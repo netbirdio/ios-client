@@ -1,0 +1,8 @@
+framework module "Ios" {
+	header "ref.h"
+    header "Ios.objc.h"
+    header "Universe.objc.h"
+    header "Ios.h"
+
+    export *
+}
