@@ -35,7 +35,7 @@ The NetBird iOS client allows connections from mobile devices running iOS 14.0+ 
 ## Install
 You can download and install the app from the App Store:
 
-[<img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="80">](https://apps.apple.com/app/idYourAppID)
+[<img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="80">](https://apps.apple.com/app/netbird-p2p-vpn/id6469329339)
 
 ## Screenshots
 
