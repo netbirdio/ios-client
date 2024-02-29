@@ -70,7 +70,7 @@ git clone https://github.com/netbirdio/ios-client.git
 Building the xcframework from the main netbird repo. This needs to be stored in the root directory of app
 ```
 cd netbird
-gomobile bind -target=ios -bundleid=io.netbird.framework -o ../ios-client/NetBird/NetBirdSDK.xcframework ./client/ios/NetBirdSDK
+gomobile bind -target=ios -bundleid=io.netbird.framework -o ../ios-client/NetBirdSDK.xcframework ./client/ios/NetBirdSDK
 ```
 
 Open the Xcode project and we are ready to go.
