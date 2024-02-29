@@ -46,11 +46,11 @@ You can download and install the app from the App Store:
 </p>
 
 ## Code structure
-The code is devided into 4 parts:
-- the main netbird golang code from the [netbird](https://github.com/netbirdio/netbird) repo which is compiled into a xcframework. This contains most of the client logic.
-- the network extension `/NetbirdNetworkExtension` that is running in the background where the compiled golang code is executed
-- the UI and app code under `/NetBird`
-- and the `/NetbirdKit/NetworkExtensionAdapter` that controls the extension and builds the link between UI and extension
+The code is divided into 4 parts:
+- The main netbird Go code from the [NetBird](https://github.com/netbirdio/netbird) repo which is compiled into an xcframework. This contains most of the client logic.
+- The network extension /NetbirdNetworkExtension that is running in the background where the compiled Go code is executed.
+- The UI and app code under `/NetBird`
+- The `/NetbirdKit/NetworkExtensionAdapter` that controls the extension and builds the link between UI and extension
 
 ## Requirements
 
@@ -60,22 +60,22 @@ The code is devided into 4 parts:
 
 ## Run locally
 
-To build the app this repository and the main netbird repository are needed.
+To build the app, this repository and the main netbird repository are needed.
 
 ```
 git clone https://github.com/netbirdio/netbird.git
 git clone https://github.com/netbirdio/ios-client.git
 ```
 
-Building the xcframework from the main netbird repo. This needs to be stored in the root directory of app
+Building the xcframework from the main netbird repo. This needs to be stored in the root directory of the app
 ```
 cd netbird
 gomobile bind -target=ios -bundleid=io.netbird.framework -o ../ios-client/NetBirdSDK.xcframework ./client/ios/NetBirdSDK
 ```
 
-Open the Xcode project and we are ready to go.
+Open the Xcode project, and we are ready to go.
 
-> **Note:** The app can not be run in simulator. To test the app a physical device needs to be connected to Xcode via cable and set as the run destination.
+> **Note:** The app can not be run in the iOS simulator. To test the app, a physical device needs to be connected to Xcode via cable and set as the run destination.
 
 ## Other project repositories
 
