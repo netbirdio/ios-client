@@ -11,6 +11,8 @@ struct AdvancedView: View {
     @EnvironmentObject var viewModel: ViewModel
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
         
+    @State private var directoryPickerPresented = false
+    
     var body: some View {
         ZStack {
             Color("BgPage")
@@ -44,10 +46,37 @@ struct AdvancedView: View {
                         }
                     }
                 }
-                .padding(.top, 5)
+                .padding(.top, 10)
+                Divider()
+                    .padding([.top, .bottom])
+                Toggle(isOn: $viewModel.traceLogsEnabled, label: {
+                    Text("Enable Trace logs.")
+                        .multilineTextAlignment(.leading)
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundColor(Color("TextSecondary"))
+                        .padding(.top, 3)
+                })
+                SolidButton(text: "Share logs") {
+                    directoryPickerPresented = true
+                }
+                .padding(.top, 10)
                 Spacer()
             }
             .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.10)
+            if viewModel.showLogLevelChangedAlert {
+                Color.black.opacity(0.4)
+                    .edgesIgnoringSafeArea(.all)
+                    .onTapGesture {
+                        viewModel.buttonLock = true
+                        viewModel.showLogLevelChangedAlert = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            viewModel.buttonLock = false
+                        }
+                    }
+                
+                LogLevelAlert(viewModel: viewModel, isPresented: $viewModel.showLogLevelChangedAlert)
+                    .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+            }
         }
         .onAppear(perform: {
             viewModel.loadPreSharedKey()
@@ -61,6 +90,38 @@ struct AdvancedView: View {
         .onTapGesture {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
+        .sheet(isPresented: $directoryPickerPresented) {
+            DirectoryPicker { url in
+                print("Directory selected: \(url)")
+                saveLogFile(at: url)
+            }
+        }
+    }
+    
+    func saveLogFile(at url: URL?) {
+        guard let url = url else { return }
+
+        let fileManager = FileManager.default
+        guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") else {
+                print("Failed to retrieve the group URL")
+                return
+            }
+
+            let logURL = groupURL.appendingPathComponent("logfile.log")
+
+            do {
+                let logData = try String(contentsOf: logURL, encoding: .utf8)
+                let fileURL = url.appendingPathComponent("netbird.log")
+                do {
+                    try logData.write(to: fileURL, atomically: true, encoding: .utf8)
+                    print("Log file saved successfully.")
+                } catch {
+                    print("Failed to save log file: \(error)")
+                }
+            } catch {
+                print("Failed to read log data: \(error)")
+                return
+            }
     }
     
     func checkForValidPresharedKey(text: String) {
@@ -84,6 +145,32 @@ struct AdvancedView: View {
 
         // Check if the decoded data is 32 bytes (256 bits)
         return data.count == 32
+    }
+}
+
+struct LogLevelAlert: View {
+    @StateObject var viewModel: ViewModel
+    @Binding var isPresented: Bool
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Image("exclamation-circle")
+                .padding(.top, 20)
+            Text("Changing Log Level")
+                .font(.title)
+                .foregroundColor(Color("TextAlert"))
+            Text("Changing log level will take effect after next connect.")
+                .foregroundColor(Color("TextAlert"))
+                .multilineTextAlignment(.center)
+            SolidButton(text: "Confirm") {
+                isPresented.toggle()
+            }
+            .padding(.top, 20)
+        }
+        .padding()
+        .background(Color("BgSideDrawer"))
+        .cornerRadius(15)
+        .shadow(radius: 10)
     }
 }
 

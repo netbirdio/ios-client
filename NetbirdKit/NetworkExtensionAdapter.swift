@@ -118,8 +118,12 @@ public class NetworkExtensionAdapter: ObservableObject {
 
     public func startVPNConnection() {
         print("starting tunnel")
+        let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
+        print("Loglevel: " + logLevel)
+        let options: [String: NSObject] = ["logLevel": logLevel as NSObject]
+        
         do {
-            try self.session?.startVPNTunnel()
+            try self.session?.startVPNTunnel(options: options)
             print("VPN Tunnel started.")
         } catch let error {
             print("Failed to start VPN tunnel: \(error)")
