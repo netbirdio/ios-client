@@ -36,7 +36,42 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
         
         let routes = routesString.split(separator: ",")
         for route in routes {
-            neRoutes.append(createIPv4RouteFromCIDR(cidr: String(route)))
+            if route.contains("0.0.0.0/0") {
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.1/32"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.2/31"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.4/30"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.8/29"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.16/28"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.32/27"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.64/26"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.128/25"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.1.0/24"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.2.0/23"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.4.0/22"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.8.0/21"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.16.0/20"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.32.0/19"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.64.0/18"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.128.0/17"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.1.0.0/16"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.2.0.0/15"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.4.0.0/14"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.8.0.0/13"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.16.0.0/12"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.32.0.0/11"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.64.0.0/10"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.128.0.0/9"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "1.0.0.0/8"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "2.0.0.0/7"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "4.0.0.0/6"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "8.0.0.0/5"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "16.0.0.0/4"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "32.0.0.0/3"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "64.0.0.0/2"))
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: "128.0.0.0/1"))
+            } else {
+                neRoutes.append(createIPv4RouteFromCIDR(cidr: String(route)))
+            }
         }
         if interfaceIP != nil {
             neRoutes.append(createIPv4RouteFromCIDR(cidr: self.interfaceIP!))

@@ -190,7 +190,7 @@
 				50051DE02AE69A8100AFBDC4 /* FirebaseCrashlytics in Frameworks */,
 				50003BBC2AFBCA6B00E5EB6B /* FirebasePerformance in Frameworks */,
 				5051190F2AE03F68003027D3 /* FirebaseAnalytics in Frameworks */,
-				50D402942BD9143900D4AC5B /* NetBirdSDK.xcframework in Frameworks */,
+        50D402942BD9143900D4AC5B /* NetBirdSDK.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
