@@ -28,6 +28,8 @@ class ViewModel: ObservableObject {
     @Published var presentSideDrawer = false
     @Published var extensionState : NEVPNStatus = .disconnected
     @Published var navigateToServerView = false
+    @Published var rosenpassEnabled = false
+    @Published var rosenpassPermissive = false
     @Published var managementURL = ""
     @Published var presharedKey = ""
     @Published var server: String = ""
@@ -60,6 +62,8 @@ class ViewModel: ObservableObject {
     init() {
         let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
         self.traceLogsEnabled = logLevel == "TRACE"
+        self.rosenpassEnabled = self.getRosenpassEnabled()
+        self.rosenpassPermissive = self.getRosenpassPermissive()
         
         $server
            .removeDuplicates()
@@ -220,6 +224,48 @@ class ViewModel: ObservableObject {
     func loadPreSharedKey() {
         self.presharedKey = preferences.getPreSharedKey(nil)
         self.presharedKeySecure = self.presharedKey != ""
+    }
+    
+    func setRosenpassEnabled(enabled: Bool) {
+        preferences.setRosenpassEnabled(enabled)
+        do {
+            try preferences.commit()
+        } catch {
+            print("Failed to update rosenpass settings")
+        }
+    }
+    
+    func getRosenpassEnabled() -> Bool {
+        var result = ObjCBool(false)
+        do {
+            try preferences.getRosenpassEnabled(&result)
+        } catch {
+            print("Failed to read rosenpass settings")
+        }
+    
+        return result.boolValue
+    }
+
+    
+    func getRosenpassPermissive() -> Bool {
+        var result = ObjCBool(false)
+        do {
+            try preferences.getRosenpassPermissive(&result)
+        } catch {
+            print("Failed to read rosenpass permissive settings")
+        }
+    
+        return result.boolValue
+    }
+
+    
+    func setRosenpassPermissive(permissive: Bool) {
+        preferences.setRosenpassPermissive(permissive)
+        do {
+            try preferences.commit()
+        } catch {
+            print("Failed to update rosenpass permissive settings")
+        }
     }
     
     func getDefaultStatus() -> StatusDetails {
