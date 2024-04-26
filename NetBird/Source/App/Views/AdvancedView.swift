@@ -45,6 +45,34 @@ struct AdvancedView: View {
                     }
                 }
                 .padding(.top, 5)
+                Divider()
+                    .padding([.top, .bottom])
+                Toggle(isOn: $viewModel.rosenpassEnabled, label: {
+                    Text("Enable Rosenpass.")
+                        .multilineTextAlignment(.leading)
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundColor(Color("TextSecondary"))
+                        .padding(.top, 3)
+                })
+                .onChange(of: viewModel.rosenpassEnabled) { value in
+                    if !value {
+                        viewModel.rosenpassPermissive = false
+                    }
+                    viewModel.setRosenpassEnabled(enabled: value)
+                }
+                Toggle(isOn: $viewModel.rosenpassPermissive, label: {
+                    Text("Enable Rosenpass permissive mode.")
+                        .multilineTextAlignment(.leading)
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundColor(Color("TextSecondary"))
+                        .padding(.top, 3)
+                })
+                .onChange(of: viewModel.rosenpassPermissive) { value in
+                    if value {
+                        viewModel.rosenpassEnabled = true
+                    }
+                    viewModel.setRosenpassPermissive(permissive: value)
+                }
                 Spacer()
             }
             .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.10)
