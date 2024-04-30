@@ -76,7 +76,9 @@
 		50CD81B02AD5B94D00CF830B /* PeerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81AF2AD5B94D00CF830B /* PeerCard.swift */; };
 		50CD81B12AD5B94D00CF830B /* PeerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81AF2AD5B94D00CF830B /* PeerCard.swift */; };
 		50CD84362AD82F9400CF830B /* ServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD84352AD82F9400CF830B /* ServerView.swift */; };
-		50D402902BD8188C00D4AC5B /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D4028F2BD8188C00D4AC5B /* NetBirdSDK.xcframework */; };
+		50D402922BD913D100D4AC5B /* DirectoryPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D402912BD913D100D4AC5B /* DirectoryPicker.swift */; };
+		50D402942BD9143900D4AC5B /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
+		50D402952BD9143900D4AC5B /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
 		50E608132A7958B100BAF09B /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608122A7958B100BAF09B /* MainViewModel.swift */; };
 		50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E6081F2A7979D600BAF09B /* SideDrawer.swift */; };
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
@@ -153,7 +155,8 @@
 		50CD81A62AD5504B00CF830B /* StatusDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusDetails.swift; sourceTree = "<group>"; };
 		50CD81AF2AD5B94D00CF830B /* PeerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerCard.swift; sourceTree = "<group>"; };
 		50CD84352AD82F9400CF830B /* ServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerView.swift; sourceTree = "<group>"; };
-		50D4028F2BD8188C00D4AC5B /* NetBirdSDK.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = NetBirdSDK.xcframework; path = NetBird/NetBirdSDK.xcframework; sourceTree = "<group>"; };
+		50D402912BD913D100D4AC5B /* DirectoryPicker.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DirectoryPicker.swift; sourceTree = "<group>"; };
+		50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = NetBirdSDK.xcframework; path = NetBird/NetBirdSDK.xcframework; sourceTree = "<group>"; };
 		50E608022A7950CB00BAF09B /* Device.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Device.swift; sourceTree = "<group>"; };
 		50E608122A7958B100BAF09B /* MainViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewModel.swift; sourceTree = "<group>"; };
 		50E6081F2A7979D600BAF09B /* SideDrawer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SideDrawer.swift; sourceTree = "<group>"; };
@@ -167,6 +170,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				508BD8492AF140D50055E415 /* FirebaseAnalyticsSwift in Frameworks */,
+				50D402952BD9143900D4AC5B /* NetBirdSDK.xcframework in Frameworks */,
 				50245A542A80431B0034792B /* NetworkExtension.framework in Frameworks */,
 				50003BBE2AFBCA7900E5EB6B /* FirebasePerformance in Frameworks */,
 				508BD84B2AF140D50055E415 /* FirebaseCrashlytics in Frameworks */,
@@ -186,7 +190,7 @@
 				50051DE02AE69A8100AFBDC4 /* FirebaseCrashlytics in Frameworks */,
 				50003BBC2AFBCA6B00E5EB6B /* FirebasePerformance in Frameworks */,
 				5051190F2AE03F68003027D3 /* FirebaseAnalytics in Frameworks */,
-				50D402902BD8188C00D4AC5B /* NetBirdSDK.xcframework in Frameworks */,
+        50D402942BD9143900D4AC5B /* NetBirdSDK.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -246,7 +250,7 @@
 		50A8910E2A792A15007C48FC = {
 			isa = PBXGroup;
 			children = (
-				50D4028F2BD8188C00D4AC5B /* NetBirdSDK.xcframework */,
+				50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */,
 				506331F72AF1676B00BC8F0E /* GoogleService-Info.plist */,
 				50245A0A2A7AA9390034792B /* NetBird-Bridging-Header.h */,
 				50A891192A792A15007C48FC /* NetBird */,
@@ -325,6 +329,7 @@
 		50E608092A79557A00BAF09B /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				50D402912BD913D100D4AC5B /* DirectoryPicker.swift */,
 				50E6081F2A7979D600BAF09B /* SideDrawer.swift */,
 				502455BC2A79B0480034792B /* CustomBackButton.swift */,
 				502455BE2A79B4500034792B /* SolidButton.swift */,
@@ -568,6 +573,7 @@
 				50216D8E2ACB1905009574C9 /* NetworkChangeListener.swift in Sources */,
 				50CD81A72AD5504B00CF830B /* StatusDetails.swift in Sources */,
 				505118CE2AD96ECA003027D3 /* x25519.c in Sources */,
+				50D402922BD913D100D4AC5B /* DirectoryPicker.swift in Sources */,
 				508BD8452AF04A990055E415 /* SafariView.swift in Sources */,
 				505118D02AD96ECA003027D3 /* key.c in Sources */,
 				50E608262A79968500BAF09B /* AdvancedView.swift in Sources */,

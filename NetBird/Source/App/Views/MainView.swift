@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Lottie
+import NetworkExtension
 
 struct MainView: View {
     @EnvironmentObject var viewModel: ViewModel
@@ -78,13 +79,15 @@ struct MainView: View {
                             }
                             Spacer()
                         }
-//                        Spacer()
-//                        Button("print logs") {
-//                            let fileManager = FileManager.default
-//                            let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
-//                            let logURL = groupURL?.appendingPathComponent("logfile.log")
-//                            printLogContents(from: logURL!)
-//                        }
+                        #if DEBUG
+                        Spacer()
+                        Button("print logs") {
+                            let fileManager = FileManager.default
+                            let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
+                            let logURL = groupURL?.appendingPathComponent("logfile.log")
+                            printLogContents(from: logURL!)
+                        }
+                        #endif
                         Spacer()
                         Button(action: {
                             if !viewModel.buttonLock {

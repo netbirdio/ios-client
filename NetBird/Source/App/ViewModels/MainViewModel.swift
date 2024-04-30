@@ -18,6 +18,7 @@ class ViewModel: ObservableObject {
     @Published var showInvalidServerAlert = false
     @Published var showInvalidSetupKeyHint = false
     @Published var showInvalidSetupKeyAlert = false
+    @Published var showLogLevelChangedAlert = false
     @Published var showInvalidPresharedKeyAlert = false
     @Published var showServerChangedInfo = false
     @Published var showPreSharedKeyChangedInfo = false
@@ -39,6 +40,17 @@ class ViewModel: ObservableObject {
     @Published var extensionStateText = "Disconnected"
     @Published var connectPressed = false
     @Published var disconnectPressed = false
+    @Published var traceLogsEnabled: Bool {
+        didSet {
+            self.showLogLevelChangedAlert = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                self.showLogLevelChangedAlert = false
+            }
+            let logLevel = traceLogsEnabled ? "TRACE" : "INFO"
+            UserDefaults.standard.set(logLevel, forKey: "logLevel")
+            UserDefaults.standard.synchronize()
+        }
+    }
     var preferences = Preferences.newPreferences()
     var buttonLock = false
     let defaults = UserDefaults.standard
@@ -48,6 +60,8 @@ class ViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     init() {
+        let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
+        self.traceLogsEnabled = logLevel == "TRACE"
         self.rosenpassEnabled = self.getRosenpassEnabled()
         self.rosenpassPermissive = self.getRosenpassPermissive()
         

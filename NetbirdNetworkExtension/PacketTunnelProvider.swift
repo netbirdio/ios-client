@@ -22,14 +22,18 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private lazy var adapter: NetBirdAdapter = {
         return NetBirdAdapter(with: self.tunnelManager)
     }()
-    
-    override init() {
-        initializeLogging()
-    }
             
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
-        let options = FirebaseOptions(contentsOfFile: Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist")!)
-        FirebaseApp.configure(options: options!)
+        let firebaseOptions = FirebaseOptions(contentsOfFile: Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist")!)
+        FirebaseApp.configure(options: firebaseOptions!)
+        
+        if let options = options {
+            // For example, handle a specific option
+            if let logLevel = options["logLevel"] as? String {
+                initializeLogging(loglevel: logLevel)
+            }
+        }
+        
         
         if adapter.needsLogin() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -124,7 +128,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 }
 
-func initializeLogging() {
+func initializeLogging(loglevel: String) {
     let fileManager = FileManager.default
 
     let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
@@ -166,7 +170,7 @@ func initializeLogging() {
     
     if let logPath = logURL?.path {
         
-        success = NetBirdSDKInitializeLog("DEBUG", logPath, &error)
+        success = NetBirdSDKInitializeLog(loglevel, logPath, &error)
     }
     if !success, let actualError = error {
                print("Failed to initialize log: \(actualError.localizedDescription)")
