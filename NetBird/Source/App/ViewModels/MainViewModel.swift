@@ -23,8 +23,8 @@ class ViewModel: ObservableObject {
     @Published var showServerChangedInfo = false
     @Published var showPreSharedKeyChangedInfo = false
     @Published var showCopiedAlert = false
-    @Published var showCopiedInfoAlert = false
     @Published var showAuthenticationRequired = false
+    @Published var isSheetExpanded = false
     @Published var presentSideDrawer = false
     @Published var extensionState : NEVPNStatus = .disconnected
     @Published var navigateToServerView = false
@@ -35,7 +35,9 @@ class ViewModel: ObservableObject {
     @Published var server: String = ""
     @Published var setupKey: String = ""
     @Published var presharedKeySecure = true
-    @Published var statusDetails = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
+    @Published var fqdn = UserDefaults.standard.string(forKey: "fqdn") ?? ""
+    @Published var ip = UserDefaults.standard.string(forKey: "ip") ?? ""
+    @Published var managementStatus: ClientState = .disconnected
     @Published var statusDetailsValid = false
     @Published var extensionStateText = "Disconnected"
     @Published var connectPressed = false
@@ -54,10 +56,12 @@ class ViewModel: ObservableObject {
     var preferences = Preferences.newPreferences()
     var buttonLock = false
     let defaults = UserDefaults.standard
-    @Published var fqdn = UserDefaults.standard.string(forKey: "fqdn") ?? ""
-    @Published var ip = UserDefaults.standard.string(forKey: "ip") ?? ""
+    let isIpad = UIDevice.current.userInterfaceIdiom == .pad
     
     private var cancellables = Set<AnyCancellable>()
+    
+    @Published var peerViewModel = PeerViewModel()
+    @Published var routeViewModel = RoutesViewModel()
     
     init() {
         let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
@@ -112,9 +116,6 @@ class ViewModel: ObservableObject {
     
     func startPollingDetails() {
         networkExtensionAdapter.startTimer { details in
-            let sortedPeerInfo = details.peerInfo.sorted(by: { a, b in
-                a.ip < b.ip
-            })
             
             self.checkExtensionState()
             if self.extensionState == .disconnected && self.extensionStateText == "Connected" {
@@ -122,28 +123,92 @@ class ViewModel: ObservableObject {
                 self.extensionStateText = "Disconnected"
             }
             
-            let newStatusDetails = StatusDetails(ip: details.ip, fqdn: details.fqdn, managementStatus: details.managementStatus, peerInfo: sortedPeerInfo)
-            if newStatusDetails.ip != self.statusDetails.ip || newStatusDetails.fqdn != self.statusDetails.fqdn || newStatusDetails.managementStatus != self.statusDetails.managementStatus || !newStatusDetails.peerInfo.elementsEqual(self.statusDetails.peerInfo, by: { a, b in
-                a.ip == b.ip && a.connStatus == b.connStatus
-            }) {
-                if !newStatusDetails.fqdn.isEmpty && newStatusDetails.fqdn != self.statusDetails.fqdn {
-                    self.defaults.set(newStatusDetails.fqdn, forKey: "fqdn")
+            if details.ip != self.ip || details.fqdn != self.fqdn || details.managementStatus != self.managementStatus
+            {
+                if !details.fqdn.isEmpty && details.fqdn != self.fqdn {
+                    self.defaults.set(details.fqdn, forKey: "fqdn")
                     self.fqdn = details.fqdn
 
                 }
-                if !newStatusDetails.ip.isEmpty && newStatusDetails.ip != self.statusDetails.ip {
-                    self.defaults.set(newStatusDetails.ip, forKey: "ip")
+                if !details.ip.isEmpty && details.ip != self.ip {
+                    self.defaults.set(details.ip, forKey: "ip")
                     self.ip = details.ip
                 }
+                print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(self.networkExtensionAdapter.isLoginRequired())")
 
-                print("Status: \(newStatusDetails.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(self.networkExtensionAdapter.isLoginRequired())")
-                if newStatusDetails.managementStatus == .disconnected && self.extensionState == .connected && self.networkExtensionAdapter.isLoginRequired() {
+                if details.managementStatus != self.managementStatus {
+                    self.managementStatus = details.managementStatus
+                }
+                
+                if details.managementStatus == .disconnected && self.extensionState == .connected && self.networkExtensionAdapter.isLoginRequired() {
                     self.networkExtensionAdapter.stop()
                     self.showAuthenticationRequired = true
                 }
-                self.statusDetails = newStatusDetails
             }
+            
             self.statusDetailsValid = true
+                
+            let sortedPeerInfo = details.peerInfo.sorted(by: { a, b in
+                a.ip < b.ip
+            })
+            if !sortedPeerInfo.elementsEqual(self.peerViewModel.peerInfo, by: { a, b in
+                a.ip == b.ip && a.connStatus == b.connStatus && a.relayed == b.relayed && a.direct == b.direct && a.connStatusUpdate == b.connStatusUpdate && a.routes.count == b.routes.count
+            }) {
+                print("Setting new peer info")
+                self.updatePeerInfoArray(with: sortedPeerInfo)
+            }
+        
+        }
+    }
+    
+    func updatePeerInfoArray(with newPeers: [PeerInfo]) {
+        for newPeer in newPeers {
+            if let index = self.peerViewModel.peerInfo.firstIndex(where: { $0.id == newPeer.id }) {
+                self.peerViewModel.peerInfo[index].update(from: newPeer)
+            } else {
+                // Optionally add new peers that do not exist in the current array
+                self.peerViewModel.peerInfo.append(newPeer)
+            }
+        }
+
+        // Optionally remove peers that are not in the newPeers array
+        self.peerViewModel.peerInfo = self.peerViewModel.peerInfo.filter { currentPeer in
+            newPeers.contains(where: { $0.id == currentPeer.id })
+        }
+    }
+    
+    func getRoutes() {
+        networkExtensionAdapter.getRoutes { details in
+            self.routeViewModel.routeInfo = details.routeSelectionInfo
+            print("Route count: \(details.routeSelectionInfo.count)")
+        }
+    }
+    
+    func selectRoute(route: RoutesSelectionInfo) {
+        guard let index = routeViewModel.routeInfo.firstIndex(where: { $0.id == route.id }) else { return }
+        routeViewModel.routeInfo[index].selected = true
+        networkExtensionAdapter.selectRoutes(id: route.name) { details in
+            print("selected route")
+        }
+    }
+    
+    func selectAllRoutes() {
+        networkExtensionAdapter.selectRoutes(id: "All") { details in
+            print("selected all routes")
+        }
+    }
+    
+    func deselectRoute(route: RoutesSelectionInfo) {
+        guard let index = routeViewModel.routeInfo.firstIndex(where: { $0.id == route.id }) else { return }
+        routeViewModel.routeInfo[index].selected = false
+        networkExtensionAdapter.deselectRoutes(id: route.name) { details in
+            print("deselect route")
+        }
+    }
+    
+    func deselectAllRoutes() {
+        networkExtensionAdapter.deselectRoutes(id: "All") { details in
+            print("deselect all routes")
         }
     }
     

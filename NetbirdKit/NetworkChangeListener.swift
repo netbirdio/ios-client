@@ -11,11 +11,16 @@ import NetBirdSDK
 import NetworkExtension
 import os
 
+enum IPAddressType {
+    case ipv4
+    case ipv6
+    case invalid
+}
 
 class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
     func onNetworkChanged(_ p0: String?) {
-        let routes = parseRoutesToNESettings(routesString: p0!)
-        tunnelManager?.setRoutes(routes: routes)
+        let (v4Routes, v6Routes, containsDefault) = parseRoutesToNESettings(routesString: p0!)
+        tunnelManager?.setRoutes(v4Routes: v4Routes, v6Routes: v6Routes, containsDefault: containsDefault)
     }
     
     private weak var tunnelManager: PacketTunnelProviderSettingsManager?
@@ -31,60 +36,68 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
         tunnelManager?.setInterfaceIP(interfaceIP: p0!)
     }
     
-    func parseRoutesToNESettings(routesString: String) -> [NEIPv4Route] {
-        var neRoutes : [NEIPv4Route] = []
+    func parseRoutesToNESettings(routesString: String) -> ([NEIPv4Route], [NEIPv6Route], Bool) {
+        var v4Routes : [NEIPv4Route] = []
+        var v6Routes : [NEIPv6Route] = []
+        var containsDefault = false
         
         let routes = routesString.split(separator: ",")
         for route in routes {
-            if route.contains("0.0.0.0/0") {
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.1/32"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.2/31"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.4/30"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.8/29"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.16/28"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.32/27"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.64/26"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.0.128/25"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.1.0/24"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.2.0/23"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.4.0/22"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.8.0/21"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.16.0/20"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.32.0/19"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.64.0/18"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.0.128.0/17"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.1.0.0/16"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.2.0.0/15"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.4.0.0/14"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.8.0.0/13"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.16.0.0/12"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.32.0.0/11"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.64.0.0/10"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "0.128.0.0/9"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "1.0.0.0/8"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "2.0.0.0/7"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "4.0.0.0/6"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "8.0.0.0/5"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "16.0.0.0/4"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "32.0.0.0/3"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "64.0.0.0/2"))
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: "128.0.0.0/1"))
-            } else {
-                neRoutes.append(createIPv4RouteFromCIDR(cidr: String(route)))
+            switch detectIPAddressType(String(route)) {
+            case .ipv4:
+                v4Routes.append(createIPv4RouteFromCIDR(cidr: String(route)))
+                if route.contains("0.0.0.0/0") {
+                    containsDefault = true
+                }
+            case .ipv6:
+                v6Routes.append(createIPv6RouteFromCIDR(cidr: String(route)))
+                if route.contains("::/0") {
+                    containsDefault = true
+                }
+            case .invalid:
+                print("unknown route")
             }
         }
+        
         if interfaceIP != nil {
-            neRoutes.append(createIPv4RouteFromCIDR(cidr: self.interfaceIP!))
+            v4Routes.append(createIPv4RouteFromCIDR(cidr: self.interfaceIP!))
         }
-        return neRoutes
+        return (v4Routes, v6Routes, containsDefault)
     }
     
     func createIPv4RouteFromCIDR(cidr: String) -> NEIPv4Route {
         let (ipAddress, subnetMask) = extractIPAddressAndSubnet(from: cidr)!
         let destinationAddress = subtractSubnetMask(from: ipAddress, subnetMask: subnetMask)
+        
         return NEIPv4Route(destinationAddress: destinationAddress!, subnetMask: subnetMask)
     }
     
+    func createIPv6RouteFromCIDR(cidr: String) -> NEIPv6Route {
+        let routeComponents = cidr.components(separatedBy: "/")
+        let destinationAddress = routeComponents[0]
+        let prefixLength = Int(routeComponents[1])!
+        return NEIPv6Route(destinationAddress: destinationAddress, networkPrefixLength: prefixLength as NSNumber)
+    }
+    
+}
+
+func detectIPAddressType(_ address: String) -> IPAddressType {
+    let ipv4Pattern = "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$"
+    let ipv6Pattern = "^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}(\\/\\d{1,3})?$"
+
+    let ipv4Regex = try! NSRegularExpression(pattern: ipv4Pattern, options: [])
+    let ipv6Regex = try! NSRegularExpression(pattern: ipv6Pattern, options: [])
+
+    let ipv4Matches = ipv4Regex.numberOfMatches(in: address, options: [], range: NSRange(location: 0, length: address.utf16.count))
+    let ipv6Matches = ipv6Regex.numberOfMatches(in: address, options: [], range: NSRange(location: 0, length: address.utf16.count))
+
+    if ipv4Matches > 0 {
+        return .ipv4
+    } else if ipv6Matches > 0 {
+        return .ipv6
+    } else {
+        return .invalid
+    }
 }
 
 func extractIPAddressAndSubnet(from cidr: String) -> (String, String)? {

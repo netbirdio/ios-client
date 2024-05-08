@@ -61,6 +61,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 login(completionHandler: completionHandler)
             case "Status":
                 getStatus(completionHandler: completionHandler)
+            case "GetRoutes":
+                getSelectRoutes(completionHandler: completionHandler)
+            case let string where string.hasPrefix("Select-"):
+                let id = String(string.dropFirst("Select-".count))
+                selectRoute(id: id)
+            case let string where string.hasPrefix("Deselect-"):
+                let id = String(string.dropFirst("Deselect-".count))
+                deselectRoute(id: id)
             default:
                 print("unknown message")
             }
@@ -82,7 +90,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         for i in 0..<statusDetailsMessage.size() {
             let peer = statusDetailsMessage.get(i)
-            let peerInfo = PeerInfo(ip: peer!.ip, fqdn: peer!.fqdn, connStatus: peer!.connStatus)
+            let routes = peer!.getRouteDetails()
+            var routesArray: [String] = []
+            for j in 0..<routes!.size() {
+                let route = routes?.get(j)
+                routesArray.append(route!.route)
+            }
+            
+            let peerInfo = PeerInfo(ip: peer!.ip, fqdn: peer!.fqdn, localIceCandidateEndpoint:  peer!.localIceCandidateEndpoint, remoteIceCandidateEndpoint: peer!.remoteIceCandidateEndpoint, localIceCandidateType: peer!.localIceCandidateType, remoteIceCandidateType: peer!.remoteIceCandidateType, pubKey: peer!.pubKey, latency: peer!.latency, bytesRx: peer!.bytesRx, bytesTx: peer!.bytesTx, connStatus: peer!.connStatus, connStatusUpdate: peer!.connStatusUpdate, direct: peer!.direct, lastWireguardHandshake: peer!.lastWireguardHandshake, relayed: peer!.relayed, rosenpassEnabled: peer!.relayed, routes: routesArray)
             peerInfoArray.append(peerInfo)
         }
         
@@ -102,8 +117,57 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             } catch {
                 print("Failed to convert default")
             }
-            print("Failed to encode person: \(error.localizedDescription)")
+            print("Failed to encode status details: \(error.localizedDescription)")
             
+        }
+    }
+    
+    func getSelectRoutes(completionHandler: ((Data?) -> Void)) {
+        let routeSelectionDetailsMessage = adapter.client.getRoutesSelectionDetails()
+        var routeSelectionInfo: [RoutesSelectionInfo] = []
+        guard let routeSelectionDetailsMessage = routeSelectionDetailsMessage else {
+            print("Did not receive route selection details")
+            return
+        }
+        for i in 0..<routeSelectionDetailsMessage.size() {
+            let route = routeSelectionDetailsMessage.get(i)
+            let info = RoutesSelectionInfo(name: route!.id_, network: route!.network, selected: route!.selected)
+            routeSelectionInfo.append(info)
+        }
+        
+        let routeSelectionDetails = RoutesSelectionDetails(all: routeSelectionDetailsMessage.all, append: routeSelectionDetailsMessage.append, routeSelectionInfo: routeSelectionInfo)
+        
+        do {
+            let data = try PropertyListEncoder().encode(routeSelectionDetails)
+            completionHandler(data)
+            return
+        } catch {
+            do {
+                let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
+                let data = try PropertyListEncoder().encode(defaultStatus)
+                completionHandler(data)
+                return
+            } catch {
+                print("Failed to convert default")
+            }
+            print("Failed to encode route selection: \(error.localizedDescription)")
+        }
+    }
+    
+    func selectRoute(id: String) {
+        do {
+            try adapter.client.selectRoute(id)
+        } catch {
+            print("Failed to select route")
+        }
+        
+    }
+    
+    func deselectRoute(id: String) {
+        do {
+            try adapter.client.deselectRoute(id)
+        } catch {
+            print("Failed to deselect route")
         }
     }
     
@@ -120,7 +184,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
        setTunnelNetworkSettings(tunnelNetworkSettings) { error in
            if let error = error {
                // Handle Error
-               print("error when assigning routes")
+               print("error when assigning routes: \(error.localizedDescription)")
                return
            }
            print("Routes set")

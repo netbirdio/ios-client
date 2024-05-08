@@ -46,6 +46,7 @@ struct CustomLottieView: UIViewRepresentable {
                 case .connected:
                     DispatchQueue.main.async {
                         viewModel.extensionStateText = "Connected"
+                        viewModel.getRoutes()
                     }
                     uiView.currentFrame = context.coordinator.connectedFrame
                 case .connecting:
@@ -127,7 +128,7 @@ struct CustomLottieView: UIViewRepresentable {
                 if self.engineStatus == .connected {
                     self.playFadeOut(uiView: uiView, startFrame: self.connectingFadeOut.startFrame, endFrame: self.connectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Connected")
                 } else if (self.engineStatus == .disconnecting || self.extensionStatus == .disconnecting || self.engineStatus == .disconnected || self.extensionStatus == .disconnected) && !(self.connectPressed ?? false) {
-                    print("Connected pressed = \(self.connectPressed?.description)")
+                    print("Connected pressed = \(String(describing: self.connectPressed?.description))")
                     self.playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
                 } else {
                     playConnectingLoop(uiView: uiView, viewModel: viewModel)
