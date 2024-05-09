@@ -123,36 +123,35 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
     
     func getSelectRoutes(completionHandler: ((Data?) -> Void)) {
-        let routeSelectionDetailsMessage = adapter.client.getRoutesSelectionDetails()
-        var routeSelectionInfo: [RoutesSelectionInfo] = []
-        guard let routeSelectionDetailsMessage = routeSelectionDetailsMessage else {
-            print("Did not receive route selection details")
-            return
-        }
-        for i in 0..<routeSelectionDetailsMessage.size() {
-            let route = routeSelectionDetailsMessage.get(i)
-            let info = RoutesSelectionInfo(name: route!.id_, network: route!.network, selected: route!.selected)
-            routeSelectionInfo.append(info)
-        }
-        
-        let routeSelectionDetails = RoutesSelectionDetails(all: routeSelectionDetailsMessage.all, append: routeSelectionDetailsMessage.append, routeSelectionInfo: routeSelectionInfo)
-        
         do {
+            let routeSelectionDetailsMessage = try adapter.client.getRoutesSelectionDetails()
+            let routeSelectionInfo = (0..<routeSelectionDetailsMessage.size()).compactMap { index -> RoutesSelectionInfo? in
+                guard let route = routeSelectionDetailsMessage.get(index) else { return nil }
+                return RoutesSelectionInfo(name: route.id_, network: route.network, selected: route.selected)
+            }
+
+            let routeSelectionDetails = RoutesSelectionDetails(
+                all: routeSelectionDetailsMessage.all,
+                append: routeSelectionDetailsMessage.append,
+                routeSelectionInfo: routeSelectionInfo
+            )
+            
             let data = try PropertyListEncoder().encode(routeSelectionDetails)
             completionHandler(data)
-            return
         } catch {
+            // Handling encoding errors or data fetching errors in one catch block
+            print("Error: \(error.localizedDescription)")
+            // If an error occurs, send back a default status
+            let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
             do {
-                let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
                 let data = try PropertyListEncoder().encode(defaultStatus)
                 completionHandler(data)
-                return
             } catch {
-                print("Failed to convert default")
+                print("Failed to convert default status: \(error.localizedDescription)")
             }
-            print("Failed to encode route selection: \(error.localizedDescription)")
         }
     }
+
     
     func selectRoute(id: String) {
         do {
