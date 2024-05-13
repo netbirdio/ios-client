@@ -29,9 +29,11 @@ struct DirectoryPicker: UIViewControllerRepresentable {
 
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
             if let url = urls.first {
-                url.startAccessingSecurityScopedResource()
-                parent.onDirectoryPick(url)
-                url.stopAccessingSecurityScopedResource()
+                let ok = url.startAccessingSecurityScopedResource()
+                if ok {
+                    parent.onDirectoryPick(url)
+                    url.stopAccessingSecurityScopedResource()
+                }
             }
             parent.presentationMode.wrappedValue.dismiss()
         }

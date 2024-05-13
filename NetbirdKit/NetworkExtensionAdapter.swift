@@ -161,6 +161,79 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
     
+    func getRoutes(completion: @escaping (RoutesSelectionDetails) -> Void) {
+        guard let session = self.session else {
+            let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
+            completion(defaultStatus)
+            return
+        }
+        
+        let messageString = "GetRoutes"
+        if let messageData = messageString.data(using: .utf8) {
+            do {
+                try session.sendProviderMessage(messageData) { response in
+                    if let response = response {
+                        do {
+                            let decodedStatus = try self.decoder.decode(RoutesSelectionDetails.self, from: response)
+                            completion(decodedStatus)
+                            return
+                        } catch {
+                            print("Failed to decode route selection details.")
+                        }
+                    } else {
+                        let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
+                        completion(defaultStatus)
+                        return
+                    }
+                }
+            } catch {
+                print("Failed to send Provider message")
+            }
+        } else {
+            print("Error converting message to Data")
+        }
+    }
+    
+    func selectRoutes(id: String, completion: @escaping (RoutesSelectionDetails) -> Void) {
+        guard let session = self.session else {
+            return
+        }
+        
+        let messageString = "Select-\(id)"
+        if let messageData = messageString.data(using: .utf8) {
+            do {
+                try session.sendProviderMessage(messageData) { response in
+                    let routes = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
+                    completion(routes)
+                }
+            } catch {
+                print("Failed to send Provider message")
+            }
+        } else {
+            print("Error converting message to Data")
+        }
+    }
+    
+    func deselectRoutes(id: String, completion: @escaping (RoutesSelectionDetails) -> Void) {
+        guard let session = self.session else {
+            return
+        }
+        
+        let messageString = "Deselect-\(id)"
+        if let messageData = messageString.data(using: .utf8) {
+            do {
+                try session.sendProviderMessage(messageData) { response in
+                    let routes = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
+                    completion(routes)
+                }
+            } catch {
+                print("Failed to send Provider message")
+            }
+        } else {
+            print("Error converting message to Data")
+        }
+    }
+    
     func fetchData(completion: @escaping (StatusDetails) -> Void) {
         guard let session = self.session else {
             let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
@@ -197,7 +270,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     func startTimer(completion: @escaping (StatusDetails) -> Void) {
         self.timer.invalidate()
         self.fetchData(completion: completion)
-        self.timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true, block: { _ in
+        self.timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true, block: { _ in
             self.fetchData(completion: completion)
         })
     }

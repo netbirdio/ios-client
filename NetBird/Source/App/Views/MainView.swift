@@ -12,10 +12,11 @@ import NetworkExtension
 struct MainView: View {
     @EnvironmentObject var viewModel: ViewModel
     @State private var isSheetshown = true
-    @State private var isSheetExpanded = false
     @State private var animationKey: UUID = UUID()
     
-    let isIpad = UIDevice.current.userInterfaceIdiom == .pad
+    @State private var isPressed = false
+    @State private var showRouteSelection = false
+    @State private var allSelected = false
     
     init() {
         let appearance = UINavigationBarAppearance()
@@ -23,8 +24,8 @@ struct MainView: View {
         appearance.backgroundColor = UIColor(named: "BgNavigationBar")
 
         // Customize the title text color
-        appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+//        appearance.titleTextAttributes = [.foregroundColor: UIColor(named: "TextAlert")]
+//        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor(named: "TextAlert")]
 
         // Set the appearance for when the navigation bar is displayed regularly
         UINavigationBar.appearance().standardAppearance = appearance
@@ -52,7 +53,7 @@ struct MainView: View {
                         Image("bg-bottom")
                             .resizable(resizingMode: .stretch)
                             .aspectRatio(contentMode: .fill)
-                            .padding(.top, UIScreen.main.bounds.height * (isIpad ? 0.32 : 0.19))
+                            .padding(.top, UIScreen.main.bounds.height * (viewModel.isIpad ? 0.32 : 0.19))
                             .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 1.33)
                             .edgesIgnoringSafeArea(.bottom)
                     }
@@ -79,27 +80,18 @@ struct MainView: View {
                             }
                             Spacer()
                         }
-                        #if DEBUG
-                        Spacer()
-                        Button("print logs") {
-                            let fileManager = FileManager.default
-                            let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
-                            let logURL = groupURL?.appendingPathComponent("logfile.log")
-                            printLogContents(from: logURL!)
-                        }
-                        #endif
                         Spacer()
                         Button(action: {
                             if !viewModel.buttonLock {
                                 if viewModel.extensionState == .disconnected {
                                     viewModel.connect()
-                                } else if viewModel.extensionState == .connecting || viewModel.statusDetails.managementStatus == .connecting || viewModel.extensionState == .connected {
+                                } else if viewModel.extensionState == .connecting || viewModel.managementStatus == .connecting || viewModel.extensionState == .connected {
                                     print("Trying to stop extenison")
                                     viewModel.close()
                                 }
                             }
                         }) {
-                            CustomLottieView(extensionStatus: $viewModel.extensionState, engineStatus: $viewModel.statusDetails.managementStatus, connectPressed: $viewModel.connectPressed, disconnectPressed: $viewModel.disconnectPressed, viewModel: viewModel)
+                            CustomLottieView(extensionStatus: $viewModel.extensionState, engineStatus: $viewModel.managementStatus, connectPressed: $viewModel.connectPressed, disconnectPressed: $viewModel.disconnectPressed, viewModel: viewModel)
                                 .id(animationKey)
                                 .frame(width: UIScreen.main.bounds.width * 0.79, height: UIScreen.main.bounds.width * 0.79)
                                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
@@ -116,7 +108,7 @@ struct MainView: View {
                         Spacer()
                     }
                     .padding()
-                    SheetView(isSheetExpanded: $isSheetExpanded, peerInfo: viewModel.statusDetails.peerInfo)
+                    SheetView()
                     SideDrawer(viewModel: viewModel, isShowing: $viewModel.presentSideDrawer)
                     NavigationLink("", destination: ServerView(), isActive: $viewModel.navigateToServerView)
                         .hidden()
@@ -193,25 +185,19 @@ struct MainView: View {
                                 .animation(.default, value: viewModel.showCopiedAlert)
                                 .zIndex(1)
                            }
-                            if viewModel.showCopiedInfoAlert {
-                               Text("Double-tap to copy!")
-                                   .foregroundColor(.white)
-                                   .font(.headline)
-                                   .padding(5)
-                                   .background(Color.black.opacity(0.5))
-                                   .cornerRadius(8)
-                                   .transition(AnyTransition.opacity.combined(with: .move(edge: .top)))
-                                   .animation(.default, value: viewModel.showCopiedInfoAlert)
-                                   .zIndex(1)
-                           }
                         }
                         .padding(.bottom, 40)
                     }
                 } else {
-                    Image("netbird-logo-menu")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: UIScreen.main.bounds.width * 0.8)
+                    ZStack {
+                        Color("BgPrimary")
+                            .frame(height: UIScreen.main.bounds.height)
+                            .ignoresSafeArea(.all)
+                        Image("netbird-logo-menu")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: UIScreen.main.bounds.width * 0.8)
+                    }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -224,35 +210,13 @@ struct MainView: View {
 struct SheetView: View {
     @EnvironmentObject var viewModel: ViewModel
     
-    @Binding var isSheetExpanded: Bool
-    var peerInfo: [PeerInfo]
     @GestureState private var translation: CGFloat = 0
     
-    @State private var peerFilter: String = ""
-    @State private var selectionFilter: String = "All"
     @State private var showDropdown: Bool = false
-    
-    @State private var tappedPeer: PeerInfo? = nil
+    @State var selectedTab = 1
+    @State private var isAnimating = false
     
     let isIpad = UIDevice.current.userInterfaceIdiom == .pad
-
-    var filteredPeers: [PeerInfo] {
-        return peerInfo
-            .filter {
-                switch selectionFilter {
-                case "All": return true
-                case "Connected": return $0.connStatus == "Connected"
-                case "Disconnected": return $0.connStatus == "Disconnected"
-                default: return false
-                }
-            }
-            .filter {
-                $0.fqdn.lowercased().contains(peerFilter.lowercased()) ||
-                $0.ip.contains(peerFilter) ||
-                peerFilter.isEmpty
-            }
-    }
-
     
     var body: some View {
         ZStack {
@@ -260,128 +224,75 @@ struct SheetView: View {
                 VStack {
                     Button {
                         withAnimation(.linear(duration: 0.2)) {
-                            isSheetExpanded.toggle()
+                            viewModel.isSheetExpanded.toggle()
                         }
                     } label: {
                         Handlebar().padding(.top, 5)
                     }
                     HStack {
-                        Text((viewModel.extensionStateText != "Connected" ? "0" : peerInfo.filter({ info in
-                            info.connStatus == "Connected"
-                        }).count.description) + " of " + (viewModel.extensionStateText != "Connected" ? "0" : peerInfo.count.description)).font(.system(size: 18, weight: .bold))
-                            .foregroundColor(Color("TextSecondary"))
-                        Text("Peers connected")
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundColor(Color("TextSecondary"))
-                    }
-                    .padding(.top, UIScreen.main.bounds.height * (isIpad ? 0.02 : 0.005))
-                    .padding(.bottom, 15)
-                    if viewModel.extensionStateText == "Connected" && peerInfo.count > 0 {
-                        VStack {
-                            HStack {
-                                CustomTextField(placeholder: "search peers", text: $peerFilter, secure: .constant(false))
-                                    .padding([.top, .bottom], 10)
-                                Menu {
-                                    Button(action: { selectionFilter = "All" }) {
-                                        Text("All")
-                                    }
-                                    
-                                    Button(action: { selectionFilter = "Connected" }) {
-                                        Text("Connected")
-                                    }
-                                    Button(action: { selectionFilter = "Disconnected" }) {
-                                        Text("Disconnected")
-                                    }
-                                    
-                                } label: {
-                                    Image("icon-filter")
-                                        .padding([.leading, .trailing], 4)
-                                }
-                            }.padding([.leading, .trailing])
-                            ZStack {
-                                ScrollView {
-                                    ForEach(filteredPeers) { peer in
-                                        ZStack {
-                                            PeerCard(peer: peer)
-                                                .opacity(tappedPeer == peer ? 0.3 : 1.0)
-                                                .onTapGesture(count: 2) {
-                                                    tappedPeer = peer
-                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                                        withAnimation {
-                                                            tappedPeer = nil
-                                                        }
-                                                    }
-                                                    
-                                                    print("Copied to clipboard")
-                                                    UIPasteboard.general.string = peer.fqdn
-                                                    viewModel.showCopiedAlert = true
-
-                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                                        withAnimation {
-                                                            viewModel.showCopiedAlert = false
-                                                        }
-                                                    }
-                                                }
-                                                .onTapGesture {
-                                                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                                                    print("show notication")
-                                                    viewModel.showCopiedInfoAlert = true
-                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                                        withAnimation {
-                                                            viewModel.showCopiedInfoAlert = false
-                                                        }
-                                                    }
-                                                }
-                                                .padding([.top,.bottom], 2)
-                                        }
-                                    }
-                                }
-                                .frame(height: UIScreen.main.bounds.height * 0.70)
-                                .padding(.bottom, 1)
-                            }
-                        }
-                    } else {
-                        Group {
-                            Image("icon-empty-box")
-                                .padding(.top, UIScreen.main.bounds.height * 0.05)
-                            Text("It looks like there are no machines that you can connect to...")
+                        if selectedTab == 1 {
+                            Text((viewModel.extensionStateText != "Connected" ? "0" : viewModel.peerViewModel.peerInfo.filter({ info in
+                                info.connStatus == "Connected"
+                            }).count.description) + " of " + (viewModel.extensionStateText != "Connected" ? "0" : viewModel.peerViewModel.peerInfo.count.description)).font(.system(size: 18, weight: .bold))
+                                .foregroundColor(Color("TextSecondary"))
+                            Text("Peers connected")
                                 .font(.system(size: 18, weight: .regular))
-                                .foregroundColor(Color("TextPrimary"))
-                                .multilineTextAlignment(.center)
-                                .padding(.top, UIScreen.main.bounds.height * 0.04)
-                                .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.075)
-                            Link(destination: URL(string: "https://docs.netbird.io")!) {
-                                Text("Learn why")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                    .padding()
-                                    .frame(maxWidth: .infinity) // Span the whole width
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 3)
-                                            .fill(Color.accentColor)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 3)
-                                                    .stroke(Color.orange.darker(), lineWidth: 2)
-                                            )
-                                    )
-                                .padding(.top, UIScreen.main.bounds.height * 0.04)
-                            }
+                                .foregroundColor(Color("TextSecondary"))
+                        } else {
+                            Text((viewModel.extensionStateText != "Connected" ? "0" : viewModel.routeViewModel.routeInfo.filter({ info in
+                                info.selected
+                            }).count.description) + " of " + (viewModel.extensionStateText != "Connected" ? "0" : viewModel.routeViewModel.routeInfo.count.description)).font(.system(size: 18, weight: .bold))
+                                .foregroundColor(Color("TextSecondary"))
+                            Text("Routes active")
+                                .font(.system(size: 18, weight: .regular))
+                                .foregroundColor(Color("TextSecondary"))
                         }
-                        .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.05)
                     }
-                    Spacer()
+                    .padding(.top, UIScreen.main.bounds.height * (viewModel.isIpad ? 0.03 : 0.006))
+                    .padding(.bottom, viewModel.isSheetExpanded ? 5 : 30)
+                    TabView(selection: $selectedTab) {
+                        PeerTabView()
+                        .tag(1)
+                        
+                        RouteTabView()
+                        .tag(2)
+                    }
+                    .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+                    // Custom Tab Bar
+                    HStack {
+                        TabBarButton(label: "Peers", systemImage: "desktopcomputer", selectedTab: $selectedTab, index: 1)
+                        TabBarButton(label: "Routes", systemImage: "point.filled.topleft.down.curvedto.point.bottomright.up", selectedTab: $selectedTab, index: 2)
+                    }
+                    .padding(.bottom, 20)
+                    .background(Color("BgNavigationBar"))
+                    .frame(height: 50)
                 }
-                if isSheetExpanded {
+                .padding(.bottom, 100)
+                if viewModel.isSheetExpanded {
                     VStack {
                         HStack {
+                            if selectedTab == 2 {
+                                Button {
+                                    isAnimating = true
+                                    viewModel.getRoutes()
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) {
+                                        self.isAnimating = false
+                                    }
+                                } label: {
+                                    Image(systemName: "arrow.clockwise")
+                                        .padding(21)
+                                        .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                                        .animation(isAnimating ? Animation.linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: isAnimating)
+                                }
+                            }
                             Spacer()
                             Button {
                                 withAnimation {
-                                    isSheetExpanded = false
+                                    viewModel.isSheetExpanded = false
                                 }
                             } label: {
                                 Image("close-slider")
-                                    .padding(25)
+                                    .padding(23)
                             }
                         }
                         Spacer()
@@ -390,11 +301,10 @@ struct SheetView: View {
             }
             .padding(.top, 3)
             .padding(.bottom, 7)
-            .frame(maxWidth: .infinity, maxHeight: UIScreen.main.bounds.height)
             .background(Color("BgMenu"))
             .cornerRadius(35)
             .shadow(radius: 10)
-            .offset(y: isSheetExpanded ? UIScreen.main.bounds.height * 0.1 : UIScreen.main.bounds.height * 0.90 + translation)
+            .offset(y: viewModel.isSheetExpanded ? UIScreen.main.bounds.height * 0.1 : UIScreen.main.bounds.height * 0.90 + translation)
             .gesture(
                 DragGesture()
                     .updating($translation, body: { value, state, _ in
@@ -403,26 +313,30 @@ struct SheetView: View {
                     .onEnded({ value in
                         if value.translation.height > UIScreen.main.bounds.height * 0.25 {
                             withAnimation {
-                                isSheetExpanded = false
+                                viewModel.isSheetExpanded = false
                             }
                         } else {
                             withAnimation {
-                                isSheetExpanded = true
+                                viewModel.isSheetExpanded = true
                             }
                         }
                     })
             )
-            .onTapGesture {
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            .onChange(of: viewModel.isSheetExpanded) { value in
+                if !value {
+                    withAnimation {
+                        self.selectedTab = 1
+                    }
+                }
             }
-            
+
             // Add a transparent background to enable interaction with the rest of the screen when collapsed
-            if !isSheetExpanded {
+            if !viewModel.isSheetExpanded {
                 Color.clear
                     .ignoresSafeArea(.container)
                     .onTapGesture {
                         withAnimation {
-                            isSheetExpanded = true
+                            viewModel.isSheetExpanded = true
                         }
                     }
             }

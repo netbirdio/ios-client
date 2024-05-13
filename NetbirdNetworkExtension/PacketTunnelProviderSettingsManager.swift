@@ -13,20 +13,28 @@ class PacketTunnelProviderSettingsManager {
     private weak var packetTunnelProvider: PacketTunnelProvider?
     
     private var interfaceIP: String?
-    private var routes: [NEIPv4Route]?
+    private var ipv4Routes: [NEIPv4Route]?
+    private var ipv6Routes: [NEIPv6Route]?
     private var dnsSettings: NEDNSSettings?
+    private var needFallbackNS: Bool = false
     
     init(with packetTunnelProvider: PacketTunnelProvider) {
         self.packetTunnelProvider = packetTunnelProvider
     }
     
-    func setRoutes(routes: [NEIPv4Route]) {
-        self.routes = routes
+    func setRoutes(v4Routes: [NEIPv4Route], v6Routes: [NEIPv6Route], containsDefault: Bool) {
+        self.needFallbackNS = containsDefault
+        self.ipv4Routes = v4Routes
+        self.ipv6Routes = v6Routes
         self.updateTunnel()
     }
     
     func setDNS(config: HostDNSConfig) {
-        let dnsSettings = NEDNSSettings(servers: [config.serverIP])
+        var servers = [config.serverIP]
+        if !config.routeAll && needFallbackNS {
+            servers.append("1.1.1.1")
+        }
+        let dnsSettings = NEDNSSettings(servers: servers)
         if config.routeAll {
             dnsSettings.matchDomains = [""]
         } else {
@@ -72,10 +80,18 @@ class PacketTunnelProviderSettingsManager {
                 
                 ipv4Settings.includedRoutes = [ NEIPv4Route(destinationAddress: ipAddress, subnetMask: subnetMask) ]
                 
-                if self.routes != nil {
-                    ipv4Settings.includedRoutes = self.routes
+                if self.ipv4Routes != nil {
+                    ipv4Settings.includedRoutes = self.ipv4Routes
                 }
                 tunnelNetworkSettings.ipv4Settings = ipv4Settings
+                
+                let ipv6Settings = NEIPv6Settings(addresses: [], networkPrefixLengths: [])
+                
+                if self.ipv6Routes != nil {
+                    ipv6Settings.includedRoutes = self.ipv6Routes
+                }
+                
+                tunnelNetworkSettings.ipv6Settings = ipv6Settings
                 
                 tunnelNetworkSettings.mtu = 1280
                 

@@ -51,14 +51,16 @@ struct AdvancedView: View {
                     .padding([.top, .bottom])
                 Toggle(isOn: $viewModel.traceLogsEnabled, label: {
                     Text("Enable Trace logs.")
-                  .multilineTextAlignment(.leading)
+                        .multilineTextAlignment(.leading)
                         .font(.system(size: 18, weight: .regular))
                         .foregroundColor(Color("TextSecondary"))
                         .padding(.top, 3)
-                .padding(.top, 5)
+                })
+                .toggleStyle(SwitchToggleStyle(tint: .orange))
                 SolidButton(text: "Share logs") {
                     directoryPickerPresented = true
                 }
+                .padding(.top, 3)
                 Divider()
                     .padding([.top, .bottom])
                 Toggle(isOn: $viewModel.rosenpassEnabled, label: {
@@ -68,7 +70,7 @@ struct AdvancedView: View {
                         .foregroundColor(Color("TextSecondary"))
                         .padding(.top, 3)
                 })
-                .padding(.top, 10)
+                .toggleStyle(SwitchToggleStyle(tint: .orange))
                 .onChange(of: viewModel.rosenpassEnabled) { value in
                     if !value {
                         viewModel.rosenpassPermissive = false
@@ -82,6 +84,7 @@ struct AdvancedView: View {
                         .foregroundColor(Color("TextSecondary"))
                         .padding(.top, 3)
                 })
+                .toggleStyle(SwitchToggleStyle(tint: .orange))
                 .onChange(of: viewModel.rosenpassPermissive) { value in
                     if value {
                         viewModel.rosenpassEnabled = true
