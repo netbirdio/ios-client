@@ -10,7 +10,7 @@ import SwiftUI
 struct AboutView: View {
     
     @EnvironmentObject var viewModel: ViewModel
-    
+
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
     
     var body: some View {
@@ -58,7 +58,7 @@ struct AboutView: View {
                             viewModel.buttonLock = false
                         }
                     }
-                
+
                 BetaProgramAlert(viewModel: viewModel, isPresented: $viewModel.showBetaProgramAlert)
                     .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
             }
@@ -75,7 +75,7 @@ struct AboutView: View {
 struct BetaProgramAlert: View {
     @StateObject var viewModel: ViewModel
     @Binding var isPresented: Bool
-    
+
     var body: some View {
         VStack(spacing: 20) {
             Image("exclamation-circle")
