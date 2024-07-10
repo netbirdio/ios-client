@@ -39,7 +39,7 @@ struct AboutView: View {
                 Link("Privacy policy", destination: URL(string: "https://netbird.io/privacy")!)
                     .font(.system(size: 18, weight: .medium))
                 Spacer()
-                SolidButton(text: "Join Beta Program") {
+                TransparentGradientButton(text: "Join Beta Program") {
                     viewModel.showBetaProgramAlert.toggle()
                 }
                 .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.20)

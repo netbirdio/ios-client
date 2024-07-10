@@ -50,6 +50,7 @@
 		5051190F2AE03F68003027D3 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 5051190E2AE03F68003027D3 /* FirebaseAnalytics */; };
 		505119112AE03F68003027D3 /* FirebaseAnalyticsSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 505119102AE03F68003027D3 /* FirebaseAnalyticsSwift */; };
 		505119132AE03F68003027D3 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 505119122AE03F68003027D3 /* FirebaseAppCheck */; };
+		505344B92C3EFE4C00223065 /* TransparentGradientButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 505344B82C3EFE4C00223065 /* TransparentGradientButton.swift */; };
 		506331F82AF1676B00BC8F0E /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 506331F72AF1676B00BC8F0E /* GoogleService-Info.plist */; };
 		506331F92AF1676B00BC8F0E /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 506331F72AF1676B00BC8F0E /* GoogleService-Info.plist */; };
 		506331FB2AF52AB900BC8F0E /* CustomLottieView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 506331FA2AF52AB900BC8F0E /* CustomLottieView.swift */; };
@@ -147,6 +148,7 @@
 		505118CB2AD96ECA003027D3 /* key.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = key.c; sourceTree = "<group>"; };
 		505118CC2AD96ECA003027D3 /* module.modulemap */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
 		505118CD2AD96ECA003027D3 /* x25519.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = x25519.h; sourceTree = "<group>"; };
+		505344B82C3EFE4C00223065 /* TransparentGradientButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransparentGradientButton.swift; sourceTree = "<group>"; };
 		506331F72AF1676B00BC8F0E /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		506331FA2AF52AB900BC8F0E /* CustomLottieView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomLottieView.swift; sourceTree = "<group>"; };
 		506331FF2AF9197700BC8F0E /* button-full2-dark.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "button-full2-dark.json"; sourceTree = "<group>"; };
@@ -356,6 +358,7 @@
 				506332012AF9415500BC8F0E /* CustomTextField.swift */,
 				509CCD672BE8FFBF00B7C2D8 /* TabBarButton.swift */,
 				50BB17402C30239400518BCA /* RouteCard.swift */,
+				505344B82C3EFE4C00223065 /* TransparentGradientButton.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -588,6 +591,7 @@
 				509CCD6E2BE90D2100B7C2D8 /* RouteTabView.swift in Sources */,
 				502455BF2A79B4500034792B /* SolidButton.swift in Sources */,
 				50BB17412C30239400518BCA /* RouteCard.swift in Sources */,
+				505344B92C3EFE4C00223065 /* TransparentGradientButton.swift in Sources */,
 				50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */,
 				50216D932ACB2488009574C9 /* NetworkExtensionAdapter.swift in Sources */,
 				509CCD6C2BE90D0E00B7C2D8 /* PeerTabView.swift in Sources */,
