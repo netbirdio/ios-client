@@ -67,6 +67,7 @@
 		50A8911B2A792A15007C48FC /* NetBirdApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911A2A792A15007C48FC /* NetBirdApp.swift */; };
 		50A8911D2A792A15007C48FC /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911C2A792A15007C48FC /* MainView.swift */; };
 		50A8911F2A792A16007C48FC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 50A8911E2A792A16007C48FC /* Assets.xcassets */; };
+		50BB17412C30239400518BCA /* RouteCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50BB17402C30239400518BCA /* RouteCard.swift */; };
 		50C5D30F2BDD96CF003159BE /* RoutesSelectionDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C5D30E2BDD96CF003159BE /* RoutesSelectionDetails.swift */; };
 		50C5D3102BDD96CF003159BE /* RoutesSelectionDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C5D30E2BDD96CF003159BE /* RoutesSelectionDetails.swift */; };
 		50C727ED2A824C10006E898D /* NetBirdAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C727EB2A824812006E898D /* NetBirdAdapter.swift */; };
@@ -82,7 +83,6 @@
 		50CD81B02AD5B94D00CF830B /* PeerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81AF2AD5B94D00CF830B /* PeerCard.swift */; };
 		50CD81B12AD5B94D00CF830B /* PeerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81AF2AD5B94D00CF830B /* PeerCard.swift */; };
 		50CD84362AD82F9400CF830B /* ServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD84352AD82F9400CF830B /* ServerView.swift */; };
-		50D402922BD913D100D4AC5B /* DirectoryPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D402912BD913D100D4AC5B /* DirectoryPicker.swift */; };
 		50D402942BD9143900D4AC5B /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
 		50D402952BD9143900D4AC5B /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
 		50D402972BD9B89300D4AC5B /* PeerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D402962BD9B89300D4AC5B /* PeerViewModel.swift */; };
@@ -160,6 +160,7 @@
 		50A8911A2A792A15007C48FC /* NetBirdApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetBirdApp.swift; sourceTree = "<group>"; };
 		50A8911C2A792A15007C48FC /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		50A8911E2A792A16007C48FC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		50BB17402C30239400518BCA /* RouteCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteCard.swift; sourceTree = "<group>"; };
 		50C5D30E2BDD96CF003159BE /* RoutesSelectionDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutesSelectionDetails.swift; sourceTree = "<group>"; };
 		50C727EB2A824812006E898D /* NetBirdAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetBirdAdapter.swift; sourceTree = "<group>"; };
 		50CD814E2AD0355000CF830B /* PacketTunnelProviderSettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacketTunnelProviderSettingsManager.swift; sourceTree = "<group>"; };
@@ -167,7 +168,6 @@
 		50CD81A62AD5504B00CF830B /* StatusDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusDetails.swift; sourceTree = "<group>"; };
 		50CD81AF2AD5B94D00CF830B /* PeerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerCard.swift; sourceTree = "<group>"; };
 		50CD84352AD82F9400CF830B /* ServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerView.swift; sourceTree = "<group>"; };
-		50D402912BD913D100D4AC5B /* DirectoryPicker.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DirectoryPicker.swift; sourceTree = "<group>"; };
 		50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = NetBirdSDK.xcframework; path = NetBird/NetBirdSDK.xcframework; sourceTree = "<group>"; };
 		50D402962BD9B89300D4AC5B /* PeerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerViewModel.swift; sourceTree = "<group>"; };
 		50E608022A7950CB00BAF09B /* Device.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Device.swift; sourceTree = "<group>"; };
@@ -347,7 +347,6 @@
 		50E608092A79557A00BAF09B /* Components */ = {
 			isa = PBXGroup;
 			children = (
-				50D402912BD913D100D4AC5B /* DirectoryPicker.swift */,
 				50E6081F2A7979D600BAF09B /* SideDrawer.swift */,
 				502455BC2A79B0480034792B /* CustomBackButton.swift */,
 				502455BE2A79B4500034792B /* SolidButton.swift */,
@@ -356,6 +355,7 @@
 				506331FA2AF52AB900BC8F0E /* CustomLottieView.swift */,
 				506332012AF9415500BC8F0E /* CustomTextField.swift */,
 				509CCD672BE8FFBF00B7C2D8 /* TabBarButton.swift */,
+				50BB17402C30239400518BCA /* RouteCard.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -587,6 +587,7 @@
 				50A8911B2A792A15007C48FC /* NetBirdApp.swift in Sources */,
 				509CCD6E2BE90D2100B7C2D8 /* RouteTabView.swift in Sources */,
 				502455BF2A79B4500034792B /* SolidButton.swift in Sources */,
+				50BB17412C30239400518BCA /* RouteCard.swift in Sources */,
 				50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */,
 				50216D932ACB2488009574C9 /* NetworkExtensionAdapter.swift in Sources */,
 				509CCD6C2BE90D0E00B7C2D8 /* PeerTabView.swift in Sources */,
@@ -598,7 +599,6 @@
 				50216D8E2ACB1905009574C9 /* NetworkChangeListener.swift in Sources */,
 				50CD81A72AD5504B00CF830B /* StatusDetails.swift in Sources */,
 				505118CE2AD96ECA003027D3 /* x25519.c in Sources */,
-				50D402922BD913D100D4AC5B /* DirectoryPicker.swift in Sources */,
 				508BD8452AF04A990055E415 /* SafariView.swift in Sources */,
 				505118D02AD96ECA003027D3 /* key.c in Sources */,
 				50E608262A79968500BAF09B /* AdvancedView.swift in Sources */,
@@ -809,7 +809,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -822,6 +822,7 @@
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
@@ -837,7 +838,7 @@
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gccgoimporter/testdata",
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge",
 				);
-				MARKETING_VERSION = 0.0.4;
+				MARKETING_VERSION = 0.0.6;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -860,7 +861,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -873,6 +874,7 @@
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
@@ -888,7 +890,7 @@
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gccgoimporter/testdata",
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge",
 				);
-				MARKETING_VERSION = 0.0.4;
+				MARKETING_VERSION = 0.0.6;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

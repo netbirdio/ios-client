@@ -18,7 +18,7 @@ struct RouteTabView: View {
                 if viewModel.extensionStateText == "Connected" && viewModel.routeViewModel.routeInfo.count > 0 {
                     VStack {
                         RouteSelectionHeader(routeViewModel: viewModel.routeViewModel)
-                        RouteSelectView(viewModel: viewModel, routeViewModel: viewModel.routeViewModel)
+                        RouteListView(viewModel: viewModel, routeViewModel: viewModel.routeViewModel, peerViewModel: viewModel.peerViewModel)
                     }
                 } else {
                     NoRoutesView()
@@ -28,7 +28,7 @@ struct RouteTabView: View {
             }
         }
         .onAppear {
-            self.viewModel.getRoutes()
+            self.viewModel.routeViewModel.getRoutes()
         }
     }
 }
@@ -48,9 +48,8 @@ struct RouteSelectionHeader: View {
                     Text("Enabled")
                 }
                 Button(action: { self.routeViewModel.selectionFilter = "Disabled" }) {
-                    Text("disabled")
+                    Text("Disabled")
                 }
-                
             } label: {
                 Image("icon-filter")
                     .padding([.leading, .trailing], 4)
@@ -60,49 +59,17 @@ struct RouteSelectionHeader: View {
 }
 
 
-struct RouteSelectView: View {
+struct RouteListView: View {
     @ObservedObject var viewModel: ViewModel
     @ObservedObject var routeViewModel: RoutesViewModel
+    @ObservedObject var peerViewModel: PeerViewModel
 
     var body: some View {
         ScrollView {
-            ForEach(routeViewModel.filteredRoutes) { route in
-                HStack {
-                    HStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(viewModel.peerViewModel.peerInfo.filter({ info in
-                                info.connStatus == "Connected" && info.routes.contains(route.network)
-                            }).count > 0 ? Color.green : (route.selected ? Color.yellow : Color.gray.opacity(0.5)))
-                                        .frame(width: 8, height: 40)
-                        VStack(alignment: .leading, content: {
-                            Text(route.name).foregroundColor(Color("TextPeerCard"))
-                        }).padding(.leading, 5)
-                        if(route.network.contains("0.0.0.0/0")){
-                            Image("direction-sign")
-                        }
-                        Spacer()
-                        Text(route.network).foregroundColor(Color("TextPeerCard")).padding(.leading, 3)
-                        Toggle("", isOn: Binding(
-                            get: { route.selected },
-                            set: { newValue in
-                                routeViewModel.toggleSelected(for: route.id)
-                            }
-                        ))
-                        .labelsHidden()
-                        .toggleStyle(SwitchToggleStyle(tint: .orange))
-                        .onChange(of: route.selected) { value in
-                            if value {
-                                self.viewModel.selectRoute(route: route)
-                            } else {
-                                self.viewModel.deselectRoute(route: route)
-                            }
-                        }
-                    }
-                    .padding()
-                }.background(
-                    Color("BgPeerCard")
-                )
-                .cornerRadius(8)
+            ForEach(Array(self.routeViewModel.filteredRoutes.enumerated()), id: \.element.id) { index, route in
+                RouteCard(route: route, selectedRouteId: $routeViewModel.selectedRouteId, orientationTop: index > 3, peerViewModel: peerViewModel, routeViewModel: routeViewModel)
+                    .zIndex(routeViewModel.selectedRouteId == route.id ? 1 : 0)
+                    .opacity(self.routeViewModel.tappedRoute == route ? 0.3 : 1.0)
             }
         }
     }

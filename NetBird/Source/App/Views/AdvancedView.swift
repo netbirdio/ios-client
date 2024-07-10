@@ -11,7 +11,6 @@ struct AdvancedView: View {
     @EnvironmentObject var viewModel: ViewModel
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
         
-    @State private var directoryPickerPresented = false
     
     var body: some View {
         ZStack {
@@ -58,7 +57,7 @@ struct AdvancedView: View {
                 })
                 .toggleStyle(SwitchToggleStyle(tint: .orange))
                 SolidButton(text: "Share logs") {
-                    directoryPickerPresented = true
+                    shareButtonTapped()
                 }
                 .padding(.top, 3)
                 Divider()
@@ -121,12 +120,51 @@ struct AdvancedView: View {
         .onTapGesture {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
-        .sheet(isPresented: $directoryPickerPresented) {
-            DirectoryPicker { url in
-                print("Directory selected: \(url)")
-                saveLogFile(at: url)
-            }
+    }
+    
+    func shareButtonTapped() {
+        let fileManager = FileManager.default
+        guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") else {
+            print("Failed to retrieve the group URL")
+            return
         }
+
+        let logURL = groupURL.appendingPathComponent("logfile.log")
+
+        do {
+            let logData = try String(contentsOf: logURL, encoding: .utf8)
+            let fileName = "netbird-log.txt"
+            guard let filePath = getDocumentsDirectory()?.appendingPathComponent(fileName) else {
+                print("Failed to get file path")
+                return
+            }
+            
+            do {
+                try logData.write(to: filePath, atomically: true, encoding: .utf8)
+                
+                let activityViewController = UIActivityViewController(activityItems: [filePath], applicationActivities: nil)
+                
+                activityViewController.excludedActivityTypes = [
+                    .assignToContact,
+                    .saveToCameraRoll
+                ]
+                
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootViewController = windowScene.windows.first?.rootViewController {
+                    rootViewController.present(activityViewController, animated: true, completion: nil)
+                }
+            } catch {
+                print("Failed to write to file: \(error.localizedDescription)")
+            }
+        } catch {
+            print("Failed to read log data: \(error)")
+            return
+        }
+    }
+        
+    func getDocumentsDirectory() -> URL? {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths.first
     }
     
     func saveLogFile(at url: URL?) {
