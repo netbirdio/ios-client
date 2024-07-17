@@ -46,7 +46,7 @@ struct CustomLottieView: UIViewRepresentable {
                 case .connected:
                     DispatchQueue.main.async {
                         viewModel.extensionStateText = "Connected"
-                        viewModel.getRoutes()
+                        viewModel.routeViewModel.getRoutes()
                     }
                     uiView.currentFrame = context.coordinator.connectedFrame
                 case .connecting:

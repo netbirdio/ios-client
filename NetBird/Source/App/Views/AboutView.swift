@@ -9,6 +9,8 @@ import SwiftUI
 
 struct AboutView: View {
     
+    @EnvironmentObject var viewModel: ViewModel
+    
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
     
     var body: some View {
@@ -37,9 +39,28 @@ struct AboutView: View {
                 Link("Privacy policy", destination: URL(string: "https://netbird.io/privacy")!)
                     .font(.system(size: 18, weight: .medium))
                 Spacer()
+                TransparentGradientButton(text: "Join Beta Program") {
+                    viewModel.showBetaProgramAlert.toggle()
+                }
+                .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.20)
+                .padding(.bottom, 50)
                 Text("© 2023 NetBird all rights reserved")
                     .foregroundColor(Color.white)
                     .padding(.bottom, UIScreen.main.bounds.height * 0.01)
+            }
+            if viewModel.showBetaProgramAlert {
+                Color.black.opacity(0.4)
+                    .edgesIgnoringSafeArea(.all)
+                    .onTapGesture {
+                        viewModel.buttonLock = true
+                        viewModel.showBetaProgramAlert = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            viewModel.buttonLock = false
+                        }
+                    }
+                
+                BetaProgramAlert(viewModel: viewModel, isPresented: $viewModel.showBetaProgramAlert)
+                    .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
@@ -48,6 +69,51 @@ struct AboutView: View {
         .navigationBarItems(leading: CustomBackButton(text: "About", action: {
             presentationMode.wrappedValue.dismiss()
         }))
+    }
+}
+
+struct BetaProgramAlert: View {
+    @StateObject var viewModel: ViewModel
+    @Binding var isPresented: Bool
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Image("exclamation-circle")
+                .padding(.top, 20)
+            Text("Joining TestFlight Beta")
+                .font(.title)
+                .foregroundColor(Color("TextAlert"))
+            Text("By signing up for the TestFlight you will be receiving the new updates early and can give us valuable feedback before the official release.")
+                .foregroundColor(Color("TextAlert"))
+                .multilineTextAlignment(.center)
+            SolidButton(text: "Sign Up") {
+                if let url = URL(string: "https://testflight.apple.com/join/jISzXOP8") {
+                    UIApplication.shared.open(url)
+                }
+                isPresented.toggle()
+            }
+            Button {
+                isPresented.toggle()
+            } label: {
+                Text("Cancel")
+                    .font(.headline)
+                    .foregroundColor(Color.accentColor)
+                    .padding()
+                    .frame(maxWidth: .infinity) // Span the whole width
+                    .background(
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color(red: 0, green: 0, blue: 0, opacity: 0))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .stroke(Color.accentColor, lineWidth: 1)
+                            )
+                    )
+            }
+        }
+        .padding()
+        .background(Color("BgSideDrawer"))
+        .cornerRadius(15)
+        .shadow(radius: 10)
     }
 }
 

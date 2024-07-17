@@ -12,13 +12,14 @@ import Combine
 
 @MainActor
 class ViewModel: ObservableObject {    
-    @Published var networkExtensionAdapter = NetworkExtensionAdapter()
+    @Published var networkExtensionAdapter: NetworkExtensionAdapter
     @Published var showSetupKeyPopup = false
     @Published var showChangeServerAlert = false
     @Published var showInvalidServerAlert = false
     @Published var showInvalidSetupKeyHint = false
     @Published var showInvalidSetupKeyAlert = false
     @Published var showLogLevelChangedAlert = false
+    @Published var showBetaProgramAlert = false
     @Published var showInvalidPresharedKeyAlert = false
     @Published var showServerChangedInfo = false
     @Published var showPreSharedKeyChangedInfo = false
@@ -60,12 +61,16 @@ class ViewModel: ObservableObject {
     
     private var cancellables = Set<AnyCancellable>()
     
-    @Published var peerViewModel = PeerViewModel()
-    @Published var routeViewModel = RoutesViewModel()
+    @Published var peerViewModel: PeerViewModel
+    @Published var routeViewModel: RoutesViewModel
     
     init() {
+        let networkExtensionAdapter = NetworkExtensionAdapter()
+        self.networkExtensionAdapter = networkExtensionAdapter
         let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
         self.traceLogsEnabled = logLevel == "TRACE"
+        self.peerViewModel = PeerViewModel()
+        self.routeViewModel = RoutesViewModel(networkExtensionAdapter: networkExtensionAdapter)
         self.rosenpassEnabled = self.getRosenpassEnabled()
         self.rosenpassPermissive = self.getRosenpassPermissive()
         
@@ -174,41 +179,6 @@ class ViewModel: ObservableObject {
         // Optionally remove peers that are not in the newPeers array
         self.peerViewModel.peerInfo = self.peerViewModel.peerInfo.filter { currentPeer in
             newPeers.contains(where: { $0.id == currentPeer.id })
-        }
-    }
-    
-    func getRoutes() {
-        networkExtensionAdapter.getRoutes { details in
-            self.routeViewModel.routeInfo = details.routeSelectionInfo
-            print("Route count: \(details.routeSelectionInfo.count)")
-        }
-    }
-    
-    func selectRoute(route: RoutesSelectionInfo) {
-        guard let index = routeViewModel.routeInfo.firstIndex(where: { $0.id == route.id }) else { return }
-        routeViewModel.routeInfo[index].selected = true
-        networkExtensionAdapter.selectRoutes(id: route.name) { details in
-            print("selected route")
-        }
-    }
-    
-    func selectAllRoutes() {
-        networkExtensionAdapter.selectRoutes(id: "All") { details in
-            print("selected all routes")
-        }
-    }
-    
-    func deselectRoute(route: RoutesSelectionInfo) {
-        guard let index = routeViewModel.routeInfo.firstIndex(where: { $0.id == route.id }) else { return }
-        routeViewModel.routeInfo[index].selected = false
-        networkExtensionAdapter.deselectRoutes(id: route.name) { details in
-            print("deselect route")
-        }
-    }
-    
-    func deselectAllRoutes() {
-        networkExtensionAdapter.deselectRoutes(id: "All") { details in
-            print("deselect all routes")
         }
     }
     

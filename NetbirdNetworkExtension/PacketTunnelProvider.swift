@@ -125,9 +125,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     func getSelectRoutes(completionHandler: ((Data?) -> Void)) {
         do {
             let routeSelectionDetailsMessage = try adapter.client.getRoutesSelectionDetails()
-            let routeSelectionInfo = (0..<routeSelectionDetailsMessage.size()).compactMap { index -> RoutesSelectionInfo? in
+            
+            let routeSelectionInfo: [RoutesSelectionInfo] = (0..<routeSelectionDetailsMessage.size()).compactMap { index in
                 guard let route = routeSelectionDetailsMessage.get(index) else { return nil }
-                return RoutesSelectionInfo(name: route.id_, network: route.network, selected: route.selected)
+                
+                let domains: [DomainDetails] = (0..<(route.domains?.size() ?? 0)).compactMap { domainIndex in
+                    guard let domain = route.domains?.get(domainIndex) else { return nil }
+                    return DomainDetails(domain: domain.domain, resolvedips: domain.resolvedIPs)
+                }
+                
+                return RoutesSelectionInfo(name: route.id_, network: route.network, domains: domains, selected: route.selected)
             }
 
             let routeSelectionDetails = RoutesSelectionDetails(

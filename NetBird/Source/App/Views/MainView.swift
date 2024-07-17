@@ -274,7 +274,7 @@ struct SheetView: View {
                             if selectedTab == 2 {
                                 Button {
                                     isAnimating = true
-                                    viewModel.getRoutes()
+                                    viewModel.routeViewModel.getRoutes()
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) {
                                         self.isAnimating = false
                                     }

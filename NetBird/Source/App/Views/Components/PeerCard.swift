@@ -12,6 +12,8 @@ struct PeerCard: View {
     @Binding var selectedPeerId: UUID?
     @State var orientationTop: Bool
     
+    @State private var tooltipSize: CGSize = .zero
+    
     var body: some View {
         HStack {
             HStack {
@@ -34,16 +36,31 @@ struct PeerCard: View {
         )
         .cornerRadius(8)
         .overlay(
-            TooltipView(peer: peer, orientationTop: orientationTop, selectedPeerId: $selectedPeerId)
-                .offset(y: orientationTop ? -330 : 320)
-                .opacity(self.selectedPeerId == peer.id ? 1 : 0),
-            alignment: orientationTop ? .top : .bottom
+            GeometryReader { parentGeometry in
+                ZStack {
+                    if selectedPeerId == peer.id {
+                        PeerTooltipView(peer: peer, orientationTop: orientationTop, selectedPeerId: $selectedPeerId)
+                            .background(GeometryReader { tooltipGeometry in
+                                Color.clear
+                                    .onAppear {
+                                        tooltipSize = tooltipGeometry.size
+                                    }
+                            })
+                            .position(
+                                x: parentGeometry.size.width / 2,
+                                y: orientationTop ? parentGeometry.size.height - (tooltipSize.height / 2) - 65 : (tooltipSize.height / 2) + 65
+                            )
+                            .opacity(self.selectedPeerId == peer.id ? 1 : 0)
+                    }
+                }
+                .frame(width: parentGeometry.size.width, height: parentGeometry.size.height, alignment: .center)
+            },
+            alignment: .center
         )
-        .animation(.easeInOut)
     }
 }
 
-struct TooltipView: View {
+struct PeerTooltipView: View {
     @ObservedObject var peer: PeerInfo
     @State var orientationTop: Bool
     @Binding var selectedPeerId: UUID?
@@ -99,7 +116,7 @@ struct TooltipView: View {
                 .rotationEffect(.degrees(orientationTop ? 180 : 0 ))
                 .offset(x: 0, y: orientationTop ? 10 : -10), alignment: orientationTop ? .bottom : .top
         )
-        .transition(.scale)
+        .transition(.identity)
     }
     
     @ViewBuilder
@@ -189,16 +206,17 @@ struct TooltipView: View {
         let relativeDate = relativeFormatter.localizedString(for: date, relativeTo: Date())
         return relativeDate
     }
-}
-
-struct Triangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.closeSubpath()
-        return path
+    
+    struct Triangle: Shape {
+        func path(in rect: CGRect) -> Path {
+            var path = Path()
+            path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+            path.closeSubpath()
+            return path
+        }
     }
 }
+
 
