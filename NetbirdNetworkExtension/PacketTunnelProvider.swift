@@ -6,6 +6,7 @@
 //
 
 import NetworkExtension
+import Network
 import os
 import Firebase
 import FirebaseCrashlytics
@@ -23,6 +24,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         return NetBirdAdapter(with: self.tunnelManager)
     }()
             
+    var pathMonitor: NWPathMonitor?
+    let monitorQueue = DispatchQueue(label: "NetworkMonitor")
+    var currentNetworkType: NWInterface.InterfaceType?
+    
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         let firebaseOptions = FirebaseOptions(contentsOfFile: Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist")!)
         FirebaseApp.configure(options: firebaseOptions!)
@@ -34,6 +39,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             }
         }
         
+        // Initialize current network type
+        currentNetworkType = nil
+        
+        startMonitoringNetworkChanges()
         
         if adapter.needsLogin() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -41,12 +50,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             }
             return
         }
-                
+        
         adapter.start(completionHandler: completionHandler)
     }
     
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         adapter.stop()
+        pathMonitor?.cancel()
+        pathMonitor = nil
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             completionHandler()
         }
@@ -71,6 +82,55 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 deselectRoute(id: id)
             default:
                 print("unknown message")
+            }
+        }
+    }
+    
+    func startMonitoringNetworkChanges() {
+        pathMonitor = NWPathMonitor()
+        pathMonitor?.pathUpdateHandler = { [weak self] path in
+            self?.handleNetworkChange(path: path)
+        }
+        pathMonitor?.start(queue: monitorQueue)
+    }
+
+    func handleNetworkChange(path: Network.NWPath) {
+        guard path.status == .satisfied else {
+            print("No network connection")
+            return
+        }
+        
+        let newNetworkType: NWInterface.InterfaceType? = {
+            if path.usesInterfaceType(.wifi) {
+                return .wifi
+            } else if path.usesInterfaceType(.cellular) {
+                return .cellular
+            } else {
+                return nil
+            }
+        }()
+        
+        guard let networkType = newNetworkType else {
+            print("Connected to other network type")
+            return
+        }
+        
+        if currentNetworkType != networkType {
+            print("Network type changed to \(networkType)")
+            if currentNetworkType != nil {
+                restartClient()
+            }
+            currentNetworkType = networkType
+        } else {
+            print("Network type remains the same: \(networkType)")
+        }
+    }
+    
+    func restartClient() {
+        adapter.stop()
+        self.adapter.start { error in
+            if let error = error {
+                print("Error restarting client: \(error.localizedDescription)")
             }
         }
     }
@@ -246,4 +306,3 @@ func initializeLogging(loglevel: String) {
                print("Failed to initialize log: \(actualError.localizedDescription)")
            }
 }
-
