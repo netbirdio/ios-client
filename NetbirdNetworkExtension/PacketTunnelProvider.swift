@@ -56,8 +56,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         adapter.stop()
-        pathMonitor?.cancel()
-        pathMonitor = nil
+        guard let pathMonitor = self.pathMonitor else {
+            print("pathMonitor is nil")
+            return
+        }
+        pathMonitor.cancel()
+        self.pathMonitor = nil
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             completionHandler()
         }
