@@ -66,7 +66,11 @@ class PacketTunnelProviderSettingsManager {
     
     private func updateTunnel() {
         if let tunnelSettings = createTunnelSettings() {
-            self.packetTunnelProvider!.setTunnelSettings(tunnelNetworkSettings: tunnelSettings)
+            if let tunnelProvider = self.packetTunnelProvider {
+                tunnelProvider.setTunnelSettings(tunnelNetworkSettings: tunnelSettings)
+            } else {
+                print("Failed to get tunnel provider")
+            }
         } else {
             print("Failed to update tunnel")
         }
