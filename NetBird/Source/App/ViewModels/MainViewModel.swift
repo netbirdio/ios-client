@@ -23,7 +23,8 @@ class ViewModel: ObservableObject {
     @Published var showInvalidPresharedKeyAlert = false
     @Published var showServerChangedInfo = false
     @Published var showPreSharedKeyChangedInfo = false
-    @Published var showCopiedAlert = false
+    @Published var showFqdnCopiedAlert = false
+    @Published var showIpCopiedAlert = false
     @Published var showAuthenticationRequired = false
     @Published var isSheetExpanded = false
     @Published var presentSideDrawer = false
@@ -152,33 +153,17 @@ class ViewModel: ObservableObject {
             }
             
             self.statusDetailsValid = true
-                
+                           
             let sortedPeerInfo = details.peerInfo.sorted(by: { a, b in
                 a.ip < b.ip
             })
-            if !sortedPeerInfo.elementsEqual(self.peerViewModel.peerInfo, by: { a, b in
+            if sortedPeerInfo.count != self.peerViewModel.peerInfo.count || !sortedPeerInfo.elementsEqual(self.peerViewModel.peerInfo, by: { a, b in
                 a.ip == b.ip && a.connStatus == b.connStatus && a.relayed == b.relayed && a.direct == b.direct && a.connStatusUpdate == b.connStatusUpdate && a.routes.count == b.routes.count
             }) {
-                print("Setting new peer info")
-                self.updatePeerInfoArray(with: sortedPeerInfo)
+                print("Setting new peer info: \(sortedPeerInfo.count) Peers")
+                self.peerViewModel.peerInfo = sortedPeerInfo
             }
         
-        }
-    }
-    
-    func updatePeerInfoArray(with newPeers: [PeerInfo]) {
-        for newPeer in newPeers {
-            if let index = self.peerViewModel.peerInfo.firstIndex(where: { $0.id == newPeer.id }) {
-                self.peerViewModel.peerInfo[index].update(from: newPeer)
-            } else {
-                // Optionally add new peers that do not exist in the current array
-                self.peerViewModel.peerInfo.append(newPeer)
-            }
-        }
-
-        // Optionally remove peers that are not in the newPeers array
-        self.peerViewModel.peerInfo = self.peerViewModel.peerInfo.filter { currentPeer in
-            newPeers.contains(where: { $0.id == currentPeer.id })
         }
     }
     

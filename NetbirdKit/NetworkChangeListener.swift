@@ -19,13 +19,14 @@ enum IPAddressType {
 
 class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
     func onNetworkChanged(_ p0: String?) {
-        let (v4Routes, v6Routes, containsDefault) = parseRoutesToNESettings(routesString: p0!)
-        if let tunnelManager = self.tunnelManager {
-            tunnelManager.setRoutes(v4Routes: v4Routes, v6Routes: v6Routes, containsDefault: containsDefault)
+        if p0 == nil || p0!.isEmpty {
+            return
         }
+        let (v4Routes, v6Routes, containsDefault) = parseRoutesToNESettings(routesString: p0!)
+        self.tunnelManager.setRoutes(v4Routes: v4Routes, v6Routes: v6Routes, containsDefault: containsDefault)
     }
     
-    private weak var tunnelManager: PacketTunnelProviderSettingsManager?
+    private var tunnelManager: PacketTunnelProviderSettingsManager
     
     var interfaceIP: String?
     
@@ -34,10 +35,11 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
     }
     
     func setInterfaceIP(_ p0: String?) {
-        self.interfaceIP = p0!
-        if let tunnelManager = self.tunnelManager {
-            tunnelManager.setInterfaceIP(interfaceIP: p0!)
+        if p0 == nil || p0!.isEmpty {
+            return
         }
+        self.interfaceIP = p0!
+        self.tunnelManager.setInterfaceIP(interfaceIP: p0!)
     }
     
     func parseRoutesToNESettings(routesString: String) -> ([NEIPv4Route], [NEIPv6Route], Bool) {
