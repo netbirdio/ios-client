@@ -14,9 +14,13 @@ class PeerViewModel: ObservableObject {
     
     @Published var tappedPeer: PeerInfo? = nil
     @Published var selectedPeerId: UUID?
-
+    
+    @Published var freezeDisplayedPeers: Bool = false
+    private var displayedPeersBackup: [PeerInfo] = []
+    var lockID: String = UUID().uuidString
+    
     var filteredPeers: [PeerInfo] {
-        peerInfo.filter { peer in
+        return peerInfo.filter { peer in
             switch selectionFilter {
             case "All": return true
             case "Connected": return peer.connStatus == "Connected"
@@ -29,6 +33,28 @@ class PeerViewModel: ObservableObject {
             peer.ip.contains(peerFilter) ||
             peerFilter.isEmpty
         }
+    }
+    
+    var displayedPeers: [PeerInfo] {
+        if freezeDisplayedPeers {
+            return displayedPeersBackup
+        } else {
+            displayedPeersBackup = filteredPeers
+            let conn = filteredPeers.filter{ peer in
+                peer.connStatus == "Connected"
+            }
+            return filteredPeers
+        }
+    }
+    
+    func freezeDisplayedPeerList() {
+        self.freezeDisplayedPeers = true
+        print("Freezing displayed peer list")
+    }
+    
+    func unfreezeDisplayedPeerList() {
+        self.freezeDisplayedPeers = false
+        print("Unfreezing displayed peer list")
     }
 
 }

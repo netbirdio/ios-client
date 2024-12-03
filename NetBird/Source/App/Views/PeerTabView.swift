@@ -98,48 +98,102 @@ struct NoPeersView: View {
 struct PeerListView: View {
     @ObservedObject var peerViewModel: PeerViewModel
     @ObservedObject var viewModel: ViewModel
-        
+
     var body: some View {
         ScrollView {
             VStack {
-                ForEach(Array(self.peerViewModel.filteredPeers.enumerated()), id: \.element.id) { index, peer in
-                    PeerCard(
+                ForEach(Array(peerViewModel.displayedPeers.enumerated()), id: \.element.id) { index, peer in
+                    PeerCardView(
                         peer: peer,
-                        selectedPeerId: $peerViewModel.selectedPeerId,
-                        orientationTop: index > 3
+                        index: index,
+                        peerViewModel: peerViewModel,
+                        viewModel: viewModel
                     )
-                    .zIndex(peerViewModel.selectedPeerId == peer.id ? 1 : 0)
-                    .opacity(self.peerViewModel.tappedPeer == peer ? 0.3 : 1.0)
-                    .onTapGesture {
-                        withAnimation {
-                            print("Setting selected peer id to \(peer.id)")
-                            peerViewModel.selectedPeerId = peerViewModel.selectedPeerId == peer.id ? nil : peer.id
-                        }
-                    }
-                    .onLongPressGesture {
-                        peerViewModel.tappedPeer = peer
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            withAnimation {
-                                peerViewModel.tappedPeer = nil
-                            }
-                        }
-
-                        print("Copied to clipboard")
-                        UIPasteboard.general.string = peer.fqdn
-                        self.viewModel.showCopiedAlert = true
-
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            withAnimation {
-                                self.viewModel.showCopiedAlert = false
-                            }
-                        }
-                    }
                 }
-                if self.peerViewModel.peerInfo.count < 4 {
+                
+                if peerViewModel.peerInfo.count < 4 {
                     Color.clear.frame(height: 80)
                 }
             }
             .padding(.bottom, 20)
+        }
+    }
+}
+
+struct PeerCardView: View {
+    let peer: PeerInfo
+    let index: Int
+    @ObservedObject var peerViewModel: PeerViewModel
+    @ObservedObject var viewModel: ViewModel
+
+    var body: some View {
+        PeerCard(
+            peer: peer,
+            selectedPeerId: $peerViewModel.selectedPeerId,
+            orientationTop: index > 3
+        )
+        .zIndex(peerViewModel.selectedPeerId == peer.id ? 1 : 0)
+        .opacity(peerViewModel.tappedPeer == peer ? 0.3 : 1.0)
+        .gesture(
+            ExclusiveGesture(longPressGesture(for: peer), tapGesture(for: peer))
+        )
+        .contextMenu {
+            contextMenu(for: peer)
+        }
+    }
+
+    private func longPressGesture(for peer: PeerInfo) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.1)
+            .onEnded { _ in
+                print("long press ended")
+                let currLockID = UUID().uuidString
+                peerViewModel.lockID = currLockID
+                
+                self.peerViewModel.freezeDisplayedPeerList()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+                    if currLockID == peerViewModel.lockID {
+                        peerViewModel.unfreezeDisplayedPeerList()
+                    }
+                    
+                }
+            }
+    }
+
+    private func tapGesture(for peer: PeerInfo) -> some Gesture {
+        TapGesture(count: 1)
+            .onEnded {
+                withAnimation {
+                    print("Setting selected peer id to \(peer.id)")
+                    peerViewModel.selectedPeerId = peerViewModel.selectedPeerId == peer.id ? nil : peer.id
+                }
+            }
+    }
+
+    private func contextMenu(for peer: PeerInfo) -> some View {
+        Group {
+            Button("Copy FQDN") {
+                UIPasteboard.general.string = peer.fqdn
+                print("Copied FQDN to clipboard")
+                viewModel.showFqdnCopiedAlert = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    withAnimation {
+                        viewModel.showFqdnCopiedAlert = false
+                    }
+                }
+                peerViewModel.unfreezeDisplayedPeerList()
+            }
+
+            Button("Copy IP") {
+                UIPasteboard.general.string = peer.ip
+                print("Copied IP to clipboard")
+                viewModel.showIpCopiedAlert = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    withAnimation {
+                        viewModel.showIpCopiedAlert = false
+                    }
+                }
+                peerViewModel.unfreezeDisplayedPeerList()
+            }
         }
     }
 }

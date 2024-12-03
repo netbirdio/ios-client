@@ -15,84 +15,108 @@ struct AdvancedView: View {
     var body: some View {
         ZStack {
             Color("BgPage")
-                .edgesIgnoringSafeArea(.bottom)
-            VStack (alignment: .leading){
-                Text("Add a pre-shared key")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(Color("TextPrimary"))
-                    .padding(.top, UIScreen.main.bounds.height * 0.04)
-                Text("You will only communicate with peers that use the same key.")
-                    .multilineTextAlignment(.leading)
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundColor(Color("TextSecondary"))
-                    .padding(.top, 3)
-                CustomTextField(placeholder: "Add a pre-shared key", text: $viewModel.presharedKey, secure: $viewModel.presharedKeySecure)
-                    .padding(.top, 3)
-                    .onChange(of: viewModel.presharedKey, perform: { value in
-                        checkForValidPresharedKey(text: value)
-                    })
-                if viewModel.showInvalidPresharedKeyAlert {
-                    Text("Invalid key").foregroundColor(.red)
-                }
-                SolidButton(text: viewModel.presharedKeySecure ? "Remove" : "Save") {
-                    if !viewModel.showInvalidPresharedKeyAlert {
-                        if viewModel.presharedKeySecure {
-                            viewModel.removePreSharedKey() // TODO: might replace this with new implememented removal
-                        } else {
-                            viewModel.updatePreSharedKey()
-                            print("save preshared key")
-                            self.presentationMode.wrappedValue.dismiss()
+                .edgesIgnoringSafeArea(.all)
+            
+            ScrollView { 
+                VStack(alignment: .leading) {
+                    Text("Add a pre-shared key")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(Color("TextPrimary"))
+                        .padding(.top, UIScreen.main.bounds.height * 0.04)
+                        .fixedSize(horizontal: false, vertical: true)
+                    
+                    Text("You will only communicate with peers that use the same key.")
+                        .multilineTextAlignment(.leading)
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundColor(Color("TextSecondary"))
+                        .padding(.top, 3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    
+                    CustomTextField(placeholder: "Add a pre-shared key", text: $viewModel.presharedKey, secure: $viewModel.presharedKeySecure)
+                        .padding(.top, 3)
+                        .onChange(of: viewModel.presharedKey) { value in
+                            checkForValidPresharedKey(text: value)
+                        }
+                    
+                    if viewModel.showInvalidPresharedKeyAlert {
+                        Text("Invalid key")
+                            .foregroundColor(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    
+                    SolidButton(text: viewModel.presharedKeySecure ? "Remove" : "Save") {
+                        if !viewModel.showInvalidPresharedKeyAlert {
+                            if viewModel.presharedKeySecure {
+                                viewModel.removePreSharedKey()
+                            } else {
+                                viewModel.updatePreSharedKey()
+                                print("save preshared key")
+                                presentationMode.wrappedValue.dismiss()
+                            }
                         }
                     }
-                }
-                .padding(.top, 10)
-                Divider()
-                    .padding([.top, .bottom])
-                Toggle(isOn: $viewModel.traceLogsEnabled, label: {
-                    Text("Enable Trace logs.")
-                        .multilineTextAlignment(.leading)
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundColor(Color("TextSecondary"))
-                        .padding(.top, 3)
-                })
-                .toggleStyle(SwitchToggleStyle(tint: .orange))
-                SolidButton(text: "Share logs") {
-                    shareButtonTapped()
-                }
-                .padding(.top, 3)
-                Divider()
-                    .padding([.top, .bottom])
-                Toggle(isOn: $viewModel.rosenpassEnabled, label: {
-                    Text("Enable Rosenpass.")
-                        .multilineTextAlignment(.leading)
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundColor(Color("TextSecondary"))
-                        .padding(.top, 3)
-                })
-                .toggleStyle(SwitchToggleStyle(tint: .orange))
-                .onChange(of: viewModel.rosenpassEnabled) { value in
-                    if !value {
-                        viewModel.rosenpassPermissive = false
+                    .padding(.top, 10)
+                    
+                    Divider()
+                        .padding([.top, .bottom])
+                    
+                    Toggle(isOn: $viewModel.traceLogsEnabled) {
+                        Text("Enable Trace logs.")
+                            .multilineTextAlignment(.leading)
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(Color("TextSecondary"))
+                            .padding(.top, 3)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    viewModel.setRosenpassEnabled(enabled: value)
-                }
-                Toggle(isOn: $viewModel.rosenpassPermissive, label: {
-                    Text("Enable Rosenpass permissive mode.")
-                        .multilineTextAlignment(.leading)
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundColor(Color("TextSecondary"))
-                        .padding(.top, 3)
-                })
-                .toggleStyle(SwitchToggleStyle(tint: .orange))
-                .onChange(of: viewModel.rosenpassPermissive) { value in
-                    if value {
-                        viewModel.rosenpassEnabled = true
+                    .toggleStyle(SwitchToggleStyle(tint: .orange))
+                    
+                    SolidButton(text: "Share logs") {
+                        shareButtonTapped()
                     }
-                    viewModel.setRosenpassPermissive(permissive: value)
+                    .padding(.top, 3)
+                    
+                    Divider()
+                        .padding([.top, .bottom])
+                    
+                    Toggle(isOn: $viewModel.rosenpassEnabled) {
+                        Text("Enable Rosenpass.")
+                            .multilineTextAlignment(.leading)
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(Color("TextSecondary"))
+                            .padding(.top, 3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: .orange))
+                    .onChange(of: viewModel.rosenpassEnabled) { value in
+                        if !value {
+                            viewModel.rosenpassPermissive = false
+                        }
+                        viewModel.setRosenpassEnabled(enabled: value)
+                    }
+                    
+                    Toggle(isOn: $viewModel.rosenpassPermissive) {
+                        Text("Enable Rosenpass permissive mode.")
+                            .multilineTextAlignment(.leading)
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(Color("TextSecondary"))
+                            .padding(.top, 3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: .orange))
+                    .onChange(of: viewModel.rosenpassPermissive) { value in
+                        if value {
+                            viewModel.rosenpassEnabled = true
+                        }
+                        viewModel.setRosenpassPermissive(permissive: value)
+                    }
+                    
+                    Spacer()
                 }
-                Spacer()
+                .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.10)
+                .frame(maxWidth: .infinity, alignment: .leading) // Ensures VStack uses full width
             }
-            .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.10)
+            .ignoresSafeArea(.keyboard) // Prevents keyboard from shifting views up
+            
             if viewModel.showLogLevelChangedAlert {
                 Color.black.opacity(0.4)
                     .edgesIgnoringSafeArea(.all)
@@ -108,15 +132,15 @@ struct AdvancedView: View {
                     .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
             }
         }
-        .onAppear(perform: {
+        .onAppear {
             viewModel.loadPreSharedKey()
-        })
+        }
         .navigationViewStyle(StackNavigationViewStyle())
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
-        .navigationBarItems(leading: CustomBackButton(text: "Advanced", action: {
+        .navigationBarItems(leading: CustomBackButton(text: "Advanced") {
             presentationMode.wrappedValue.dismiss()
-        }))
+        })
         .onTapGesture {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }

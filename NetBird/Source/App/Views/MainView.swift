@@ -8,6 +8,7 @@
 import SwiftUI
 import Lottie
 import NetworkExtension
+import Combine
 
 struct MainView: View {
     @EnvironmentObject var viewModel: ViewModel
@@ -169,22 +170,47 @@ struct MainView: View {
                     ZStack {
                         VStack {
                             Spacer()
-                            if viewModel.showCopiedAlert {
-                                HStack {
-                                    Image("logo-onboarding")
-                                        .resizable()
-                                        .frame(width: 20, height: 15)
-                                    Text("Domain name copied!")
-                                        .foregroundColor(.white)
-                                        .font(.headline)
+                            if viewModel.showFqdnCopiedAlert {
+                                VStack {
+                                    Spacer()
+                                    HStack {
+                                        Image("logo-onboarding")
+                                            .resizable()
+                                            .frame(width: 20, height: 15)
+                                        Text("Domain name copied!")
+                                            .foregroundColor(.white)
+                                            .font(.headline)
+                                    }
+                                    .padding(5)
+                                    .background(Color.black.opacity(0.5))
+                                    .cornerRadius(8)
+                                    .transition(AnyTransition.opacity.combined(with: .move(edge: .top)))
+                                    .animation(.default, value: viewModel.showFqdnCopiedAlert)
+                                    .zIndex(1)
+                                    Spacer().frame(height: 40)
                                 }
-                                .padding(5)
-                                .background(Color.black.opacity(0.5))
-                                .cornerRadius(8)
-                                .transition(AnyTransition.opacity.combined(with: .move(edge: .top)))
-                                .animation(.default, value: viewModel.showCopiedAlert)
-                                .zIndex(1)
-                           }
+                            }
+                            
+                            if viewModel.showIpCopiedAlert {
+                                VStack {
+                                    Spacer()
+                                    HStack {
+                                        Image("logo-onboarding")
+                                            .resizable()
+                                            .frame(width: 20, height: 15)
+                                        Text("IP address copied!")
+                                            .foregroundColor(.white)
+                                            .font(.headline)
+                                    }
+                                    .padding(5)
+                                    .background(Color.black.opacity(0.5))
+                                    .cornerRadius(8)
+                                    .transition(AnyTransition.opacity.combined(with: .move(edge: .top)))
+                                    .animation(.default, value: viewModel.showIpCopiedAlert)
+                                    .zIndex(1)
+                                    Spacer().frame(height: 40)
+                                }
+                            }
                         }
                         .padding(.bottom, 40)
                     }
@@ -207,11 +233,29 @@ struct MainView: View {
     }
 }
 
+class KeyboardObserver: ObservableObject {
+    @Published var keyboardHeight: CGFloat = 0
+    private var cancellables = Set<AnyCancellable>()
+    
+    init() {
+        NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
+            .compactMap { $0.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect }
+            .map { $0.height }
+            .assign(to: \.keyboardHeight, on: self)
+            .store(in: &cancellables)
+        
+        NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
+            .map { _ in CGFloat(0) }
+            .assign(to: \.keyboardHeight, on: self)
+            .store(in: &cancellables)
+    }
+}
+
 struct SheetView: View {
     @EnvironmentObject var viewModel: ViewModel
+    @StateObject private var keyboardObserver = KeyboardObserver()
     
     @GestureState private var translation: CGFloat = 0
-    
     @State private var showDropdown: Bool = false
     @State var selectedTab = 1
     @State private var isAnimating = false
@@ -227,37 +271,45 @@ struct SheetView: View {
                             viewModel.isSheetExpanded.toggle()
                         }
                     } label: {
-                        Handlebar().padding(.top, 5)
+                        Handlebar()
+                            .padding(.top, 5)
                     }
+                    
+                    // Header Section with Connection Status
                     HStack {
                         if selectedTab == 1 {
-                            Text((viewModel.extensionStateText != "Connected" ? "0" : viewModel.peerViewModel.peerInfo.filter({ info in
-                                info.connStatus == "Connected"
-                            }).count.description) + " of " + (viewModel.extensionStateText != "Connected" ? "0" : viewModel.peerViewModel.peerInfo.count.description)).font(.system(size: 18, weight: .bold))
+                            Text((viewModel.extensionStateText != "Connected" ? "0" : viewModel.peerViewModel.peerInfo.filter { $0.connStatus == "Connected" }.count.description)
+                                + " of "
+                                + (viewModel.extensionStateText != "Connected" ? "0" : viewModel.peerViewModel.peerInfo.count.description))
+                                .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(Color("TextSecondary"))
                             Text("Peers connected")
                                 .font(.system(size: 18, weight: .regular))
                                 .foregroundColor(Color("TextSecondary"))
                         } else {
-                            Text((viewModel.extensionStateText != "Connected" ? "0" : viewModel.routeViewModel.routeInfo.filter({ info in
-                                info.selected
-                            }).count.description) + " of " + (viewModel.extensionStateText != "Connected" ? "0" : viewModel.routeViewModel.routeInfo.count.description)).font(.system(size: 18, weight: .bold))
+                            Text((viewModel.extensionStateText != "Connected" ? "0" : viewModel.routeViewModel.routeInfo.filter { $0.selected }.count.description)
+                                + " of "
+                                + (viewModel.extensionStateText != "Connected" ? "0" : viewModel.routeViewModel.routeInfo.count.description))
+                                .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(Color("TextSecondary"))
                             Text("Routes active")
                                 .font(.system(size: 18, weight: .regular))
                                 .foregroundColor(Color("TextSecondary"))
                         }
                     }
-                    .padding(.top, UIScreen.main.bounds.height * (viewModel.isIpad ? 0.03 : 0.006))
+                    .padding(.top, UIScreen.main.bounds.height * (isIpad ? 0.03 : 0.006))
                     .padding(.bottom, viewModel.isSheetExpanded ? 5 : 30)
+                    
+                    // TabView with Peer and Route Tabs
                     TabView(selection: $selectedTab) {
                         PeerTabView()
-                        .tag(1)
+                            .tag(1)
                         
                         RouteTabView()
-                        .tag(2)
+                            .tag(2)
                     }
                     .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+                    
                     // Custom Tab Bar
                     HStack {
                         TabBarButton(label: "Peers", systemImage: "desktopcomputer", selectedTab: $selectedTab, index: 1)
@@ -268,6 +320,9 @@ struct SheetView: View {
                     .frame(height: 50)
                 }
                 .padding(.bottom, 100)
+                .ignoresSafeArea(.keyboard, edges: .bottom) // Prevents keyboard from pushing up the content
+                
+                // Additional Buttons when the sheet is expanded
                 if viewModel.isSheetExpanded {
                     VStack {
                         HStack {
@@ -282,7 +337,7 @@ struct SheetView: View {
                                     Image(systemName: "arrow.clockwise")
                                         .padding(21)
                                         .rotationEffect(.degrees(isAnimating ? 360 : 0))
-                                        .animation(isAnimating ? Animation.linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: isAnimating)
+                                        .animation(isAnimating ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: isAnimating)
                                 }
                             }
                             Spacer()
@@ -304,13 +359,13 @@ struct SheetView: View {
             .background(Color("BgMenu"))
             .cornerRadius(35)
             .shadow(radius: 10)
-            .offset(y: viewModel.isSheetExpanded ? UIScreen.main.bounds.height * 0.1 : UIScreen.main.bounds.height * 0.90 + translation)
+            .offset(y: viewModel.isSheetExpanded ? (UIScreen.main.bounds.height + keyboardObserver.keyboardHeight) * 0.1 : UIScreen.main.bounds.height * 0.90 + translation)
             .gesture(
                 DragGesture()
-                    .updating($translation, body: { value, state, _ in
+                    .updating($translation) { value, state, _ in
                         state = value.translation.height
-                    })
-                    .onEnded({ value in
+                    }
+                    .onEnded { value in
                         if value.translation.height > UIScreen.main.bounds.height * 0.25 {
                             withAnimation {
                                 viewModel.isSheetExpanded = false
@@ -320,17 +375,20 @@ struct SheetView: View {
                                 viewModel.isSheetExpanded = true
                             }
                         }
-                    })
+                    }
             )
             .onChange(of: viewModel.isSheetExpanded) { value in
                 if !value {
                     withAnimation {
-                        self.selectedTab = 1
+                        selectedTab = 1
                     }
                 }
             }
+            .onAppear {
+                UITableView.appearance().keyboardDismissMode = .interactive
+            }
 
-            // Add a transparent background to enable interaction with the rest of the screen when collapsed
+            // Clear background to enable interaction with the rest of the screen when collapsed
             if !viewModel.isSheetExpanded {
                 Color.clear
                     .ignoresSafeArea(.container)
@@ -341,8 +399,6 @@ struct SheetView: View {
                     }
             }
         }
-        .frame(maxHeight: .infinity) // Make sure the sheet can take up the entire screen height
-        .ignoresSafeArea(.keyboard) // Ignore the keyboard to prevent conflicts with the sheet layout
     }
 }
 

@@ -22,7 +22,7 @@ struct HostDNSConfig: Codable {
 
 class DNSManager: NSObject, NetBirdSDKDnsManagerProtocol {
     
-    private weak var tunnelManager: PacketTunnelProviderSettingsManager?
+    private var tunnelManager: PacketTunnelProviderSettingsManager
     
     init(with tunnelManager: PacketTunnelProviderSettingsManager) {
         self.tunnelManager = tunnelManager
@@ -31,7 +31,7 @@ class DNSManager: NSObject, NetBirdSDKDnsManagerProtocol {
     func applyDns(_ p0: String?) {
         if let p0 = p0, !p0.isEmpty {
             if let config = parseDNSSettingsString(inputString: p0) {
-                self.tunnelManager?.setDNS(config: config)
+                self.tunnelManager.setDNS(config: config)
             }
         }
     }
