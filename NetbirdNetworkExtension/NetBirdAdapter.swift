@@ -67,7 +67,7 @@ public class NetBirdAdapter {
         self.tunnelManager = tunnelManager
         self.networkChangeListener = NetworkChangeListener(with: tunnelManager)
         self.dnsManager = DNSManager(with: tunnelManager)
-        self.client = NetBirdSDKNewClient(Preferences.configFile(), Device.getName(), Device.getOsVersion(), Device.getOsName(), self.networkChangeListener, self.dnsManager)!
+        self.client = NetBirdSDKNewClient(Preferences.configFile(), Preferences.stateFile(), Device.getName(), Device.getOsVersion(), Device.getOsName(), self.networkChangeListener, self.dnsManager)!
     }
     
     /// Returns the tunnel device interface name, or nil on error.

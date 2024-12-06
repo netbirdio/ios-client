@@ -93,7 +93,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     
     public func isLoginRequired() -> Bool {
-        guard let client = NetBirdSDKNewClient(Preferences.configFile(), Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+        guard let client = NetBirdSDKNewClient(Preferences.configFile(), Preferences.stateFile(), Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
             print("Failed to initialize client")
             return true
         }

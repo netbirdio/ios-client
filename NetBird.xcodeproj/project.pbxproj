@@ -842,7 +842,7 @@
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gccgoimporter/testdata",
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge",
 				);
-				MARKETING_VERSION = 0.0.8;
+				MARKETING_VERSION = 0.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -894,7 +894,7 @@
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gccgoimporter/testdata",
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge",
 				);
-				MARKETING_VERSION = 0.0.8;
+				MARKETING_VERSION = 0.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
