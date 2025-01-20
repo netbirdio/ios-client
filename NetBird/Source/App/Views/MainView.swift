@@ -292,7 +292,7 @@ struct SheetView: View {
                                 + (viewModel.extensionStateText != "Connected" ? "0" : viewModel.routeViewModel.routeInfo.count.description))
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(Color("TextSecondary"))
-                            Text("Routes active")
+                            Text("Resources connected")
                                 .font(.system(size: 18, weight: .regular))
                                 .foregroundColor(Color("TextSecondary"))
                         }
@@ -313,7 +313,7 @@ struct SheetView: View {
                     // Custom Tab Bar
                     HStack {
                         TabBarButton(label: "Peers", systemImage: "desktopcomputer", selectedTab: $selectedTab, index: 1)
-                        TabBarButton(label: "Routes", systemImage: "point.filled.topleft.down.curvedto.point.bottomright.up", selectedTab: $selectedTab, index: 2)
+                        TabBarButton(label: "Networks", systemImage: "point.filled.topleft.down.curvedto.point.bottomright.up", selectedTab: $selectedTab, index: 2)
                     }
                     .padding(.bottom, 20)
                     .background(Color("BgNavigationBar"))

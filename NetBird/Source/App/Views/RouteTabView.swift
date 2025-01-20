@@ -38,7 +38,7 @@ struct RouteSelectionHeader: View {
     
     var body: some View {
         HStack {
-            CustomTextField(placeholder: "search routes", text: self.$routeViewModel.routeFilter, secure: .constant(false))
+            CustomTextField(placeholder: "search resources", text: self.$routeViewModel.routeFilter, secure: .constant(false))
                 .padding([.top, .bottom], 10)
             Menu {
                 Button(action: { self.routeViewModel.selectionFilter = "All" }) {
@@ -81,13 +81,13 @@ struct NoRoutesView: View {
         Group {
             Image("icon-empty-box")
                 .padding(.top, UIScreen.main.bounds.height * 0.05)
-            Text("It looks like there are no routes that you can choose from ...")
+            Text("It looks like there are no resources that you can connect to ...")
                 .font(.system(size: 18, weight: .regular))
                 .foregroundColor(Color("TextPrimary"))
                 .multilineTextAlignment(.center)
                 .padding(.top, UIScreen.main.bounds.height * 0.04)
                 .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.075)
-            Link(destination: URL(string: "https://docs.netbird.io")!) {
+            Link(destination: URL(string: "https://docs.netbird.io/how-to/networks")!) {
                 Text("Learn why")
                     .font(.headline)
                     .foregroundColor(.white)
