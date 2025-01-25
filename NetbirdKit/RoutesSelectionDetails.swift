@@ -19,7 +19,6 @@ class RoutesSelectionInfo: ObservableObject, Codable, Identifiable {
         self.domains = domains
     }
 
-    // Codable conformance with custom keys
     enum CodingKeys: String, CodingKey {
         case id, name, network, domains, selected
     }

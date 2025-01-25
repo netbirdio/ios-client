@@ -63,35 +63,47 @@ struct PeerListHeader: View {
 }
 
 struct NoPeersView: View {
-    
     var body: some View {
-        Group {
+        VStack {
             Image("icon-empty-box")
+                .resizable()
+                .scaledToFit()
+                .frame(height: UIScreen.main.bounds.height * 0.2)
                 .padding(.top, UIScreen.main.bounds.height * 0.05)
+
             Text("It looks like there are no machines that you can connect to...")
                 .font(.system(size: 18, weight: .regular))
                 .foregroundColor(Color("TextPrimary"))
                 .multilineTextAlignment(.center)
+                .padding(.horizontal, UIScreen.main.bounds.width * 0.075)
                 .padding(.top, UIScreen.main.bounds.height * 0.04)
-                .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.075)
-            Link(destination: URL(string: "https://docs.netbird.io")!) {
-                Text("Learn why")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .padding()
-                    .frame(maxWidth: .infinity) // Span the whole width
-                    .background(
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.accentColor)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 3)
-                                    .stroke(Color.orange.darker(), lineWidth: 2)
-                            )
-                    )
+
+            if let url = URL(string: "https://docs.netbird.io") {
+                Link(destination: url) {
+                    Text("Learn why")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.accentColor)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.orange.opacity(0.8), lineWidth: 2)
+                                )
+                        )
+                }
                 .padding(.top, UIScreen.main.bounds.height * 0.04)
+                .padding(.horizontal, UIScreen.main.bounds.width * 0.05)
+            } else {
+                Text("Unable to load the documentation link.")
+                    .font(.footnote)
+                    .foregroundColor(.red)
+                    .padding(.top, UIScreen.main.bounds.height * 0.04)
             }
         }
-        .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.05)
+        .padding(.horizontal, UIScreen.main.bounds.width * 0.05)
     }
 }
 

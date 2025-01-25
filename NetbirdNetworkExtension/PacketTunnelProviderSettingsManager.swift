@@ -23,15 +23,15 @@ class PacketTunnelProviderSettingsManager {
     }
     
     func setRoutes(v4Routes: [NEIPv4Route], v6Routes: [NEIPv6Route], containsDefault: Bool) {
-        self.needFallbackNS = containsDefault
-        self.ipv4Routes = v4Routes
-        self.ipv6Routes = v6Routes
-        self.updateTunnel()
+            self.needFallbackNS = containsDefault
+            self.ipv4Routes = v4Routes
+            self.ipv6Routes = v6Routes
+            self.updateTunnel()
     }
     
     func setDNS(config: HostDNSConfig) {
         var servers = [config.serverIP]
-        if !config.routeAll && needFallbackNS {
+        if !config.routeAll && needFallbackNS{
             servers.append("1.1.1.1")
         }
         let dnsSettings = NEDNSSettings(servers: servers)

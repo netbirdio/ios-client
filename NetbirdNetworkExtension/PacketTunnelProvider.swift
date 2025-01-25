@@ -15,49 +15,62 @@ import FirebasePerformance
 
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
-    
+
     private lazy var tunnelManager: PacketTunnelProviderSettingsManager = {
         return PacketTunnelProviderSettingsManager(with: self)
     }()
-    
+
     private lazy var adapter: NetBirdAdapter = {
         return NetBirdAdapter(with: self.tunnelManager)
     }()
-            
+
     var pathMonitor: NWPathMonitor?
     let monitorQueue = DispatchQueue(label: "NetworkMonitor")
     var currentNetworkType: NWInterface.InterfaceType?
-    
+
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
-        let firebaseOptions = FirebaseOptions(contentsOfFile: Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist")!)
-        FirebaseApp.configure(options: firebaseOptions!)
-        
-        if let options = options {
-            // For example, handle a specific option
-            if let logLevel = options["logLevel"] as? String {
-                initializeLogging(loglevel: logLevel)
-            }
+        guard let googleServicePlistPath = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+              let firebaseOptions = FirebaseOptions(contentsOfFile: googleServicePlistPath) else {
+            let error = NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1002,
+                userInfo: [NSLocalizedDescriptionKey: "Could not load Firebase configuration."]
+            )
+            completionHandler(error)
+            return
         }
-        
-        // Initialize current network type
+
+        FirebaseApp.configure(options: firebaseOptions)
+
+        if let options = options, let logLevel = options["logLevel"] as? String {
+            initializeLogging(loglevel: logLevel)
+        }
+
         currentNetworkType = nil
-        
         startMonitoringNetworkChanges()
-        
+
         if adapter.needsLogin() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                completionHandler(NSError(domain: "io.netbird.NetbirdNetworkExtension", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Login required."]))
+                let error = NSError(
+                    domain: "io.netbird.NetbirdNetworkExtension",
+                    code: 1001,
+                    userInfo: [NSLocalizedDescriptionKey: "Login required."]
+                )
+                completionHandler(error)
             }
             return
         }
-        
+
         adapter.start(completionHandler: completionHandler)
     }
-    
+
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         adapter.stop()
         guard let pathMonitor = self.pathMonitor else {
-            print("pathMonitor is nil")
+            print("pathMonitor is nil; nothing to cancel.")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                completionHandler()
+            }
             return
         }
         pathMonitor.cancel()
@@ -66,44 +79,47 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             completionHandler()
         }
     }
-    
+
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
-        guard let completionHandler = completionHandler else { return }
-        
-        if let string = String(data: messageData, encoding: .utf8) {
-            switch string {
-            case "Login":
-                login(completionHandler: completionHandler)
-            case "Status":
-                getStatus(completionHandler: completionHandler)
-            case "GetRoutes":
-                getSelectRoutes(completionHandler: completionHandler)
-            case let string where string.hasPrefix("Select-"):
-                let id = String(string.dropFirst("Select-".count))
-                selectRoute(id: id)
-            case let string where string.hasPrefix("Deselect-"):
-                let id = String(string.dropFirst("Deselect-".count))
-                deselectRoute(id: id)
-            default:
-                print("unknown message")
-            }
+        guard let completionHandler = completionHandler,
+              let string = String(data: messageData, encoding: .utf8) else {
+            return
+        }
+
+        switch string {
+        case "Login":
+            login(completionHandler: completionHandler)
+        case "Status":
+            getStatus(completionHandler: completionHandler)
+        case "GetRoutes":
+            getSelectRoutes(completionHandler: completionHandler)
+        case let s where s.hasPrefix("Select-"):
+            let id = String(s.dropFirst("Select-".count))
+            selectRoute(id: id)
+        case let s where s.hasPrefix("Deselect-"):
+            let id = String(s.dropFirst("Deselect-".count))
+            deselectRoute(id: id)
+        default:
+            print("Unknown message: \(string)")
         }
     }
-    
+
     func startMonitoringNetworkChanges() {
-        pathMonitor = NWPathMonitor()
-        pathMonitor?.pathUpdateHandler = { [weak self] path in
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
             self?.handleNetworkChange(path: path)
         }
-        pathMonitor?.start(queue: monitorQueue)
+        monitor.start(queue: monitorQueue)
+    
+        pathMonitor = monitor
     }
 
     func handleNetworkChange(path: Network.NWPath) {
         guard path.status == .satisfied else {
-            print("No network connection")
+            print("No network connection.")
             return
         }
-        
+
         let newNetworkType: NWInterface.InterfaceType? = {
             if path.usesInterfaceType(.wifi) {
                 return .wifi
@@ -113,92 +129,120 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 return nil
             }
         }()
-        
+
         guard let networkType = newNetworkType else {
-            print("Connected to other network type")
+            print("Connected to an unsupported network type.")
             return
         }
-        
+
         if currentNetworkType != networkType {
-            print("Network type changed to \(networkType)")
+            print("Network type changed to \(networkType).")
             if currentNetworkType != nil {
                 restartClient()
             }
             currentNetworkType = networkType
         } else {
-            print("Network type remains the same: \(networkType)")
+            print("Network type remains the same: \(networkType).")
         }
     }
-    
+
     func restartClient() {
         adapter.stop()
-        self.adapter.start { error in
+        adapter.start { error in
             if let error = error {
                 print("Error restarting client: \(error.localizedDescription)")
             }
         }
     }
-    
-    func login(completionHandler: ((Data?) -> Void)) {
-        let url = adapter.login()
-        let data = url.data(using: .utf8)
+
+    func login(completionHandler: (Data?) -> Void) {
+        let urlString = adapter.login()
+        let data = urlString.data(using: .utf8)
         completionHandler(data)
     }
-    
-    func getStatus(completionHandler: ((Data?) -> Void)) {
-        let statusDetailsMessage = adapter.client.getStatusDetails()
-        var peerInfoArray: [PeerInfo] = []
-        guard let statusDetailsMessage = statusDetailsMessage else {
-            print("Did not receive status details")
+
+    func getStatus(completionHandler: (Data?) -> Void) {
+        guard let statusDetailsMessage = adapter.client.getStatusDetails() else {
+            print("Did not receive status details.")
+            completionHandler(nil)
             return
         }
+
+        var peerInfoArray: [PeerInfo] = []
         for i in 0..<statusDetailsMessage.size() {
-            let peer = statusDetailsMessage.get(i)
-            let routes = peer!.getRouteDetails()
+            guard let peer = statusDetailsMessage.get(i) else { continue }
+            let routes = peer.getRouteDetails()
+
             var routesArray: [String] = []
-            for j in 0..<routes!.size() {
-                let route = routes?.get(j)
-                routesArray.append(route!.route)
+            for j in 0..<(routes?.size() ?? 0) {
+                if let route = routes?.get(j) {
+                    routesArray.append(route.route)
+                }
             }
-            
-            let peerInfo = PeerInfo(ip: peer!.ip, fqdn: peer!.fqdn, localIceCandidateEndpoint:  peer!.localIceCandidateEndpoint, remoteIceCandidateEndpoint: peer!.remoteIceCandidateEndpoint, localIceCandidateType: peer!.localIceCandidateType, remoteIceCandidateType: peer!.remoteIceCandidateType, pubKey: peer!.pubKey, latency: peer!.latency, bytesRx: peer!.bytesRx, bytesTx: peer!.bytesTx, connStatus: peer!.connStatus, connStatusUpdate: peer!.connStatusUpdate, direct: peer!.direct, lastWireguardHandshake: peer!.lastWireguardHandshake, relayed: peer!.relayed, rosenpassEnabled: peer!.relayed, routes: routesArray)
+
+            let peerInfo = PeerInfo(
+                ip: peer.ip,
+                fqdn: peer.fqdn,
+                localIceCandidateEndpoint: peer.localIceCandidateEndpoint,
+                remoteIceCandidateEndpoint: peer.remoteIceCandidateEndpoint,
+                localIceCandidateType: peer.localIceCandidateType,
+                remoteIceCandidateType: peer.remoteIceCandidateType,
+                pubKey: peer.pubKey,
+                latency: peer.latency,
+                bytesRx: peer.bytesRx,
+                bytesTx: peer.bytesTx,
+                connStatus: peer.connStatus,
+                connStatusUpdate: peer.connStatusUpdate,
+                direct: peer.direct,
+                lastWireguardHandshake: peer.lastWireguardHandshake,
+                relayed: peer.relayed,
+                rosenpassEnabled: peer.rosenpassEnabled,
+                routes: routesArray
+            )
             peerInfoArray.append(peerInfo)
         }
-        
-        
-        let statusDetails = StatusDetails(ip: statusDetailsMessage.getIP(), fqdn: statusDetailsMessage.getFQDN() , managementStatus: self.adapter.clientState, peerInfo: peerInfoArray)
-        
+
+        let statusDetails = StatusDetails(
+            ip: statusDetailsMessage.getIP(),
+            fqdn: statusDetailsMessage.getFQDN(),
+            managementStatus: adapter.clientState,
+            peerInfo: peerInfoArray
+        )
+
         do {
             let data = try PropertyListEncoder().encode(statusDetails)
             completionHandler(data)
-            return
         } catch {
+            print("Failed to encode status details: \(error.localizedDescription)")
             do {
-                let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: self.adapter.clientState, peerInfo: [])
+                let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: adapter.clientState, peerInfo: [])
                 let data = try PropertyListEncoder().encode(defaultStatus)
                 completionHandler(data)
-                return
             } catch {
-                print("Failed to convert default")
+                print("Failed to encode default status: \(error.localizedDescription)")
+                completionHandler(nil)
             }
-            print("Failed to encode status details: \(error.localizedDescription)")
-            
         }
     }
-    
-    func getSelectRoutes(completionHandler: ((Data?) -> Void)) {
+
+    func getSelectRoutes(completionHandler: (Data?) -> Void) {
         do {
             let routeSelectionDetailsMessage = try adapter.client.getRoutesSelectionDetails()
-            
+
             let routeSelectionInfo: [RoutesSelectionInfo] = (0..<routeSelectionDetailsMessage.size()).compactMap { index in
                 guard let route = routeSelectionDetailsMessage.get(index) else { return nil }
-                
-                let domains: [DomainDetails] = (0..<(route.domains?.size() ?? 0)).compactMap { domainIndex in
+
+                let domains = (0..<(route.domains?.size() ?? 0)).compactMap { domainIndex -> DomainDetails? in
                     guard let domain = route.domains?.get(domainIndex) else { return nil }
                     return DomainDetails(domain: domain.domain, resolvedips: domain.resolvedIPs)
                 }
-                
-                return RoutesSelectionInfo(name: route.id_, network: route.network, domains: domains, selected: route.selected)
+
+                return RoutesSelectionInfo(
+                    name: route.id_,
+                    network: route.network,
+                    domains: domains,
+                    selected: route.selected
+                )
             }
 
             let routeSelectionDetails = RoutesSelectionDetails(
@@ -206,59 +250,53 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 append: routeSelectionDetailsMessage.append,
                 routeSelectionInfo: routeSelectionInfo
             )
-            
+
             let data = try PropertyListEncoder().encode(routeSelectionDetails)
             completionHandler(data)
         } catch {
-            // Handling encoding errors or data fetching errors in one catch block
-            print("Error: \(error.localizedDescription)")
-            // If an error occurs, send back a default status
+            print("Error retrieving or encoding route selection details: \(error.localizedDescription)")
             let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
             do {
                 let data = try PropertyListEncoder().encode(defaultStatus)
                 completionHandler(data)
             } catch {
-                print("Failed to convert default status: \(error.localizedDescription)")
+                print("Failed to encode default route selection details: \(error.localizedDescription)")
+                completionHandler(nil)
             }
         }
     }
 
-    
     func selectRoute(id: String) {
         do {
             try adapter.client.selectRoute(id)
         } catch {
-            print("Failed to select route")
+            print("Failed to select route: \(error.localizedDescription)")
         }
-        
     }
-    
+
     func deselectRoute(id: String) {
         do {
             try adapter.client.deselectRoute(id)
         } catch {
-            print("Failed to deselect route")
+            print("Failed to deselect route: \(error.localizedDescription)")
         }
     }
-    
+
     override func sleep(completionHandler: @escaping () -> Void) {
-        // Add code here to get ready to sleep.
         completionHandler()
     }
-    
+
     override func wake() {
-        // Add code here to wake up.
     }
-    
+
     func setTunnelSettings(tunnelNetworkSettings: NEPacketTunnelNetworkSettings) {
-       setTunnelNetworkSettings(tunnelNetworkSettings) { error in
-           if let error = error {
-               // Handle Error
-               print("error when assigning routes: \(error.localizedDescription)")
-               return
-           }
-           print("Routes set")
-       }
+        setTunnelNetworkSettings(tunnelNetworkSettings) { error in
+            if let error = error {
+                print("Error assigning routes: \(error.localizedDescription)")
+                return
+            }
+            print("Routes set successfully.")
+        }
     }
 }
 
@@ -279,7 +317,6 @@ func initializeLogging(loglevel: String) {
         }
     
     if fileManager.fileExists(atPath: logURLValid.path) {
-        // If the log file already exists, append the new message
         if let fileHandle = try? FileHandle(forWritingTo: logURLValid) {
             do {
                 try "".write(to: logURLValid, atomically: true, encoding: .utf8)
@@ -294,7 +331,6 @@ func initializeLogging(loglevel: String) {
             print("Failed to open the log file for writing.")
         }
     } else {
-        // If the log file doesn't exist, create and write the new message
         do {
             try logMessage.write(to: logURLValid, atomically: true, encoding: .utf8)
         } catch {
@@ -303,10 +339,9 @@ func initializeLogging(loglevel: String) {
     }
     
     if let logPath = logURL?.path {
-        
         success = NetBirdSDKInitializeLog(loglevel, logPath, &error)
     }
     if !success, let actualError = error {
-               print("Failed to initialize log: \(actualError.localizedDescription)")
-           }
+       print("Failed to initialize log: \(actualError.localizedDescription)")
+   }
 }

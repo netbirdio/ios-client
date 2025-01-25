@@ -113,14 +113,16 @@ struct MainView: View {
                     SideDrawer(viewModel: viewModel, isShowing: $viewModel.presentSideDrawer)
                     NavigationLink("", destination: ServerView(), isActive: $viewModel.navigateToServerView)
                         .hidden()
-                    if viewModel.networkExtensionAdapter.showBrowser && viewModel.networkExtensionAdapter.loginURL != nil && URL(string: viewModel.networkExtensionAdapter.loginURL!) != nil {
+                    if viewModel.networkExtensionAdapter.showBrowser,
+                       let loginURLString = viewModel.networkExtensionAdapter.loginURL,
+                       let loginURL = URL(string: loginURLString)
+                    {
                         SafariView(isPresented: $viewModel.networkExtensionAdapter.showBrowser,
-                                   url: URL(string: viewModel.networkExtensionAdapter.loginURL!)!,
-                                  didFinish: {
-                                        print("Finish login")
-                                        viewModel.networkExtensionAdapter.startVPNConnection()
-                                  })
-                           
+                                   url: loginURL,
+                                   didFinish: {
+                                       print("Finish login")
+                                       viewModel.networkExtensionAdapter.startVPNConnection()
+                                   })
                     }
                     if viewModel.showChangeServerAlert {
                         Color.black.opacity(0.4)
@@ -152,7 +154,7 @@ struct MainView: View {
                         ChangePreSharedKeyAlert(viewModel: viewModel, isPresented: $viewModel.showPreSharedKeyChangedInfo)
                             .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
                     }
-                    // diabled for now as it is generating to much false positives
+
                     if viewModel.showAuthenticationRequired && false {
                         Color.black.opacity(0.4)
                             .edgesIgnoringSafeArea(.all)
@@ -275,7 +277,6 @@ struct SheetView: View {
                             .padding(.top, 5)
                     }
                     
-                    // Header Section with Connection Status
                     HStack {
                         if selectedTab == 1 {
                             Text((viewModel.extensionStateText != "Connected" ? "0" : viewModel.peerViewModel.peerInfo.filter { $0.connStatus == "Connected" }.count.description)
@@ -300,7 +301,6 @@ struct SheetView: View {
                     .padding(.top, UIScreen.main.bounds.height * (isIpad ? 0.03 : 0.006))
                     .padding(.bottom, viewModel.isSheetExpanded ? 5 : 30)
                     
-                    // TabView with Peer and Route Tabs
                     TabView(selection: $selectedTab) {
                         PeerTabView()
                             .tag(1)
@@ -310,7 +310,6 @@ struct SheetView: View {
                     }
                     .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                     
-                    // Custom Tab Bar
                     HStack {
                         TabBarButton(label: "Peers", systemImage: "desktopcomputer", selectedTab: $selectedTab, index: 1)
                         TabBarButton(label: "Networks", systemImage: "point.filled.topleft.down.curvedto.point.bottomright.up", selectedTab: $selectedTab, index: 2)
@@ -320,9 +319,8 @@ struct SheetView: View {
                     .frame(height: 50)
                 }
                 .padding(.bottom, 100)
-                .ignoresSafeArea(.keyboard, edges: .bottom) // Prevents keyboard from pushing up the content
+                .ignoresSafeArea(.keyboard, edges: .bottom)
                 
-                // Additional Buttons when the sheet is expanded
                 if viewModel.isSheetExpanded {
                     VStack {
                         HStack {
@@ -362,9 +360,6 @@ struct SheetView: View {
             .offset(y: viewModel.isSheetExpanded ? (UIScreen.main.bounds.height + keyboardObserver.keyboardHeight) * 0.1 : UIScreen.main.bounds.height * 0.90 + translation)
             .gesture(
                 DragGesture()
-                    .updating($translation) { value, state, _ in
-                        state = value.translation.height
-                    }
                     .onEnded { value in
                         if value.translation.height > UIScreen.main.bounds.height * 0.25 {
                             withAnimation {
@@ -388,7 +383,6 @@ struct SheetView: View {
                 UITableView.appearance().keyboardDismissMode = .interactive
             }
 
-            // Clear background to enable interaction with the rest of the screen when collapsed
             if !viewModel.isSheetExpanded {
                 Color.clear
                     .ignoresSafeArea(.container)
@@ -440,7 +434,7 @@ struct ChangeServerAlert: View {
                     .font(.headline)
                     .foregroundColor(Color.accentColor)
                     .padding()
-                    .frame(maxWidth: .infinity) // Span the whole width
+                    .frame(maxWidth: .infinity)
                     .background(
                         RoundedRectangle(cornerRadius: 3)
                             .fill(Color(red: 0, green: 0, blue: 0, opacity: 0))

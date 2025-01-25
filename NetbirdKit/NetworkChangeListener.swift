@@ -19,10 +19,11 @@ enum IPAddressType {
 
 class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
     func onNetworkChanged(_ p0: String?) {
-        if p0 == nil || p0!.isEmpty {
+        guard let validString = p0, !validString.isEmpty else {
             return
         }
-        let (v4Routes, v6Routes, containsDefault) = parseRoutesToNESettings(routesString: p0!)
+        
+        let (v4Routes, v6Routes, containsDefault) = parseRoutesToNESettings(routesString: validString)
         self.tunnelManager.setRoutes(v4Routes: v4Routes, v6Routes: v6Routes, containsDefault: containsDefault)
     }
     
@@ -35,11 +36,12 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
     }
     
     func setInterfaceIP(_ p0: String?) {
-        if p0 == nil || p0!.isEmpty {
+        guard let validIP = p0, !validIP.isEmpty else {
             return
         }
-        self.interfaceIP = p0!
-        self.tunnelManager.setInterfaceIP(interfaceIP: p0!)
+        
+        self.interfaceIP = validIP
+        self.tunnelManager.setInterfaceIP(interfaceIP: validIP)
     }
     
     func parseRoutesToNESettings(routesString: String) -> ([NEIPv4Route], [NEIPv6Route], Bool) {
@@ -49,42 +51,54 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
         
         let routes = routesString.split(separator: ",")
         for route in routes {
-            switch detectIPAddressType(String(route)) {
+            let routeString = String(route)
+            switch detectIPAddressType(routeString) {
             case .ipv4:
-                v4Routes.append(createIPv4RouteFromCIDR(cidr: String(route)))
-                if route.contains("0.0.0.0/0") {
-                    containsDefault = true
+                if let ipv4Route = createIPv4RouteFromCIDR(cidr: routeString) {
+                    v4Routes.append(ipv4Route)
+                    if route.contains("0.0.0.0/0") {
+                        containsDefault = true
+                    }
                 }
             case .ipv6:
-                v6Routes.append(createIPv6RouteFromCIDR(cidr: String(route)))
-                if route.contains("::/0") {
-                    containsDefault = true
+                if let ipv6Route = createIPv6RouteFromCIDR(cidr: routeString) {
+                    v6Routes.append(ipv6Route)
+                    if route.contains("::/0") {
+                        containsDefault = true
+                    }
                 }
             case .invalid:
-                print("unknown route")
+                print("Unknown route: \(routeString)")
             }
         }
         
-        if let interfaceIP = self.interfaceIP {
-            v4Routes.append(createIPv4RouteFromCIDR(cidr: interfaceIP))
+        if let interfaceIP = self.interfaceIP, let interfaceRoute = createIPv4RouteFromCIDR(cidr: interfaceIP) {
+            v4Routes.append(interfaceRoute)
         }
         return (v4Routes, v6Routes, containsDefault)
     }
     
-    func createIPv4RouteFromCIDR(cidr: String) -> NEIPv4Route {
-        let (ipAddress, subnetMask) = extractIPAddressAndSubnet(from: cidr)!
-        let destinationAddress = subtractSubnetMask(from: ipAddress, subnetMask: subnetMask)
+    func createIPv4RouteFromCIDR(cidr: String) -> NEIPv4Route? {
+        guard let (ipAddress, subnetMask) = extractIPAddressAndSubnet(from: cidr),
+              let destinationAddress = subtractSubnetMask(from: ipAddress, subnetMask: subnetMask) else {
+            print("Failed to create IPv4 route for CIDR: \(cidr)")
+            return nil
+        }
         
-        return NEIPv4Route(destinationAddress: destinationAddress!, subnetMask: subnetMask)
+        return NEIPv4Route(destinationAddress: destinationAddress, subnetMask: subnetMask)
     }
     
-    func createIPv6RouteFromCIDR(cidr: String) -> NEIPv6Route {
+    func createIPv6RouteFromCIDR(cidr: String) -> NEIPv6Route? {
         let routeComponents = cidr.components(separatedBy: "/")
-        let destinationAddress = routeComponents[0]
-        let prefixLength = Int(routeComponents[1])!
-        return NEIPv6Route(destinationAddress: destinationAddress, networkPrefixLength: prefixLength as NSNumber)
+        guard routeComponents.count == 2,
+              let destinationAddress = routeComponents.first,
+              let prefixLength = Int(routeComponents[1]) else {
+            print("Failed to create IPv6 route for CIDR: \(cidr)")
+            return nil
+        }
+        
+        return NEIPv6Route(destinationAddress: destinationAddress, networkPrefixLength: NSNumber(value: prefixLength))
     }
-    
 }
 
 func detectIPAddressType(_ address: String) -> IPAddressType {

@@ -20,68 +20,55 @@ struct RouteCard: View {
     var body: some View {
         HStack {
             HStack {
-                HStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(self.peerViewModel.peerInfo.filter({ info in
-                            info.connStatus == "Connected" && (info.routes.contains(route.network == "invalid Prefix" ? route.domains?.map({ e in
-                                e.domain
-                            }).joined(separator: ", ") ?? "" : route.network ?? "Unknown"))
-                        }).count > 0 ? Color.green : (route.selected ? Color.yellow : Color.gray.opacity(0.5)))
-                        .frame(width: 8, height: 40)
-                    VStack(alignment: .leading, content: {
-                        Text(route.name).foregroundColor(Color("TextPeerCard"))
-                    }).padding(.leading, 5)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(statusIndicatorColor)
+                    .frame(width: 8, height: 40)
+
+                VStack(alignment: .leading) {
+                    Text(route.name)
+                        .foregroundColor(Color("TextPeerCard"))
                     if let network = route.network, network.contains("0.0.0.0/0") {
                         Image("direction-sign")
                     }
-                    Spacer()
-                    Text(
-                        route.network == "invalid Prefix" ?
-                        (route.domains?.count ?? 0 > 2 ? "\(route.domains!.count) Domains" : route.domains?.map({ e in
-                            e.domain
-                        }).joined(separator: ", ") ?? "") :
-                            route.network ?? "Unknown"
-                    )
+                }
+                .padding(.leading, 5)
+
+                Spacer()
+
+                Text(routeDisplayText)
                     .foregroundColor(Color("TextPeerCard"))
                     .padding(.leading, 3)
-                }
-                .background(
-                    Color("BgPeerCard")
-                )
-                .simultaneousGesture(
-                    TapGesture()
-                        .updating($isPressing) { currentState, gestureState, transaction in
-                            gestureState = true
-                        }
-                        .onEnded {
-                            if !isPressing {
-                                withAnimation {
-                                    print("Setting selected route id to \(route.id)")
-                                    routeViewModel.selectedRouteId = routeViewModel.selectedRouteId == route.id ? nil : route.id
-                                }
-                            }
-                        }
-                )
-                Toggle("", isOn: Binding(
-                    get: { route.selected },
-                    set: { newValue in
-                        routeViewModel.toggleSelected(for: route.id)
-                    }
-                ))
-                .labelsHidden()
-                .toggleStyle(SwitchToggleStyle(tint: .orange))
-                .onChange(of: route.selected) { value in
-                    if value {
-                        self.routeViewModel.selectRoute(route: route)
-                    } else {
-                        self.routeViewModel.deselectRoute(route: route)
-                    }
-                }
             }
             .padding()
-        }.background(
-            Color("BgPeerCard")
-        )
+            .background(Color("BgPeerCard"))
+            .cornerRadius(8)
+            .simultaneousGesture(
+                TapGesture()
+                    .updating($isPressing) { _, gestureState, _ in
+                        gestureState = true
+                    }
+                    .onEnded {
+                        if !isPressing {
+                            withAnimation {
+                                toggleRouteSelection()
+                            }
+                        }
+                    }
+            )
+
+            Toggle("", isOn: Binding(
+                get: { route.selected },
+                set: { newValue in
+                    routeViewModel.toggleSelected(for: route.id)
+                }
+            ))
+            .labelsHidden()
+            .toggleStyle(SwitchToggleStyle(tint: .orange))
+            .onChange(of: route.selected) { newValue in
+                newValue ? routeViewModel.selectRoute(route: route) : routeViewModel.deselectRoute(route: route)
+            }
+        }
+        .background(Color("BgPeerCard"))
         .cornerRadius(8)
         .overlay(
             GeometryReader { parentGeometry in
@@ -96,24 +83,48 @@ struct RouteCard: View {
                             })
                             .position(
                                 x: parentGeometry.size.width / 2,
-                                y: orientationTop ? parentGeometry.size.height - (tooltipSize.height / 2) - 50 : (tooltipSize.height / 2) + 50
+                                y: orientationTop
+                                    ? parentGeometry.size.height - (tooltipSize.height / 2) - 50
+                                    : (tooltipSize.height / 2) + 50
                             )
-                            .opacity(self.selectedRouteId == route.id ? 1 : 0)
+                            .opacity(1)
                     }
                 }
                 .frame(width: parentGeometry.size.width, height: parentGeometry.size.height, alignment: .center)
             },
             alignment: .center
         )
-        
     }
-    
-    struct SizePreferenceKey: PreferenceKey {
-        static var defaultValue: CGSize = .zero
 
-        static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-            value = nextValue()
+    private var statusIndicatorColor: Color {
+        if peerViewModel.peerInfo.contains(where: { info in
+            info.connStatus == "Connected" && (info.routes.contains(route.network ?? "") || route.domains?.contains(where: { $0.domain.contains(route.network ?? "") }) == true)
+        }) {
+            return Color.green
         }
+        return route.selected ? Color.yellow : Color.gray.opacity(0.5)
+    }
+
+    private var routeDisplayText: String {
+        if route.network == "invalid Prefix" {
+            if let domains = route.domains, domains.count > 2 {
+                return "\(domains.count) Domains"
+            }
+            return route.domains?.map { $0.domain }.joined(separator: ", ") ?? ""
+        }
+        return route.network ?? "Unknown"
+    }
+
+    private func toggleRouteSelection() {
+        routeViewModel.selectedRouteId = routeViewModel.selectedRouteId == route.id ? nil : route.id
+    }
+}
+
+struct SizePreferenceKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
     }
 }
 

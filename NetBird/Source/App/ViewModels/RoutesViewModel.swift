@@ -36,12 +36,12 @@ class RoutesViewModel: ObservableObject {
             }
         }
         .filter { route in
-            route.name.lowercased().contains(routeFilter.lowercased()) ||
-            (route.network != nil && route.network!.contains(routeFilter)) ||
-            (route.domains != nil && route.domains!.map({ e in
-                e.domain
-            }).contains(routeFilter)) ||
-            routeFilter.isEmpty
+            let routeNameMatch = route.name.lowercased().contains(routeFilter.lowercased())
+            let networkMatch = route.network?.contains(routeFilter) ?? false
+            let domainMatch = route.domains?.contains(where: { $0.domain.contains(routeFilter) }) ?? false
+            let isEmptyFilter = routeFilter.isEmpty
+
+            return routeNameMatch || networkMatch || domainMatch || isEmptyFilter
         }
     }
     

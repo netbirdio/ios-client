@@ -32,11 +32,18 @@ struct SolidButton: View {
 }
 
 extension Color {
-    func darker() -> Color {
-        let components = UIColor(self).cgColor.components!
-        return Color(red: Double(components[0] * 0.9),
-                     green: Double(components[1] * 0.9),
-                     blue: Double(components[2] * 0.9))
+    func darker(by percentage: CGFloat = 0.1) -> Color {
+        let adjustmentFactor = max(0, min(1, percentage))
+        
+        guard let uiColor = UIColor(self).cgColor.components, uiColor.count >= 3 else {
+            return self
+        }
+        
+        let red = max(0, uiColor[0] - adjustmentFactor)
+        let green = max(0, uiColor[1] - adjustmentFactor)
+        let blue = max(0, uiColor[2] - adjustmentFactor)
+        
+        return Color(red: Double(red), green: Double(green), blue: Double(blue))
     }
 }
 
