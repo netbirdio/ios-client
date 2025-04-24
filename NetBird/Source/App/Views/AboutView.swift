@@ -10,13 +10,13 @@ import SwiftUI
 struct AboutView: View {
     
     @EnvironmentObject var viewModel: ViewModel
-    
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
     
     var body: some View {
         ZStack {
             Color("BgPage")
                 .edgesIgnoringSafeArea(.bottom)
+            
             VStack {
                 Image("netbird-logo-menu")
                     .resizable()
@@ -24,39 +24,46 @@ struct AboutView: View {
                     .frame(width: UIScreen.main.bounds.width * 0.4)
                     .padding(.top, UIScreen.main.bounds.height * 0.05)
                     .padding(.bottom, UIScreen.main.bounds.height * 0.04)
+                
                 HStack {
                     Text("Version")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundColor(Color("TextPrimary"))
-                    Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown")")
+                    Text(getAppVersion())
                         .font(.system(size: 18, weight: .regular))
                         .foregroundColor(Color("TextPrimary"))
                 }
-                    .padding(.bottom, UIScreen.main.bounds.height * 0.04)
-                Link("License agreement", destination: URL(string: "https://netbird.io/terms")!)
-                    .padding(.bottom, UIScreen.main.bounds.height * 0.04)
-                    .font(.system(size: 18, weight: .medium))
-                Link("Privacy policy", destination: URL(string: "https://netbird.io/privacy")!)
-                    .font(.system(size: 18, weight: .medium))
+                .padding(.bottom, UIScreen.main.bounds.height * 0.04)
+                
+                if let licenseURL = URL(string: "https://netbird.io/terms") {
+                    Link("License agreement", destination: licenseURL)
+                        .font(.system(size: 18, weight: .medium))
+                        .padding(.bottom, UIScreen.main.bounds.height * 0.04)
+                }
+                
+                if let privacyURL = URL(string: "https://netbird.io/privacy") {
+                    Link("Privacy policy", destination: privacyURL)
+                        .font(.system(size: 18, weight: .medium))
+                }
+                
                 Spacer()
+                
                 TransparentGradientButton(text: "Join Beta Program") {
                     viewModel.showBetaProgramAlert.toggle()
                 }
-                .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.20)
+                .padding(.horizontal, UIScreen.main.bounds.width * 0.20)
                 .padding(.bottom, 50)
+                
                 Text("© 2023 NetBird all rights reserved")
-                    .foregroundColor(Color.white)
+                    .foregroundColor(.white)
                     .padding(.bottom, UIScreen.main.bounds.height * 0.01)
             }
+            
             if viewModel.showBetaProgramAlert {
                 Color.black.opacity(0.4)
                     .edgesIgnoringSafeArea(.all)
                     .onTapGesture {
-                        viewModel.buttonLock = true
-                        viewModel.showBetaProgramAlert = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            viewModel.buttonLock = false
-                        }
+                        dismissBetaProgramAlert()
                     }
                 
                 BetaProgramAlert(viewModel: viewModel, isPresented: $viewModel.showBetaProgramAlert)
@@ -69,6 +76,18 @@ struct AboutView: View {
         .navigationBarItems(leading: CustomBackButton(text: "About", action: {
             presentationMode.wrappedValue.dismiss()
         }))
+    }
+    
+    private func getAppVersion() -> String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+    
+    private func dismissBetaProgramAlert() {
+        viewModel.buttonLock = true
+        viewModel.showBetaProgramAlert = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            viewModel.buttonLock = false
+        }
     }
 }
 
