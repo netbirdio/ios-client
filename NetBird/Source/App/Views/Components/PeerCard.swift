@@ -17,9 +17,7 @@ struct PeerCard: View {
     var body: some View {
         HStack {
             HStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(peer.connStatus == "Connected" ? Color.green : Color.gray.opacity(0.5))
-                                .frame(width: 8, height: 40)
+                ConnectionIndicator(status: peer.connStatus)
                 VStack(alignment: .leading, content: {
                     Text(peer.fqdn).padding(.bottom, 1).foregroundColor(Color("TextPeerCard"))
                     Text(peer.ip).foregroundColor(Color("TextPeerCard"))
@@ -57,6 +55,48 @@ struct PeerCard: View {
             },
             alignment: .center
         )
+    }
+}
+
+struct ConnectionIndicator: View {
+    let status: String
+
+    @State private var isPulsating = false
+
+    var indicatorColor: Color {
+        switch status {
+        case "Connected":
+            return .green
+        case "Connecting":
+            return .green
+        default:
+            return .gray
+        }
+    }
+
+    var indicatorOpacity: Double {
+        switch status {
+        case "Connected":
+            return 1.0
+        case "Connecting":
+            return isPulsating ? 0.83 : 0.2
+        default:
+            return 0.5
+        }
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(indicatorColor)
+            .frame(width: 8, height: 40)
+            .opacity(indicatorOpacity)
+            .onAppear {
+                if status == "Connecting" {
+                    withAnimation(Animation.easeInOut(duration: 0.95).repeatForever(autoreverses: true)) {
+                        isPulsating.toggle()
+                    }
+                }
+            }
     }
 }
 

@@ -67,6 +67,7 @@ struct RouteCard: View {
             .onChange(of: route.selected) { newValue in
                 newValue ? routeViewModel.selectRoute(route: route) : routeViewModel.deselectRoute(route: route)
             }
+            .padding(.trailing, 15)
         }
         .background(Color("BgPeerCard"))
         .cornerRadius(8)

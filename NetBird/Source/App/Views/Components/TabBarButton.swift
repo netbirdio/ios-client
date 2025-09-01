@@ -9,7 +9,7 @@ import SwiftUI
 
 struct TabBarButton: View {
     let label: String
-    let systemImage: String
+    let image: String
     @Binding var selectedTab: Int
     let index: Int
 
@@ -18,7 +18,7 @@ struct TabBarButton: View {
             withAnimation { selectedTab = index }
         }) {
             VStack {
-                Image(systemName: systemImage)
+                Image(image)
                 Text(label)
             }
             .foregroundColor(selectedTab == index ? .accentColor : .gray)

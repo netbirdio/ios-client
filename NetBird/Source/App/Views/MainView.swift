@@ -39,192 +39,202 @@ struct MainView: View {
     }
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                if viewModel.statusDetailsValid {
-                    VStack {
-                        Color("BgSecondary")
-                            .frame(height: UIScreen.main.bounds.height * 3/5)
-                            .ignoresSafeArea(.all)
-                        Color("BgPrimary")
-                            .frame(height: UIScreen.main.bounds.height * 2/5)
-                            .ignoresSafeArea(.all)
-                    }
-                    VStack {
-                        Image("bg-bottom")
-                            .resizable(resizingMode: .stretch)
-                            .aspectRatio(contentMode: .fill)
-                            .padding(.top, UIScreen.main.bounds.height * (viewModel.isIpad ? 0.32 : 0.19))
-                            .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 1.33)
-                            .edgesIgnoringSafeArea(.bottom)
-                    }
-                    VStack {
-                        Text(viewModel.fqdn)
-                            .foregroundColor(Color("TextSecondary"))
-                            .font(.system(size: 20, weight: .regular))
-                            .padding(.top, UIScreen.main.bounds.height * 0.11)
-                            .padding(.bottom, 5)
-                        Text(viewModel.ip)
-                            .foregroundColor(Color("TextSecondary"))
-                            .font(.system(size: 20, weight: .regular))
-                        Spacer()
-                    }
-                    VStack() {
-                        HStack {
-                            Button {
-                                viewModel.presentSideDrawer = true
-                            } label: {
-                                Image("hamburgerMenu")
-                                    .resizable()
-                                    .frame(width: 35, height: 35)
-                                    .padding(.top, UIScreen.main.bounds.height * 0.03)
-                            }
-                            Spacer()
-                        }
-                        Spacer()
-                        Button(action: {
-                            if !viewModel.buttonLock {
-                                if viewModel.extensionState == .disconnected {
-                                    viewModel.connect()
-                                } else if viewModel.extensionState == .connecting || viewModel.managementStatus == .connecting || viewModel.extensionState == .connected {
-                                    print("Trying to stop extenison")
-                                    viewModel.close()
-                                }
-                            }
-                        }) {
-                            CustomLottieView(extensionStatus: $viewModel.extensionState, engineStatus: $viewModel.managementStatus, connectPressed: $viewModel.connectPressed, disconnectPressed: $viewModel.disconnectPressed, viewModel: viewModel)
-                                .id(animationKey)
-                                .frame(width: UIScreen.main.bounds.width * 0.79, height: UIScreen.main.bounds.width * 0.79)
-                                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                                    withAnimation {
-                                        self.animationKey = UUID()
-                                    }
-                                }
-                        }
-                        .padding(.top, -UIScreen.main.bounds.height / 27)
-                        .padding(.bottom)
-                        Text(viewModel.extensionStateText)
-                            .foregroundColor(Color("TextSecondary"))
-                            .font(.system(size: 24, weight: .regular))
-                        Spacer()
-                    }
-                    .padding()
-                    SheetView()
-                    SideDrawer(viewModel: viewModel, isShowing: $viewModel.presentSideDrawer)
-                    NavigationLink("", destination: ServerView(), isActive: $viewModel.navigateToServerView)
-                        .hidden()
-                    if viewModel.networkExtensionAdapter.showBrowser,
-                       let loginURLString = viewModel.networkExtensionAdapter.loginURL,
-                       let loginURL = URL(string: loginURLString)
-                    {
-                        SafariView(isPresented: $viewModel.networkExtensionAdapter.showBrowser,
-                                   url: loginURL,
-                                   didFinish: {
-                                       print("Finish login")
-                                       viewModel.networkExtensionAdapter.startVPNConnection()
-                                   })
-                    }
-                    if viewModel.showChangeServerAlert {
-                        Color.black.opacity(0.4)
-                            .edgesIgnoringSafeArea(.all)
-                            .onTapGesture {
-                                viewModel.showChangeServerAlert = false
-                            }
-                        
-                        ChangeServerAlert(viewModel: viewModel, isPresented: $viewModel.showChangeServerAlert)
-                            .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
-                    }
-                    if viewModel.showServerChangedInfo {
-                        Color.black.opacity(0.4)
-                            .edgesIgnoringSafeArea(.all)
-                            .onTapGesture {
-                                viewModel.showServerChangedInfo = false
-                            }
-                        
-                        ChangeServerInfoAlert(viewModel: viewModel, isPresented: $viewModel.showServerChangedInfo)
-                            .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
-                    }
-                    if viewModel.showPreSharedKeyChangedInfo {
-                        Color.black.opacity(0.4)
-                            .edgesIgnoringSafeArea(.all)
-                            .onTapGesture {
-                                viewModel.showPreSharedKeyChangedInfo = false
-                            }
-                        
-                        ChangePreSharedKeyAlert(viewModel: viewModel, isPresented: $viewModel.showPreSharedKeyChangedInfo)
-                            .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
-                    }
-
-                    if viewModel.showAuthenticationRequired && false {
-                        Color.black.opacity(0.4)
-                            .edgesIgnoringSafeArea(.all)
-                            .onTapGesture {
-                                viewModel.buttonLock = true
-                                viewModel.showAuthenticationRequired = false
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                    viewModel.buttonLock = false
-                                }
-                            }
-                        
-                        AuthenticationAlert(viewModel: viewModel, isPresented: $viewModel.showAuthenticationRequired)
-                            .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
-                    }
-                    ZStack {
+        GeometryReader { geometry in
+            let isLandscape = geometry.size.width > geometry.size.height
+            let imageName = isLandscape ? "bg-bottom-landscape" : "bg-bottom"
+            NavigationView {
+                ZStack {
+                    if viewModel.statusDetailsValid {
                         VStack {
-                            Spacer()
-                            if viewModel.showFqdnCopiedAlert {
-                                VStack {
-                                    Spacer()
-                                    HStack {
-                                        Image("logo-onboarding")
-                                            .resizable()
-                                            .frame(width: 20, height: 15)
-                                        Text("Domain name copied!")
-                                            .foregroundColor(.white)
-                                            .font(.headline)
-                                    }
-                                    .padding(5)
-                                    .background(Color.black.opacity(0.5))
-                                    .cornerRadius(8)
-                                    .transition(AnyTransition.opacity.combined(with: .move(edge: .top)))
-                                    .animation(.default, value: viewModel.showFqdnCopiedAlert)
-                                    .zIndex(1)
-                                    Spacer().frame(height: 40)
-                                }
-                            }
-                            
-                            if viewModel.showIpCopiedAlert {
-                                VStack {
-                                    Spacer()
-                                    HStack {
-                                        Image("logo-onboarding")
-                                            .resizable()
-                                            .frame(width: 20, height: 15)
-                                        Text("IP address copied!")
-                                            .foregroundColor(.white)
-                                            .font(.headline)
-                                    }
-                                    .padding(5)
-                                    .background(Color.black.opacity(0.5))
-                                    .cornerRadius(8)
-                                    .transition(AnyTransition.opacity.combined(with: .move(edge: .top)))
-                                    .animation(.default, value: viewModel.showIpCopiedAlert)
-                                    .zIndex(1)
-                                    Spacer().frame(height: 40)
-                                }
-                            }
+                            Color("BgSecondary")
+                                .frame(height: UIScreen.main.bounds.height * 3/5)
+                                .ignoresSafeArea(.all)
+                            Color("BgPrimary")
+                                .frame(height: UIScreen.main.bounds.height * 2/5)
+                                .ignoresSafeArea(.all)
                         }
-                        .padding(.bottom, 40)
-                    }
-                } else {
-                    ZStack {
-                        Color("BgPrimary")
-                            .frame(height: UIScreen.main.bounds.height)
-                            .ignoresSafeArea(.all)
-                        Image("netbird-logo-menu")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: UIScreen.main.bounds.width * 0.8)
+                        VStack {
+                            
+                            Image(imageName)
+                                .resizable(resizingMode: .stretch)
+                                .aspectRatio(contentMode: .fit)
+                            //                                .padding(.top, UIScreen.main.bounds.height * (viewModel.isIpad ? 0.34 : 0.13))
+                                .padding(.top, UIScreen.main.bounds.height * (viewModel.isIpad ? (isLandscape ? -0.15 : 0.36) : 0.19))
+                                .padding(.leading, UIScreen.main.bounds.height * (isLandscape ? 0.04 : 0))
+                                .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
+                                .edgesIgnoringSafeArea(.bottom)
+                            
+                        }
+                        VStack {
+                            Text(viewModel.fqdn)
+                                .foregroundColor(Color("TextSecondary"))
+                                .font(.system(size: 20, weight: .regular))
+                                .padding(.top, UIScreen.main.bounds.height * (viewModel.isIpad ? 0.09 : 0.13))
+                                .padding(.bottom, 5)
+                            Text(viewModel.ip)
+                                .foregroundColor(Color("TextSecondary"))
+                                .font(.system(size: 20, weight: .regular))
+                            Spacer()
+                        }
+                        VStack() {
+                            HStack {
+                                Button {
+                                    viewModel.presentSideDrawer = true
+                                } label: {
+                                    Image("hamburgerMenu")
+                                        .resizable()
+                                        .frame(width: 35, height: 35)
+                                        .padding(.top, UIScreen.main.bounds.height * 0.03)
+                                }
+                                Spacer()
+                            }
+                            Spacer()
+                            Button(action: {
+                                if !viewModel.buttonLock {
+                                    if viewModel.extensionState == .disconnected {
+                                        viewModel.connect()
+                                    } else if viewModel.extensionState == .connecting || viewModel.managementStatus == .connecting || viewModel.extensionState == .connected {
+                                        print("Trying to stop extenison")
+                                        viewModel.close()
+                                    }
+                                }
+                            }) {
+                                CustomLottieView(extensionStatus: $viewModel.extensionState, engineStatus: $viewModel.managementStatus, connectPressed: $viewModel.connectPressed, disconnectPressed: $viewModel.disconnectPressed, viewModel: viewModel)
+                                    .id(animationKey)
+                                    .frame(width: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79), height: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79))
+                                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                                        withAnimation {
+                                            self.animationKey = UUID()
+                                        }
+                                    }
+                            }
+                            .padding(.top, -UIScreen.main.bounds.height / 27)
+                            .padding(.bottom)
+                            Text(viewModel.extensionStateText)
+                                .foregroundColor(Color("TextSecondary"))
+                                .font(.system(size: 24, weight: .regular))
+                            //                        ProfileSwitcherView(vm: viewModel)
+                            //                            .padding(.top, 3)
+                            Spacer()
+                        }
+                        .padding()
+                        SheetView()
+                        SideDrawer(viewModel: viewModel, isShowing: $viewModel.presentSideDrawer)
+                        NavigationLink("", destination: ServerView(), isActive: $viewModel.navigateToServerView)
+                            .hidden()
+                        if viewModel.networkExtensionAdapter.showBrowser,
+                           let loginURLString = viewModel.networkExtensionAdapter.loginURL,
+                           let loginURL = URL(string: loginURLString)
+                        {
+                            SafariView(isPresented: $viewModel.networkExtensionAdapter.showBrowser,
+                                       url: loginURL,
+                                       didFinish: {
+                                print("Finish login")
+                                viewModel.networkExtensionAdapter.startVPNConnection()
+                            })
+                        }
+                        if viewModel.showChangeServerAlert {
+                            Color.black.opacity(0.4)
+                                .edgesIgnoringSafeArea(.all)
+                                .onTapGesture {
+                                    viewModel.showChangeServerAlert = false
+                                }
+                            
+                            ChangeServerAlert(viewModel: viewModel, isPresented: $viewModel.showChangeServerAlert)
+                                .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+                        }
+                        if viewModel.showServerChangedInfo {
+                            Color.black.opacity(0.4)
+                                .edgesIgnoringSafeArea(.all)
+                                .onTapGesture {
+                                    viewModel.showServerChangedInfo = false
+                                }
+                            
+                            ChangeServerInfoAlert(viewModel: viewModel, isPresented: $viewModel.showServerChangedInfo)
+                                .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+                        }
+                        if viewModel.showPreSharedKeyChangedInfo {
+                            Color.black.opacity(0.4)
+                                .edgesIgnoringSafeArea(.all)
+                                .onTapGesture {
+                                    viewModel.showPreSharedKeyChangedInfo = false
+                                }
+                            
+                            ChangePreSharedKeyAlert(viewModel: viewModel, isPresented: $viewModel.showPreSharedKeyChangedInfo)
+                                .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+                        }
+                        
+                        if viewModel.showAuthenticationRequired && false {
+                            Color.black.opacity(0.4)
+                                .edgesIgnoringSafeArea(.all)
+                                .onTapGesture {
+                                    viewModel.buttonLock = true
+                                    viewModel.showAuthenticationRequired = false
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                        viewModel.buttonLock = false
+                                    }
+                                }
+                            
+                            AuthenticationAlert(viewModel: viewModel, isPresented: $viewModel.showAuthenticationRequired)
+                                .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+                        }
+                        ZStack {
+                            VStack {
+                                Spacer()
+                                if viewModel.showFqdnCopiedAlert {
+                                    VStack {
+                                        Spacer()
+                                        HStack {
+                                            Image("logo-onboarding")
+                                                .resizable()
+                                                .frame(width: 20, height: 15)
+                                            Text("Domain name copied!")
+                                                .foregroundColor(.white)
+                                                .font(.headline)
+                                        }
+                                        .padding(5)
+                                        .background(Color.black.opacity(0.5))
+                                        .cornerRadius(8)
+                                        .transition(AnyTransition.opacity.combined(with: .move(edge: .top)))
+                                        .animation(.default, value: viewModel.showFqdnCopiedAlert)
+                                        .zIndex(1)
+                                        Spacer().frame(height: 40)
+                                    }
+                                }
+                                
+                                if viewModel.showIpCopiedAlert {
+                                    VStack {
+                                        Spacer()
+                                        HStack {
+                                            Image("logo-onboarding")
+                                                .resizable()
+                                                .frame(width: 20, height: 15)
+                                            Text("IP address copied!")
+                                                .foregroundColor(.white)
+                                                .font(.headline)
+                                        }
+                                        .padding(5)
+                                        .background(Color.black.opacity(0.5))
+                                        .cornerRadius(8)
+                                        .transition(AnyTransition.opacity.combined(with: .move(edge: .top)))
+                                        .animation(.default, value: viewModel.showIpCopiedAlert)
+                                        .zIndex(1)
+                                        Spacer().frame(height: 40)
+                                    }
+                                }
+                            }
+                            .padding(.bottom, 40)
+                        }
+                    } else {
+                        ZStack {
+                            Color("BgPrimary")
+                                .frame( width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
+                                .ignoresSafeArea(.all)
+                            Image("netbird-logo-menu")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: UIScreen.main.bounds.width * 0.8)
+                        }
                     }
                 }
             }
@@ -311,8 +321,8 @@ struct SheetView: View {
                     .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                     
                     HStack {
-                        TabBarButton(label: "Peers", systemImage: "desktopcomputer", selectedTab: $selectedTab, index: 1)
-                        TabBarButton(label: "Networks", systemImage: "point.filled.topleft.down.curvedto.point.bottomright.up", selectedTab: $selectedTab, index: 2)
+                        TabBarButton(label: "Peers", image: "peers", selectedTab: $selectedTab, index: 1)
+                        TabBarButton(label: "Networks", image: "networks", selectedTab: $selectedTab, index: 2)
                     }
                     .padding(.bottom, 20)
                     .background(Color("BgNavigationBar"))

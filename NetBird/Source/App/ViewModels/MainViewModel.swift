@@ -75,14 +75,6 @@ class ViewModel: ObservableObject {
         self.rosenpassEnabled = self.getRosenpassEnabled()
         self.rosenpassPermissive = self.getRosenpassPermissive()
         
-        $server
-           .removeDuplicates()
-           .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
-           .map { server in
-               !self.isValidURL(server)
-           }
-           .assign(to: &$showInvalidServerAlert)
-
        $setupKey
            .removeDuplicates()
            .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
@@ -292,23 +284,12 @@ class ViewModel: ObservableObject {
         return StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
     }
     
-    func isValidURL(_ string: String) -> Bool {
-        let trimmedString = string.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedString.isEmpty { return true }
-        
-        let pattern = "^(?i)https?://(([a-zA-Z\\d]([a-zA-Z\\d-]{0,61}[a-zA-Z\\d])?\\.)*[a-zA-Z]{2,})(?::\\d{1,5})?(?:/|$)"
-
-        let isMatch = trimmedString.range(of: pattern, options: .regularExpression, range: nil, locale: nil) != nil
-        return isMatch
-    }
-    
     func isValidSetupKey(_ string: String) -> Bool {
         if string.isEmpty { return true }
         let pattern = "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
         let isMatch = string.range(of: pattern, options: .regularExpression, range: nil, locale: nil) != nil
         return isMatch
     }
-}
 
 func printLogContents(from logURL: URL) {
     do {
