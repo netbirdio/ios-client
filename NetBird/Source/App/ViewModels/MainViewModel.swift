@@ -11,7 +11,7 @@ import os
 import Combine
 
 @MainActor
-class ViewModel: ObservableObject {    
+class ViewModel: ObservableObject {
     @Published var networkExtensionAdapter: NetworkExtensionAdapter
     @Published var showSetupKeyPopup = false
     @Published var showChangeServerAlert = false
@@ -75,13 +75,13 @@ class ViewModel: ObservableObject {
         self.rosenpassEnabled = self.getRosenpassEnabled()
         self.rosenpassPermissive = self.getRosenpassPermissive()
         
-       $setupKey
-           .removeDuplicates()
-           .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
-           .map { setupKey in
-               !self.isValidSetupKey(setupKey)
-           }
-           .assign(to: &$showInvalidSetupKeyHint)
+        $setupKey
+            .removeDuplicates()
+            .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
+            .map { setupKey in
+                !self.isValidSetupKey(setupKey)
+            }
+            .assign(to: &$showInvalidSetupKeyHint)
     }
     
     func connect()  {
@@ -126,14 +126,14 @@ class ViewModel: ObservableObject {
                 if !details.fqdn.isEmpty && details.fqdn != self.fqdn {
                     self.defaults.set(details.fqdn, forKey: "fqdn")
                     self.fqdn = details.fqdn
-
+                    
                 }
                 if !details.ip.isEmpty && details.ip != self.ip {
                     self.defaults.set(details.ip, forKey: "ip")
                     self.ip = details.ip
                 }
                 print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(self.networkExtensionAdapter.isLoginRequired())")
-
+                
                 if details.managementStatus != self.managementStatus {
                     self.managementStatus = details.managementStatus
                 }
@@ -145,7 +145,7 @@ class ViewModel: ObservableObject {
             }
             
             self.statusDetailsValid = true
-                           
+            
             let sortedPeerInfo = details.peerInfo.sorted(by: { a, b in
                 a.ip < b.ip
             })
@@ -155,7 +155,7 @@ class ViewModel: ObservableObject {
                 print("Setting new peer info: \(sortedPeerInfo.count) Peers")
                 self.peerViewModel.peerInfo = sortedPeerInfo
             }
-        
+            
         }
     }
     
@@ -254,10 +254,10 @@ class ViewModel: ObservableObject {
         } catch {
             print("Failed to read rosenpass settings")
         }
-    
+        
         return result.boolValue
     }
-
+    
     
     func getRosenpassPermissive() -> Bool {
         var result = ObjCBool(false)
@@ -266,10 +266,10 @@ class ViewModel: ObservableObject {
         } catch {
             print("Failed to read rosenpass permissive settings")
         }
-    
+        
         return result.boolValue
     }
-
+    
     
     func setRosenpassPermissive(permissive: Bool) {
         preferences.setRosenpassPermissive(permissive)
@@ -290,12 +290,13 @@ class ViewModel: ObservableObject {
         let isMatch = string.range(of: pattern, options: .regularExpression, range: nil, locale: nil) != nil
         return isMatch
     }
-
-func printLogContents(from logURL: URL) {
-    do {
-        let logContents = try String(contentsOf: logURL, encoding: .utf8)
-        print(logContents)
-    } catch {
-        print("Failed to read the log file: \(error.localizedDescription)")
+    
+    func printLogContents(from logURL: URL) {
+        do {
+            let logContents = try String(contentsOf: logURL, encoding: .utf8)
+            print(logContents)
+        } catch {
+            print("Failed to read the log file: \(error.localizedDescription)")
+        }
     }
 }
