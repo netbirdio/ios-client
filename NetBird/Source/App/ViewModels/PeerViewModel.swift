@@ -24,7 +24,8 @@ class PeerViewModel: ObservableObject {
             switch selectionFilter {
             case "All": return true
             case "Connected": return peer.connStatus == "Connected"
-            case "Disconnected": return peer.connStatus == "Disconnected"
+            case "Connecting": return peer.connStatus == "Connecting"
+            case "Idle": return peer.connStatus == "Idle"
             default: return false
             }
         }

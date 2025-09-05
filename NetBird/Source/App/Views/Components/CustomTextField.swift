@@ -31,10 +31,12 @@ struct CustomTextField: View {
                     .foregroundColor(foregroundColor)
                     .padding(.horizontal, 8)
                     .disabled(true)
+                    .autocorrectionDisabled()
             } else {
                 TextField(placeholder, text: $text)
                     .foregroundColor(foregroundColor)
                     .padding(.horizontal, 8)
+                    .autocorrectionDisabled()
             }
         }
     }

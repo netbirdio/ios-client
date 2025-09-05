@@ -47,8 +47,11 @@ struct PeerListHeader: View {
                 Button(action: { self.peerViewModel.selectionFilter = "Connected" }) {
                     Text("Connected")
                 }
-                Button(action: { self.peerViewModel.selectionFilter = "Disconnected" }) {
-                    Text("Disconnected")
+                Button(action: { self.peerViewModel.selectionFilter = "Connecting" }) {
+                    Text("Connecting")
+                }
+                Button(action: { self.peerViewModel.selectionFilter = "Idle" }) {
+                    Text("Idle")
                 }
                 
             } label: {

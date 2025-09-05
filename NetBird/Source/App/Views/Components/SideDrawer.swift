@@ -43,7 +43,7 @@ struct SideMenu: View {
         ZStack(alignment: .leading) {
             Rectangle()
                 .fill(Color("BgSideDrawer"))
-                .frame(width: UIScreen.main.bounds.width * (isIpad ? 0.4 : 0.7))
+                .frame(width: UIScreen.main.bounds.width * (isIpad ? 0.4 : 0.7), height: UIScreen.main.bounds.height)
                 .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 3)
 
             VStack(alignment: .leading, spacing: UIScreen.main.bounds.width * 0.05) {
@@ -90,7 +90,7 @@ struct SideMenu: View {
                 .padding(.bottom, UIScreen.main.bounds.height * 0.06)
             }
             .padding(.top, 10)
-            .frame(width: UIScreen.main.bounds.width * (isIpad ? 0.4 : 0.7))
+            .frame(width: UIScreen.main.bounds.width * (isIpad ? 0.4 : 0.7), height: UIScreen.main.bounds.height)
         }
     }
 
