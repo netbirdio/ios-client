@@ -108,7 +108,7 @@ struct ServerView: View {
                         }
                     }
                 } label: {
-                    Text("Use NetBird server")
+                    Label("Use NetBird server", image: "icon-netbird-button")
                         .font(.headline)
                         .foregroundColor(Color.accentColor)
                         .padding()
