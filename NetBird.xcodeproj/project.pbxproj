@@ -92,6 +92,7 @@
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
 		F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
+		F1258DEA2ED7B7D600C0D205 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE92ED7B7D200C0D205 /* Extensions.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -179,6 +180,7 @@
 		50E608232A79966600BAF09B /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
 		F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerViewModel.swift; sourceTree = "<group>"; };
+		F1258DE92ED7B7D200C0D205 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -352,6 +354,7 @@
 		50E608092A79557A00BAF09B /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				F1258DE92ED7B7D200C0D205 /* Extensions.swift */,
 				50E6081F2A7979D600BAF09B /* SideDrawer.swift */,
 				502455BC2A79B0480034792B /* CustomBackButton.swift */,
 				502455BE2A79B4500034792B /* SolidButton.swift */,
@@ -603,6 +606,7 @@
 				50D402972BD9B89300D4AC5B /* PeerViewModel.swift in Sources */,
 				506332022AF9415500BC8F0E /* CustomTextField.swift in Sources */,
 				50003BC42AFBD7D500E5EB6B /* PacketTunnelProvider.swift in Sources */,
+				F1258DEA2ED7B7D600C0D205 /* Extensions.swift in Sources */,
 				50216D8E2ACB1905009574C9 /* NetworkChangeListener.swift in Sources */,
 				50CD81A72AD5504B00CF830B /* StatusDetails.swift in Sources */,
 				505118CE2AD96ECA003027D3 /* x25519.c in Sources */,
