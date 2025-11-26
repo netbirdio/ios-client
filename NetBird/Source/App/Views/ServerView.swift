@@ -11,12 +11,16 @@ struct ServerView: View {
     
     @EnvironmentObject var viewModel: ViewModel
     
+    private let defaultManagementServerUrl = "https://api.netbird.io"
+    
     @State private var showSetupKeyField = false
 //    @State private var isVerifyingServer = false
 //    @State private var isVerifyingKey = false
-    @State private var symbolAsset = "add-symbol";
+    @State private var symbolAsset = "add-symbol"
+    @State private var managementServerUrl = ""
+    @State private var setupKey = ""
     
-    @State private var serverViewModel = ServerViewModel(configurationFilePath: Preferences.configFile(), deviceName: Device.getName())
+    @StateObject private var serverViewModel = ServerViewModel(configurationFilePath: Preferences.configFile(), deviceName: Device.getName())
     
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
     
@@ -25,7 +29,7 @@ struct ServerView: View {
             Text("Server")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(Color("TextPrimary"))
-            CustomTextField(placeholder: "https://example-api.domain.com:443", text: $viewModel.server, secure: .constant(false))
+            CustomTextField(placeholder: "https://example-api.domain.com:443", text: $managementServerUrl, secure: .constant(false), height: 48)
         }
         .padding(.top, UIScreen.main.bounds.height * 0.04)
     }
@@ -40,6 +44,8 @@ struct ServerView: View {
                     if (showSetupKeyField) {
                         symbolAsset = "remove-symbol"
                     } else {
+                        // clear setup key input when toggling visibility to invisible
+                        setupKey = ""
                         symbolAsset = "add-symbol"
                     }
                 }
@@ -48,7 +54,7 @@ struct ServerView: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(Color("TextPrimary"))
                     .padding(.top, 8)
-                CustomTextField(placeholder: "0EF79C2F-DEE1-419B-BFC8-1BF529332998", text: $viewModel.setupKey, secure: .constant(false))
+                CustomTextField(placeholder: "0EF79C2F-DEE1-419B-BFC8-1BF529332998", text: $setupKey, secure: .constant(false), height: 48)
                     .padding(.bottom, 8)
                 Text("Using setup keys for user devices is not recommended. SSO with MFA provides stronger security, proper user-device association, and periodic re-authentication.")
                     .font(.system(size: 16))
@@ -123,6 +129,20 @@ struct ServerView: View {
 //                }
 //            }
 //            print("use custom server")
+            
+            if managementServerUrl.isEmpty && setupKey.isEmpty {
+                return
+            }
+            
+            if !managementServerUrl.isEmpty && !setupKey.isEmpty {
+                serverViewModel.loginWithSetupKey(managementServerUrl: managementServerUrl, setupKey: setupKey)
+            } else if !managementServerUrl.isEmpty {
+                serverViewModel.changeManagementServerAddress(managementServerUrl: managementServerUrl)
+            } else {
+                managementServerUrl = defaultManagementServerUrl
+                
+                serverViewModel.loginWithSetupKey(managementServerUrl: managementServerUrl, setupKey: setupKey)
+            }
         }
     }
     
@@ -141,6 +161,13 @@ struct ServerView: View {
 //                    showSetupKeyField = true
 //                }
 //            }
+            managementServerUrl = defaultManagementServerUrl
+            
+            if setupKey.isEmpty {
+                serverViewModel.changeManagementServerAddress(managementServerUrl: managementServerUrl)
+            } else {
+                serverViewModel.loginWithSetupKey(managementServerUrl: managementServerUrl, setupKey: setupKey)
+            }
         } label: {
             Label("Use NetBird server", image: "icon-netbird-button")
                 .font(.headline)
