@@ -91,6 +91,7 @@
 		50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E6081F2A7979D600BAF09B /* SideDrawer.swift */; };
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
+		F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -177,6 +178,7 @@
 		50E6081F2A7979D600BAF09B /* SideDrawer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SideDrawer.swift; sourceTree = "<group>"; };
 		50E608232A79966600BAF09B /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
+		F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -330,6 +332,7 @@
 		50E608012A7950C000BAF09B /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */,
 				50E608122A7958B100BAF09B /* MainViewModel.swift */,
 				50D402962BD9B89300D4AC5B /* PeerViewModel.swift */,
 				509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */,
@@ -604,6 +607,7 @@
 				50CD81A72AD5504B00CF830B /* StatusDetails.swift in Sources */,
 				505118CE2AD96ECA003027D3 /* x25519.c in Sources */,
 				508BD8452AF04A990055E415 /* SafariView.swift in Sources */,
+				F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */,
 				505118D02AD96ECA003027D3 /* key.c in Sources */,
 				50E608262A79968500BAF09B /* AdvancedView.swift in Sources */,
 				50E608242A79966600BAF09B /* AboutView.swift in Sources */,
@@ -842,7 +846,7 @@
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gccgoimporter/testdata",
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge",
 				);
-				MARKETING_VERSION = 0.0.10;
+				MARKETING_VERSION = 0.0.12;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -894,7 +898,7 @@
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gccgoimporter/testdata",
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge",
 				);
-				MARKETING_VERSION = 0.0.10;
+				MARKETING_VERSION = 0.0.12;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
