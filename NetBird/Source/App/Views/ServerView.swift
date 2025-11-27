@@ -19,6 +19,7 @@ struct ServerView: View {
     @State private var symbolAsset = "add-symbol"
     @State private var managementServerUrl = ""
     @State private var setupKey = ""
+    @State private var serverErrorMessage : String?
     
     @StateObject private var serverViewModel = ServerViewModel(configurationFilePath: Preferences.configFile(), deviceName: Device.getName())
     
@@ -30,8 +31,21 @@ struct ServerView: View {
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(Color("TextPrimary"))
             CustomTextField(placeholder: "https://example-api.domain.com:443", text: $managementServerUrl, secure: .constant(false), height: 48)
+                .onChange(of: managementServerUrl) { newText in
+                    if serverErrorMessage != nil {
+                        serverErrorMessage = nil
+                    }
+                }
         }
         .padding(.top, UIScreen.main.bounds.height * 0.04)
+    }
+    
+    func buildServerErrorMessage() -> some View {
+        VStack(alignment: .leading) {
+            if serverErrorMessage != nil && !serverErrorMessage!.isEmpty {
+                Text(serverErrorMessage!).foregroundColor(.red)
+            }
+        }
     }
     
     func buildSetupKey() -> some View {
@@ -191,6 +205,7 @@ struct ServerView: View {
                 .edgesIgnoringSafeArea(.bottom)
             VStack(alignment: .leading, spacing: 16) {
                 buildServer()
+                buildServerErrorMessage()
                 buildSetupKey()
                 buildChangeButton()
                 buildUseNetBirdButton()
@@ -204,8 +219,23 @@ struct ServerView: View {
         .navigationBarItems(leading: CustomBackButton(text: "Change Server", action: {
             presentationMode.wrappedValue.dismiss()
         }))
-        .onTapGesture {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+//        .onTapGesture {
+//            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+//        }
+        .onChange(of: serverViewModel.isOperationSuccessful) { success in
+            if success {
+                self.presentationMode.wrappedValue.dismiss()
+                viewModel.showServerChangedInfo = true
+            }
+        }
+        .onChange(of: serverViewModel.errorMessage) { error in
+            if error != nil && !error!.isEmpty {
+                // show error alert
+                serverErrorMessage = error
+            } else {
+                // clear error alert
+                serverErrorMessage = nil
+            }
         }
     }
     
