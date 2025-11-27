@@ -143,6 +143,11 @@ struct ServerView: View {
 //                }
 //            }
 //            print("use custom server")
+            hideKeyboard()
+            
+//            if serverErrorMessage != nil {
+//                return
+//            }
             
             if managementServerUrl.isEmpty && setupKey.isEmpty {
                 return
@@ -175,6 +180,7 @@ struct ServerView: View {
 //                    showSetupKeyField = true
 //                }
 //            }
+            hideKeyboard()
             managementServerUrl = defaultManagementServerUrl
             
             if setupKey.isEmpty {
@@ -203,6 +209,9 @@ struct ServerView: View {
         ZStack {
             Color("BgPage")
                 .edgesIgnoringSafeArea(.bottom)
+                .onTapGesture {
+                    hideKeyboard()
+                }
             VStack(alignment: .leading, spacing: 16) {
                 buildServer()
                 buildServerErrorMessage()
