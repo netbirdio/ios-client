@@ -21,8 +21,9 @@ class ServerViewModel : ObservableObject {
         self.deviceName = deviceName
     }
     
-    private func getAuthenticator(url managementServerUrl: String) -> NetBirdSDKAuth? {
+    private func getAuthenticator(url managementServerUrl: String) async -> NetBirdSDKAuth? {
         var error: NSError?
+        
         let authenticator = NetBirdSDKNewAuth(configurationFilePath, managementServerUrl, &error)
         
         if error != nil {
@@ -34,8 +35,8 @@ class ServerViewModel : ObservableObject {
         return authenticator
     }
     
-    func changeManagementServerAddress(managementServerUrl: String) {
-        let authenticator = getAuthenticator(url: managementServerUrl)
+    func changeManagementServerAddress(managementServerUrl: String) async {
+        let authenticator = await getAuthenticator(url: managementServerUrl)
         
         var isSsoSupported: ObjCBool = false
         
@@ -54,8 +55,8 @@ class ServerViewModel : ObservableObject {
         }
     }
     
-    func loginWithSetupKey(managementServerUrl: String, setupKey: String) {
-        let authenticator = getAuthenticator(url: managementServerUrl)
+    func loginWithSetupKey(managementServerUrl: String, setupKey: String) async {
+        let authenticator = await getAuthenticator(url: managementServerUrl)
         
         do {
             try authenticator?.login(withSetupKeyAndSaveConfig: setupKey, deviceName: self.deviceName)

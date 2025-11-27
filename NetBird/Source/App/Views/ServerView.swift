@@ -94,99 +94,52 @@ struct ServerView: View {
     func buildChangeButton() -> some View {
         // isVerifyingServer || isVerifyingKey ? "Verifying..." :
         SolidButton(text: "Change") {
-//            if viewModel.showInvalidServerAlert || viewModel.server.isEmpty || isVerifyingServer || isVerifyingKey {
-//                return
-//            }
-//            if viewModel.setupKey == "" {
-//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-//                    isVerifyingServer = true
-//                }
-//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-//                    let sso = viewModel.updateManagementURL(url: viewModel.server)
-//                    switch sso {
-//                    case .none:
-//                        viewModel.showInvalidServerAlert = true
-//                    case .some(true):
-//                        viewModel.showServerChangedInfo = true
-//                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-//                            self.presentationMode.wrappedValue.dismiss()
-//                            viewModel.server = ""
-//                            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-//                                viewModel.showServerChangedInfo = false
-//                            }
-//                        }
-//                    case .some(false):
-//                        showSetupKeyField = true
-//                    }
-//                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-//                        isVerifyingServer = false
-//                    }
-//                }
-//            } else {
-//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-//                    isVerifyingKey = true
-//                }
-//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-//                    do {
-//                        try viewModel.setSetupKey(key: viewModel.setupKey)
-//                        self.presentationMode.wrappedValue.dismiss()
-//                        viewModel.showServerChangedInfo = true
-//                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-//                            viewModel.showServerChangedInfo = false
-//                        }
-//                        viewModel.setupKey = ""
-//                        isVerifyingKey = false
-//                    } catch {
-//                        viewModel.showInvalidSetupKeyAlert = true
-//                        isVerifyingKey = false
-//                    }
-//                }
-//            }
-//            print("use custom server")
             hideKeyboard()
             
 //            if serverErrorMessage != nil {
 //                return
 //            }
             
+            // Button won't do anything if both fields are empty.
             if managementServerUrl.isEmpty && setupKey.isEmpty {
                 return
             }
             
-            if !managementServerUrl.isEmpty && !setupKey.isEmpty {
-                serverViewModel.loginWithSetupKey(managementServerUrl: managementServerUrl, setupKey: setupKey)
-            } else if !managementServerUrl.isEmpty {
-                serverViewModel.changeManagementServerAddress(managementServerUrl: managementServerUrl)
-            } else {
+            let serverUrl = managementServerUrl.isEmpty ? defaultManagementServerUrl : managementServerUrl
+            let key = setupKey
+            
+            if managementServerUrl.isEmpty {
                 managementServerUrl = defaultManagementServerUrl
-                
-                serverViewModel.loginWithSetupKey(managementServerUrl: managementServerUrl, setupKey: setupKey)
+            }
+            
+            Task {
+                if !serverUrl.isEmpty && !key.isEmpty {
+                    await serverViewModel.loginWithSetupKey(managementServerUrl: serverUrl, setupKey: key)
+                } else if !serverUrl.isEmpty {
+                    await serverViewModel.changeManagementServerAddress(managementServerUrl: serverUrl)
+                }
             }
         }
     }
     
+    func getSetupKey() -> String {
+        return self.setupKey
+    }
+    
     func buildUseNetBirdButton() -> some View {
         Button {
-//            if !isVerifyingKey && !isVerifyingServer {
-//                let sso = viewModel.updateManagementURL(url: "https://api.netbird.io")
-//                print("use netbird server")
-//                if sso ?? false {
-//                    self.presentationMode.wrappedValue.dismiss()
-//                    viewModel.showServerChangedInfo = true
-//                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-//                        viewModel.showServerChangedInfo = false
-//                    }
-//                } else {
-//                    showSetupKeyField = true
-//                }
-//            }
             hideKeyboard()
             managementServerUrl = defaultManagementServerUrl
-            
-            if setupKey.isEmpty {
-                serverViewModel.changeManagementServerAddress(managementServerUrl: managementServerUrl)
-            } else {
-                serverViewModel.loginWithSetupKey(managementServerUrl: managementServerUrl, setupKey: setupKey)
+
+            let serverUrl = defaultManagementServerUrl
+            let key = setupKey
+
+            Task {
+                if key.isEmpty {
+                    await serverViewModel.changeManagementServerAddress(managementServerUrl: serverUrl)
+                } else {
+                    await serverViewModel.loginWithSetupKey(managementServerUrl: serverUrl, setupKey: key)
+                }
             }
         } label: {
             Label("Use NetBird server", image: "icon-netbird-button")
