@@ -10,13 +10,14 @@ import SwiftUI
 struct ServerView: View {
     
     @EnvironmentObject var viewModel: ViewModel
+    @StateObject private var serverViewModel = ServerViewModel(configurationFilePath: Preferences.configFile(), deviceName: Device.getName())
     
     private let defaultManagementServerUrl = "https://api.netbird.io"
     private let addSymbol = "add-symbol"
     private let removeSymbol = "remove-symbol"
     
     @State private var showSetupKeyField = false
-    @State private var symbolAsset : String
+    @State private var symbolAsset = "add-symbol"
     
     // Input field bindings
     @State private var managementServerUrl = ""
@@ -25,13 +26,7 @@ struct ServerView: View {
     // Enable / disable buttons after tapping
     @State private var isButtonDisabled = false
     
-    @StateObject private var serverViewModel = ServerViewModel(configurationFilePath: Preferences.configFile(), deviceName: Device.getName())
-    
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
-    
-    init() {
-        symbolAsset = addSymbol
-    }
     
     func enableUi() {
         isButtonDisabled = false
@@ -42,7 +37,7 @@ struct ServerView: View {
     }
     
     func clearErrors() {
-        serverViewModel.viewErrors.clear()
+        serverViewModel.clearErrorsFor(field: .all)
     }
     
     @ViewBuilder
@@ -53,9 +48,7 @@ struct ServerView: View {
                 .foregroundColor(Color("TextPrimary"))
             CustomTextField(placeholder: "https://example-api.domain.com:443", text: $managementServerUrl, secure: .constant(false), height: 48)
                 .onChange(of: managementServerUrl) { newText in
-                    serverViewModel.viewErrors.generalError = nil
-                    serverViewModel.viewErrors.urlError = nil
-                    serverViewModel.viewErrors.ssoNotSupportedError = nil
+                    serverViewModel.clearErrorsFor(field: .url)
                 }
         }
         .padding(.top, UIScreen.main.bounds.height * 0.04)
@@ -94,7 +87,7 @@ struct ServerView: View {
                 CustomTextField(placeholder: "0EF79C2F-DEE1-419B-BFC8-1BF529332998", text: $setupKey, secure: .constant(false), height: 48)
                     .padding(.bottom, 8)
                     .onChange(of: setupKey) { newText in
-                        serverViewModel.viewErrors.setupKeyError = nil
+                        serverViewModel.clearErrorsFor(field: .setupKey)
                     }
                 buildErrorMessage(errorMessage: serverViewModel.viewErrors.setupKeyError)
                 Text("Using setup keys for user devices is not recommended. SSO with MFA provides stronger security, proper user-device association, and periodic re-authentication.")
@@ -220,7 +213,9 @@ struct ServerView: View {
         }
         .onChange(of: serverViewModel.isOperationSuccessful) { success in
             if success {
+                // This will close the view
                 self.presentationMode.wrappedValue.dismiss()
+                // This will display the dialog that the server was changed
                 viewModel.showServerChangedInfo = true
             }
         }
@@ -231,192 +226,6 @@ struct ServerView: View {
                 disableUi()
             }
         }
-    }
-    
-//    var body: some View {
-//        ZStack {
-//            Color("BgPage")
-//                .edgesIgnoringSafeArea(.bottom)
-//            VStack (alignment: .leading, spacing: 16){
-//                Text("Server")
-//                    .font(.system(size: 18, weight: .bold))
-//                    .foregroundColor(Color("TextPrimary"))
-//                    .padding(.top, UIScreen.main.bounds.height * 0.04)
-//                CustomTextField(placeholder: "https://example-api.domain.com:443", text: $viewModel.server, secure: .constant(false))
-//                    .padding(.top, 3)
-//                if viewModel.showInvalidServerAlert {
-//                    Text("Invalid server address").foregroundColor(.red)
-//                }
-//                Text("\(Image(symbolAsset)) Add this device with a setup key")
-//                    .font(.system(size: 12))
-//                    .padding(.top, 3)
-//                    .onTapGesture {
-//                        showSetupKeyField = !showSetupKeyField
-//                        
-//                        if (showSetupKeyField) {
-//                            symbolAsset = "remove-symbol"
-//                        } else {
-//                            symbolAsset = "add-symbol"
-//                        }
-//                    }
-//                if showSetupKeyField {
-//                    Text("Setup key")
-//                        .font(.system(size: 18, weight: .bold))
-//                        .foregroundColor(Color("TextPrimary"))
-//                    CustomTextField(placeholder: "0EF79C2F-DEE1-419B-BFC8-1BF529332998", text: $viewModel.setupKey, secure: .constant(false))
-//                        .padding(.top, 3)
-//                    Text("Using setup keys for user devices is not recommended. SSO with MFA provides stronger security, proper user-device association, and periodic re-authentication.")
-//                        .padding()
-//                        .font(.system(size: 16))
-//                        .foregroundColor(Color.accentColor)
-//                        .frame(maxWidth: .infinity)
-//                        .multilineTextAlignment(.center)
-//                        .background(
-//                            RoundedRectangle(cornerRadius: 3)
-//                                .fill(Color(red: 0, green: 0, blue: 0, opacity: 0))
-//                                .overlay(
-//                                    RoundedRectangle(cornerRadius: 3)
-//                                        .stroke(Color.accentColor, lineWidth: 1)
-//                                )
-//                        )
-//                    if viewModel.showInvalidSetupKeyHint {
-//                        Text("Invalid setup key").foregroundColor(.red)
-//                    }
-//                }
-//                SolidButton(text: isVerifyingServer || isVerifyingKey ? "Verifying..." : "Change") {
-//                    if viewModel.showInvalidServerAlert || viewModel.server.isEmpty || isVerifyingServer || isVerifyingKey {
-//                        return
-//                    }
-//                    if viewModel.setupKey == "" {
-//                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-//                            isVerifyingServer = true
-//                        }
-//                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-//                            let sso = viewModel.updateManagementURL(url: viewModel.server)
-//                            switch sso {
-//                            case .none:
-//                                viewModel.showInvalidServerAlert = true
-//                            case .some(true):
-//                                viewModel.showServerChangedInfo = true
-//                                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-//                                    self.presentationMode.wrappedValue.dismiss()
-//                                    viewModel.server = ""
-//                                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-//                                        viewModel.showServerChangedInfo = false
-//                                    }
-//                                }
-//                            case .some(false):
-//                                showSetupKeyField = true
-//                            }
-//                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-//                                isVerifyingServer = false
-//                            }
-//                        }
-//                    } else {
-//                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-//                            isVerifyingKey = true
-//                        }
-//                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-//                            do {
-//                                try viewModel.setSetupKey(key: viewModel.setupKey)
-//                                self.presentationMode.wrappedValue.dismiss()
-//                                viewModel.showServerChangedInfo = true
-//                                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-//                                    viewModel.showServerChangedInfo = false
-//                                }
-//                                viewModel.setupKey = ""
-//                                isVerifyingKey = false
-//                            } catch {
-//                                viewModel.showInvalidSetupKeyAlert = true
-//                                isVerifyingKey = false
-//                            }
-//                        }
-//                    }
-//                    print("use custom server")
-//                }
-//                .padding(.top, 5)
-//                Button {
-//                    if !isVerifyingKey && !isVerifyingServer {
-//                        let sso = viewModel.updateManagementURL(url: "https://api.netbird.io")
-//                        print("use netbird server")
-//                        if sso ?? false {
-//                            self.presentationMode.wrappedValue.dismiss()
-//                            viewModel.showServerChangedInfo = true
-//                            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-//                                viewModel.showServerChangedInfo = false
-//                            }
-//                        } else {
-//                            showSetupKeyField = true
-//                        }
-//                    }
-//                } label: {
-//                    Label("Use NetBird server", image: "icon-netbird-button")
-//                        .font(.headline)
-//                        .foregroundColor(Color.accentColor)
-//                        .padding()
-//                        .frame(maxWidth: .infinity)
-//                        .background(
-//                            RoundedRectangle(cornerRadius: 3)
-//                                .fill(Color(red: 0, green: 0, blue: 0, opacity: 0))
-//                                .overlay(
-//                                    RoundedRectangle(cornerRadius: 3)
-//                                        .stroke(Color.accentColor, lineWidth: 1)
-//                                )
-//                        )
-//                }
-//                Spacer()
-//            }
-//            .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.10)
-//            if viewModel.showInvalidSetupKeyAlert {
-//                Color.black.opacity(0.4)
-//                    .edgesIgnoringSafeArea(.all)
-//                    .onTapGesture {
-//                        viewModel.buttonLock = true
-//                        viewModel.showInvalidSetupKeyAlert = false
-//                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-//                            viewModel.buttonLock = false
-//                        }
-//                    }
-//                
-//                WrongSetupKeyAlert(viewModel: viewModel, isPresented: $viewModel.showInvalidSetupKeyAlert)
-//                    .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
-//            }
-//        }
-//        .navigationViewStyle(StackNavigationViewStyle())
-//        .navigationBarTitleDisplayMode(.inline)
-//        .navigationBarBackButtonHidden(true)
-//        .navigationBarItems(leading: CustomBackButton(text: "Change Server", action: {
-//            presentationMode.wrappedValue.dismiss()
-//        }))        
-//        .onTapGesture {
-//            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-//        }
-//    }
-}
-
-struct WrongSetupKeyAlert: View {
-    @StateObject var viewModel: ViewModel
-    @Binding var isPresented: Bool
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            Image("exclamation-circle")
-                .padding(.top, 20)
-            Text("Setup key invalid")
-                .font(.title)
-                .foregroundColor(Color("TextAlert"))
-            Text("The provided setup could not be used to login. Check if the key is correct.")
-                .foregroundColor(Color("TextAlert"))
-                .multilineTextAlignment(.center)
-            SolidButton(text: "Confirm") {
-                isPresented.toggle()
-            }
-            .padding(.top, 20)
-        }
-        .padding()
-        .background(Color("BgSideDrawer"))
-        .cornerRadius(15)
-        .shadow(radius: 10)
     }
 }
 

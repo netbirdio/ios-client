@@ -14,11 +14,21 @@ class ServerViewModel : ObservableObject {
     
     @Published var isOperationSuccessful: Bool = false
     @Published var isUiEnabled: Bool = true
+    
     @Published var viewErrors = ServerViewErrors()
+    private var cancellables = Set<AnyCancellable>()
     
     init(configurationFilePath: String, deviceName: String) {
         self.configurationFilePath = configurationFilePath
         self.deviceName = deviceName
+        
+        // Forward viewErrors changes to trigger ServerViewModel's objectWillChange
+        // This is to make ServerViewModel react to changes made on ServerViewErrors.
+        viewErrors.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
     
     private func isSetupKeyInvalid(setupKey: String) -> Bool {
@@ -177,18 +187,31 @@ class ServerViewModel : ObservableObject {
             isUiEnabled = true
         }
     }
+    
+    func clearErrorsFor(field: Field) {
+        switch field {
+        case .url:
+            viewErrors.urlError = nil
+            viewErrors.generalError = nil
+            viewErrors.ssoNotSupportedError = nil
+        case .setupKey:
+            viewErrors.setupKeyError = nil
+        case .all:
+            clearErrorsFor(field: .url)
+            clearErrorsFor(field: .setupKey)
+        }
+    }
 }
 
-struct ServerViewErrors {
-    var urlError: String?
-    var setupKeyError: String?
-    var ssoNotSupportedError: String?
-    var generalError: String?
-    
-    mutating func clear() {
-        urlError = nil
-        setupKeyError = nil
-        ssoNotSupportedError = nil
-        generalError = nil
-    }
+enum Field {
+    case url
+    case setupKey
+    case all
+}
+
+class ServerViewErrors : ObservableObject {
+    @Published var urlError: String?
+    @Published var setupKeyError: String?
+    @Published var ssoNotSupportedError: String?
+    @Published var generalError: String?
 }
