@@ -39,7 +39,7 @@ class ServerViewModel : ObservableObject {
     }
     
     private func isUrlInvalid(url: String) -> Bool {
-        if let url = URL(string: url), url.host != nil, url.scheme == "https" {
+        if let url = URL(string: url), url.host != nil {
             return false
         } else {
             return true
@@ -47,22 +47,36 @@ class ServerViewModel : ObservableObject {
     }
     
     private func getAuthenticator(url managementServerUrl: String) async -> NetBirdSDKAuth? {
-        var error: NSError?
-        
-        let authenticator = NetBirdSDKNewAuth(configurationFilePath, managementServerUrl, &error)
-        
-        if error != nil {
-            print(error!.domain, error!.code, error!.description)
-            errorMessage = error!.description
-            return nil
+        let detachedTask = Task.detached(priority: .background) {
+            var error: NSError?
+            var errorMessage : String?
+            var authenticator : NetBirdSDKAuth?
+            authenticator = NetBirdSDKNewAuth(self.configurationFilePath, managementServerUrl, &error)
+            
+            if error != nil {
+                print(error!.domain, error!.code, error!.description)
+                errorMessage = error!.description
+                authenticator = nil
+                return (authenticator, errorMessage)
+            }
+            
+            return (authenticator, nil)
         }
         
-        return authenticator
+        let (authenticator, errorMessage) = await detachedTask.value
+        
+        if errorMessage != nil {
+            self.errorMessage = errorMessage
+            return nil
+        } else {
+            return authenticator
+        }
     }
     
     func changeManagementServerAddress(managementServerUrl: String) async {
         // disable UI here
         isUiEnabled = false
+        await Task.yield()
         
         let isUrlInvalid = isUrlInvalid(url: managementServerUrl)
         
@@ -75,20 +89,40 @@ class ServerViewModel : ObservableObject {
         }
         
         let authenticator = await getAuthenticator(url: managementServerUrl)
+        if authenticator == nil {
+            isUiEnabled = true
+            return
+        }
         
-        var isSsoSupported: ObjCBool = false
-        
-        do {
-            try authenticator?.saveConfigIfSSOSupported(&isSsoSupported)
+        let detachedTask = Task.detached {
+            var isSsoSupported: Bool = true
+            var isOperationSuccessful: Bool = false
+            var errorMessage: String?
             
-            if isSsoSupported.boolValue {
-                //emit success state
-                isOperationSuccessful = true
-            } else {
-                self.isSsoSupported = false
+            do {
+                var isSsoSupportedPointer: ObjCBool = false
+                try authenticator!.saveConfigIfSSOSupported(&isSsoSupportedPointer)
+                
+                if isSsoSupportedPointer.boolValue {
+                    isOperationSuccessful = true
+                } else {
+                    isSsoSupported = false
+                }
+            } catch {
+                errorMessage = error.localizedDescription
             }
-        } catch {
-            errorMessage = error.localizedDescription
+            
+            return (isOperationSuccessful, isSsoSupported, errorMessage)
+        }
+        
+        let (success, isSsoSupported, errorMessage) = await detachedTask.value
+        
+        if success {
+            self.isOperationSuccessful = true
+        } else if !isSsoSupported {
+            self.isSsoSupported = false
+        } else if errorMessage != nil {
+            self.errorMessage = errorMessage
             isUiEnabled = true
         }
     }
@@ -96,6 +130,7 @@ class ServerViewModel : ObservableObject {
     func loginWithSetupKey(managementServerUrl: String, setupKey: String) async {
         // disable UI here
         isUiEnabled = false
+        await Task.yield()
         
         let isSetupKeyInvalid = isSetupKeyInvalid(setupKey: setupKey)
         let isUrlInvalid = isUrlInvalid(url: managementServerUrl)
@@ -110,15 +145,42 @@ class ServerViewModel : ObservableObject {
         }
         
         let authenticator = await getAuthenticator(url: managementServerUrl)
+        if authenticator == nil {
+            isUiEnabled = true
+            return
+        }
         
-        do {
-            try authenticator?.login(withSetupKeyAndSaveConfig: setupKey, deviceName: self.deviceName)
-            //emit success state
-            isOperationSuccessful = true
-        } catch {
-            errorMessage = error.localizedDescription
-            // error states emitted, enable UI here
+        let detachedTask = Task.detached {
+            var isOperationSuccessful = false
+            var errorMessage : String?
+
+            do {
+                try authenticator!.login(withSetupKeyAndSaveConfig: setupKey, deviceName: self.deviceName)
+                isOperationSuccessful = true
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            
+            return (isOperationSuccessful, errorMessage)
+        }
+        
+        let (success, errorMessage) = await detachedTask.value
+        
+        if success {
+            self.isOperationSuccessful = true
+        } else if errorMessage != nil {
+            self.errorMessage = errorMessage
             isUiEnabled = true
         }
+        
+//        do {
+//            try authenticator!.login(withSetupKeyAndSaveConfig: setupKey, deviceName: self.deviceName)
+//            //emit success state
+//            isOperationSuccessful = true
+//        } catch {
+//            errorMessage = error.localizedDescription
+//            // error states emitted, enable UI here
+//            isUiEnabled = true
+//        }
     }
 }

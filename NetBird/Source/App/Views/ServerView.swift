@@ -112,8 +112,7 @@ struct ServerView: View {
     }
     
     func buildChangeButton() -> some View {
-        // isVerifyingServer || isVerifyingKey ? "Verifying..." :
-        SolidButton(text: "Change") {
+        SolidButton(text: isButtonDisabled ? "Verifying..." : "Change") {
             hideKeyboard()
             
             // Button won't do anything if both fields are empty.
@@ -131,6 +130,9 @@ struct ServerView: View {
             clearErrors()
 
             Task {
+                // update the UI
+                await Task.yield()
+                
                 if !serverUrl.isEmpty && !key.isEmpty {
                     await serverViewModel.loginWithSetupKey(managementServerUrl: serverUrl, setupKey: key)
                 } else if !serverUrl.isEmpty {
@@ -152,6 +154,9 @@ struct ServerView: View {
             clearErrors()
 
             Task {
+                // update the UI
+                await Task.yield()
+                
                 if key.isEmpty {
                     await serverViewModel.changeManagementServerAddress(managementServerUrl: serverUrl)
                 } else {
@@ -215,6 +220,8 @@ struct ServerView: View {
         .onChange(of: serverViewModel.errorMessage) { error in
             if error != nil && !error!.isEmpty {
                 serverErrorMessage = error
+            } else {
+                serverErrorMessage = nil
             }
         }
         .onChange(of: serverViewModel.isUrlInvalidFlag) { invalid in
