@@ -119,11 +119,14 @@ class ServerViewModel : ObservableObject {
         
         if success {
             self.isOperationSuccessful = true
-        } else if !isSsoSupported {
-            self.isSsoSupported = false
-        } else if errorMessage != nil {
-            self.errorMessage = errorMessage
+        } else {
             isUiEnabled = true
+            
+            if !isSsoSupported {
+                self.isSsoSupported = false
+            } else if errorMessage != nil {
+                self.errorMessage = errorMessage
+            }
         }
     }
     
@@ -172,15 +175,5 @@ class ServerViewModel : ObservableObject {
             self.errorMessage = errorMessage
             isUiEnabled = true
         }
-        
-//        do {
-//            try authenticator!.login(withSetupKeyAndSaveConfig: setupKey, deviceName: self.deviceName)
-//            //emit success state
-//            isOperationSuccessful = true
-//        } catch {
-//            errorMessage = error.localizedDescription
-//            // error states emitted, enable UI here
-//            isUiEnabled = true
-//        }
     }
 }

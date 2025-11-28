@@ -12,9 +12,11 @@ struct ServerView: View {
     @EnvironmentObject var viewModel: ViewModel
     
     private let defaultManagementServerUrl = "https://api.netbird.io"
+    private let addSymbol = "add-symbol"
+    private let removeSymbol = "remove-symbol"
     
     @State private var showSetupKeyField = false
-    @State private var symbolAsset = "add-symbol"
+    @State private var symbolAsset : String
     
     // Input field bindings
     @State private var managementServerUrl = ""
@@ -31,6 +33,10 @@ struct ServerView: View {
     
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
     
+    init() {
+        symbolAsset = addSymbol
+    }
+    
     func enableUi() {
         isButtonDisabled = false
     }
@@ -41,6 +47,7 @@ struct ServerView: View {
     
     func clearErrors() {
         serverViewModel.errorMessage = nil
+        serverViewModel.isSsoSupported = nil
         serverViewModel.isUrlInvalidFlag = false
         serverViewModel.isSetupKeyInvalidFlag = false
     }
@@ -53,6 +60,7 @@ struct ServerView: View {
             CustomTextField(placeholder: "https://example-api.domain.com:443", text: $managementServerUrl, secure: .constant(false), height: 48)
                 .onChange(of: managementServerUrl) { newText in
                     serverViewModel.errorMessage = nil
+                    serverViewModel.isSsoSupported = nil
                     serverViewModel.isUrlInvalidFlag = false
                 }
         }
@@ -75,11 +83,11 @@ struct ServerView: View {
                     showSetupKeyField = !showSetupKeyField
 
                     if (showSetupKeyField) {
-                        symbolAsset = "remove-symbol"
+                        symbolAsset = removeSymbol
                     } else {
                         // clear setup key input when toggling visibility to invisible
                         setupKey = ""
-                        symbolAsset = "add-symbol"
+                        symbolAsset = addSymbol
                     }
                 }
             if showSetupKeyField {
@@ -205,10 +213,12 @@ struct ServerView: View {
             presentationMode.wrappedValue.dismiss()
         }))
         .onChange(of: serverViewModel.isSsoSupported) { isSsoSupported in
-            if isSsoSupported != nil && !isSsoSupported! {
+            if isSsoSupported != nil && isSsoSupported == false {
                 showSetupKeyField = true
+                symbolAsset = removeSymbol
                 serverErrorMessage = "SSO isn't available for the provided server, register this device with a setup key"
-                enableUi()
+            } else {
+                serverErrorMessage = nil
             }
         }
         .onChange(of: serverViewModel.isOperationSuccessful) { success in
