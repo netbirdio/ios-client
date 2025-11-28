@@ -12,12 +12,9 @@ class ServerViewModel : ObservableObject {
     let configurationFilePath: String
     let deviceName: String
     
-    @Published var errorMessage: String?
     @Published var isOperationSuccessful: Bool = false
-    @Published var isSsoSupported: Bool?
-    @Published var isSetupKeyInvalidFlag: Bool = false
-    @Published var isUrlInvalidFlag: Bool = false
     @Published var isUiEnabled: Bool = true
+    @Published var viewErrors = ServerViewErrors()
     
     init(configurationFilePath: String, deviceName: String) {
         self.configurationFilePath = configurationFilePath
@@ -66,7 +63,7 @@ class ServerViewModel : ObservableObject {
         let (authenticator, errorMessage) = await detachedTask.value
         
         if errorMessage != nil {
-            self.errorMessage = errorMessage
+            viewErrors.generalError = errorMessage
             return nil
         } else {
             return authenticator
@@ -80,9 +77,8 @@ class ServerViewModel : ObservableObject {
         
         let isUrlInvalid = isUrlInvalid(url: managementServerUrl)
         
-        self.isUrlInvalidFlag = isUrlInvalid
-        
         if isUrlInvalid {
+            viewErrors.urlError = "Invalid URL format"
             // error state emitted, enable UI here
             isUiEnabled = true
             return
@@ -123,9 +119,9 @@ class ServerViewModel : ObservableObject {
             isUiEnabled = true
             
             if !isSsoSupported {
-                self.isSsoSupported = false
+                viewErrors.ssoNotSupportedError = "SSO isn't available for the provided server, register this device with a setup key"
             } else if errorMessage != nil {
-                self.errorMessage = errorMessage
+                viewErrors.generalError = errorMessage
             }
         }
     }
@@ -138,8 +134,13 @@ class ServerViewModel : ObservableObject {
         let isSetupKeyInvalid = isSetupKeyInvalid(setupKey: setupKey)
         let isUrlInvalid = isUrlInvalid(url: managementServerUrl)
         
-        self.isSetupKeyInvalidFlag = isSetupKeyInvalid
-        self.isUrlInvalidFlag = isUrlInvalid
+        if isUrlInvalid {
+            viewErrors.urlError = "Invalid URL format"
+        }
+        
+        if isSetupKeyInvalid {
+            viewErrors.setupKeyError = "Invalid setup key format"
+        }
         
         if isSetupKeyInvalid || isUrlInvalid {
             // error states emitted, enable UI here
@@ -172,8 +173,22 @@ class ServerViewModel : ObservableObject {
         if success {
             self.isOperationSuccessful = true
         } else if errorMessage != nil {
-            self.errorMessage = errorMessage
+            viewErrors.generalError = errorMessage
             isUiEnabled = true
         }
+    }
+}
+
+struct ServerViewErrors {
+    var urlError: String?
+    var setupKeyError: String?
+    var ssoNotSupportedError: String?
+    var generalError: String?
+    
+    mutating func clear() {
+        urlError = nil
+        setupKeyError = nil
+        ssoNotSupportedError = nil
+        generalError = nil
     }
 }
