@@ -17,6 +17,7 @@ class ServerViewModel : ObservableObject {
     @Published var isSsoSupported: Bool?
     @Published var isSetupKeyInvalidFlag: Bool = false
     @Published var isUrlInvalidFlag: Bool = false
+    @Published var isUiEnabled: Bool = true
     
     init(configurationFilePath: String, deviceName: String) {
         self.configurationFilePath = configurationFilePath
@@ -60,11 +61,16 @@ class ServerViewModel : ObservableObject {
     }
     
     func changeManagementServerAddress(managementServerUrl: String) async {
+        // disable UI here
+        isUiEnabled = false
+        
         let isUrlInvalid = isUrlInvalid(url: managementServerUrl)
         
         self.isUrlInvalidFlag = isUrlInvalid
         
         if isUrlInvalid {
+            // error state emitted, enable UI here
+            isUiEnabled = true
             return
         }
         
@@ -83,11 +89,14 @@ class ServerViewModel : ObservableObject {
             }
         } catch {
             errorMessage = error.localizedDescription
-            return
+            isUiEnabled = true
         }
     }
     
     func loginWithSetupKey(managementServerUrl: String, setupKey: String) async {
+        // disable UI here
+        isUiEnabled = false
+        
         let isSetupKeyInvalid = isSetupKeyInvalid(setupKey: setupKey)
         let isUrlInvalid = isUrlInvalid(url: managementServerUrl)
         
@@ -95,6 +104,8 @@ class ServerViewModel : ObservableObject {
         self.isUrlInvalidFlag = isUrlInvalid
         
         if isSetupKeyInvalid || isUrlInvalid {
+            // error states emitted, enable UI here
+            isUiEnabled = true
             return
         }
         
@@ -106,7 +117,8 @@ class ServerViewModel : ObservableObject {
             isOperationSuccessful = true
         } catch {
             errorMessage = error.localizedDescription
-            return
+            // error states emitted, enable UI here
+            isUiEnabled = true
         }
     }
 }

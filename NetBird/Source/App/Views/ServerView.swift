@@ -14,16 +14,36 @@ struct ServerView: View {
     private let defaultManagementServerUrl = "https://api.netbird.io"
     
     @State private var showSetupKeyField = false
-//    @State private var isVerifyingServer = false
-//    @State private var isVerifyingKey = false
     @State private var symbolAsset = "add-symbol"
+    
+    // Input field bindings
     @State private var managementServerUrl = ""
     @State private var setupKey = ""
+    
+    // Error message bindings
     @State private var serverErrorMessage : String?
+    @State private var setupKeyErrorMessage : String?
+    
+    // Enable / disable buttons after tapping
+    @State private var isButtonDisabled = false
     
     @StateObject private var serverViewModel = ServerViewModel(configurationFilePath: Preferences.configFile(), deviceName: Device.getName())
     
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
+    
+    func enableUi() {
+        isButtonDisabled = false
+    }
+    
+    func disableUi() {
+        isButtonDisabled = true
+    }
+    
+    func clearErrors() {
+        serverViewModel.errorMessage = nil
+        serverViewModel.isUrlInvalidFlag = false
+        serverViewModel.isSetupKeyInvalidFlag = false
+    }
     
     func buildServer() -> some View {
         VStack(alignment: .leading){
@@ -32,22 +52,21 @@ struct ServerView: View {
                 .foregroundColor(Color("TextPrimary"))
             CustomTextField(placeholder: "https://example-api.domain.com:443", text: $managementServerUrl, secure: .constant(false), height: 48)
                 .onChange(of: managementServerUrl) { newText in
-                    if serverErrorMessage != nil {
-                        serverErrorMessage = nil
-                    }
+                    serverViewModel.errorMessage = nil
+                    serverViewModel.isUrlInvalidFlag = false
                 }
         }
         .padding(.top, UIScreen.main.bounds.height * 0.04)
     }
     
-    func buildServerErrorMessage() -> some View {
+    func buildErrorMessage(errorMessage: String?) -> some View {
         VStack(alignment: .leading) {
-            if serverErrorMessage != nil && !serverErrorMessage!.isEmpty {
-                Text(serverErrorMessage!).foregroundColor(.red)
+            if errorMessage != nil && !errorMessage!.isEmpty {
+                Text(errorMessage!).foregroundColor(.red)
             }
         }
     }
-    
+        
     func buildSetupKey() -> some View {
         VStack(alignment: .leading) {
             Text("\(Image(symbolAsset)) Add this device with a setup key")
@@ -70,6 +89,10 @@ struct ServerView: View {
                     .padding(.top, 8)
                 CustomTextField(placeholder: "0EF79C2F-DEE1-419B-BFC8-1BF529332998", text: $setupKey, secure: .constant(false), height: 48)
                     .padding(.bottom, 8)
+                    .onChange(of: setupKey) { newText in
+                        serverViewModel.isSetupKeyInvalidFlag = false
+                    }
+                buildErrorMessage(errorMessage: setupKeyErrorMessage)
                 Text("Using setup keys for user devices is not recommended. SSO with MFA provides stronger security, proper user-device association, and periodic re-authentication.")
                     .font(.system(size: 16))
                     .padding()
@@ -84,9 +107,6 @@ struct ServerView: View {
                                     .stroke(Color.accentColor, lineWidth: 1)
                             )
                     )
-//                if viewModel.showInvalidSetupKeyHint {
-//                    Text("Invalid setup key").foregroundColor(.red)
-//                }
             }
         }
     }
@@ -95,10 +115,6 @@ struct ServerView: View {
         // isVerifyingServer || isVerifyingKey ? "Verifying..." :
         SolidButton(text: "Change") {
             hideKeyboard()
-            
-//            if serverErrorMessage != nil {
-//                return
-//            }
             
             // Button won't do anything if both fields are empty.
             if managementServerUrl.isEmpty && setupKey.isEmpty {
@@ -112,6 +128,8 @@ struct ServerView: View {
                 managementServerUrl = defaultManagementServerUrl
             }
             
+            clearErrors()
+
             Task {
                 if !serverUrl.isEmpty && !key.isEmpty {
                     await serverViewModel.loginWithSetupKey(managementServerUrl: serverUrl, setupKey: key)
@@ -120,10 +138,7 @@ struct ServerView: View {
                 }
             }
         }
-    }
-    
-    func getSetupKey() -> String {
-        return self.setupKey
+        .disabled(isButtonDisabled)
     }
     
     func buildUseNetBirdButton() -> some View {
@@ -133,6 +148,8 @@ struct ServerView: View {
 
             let serverUrl = defaultManagementServerUrl
             let key = setupKey
+            
+            clearErrors()
 
             Task {
                 if key.isEmpty {
@@ -156,18 +173,19 @@ struct ServerView: View {
                         )
                 )
         }
+        .disabled(isButtonDisabled)
     }
     
     var body: some View {
         ZStack {
             Color("BgPage")
                 .edgesIgnoringSafeArea(.bottom)
-                .onTapGesture {
-                    hideKeyboard()
-                }
+//                .onTapGesture {
+//                    hideKeyboard()
+//                }
             VStack(alignment: .leading, spacing: 16) {
                 buildServer()
-                buildServerErrorMessage()
+                buildErrorMessage(errorMessage: serverErrorMessage)
                 buildSetupKey()
                 buildChangeButton()
                 buildUseNetBirdButton()
@@ -181,9 +199,13 @@ struct ServerView: View {
         .navigationBarItems(leading: CustomBackButton(text: "Change Server", action: {
             presentationMode.wrappedValue.dismiss()
         }))
-//        .onTapGesture {
-//            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-//        }
+        .onChange(of: serverViewModel.isSsoSupported) { isSsoSupported in
+            if isSsoSupported != nil && !isSsoSupported! {
+                showSetupKeyField = true
+                serverErrorMessage = "SSO isn't available for the provided server, register this device with a setup key"
+                enableUi()
+            }
+        }
         .onChange(of: serverViewModel.isOperationSuccessful) { success in
             if success {
                 self.presentationMode.wrappedValue.dismiss()
@@ -192,11 +214,28 @@ struct ServerView: View {
         }
         .onChange(of: serverViewModel.errorMessage) { error in
             if error != nil && !error!.isEmpty {
-                // show error alert
                 serverErrorMessage = error
+            }
+        }
+        .onChange(of: serverViewModel.isUrlInvalidFlag) { invalid in
+            if invalid {
+                serverErrorMessage = "Invalid URL format"
             } else {
-                // clear error alert
                 serverErrorMessage = nil
+            }
+        }
+        .onChange(of: serverViewModel.isSetupKeyInvalidFlag) { invalid in
+            if invalid {
+                setupKeyErrorMessage = "Invalid setup key format"
+            } else {
+                setupKeyErrorMessage = nil
+            }
+        }
+        .onChange(of: serverViewModel.isUiEnabled) { isEnabled in
+            if isEnabled {
+                enableUi()
+            } else {
+                disableUi()
             }
         }
     }
