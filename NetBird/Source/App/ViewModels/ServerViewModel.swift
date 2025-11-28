@@ -15,10 +15,34 @@ class ServerViewModel : ObservableObject {
     @Published var errorMessage: String?
     @Published var isOperationSuccessful: Bool = false
     @Published var isSsoSupported: Bool?
+    @Published var isSetupKeyInvalidFlag: Bool = false
+    @Published var isUrlInvalidFlag: Bool = false
     
     init(configurationFilePath: String, deviceName: String) {
         self.configurationFilePath = configurationFilePath
         self.deviceName = deviceName
+    }
+    
+    private func isSetupKeyInvalid(setupKey: String) -> Bool {
+        if setupKey.isEmpty || setupKey.count != 36 {
+            return true
+        }
+        
+        let uuid = UUID(uuidString: setupKey)
+        
+        if uuid == nil {
+            return true
+        }
+        
+        return false
+    }
+    
+    private func isUrlInvalid(url: String) -> Bool {
+        if let url = URL(string: url), url.host != nil, url.scheme == "https" {
+            return false
+        } else {
+            return true
+        }
     }
     
     private func getAuthenticator(url managementServerUrl: String) async -> NetBirdSDKAuth? {
@@ -36,6 +60,14 @@ class ServerViewModel : ObservableObject {
     }
     
     func changeManagementServerAddress(managementServerUrl: String) async {
+        let isUrlInvalid = isUrlInvalid(url: managementServerUrl)
+        
+        self.isUrlInvalidFlag = isUrlInvalid
+        
+        if isUrlInvalid {
+            return
+        }
+        
         let authenticator = await getAuthenticator(url: managementServerUrl)
         
         var isSsoSupported: ObjCBool = false
@@ -56,6 +88,16 @@ class ServerViewModel : ObservableObject {
     }
     
     func loginWithSetupKey(managementServerUrl: String, setupKey: String) async {
+        let isSetupKeyInvalid = isSetupKeyInvalid(setupKey: setupKey)
+        let isUrlInvalid = isUrlInvalid(url: managementServerUrl)
+        
+        self.isSetupKeyInvalidFlag = isSetupKeyInvalid
+        self.isUrlInvalidFlag = isUrlInvalid
+        
+        if isSetupKeyInvalid || isUrlInvalid {
+            return
+        }
+        
         let authenticator = await getAuthenticator(url: managementServerUrl)
         
         do {
