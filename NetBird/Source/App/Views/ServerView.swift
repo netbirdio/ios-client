@@ -77,6 +77,8 @@ struct ServerView: View {
                         // clear setup key input when toggling visibility to invisible
                         setupKey = ""
                         symbolAsset = addSymbol
+                        // clear errors as well
+                        serverViewModel.clearErrorsFor(field: .setupKey)
                     }
                 }
             if showSetupKeyField {
