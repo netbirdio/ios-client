@@ -53,16 +53,33 @@ class ServerViewModel : ObservableObject {
         }
     }
     
+    private func handleSdkErrorMessage(errorMessage: String) {
+        let reviewUrl = "Review the URL:\n\(errorMessage)"
+        let reviewSetupKey = "Review the setup key:\n\(errorMessage)"
+        
+        if errorMessage.localizedCaseInsensitiveContains("dial context: context deadline exceeded") {
+            viewErrors.urlError = reviewUrl
+        } else if errorMessage.localizedCaseInsensitiveContains("failed while getting management service public key") {
+            viewErrors.urlError = reviewUrl
+        } else if errorMessage.localizedCaseInsensitiveContains("couldn't add peer: setup key is invalid") {
+            viewErrors.setupKeyError = reviewSetupKey
+        } else {
+            // generic error
+            viewErrors.generalError = errorMessage
+        }
+    }
+    
     private func getAuthenticator(url managementServerUrl: String) async -> NetBirdSDKAuth? {
+        let configPath = self.configurationFilePath
         let detachedTask = Task.detached(priority: .background) {
             var error: NSError?
             var errorMessage : String?
             var authenticator : NetBirdSDKAuth?
-            authenticator = NetBirdSDKNewAuth(self.configurationFilePath, managementServerUrl, &error)
+            authenticator = NetBirdSDKNewAuth(configPath, managementServerUrl, &error)
             
-            if error != nil {
-                print(error!.domain, error!.code, error!.description)
-                errorMessage = error!.description
+            if let error = error {
+                print(error.domain, error.code, error.description)
+                errorMessage = error.description
                 authenticator = nil
                 return (authenticator, errorMessage)
             }
@@ -72,8 +89,8 @@ class ServerViewModel : ObservableObject {
         
         let (authenticator, errorMessage) = await detachedTask.value
         
-        if errorMessage != nil {
-            viewErrors.generalError = errorMessage
+        if let errorMessage = errorMessage {
+            handleSdkErrorMessage(errorMessage: errorMessage)
             return nil
         } else {
             return authenticator
@@ -105,9 +122,14 @@ class ServerViewModel : ObservableObject {
             var isOperationSuccessful: Bool = false
             var errorMessage: String?
             
+            guard let auth = authenticator else {
+                errorMessage = "Authentication not available"
+                return (false, true, errorMessage)
+            }
+            
             do {
                 var isSsoSupportedPointer: ObjCBool = false
-                try authenticator!.saveConfigIfSSOSupported(&isSsoSupportedPointer)
+                try auth.saveConfigIfSSOSupported(&isSsoSupportedPointer)
                 
                 if isSsoSupportedPointer.boolValue {
                     isOperationSuccessful = true
@@ -130,8 +152,8 @@ class ServerViewModel : ObservableObject {
             
             if !isSsoSupported {
                 viewErrors.ssoNotSupportedError = "SSO isn't available for the provided server, register this device with a setup key"
-            } else if errorMessage != nil {
-                viewErrors.generalError = errorMessage
+            } else if let error = errorMessage {
+                handleSdkErrorMessage(errorMessage: error)
             }
         }
     }
@@ -164,12 +186,18 @@ class ServerViewModel : ObservableObject {
             return
         }
         
+        let deviceName = self.deviceName
         let detachedTask = Task.detached {
             var isOperationSuccessful = false
             var errorMessage : String?
+            
+            guard let auth = authenticator else {
+                errorMessage = "Authentication not available"
+                return (false, errorMessage)
+            }
 
             do {
-                try authenticator!.login(withSetupKeyAndSaveConfig: setupKey, deviceName: self.deviceName)
+                try auth.login(withSetupKeyAndSaveConfig: setupKey, deviceName: deviceName)
                 isOperationSuccessful = true
             } catch {
                 errorMessage = error.localizedDescription
@@ -182,9 +210,12 @@ class ServerViewModel : ObservableObject {
         
         if success {
             self.isOperationSuccessful = true
-        } else if errorMessage != nil {
-            viewErrors.generalError = errorMessage
+        } else {
             isUiEnabled = true
+            
+            if let error = errorMessage {
+                handleSdkErrorMessage(errorMessage: error)
+            }
         }
     }
     
