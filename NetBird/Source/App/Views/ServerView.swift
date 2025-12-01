@@ -26,14 +26,18 @@ struct ServerView: View {
     // Enable / disable buttons after tapping
     @State private var isButtonDisabled = false
     
+    @State private var isAddDeviceToggleDisabled = false
+    
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
     
     func enableUi() {
         isButtonDisabled = false
+        isAddDeviceToggleDisabled = false
     }
     
     func disableUi() {
         isButtonDisabled = true
+        isAddDeviceToggleDisabled = true
     }
     
     func clearErrors() {
@@ -47,7 +51,7 @@ struct ServerView: View {
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(Color("TextPrimary"))
             CustomTextField(placeholder: "https://example-api.domain.com:443", text: $managementServerUrl, secure: .constant(false), height: 48)
-                .onChange(of: managementServerUrl) { newText in
+                .onChange(of: managementServerUrl) { _ in
                     serverViewModel.clearErrorsFor(field: .url)
                 }
         }
@@ -56,10 +60,8 @@ struct ServerView: View {
     
     @ViewBuilder
     func buildErrorMessage(errorMessage: String?) -> some View {
-        if errorMessage == nil || errorMessage!.isEmpty {
-            EmptyView()
-        } else {
-            Text(errorMessage!).foregroundColor(.red)
+        if let message = errorMessage, !message.isEmpty {
+            Text(message).foregroundColor(.red)
         }
     }
      
@@ -81,6 +83,7 @@ struct ServerView: View {
                         serverViewModel.clearErrorsFor(field: .setupKey)
                     }
                 }
+                .disabled(isAddDeviceToggleDisabled)
             if showSetupKeyField {
                 Text("Setup key")
                     .font(.system(size: 18, weight: .bold))
@@ -88,7 +91,7 @@ struct ServerView: View {
                     .padding(.top, 8)
                 CustomTextField(placeholder: "0EF79C2F-DEE1-419B-BFC8-1BF529332998", text: $setupKey, secure: .constant(false), height: 48)
                     .padding(.bottom, 8)
-                    .onChange(of: setupKey) { newText in
+                    .onChange(of: setupKey) { _ in
                         serverViewModel.clearErrorsFor(field: .setupKey)
                     }
                 buildErrorMessage(errorMessage: serverViewModel.viewErrors.setupKeyError)
