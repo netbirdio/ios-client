@@ -85,22 +85,15 @@ struct ServerView: View {
                 }
                 .disabled(isAddDeviceToggleDisabled)
             if showSetupKeyField {
-                Text("Setup key")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(Color("TextPrimary"))
-                    .padding(.top, 8)
                 CustomTextField(placeholder: "0EF79C2F-DEE1-419B-BFC8-1BF529332998", text: $setupKey, secure: .constant(false), height: 48)
-                    .padding(.bottom, 8)
+                    .padding([.bottom, .top], 8)
                     .onChange(of: setupKey) { _ in
                         serverViewModel.clearErrorsFor(field: .setupKey)
                     }
                 buildErrorMessage(errorMessage: serverViewModel.viewErrors.setupKeyError)
-                Text("Using setup keys for user devices is not recommended. SSO with MFA provides stronger security, proper user-device association, and periodic re-authentication.")
-                    .font(.system(size: 16))
+                JustifiedText(text: "Using setup keys for user devices is not recommended. SSO with MFA provides stronger security, proper user-device association, and periodic re-authentication.", font: .systemFont(ofSize: 16), color: UIColor(Color.accentColor))
                     .padding()
-                    .foregroundColor(Color.accentColor)
                     .frame(maxWidth: .infinity)
-                    .multilineTextAlignment(.center)
                     .background(
                         RoundedRectangle(cornerRadius: 3)
                             .fill(Color(red: 0, green: 0, blue: 0, opacity: 0))
