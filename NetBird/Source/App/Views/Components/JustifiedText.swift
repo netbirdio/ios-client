@@ -13,11 +13,12 @@ struct JustifiedText: View {
     var font: UIFont = .systemFont(ofSize: 18)
     var color: UIColor = .label
 
-    @State private var height: CGFloat = 0
+    @State private var height: CGFloat?
 
     var body: some View {
         JustifiedTextRepresentable(text: text, font: font, color: color, height: $height)
             .frame(height: height)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -25,10 +26,11 @@ private struct JustifiedTextRepresentable: UIViewRepresentable {
     var text: String
     var font: UIFont
     var color: UIColor
-    @Binding var height: CGFloat
+    @Binding var height: CGFloat?
 
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
+        
         textView.isEditable = false
         textView.isSelectable = false
         textView.isScrollEnabled = false
@@ -39,6 +41,7 @@ private struct JustifiedTextRepresentable: UIViewRepresentable {
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        
         return textView
     }
 
@@ -46,10 +49,14 @@ private struct JustifiedTextRepresentable: UIViewRepresentable {
         uiView.text = text
         uiView.font = font
         uiView.textColor = color
-        DispatchQueue.main.async {
-            let size = uiView.sizeThatFits(CGSize(width: uiView.bounds.width, height: .greatestFiniteMagnitude))
-            if size.height != height && uiView.bounds.width > 0 {
-                height = size.height
+
+        DispatchQueue.main.async { [weak uiView] in
+            guard let uiView = uiView, uiView.bounds.width > 0 else { return }
+            
+            guard uiView.bounds.width > 0 else { return }
+            let newHeight = uiView.sizeThatFits(CGSize(width: uiView.bounds.width, height: .greatestFiniteMagnitude)).height
+            if height != newHeight {
+                height = newHeight
             }
         }
     }
