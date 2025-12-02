@@ -185,9 +185,6 @@ struct ServerView: View {
         ZStack {
             Color("BgPage")
                 .edgesIgnoringSafeArea(.bottom)
-//                .onTapGesture {
-//                    hideKeyboard()
-//                }
             VStack(alignment: .leading, spacing: 16) {
                 buildServer()
                 buildErrorMessage(errorMessage: serverViewModel.viewErrors.urlError)
@@ -199,6 +196,10 @@ struct ServerView: View {
                 Spacer()
             }
             .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.10)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            hideKeyboard()
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .navigationBarTitleDisplayMode(.inline)
