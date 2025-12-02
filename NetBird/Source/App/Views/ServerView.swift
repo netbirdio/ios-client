@@ -25,8 +25,11 @@ struct ServerView: View {
     
     // Enable / disable buttons after tapping
     @State private var isButtonDisabled = false
-    
     @State private var isAddDeviceToggleDisabled = false
+    
+    // Animate ellipsis
+    @State private var dotCount: Int = 0
+    private let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
     
@@ -36,12 +39,19 @@ struct ServerView: View {
     }
     
     func disableUi() {
+        dotCount = 0
         isButtonDisabled = true
         isAddDeviceToggleDisabled = true
     }
     
     func clearErrors() {
         serverViewModel.clearErrorsFor(field: .all)
+    }
+    
+    func updateDotCount() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            dotCount = (dotCount + 1) % 4
+        }
     }
     
     @ViewBuilder
@@ -108,40 +118,68 @@ struct ServerView: View {
     
     @ViewBuilder
     func buildChangeButton() -> some View {
-        SolidButton(text: isButtonDisabled ? "Verifying..." : "Change") {
-            hideKeyboard()
-            
-            // Change button won't do anything if both fields are empty.
-            if managementServerUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && setupKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return
-            }
-            
-            var serverUrl = managementServerUrl.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if serverUrl.isEmpty {
-                serverUrl = defaultManagementServerUrl
-            }
-            
-            managementServerUrl = serverUrl
-            
-            let key = setupKey.trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            clearErrors()
-
-            Task {
-                // Allow UI state changes to propagate before starting async work
-                await Task.yield()
-                
-                if !serverUrl.isEmpty && !key.isEmpty {
-                    await serverViewModel.loginWithSetupKey(managementServerUrl: serverUrl, setupKey: key)
-                } else if !serverUrl.isEmpty {
-                    await serverViewModel.changeManagementServerAddress(managementServerUrl: serverUrl)
+        Group {
+            if isButtonDisabled {
+                HStack {
+                    Text("Validating")
+                    Text(".").opacity(dotCount > 0 ? 1 : 0)
+                    Text(".").opacity(dotCount > 1 ? 1 : 0)
+                    Text(".").opacity(dotCount > 2 ? 1 : 0)
                 }
+                .font(.headline)
+                .foregroundColor(.white)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.accentColor)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 3)
+                                .stroke(Color.orange.darker(), lineWidth: 2)
+                        )
+                )
+            } else {
+                SolidButton(text: "Change") {
+                    hideKeyboard()
+
+                    // Change button won't do anything if both fields are empty.
+                    if managementServerUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        && setupKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        return
+                    }
+
+                    var serverUrl = managementServerUrl.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    if serverUrl.isEmpty {
+                        serverUrl = defaultManagementServerUrl
+                    }
+
+                    managementServerUrl = serverUrl
+
+                    let key = setupKey.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                    clearErrors()
+
+                    Task {
+                        // Allow UI state changes to propagate before starting async work
+                        await Task.yield()
+
+                        if !serverUrl.isEmpty && !key.isEmpty {
+                            await serverViewModel.loginWithSetupKey(managementServerUrl: serverUrl, setupKey: key)
+                        } else if !serverUrl.isEmpty {
+                            await serverViewModel.changeManagementServerAddress(managementServerUrl: serverUrl)
+                        }
+                    }
+                }
+            }
+        }
+        .onReceive(timer) { _ in
+            if isButtonDisabled {
+                updateDotCount()
             }
         }
         .disabled(isButtonDisabled)
     }
-    
+
     @ViewBuilder
     func buildUseNetBirdButton() -> some View {
         Button {
