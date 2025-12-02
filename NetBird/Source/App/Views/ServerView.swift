@@ -96,7 +96,7 @@ struct ServerView: View {
                     .frame(maxWidth: .infinity)
                     .background(
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(Color(red: 0, green: 0, blue: 0, opacity: 0))
+                            .fill(Color.clear)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 3)
                                     .stroke(Color.accentColor, lineWidth: 1)
@@ -168,7 +168,7 @@ struct ServerView: View {
                 .frame(maxWidth: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(Color(red: 0, green: 0, blue: 0, opacity: 0))
+                        .fill(Color.clear)
                         .overlay(
                             RoundedRectangle(cornerRadius: 3)
                                 .stroke(Color.accentColor, lineWidth: 1)
