@@ -32,7 +32,7 @@ struct AdvancedView: View {
                         .padding(.top, 3)
                         .fixedSize(horizontal: false, vertical: true)
                     
-                    CustomTextField(placeholder: "Add a pre-shared key", text: $viewModel.presharedKey, secure: $viewModel.presharedKeySecure)
+                    CustomTextField(placeholder: "Add a pre-shared key", text: $viewModel.presharedKey, secure: $viewModel.presharedKeySecure, height: 48)
                         .padding(.top, 3)
                         .onChange(of: viewModel.presharedKey) { value in
                             checkForValidPresharedKey(text: value)
@@ -61,7 +61,7 @@ struct AdvancedView: View {
                         .padding([.top, .bottom])
                     
                     Toggle(isOn: $viewModel.traceLogsEnabled) {
-                        Text("Enable Trace logs.")
+                        Text("Enable Trace logs")
                             .multilineTextAlignment(.leading)
                             .font(.system(size: 18, weight: .regular))
                             .foregroundColor(Color("TextSecondary"))
@@ -79,7 +79,7 @@ struct AdvancedView: View {
                         .padding([.top, .bottom])
                     
                     Toggle(isOn: $viewModel.rosenpassEnabled) {
-                        Text("Enable Rosenpass.")
+                        Text("Enable Rosenpass")
                             .multilineTextAlignment(.leading)
                             .font(.system(size: 18, weight: .regular))
                             .foregroundColor(Color("TextSecondary"))
@@ -95,7 +95,7 @@ struct AdvancedView: View {
                     }
                     
                     Toggle(isOn: $viewModel.rosenpassPermissive) {
-                        Text("Enable Rosenpass permissive mode.")
+                        Text("Enable Rosenpass permissive mode")
                             .multilineTextAlignment(.leading)
                             .font(.system(size: 18, weight: .regular))
                             .foregroundColor(Color("TextSecondary"))
@@ -108,6 +108,31 @@ struct AdvancedView: View {
                             viewModel.rosenpassEnabled = true
                         }
                         viewModel.setRosenpassPermissive(permissive: value)
+                    }
+                    
+                    Divider()
+                        .padding([.top, .bottom])
+                    
+                    Text("Network & Security")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(Color("TextPrimary"))
+                        .padding(.top, 8)
+                        .fixedSize(horizontal: false, vertical: true)
+                    
+                    Toggle(isOn: $viewModel.forceRelayConnection) {
+                        Text("Force relay connection")
+                            .multilineTextAlignment(.leading)
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(Color("TextSecondary"))
+                            .padding(.top, 3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: .orange))
+                    .onChange(of: viewModel.forceRelayConnection) { value in
+                        if value {
+                            viewModel.forceRelayConnection = true
+                        }
+                        viewModel.setForcedRelayConnection(enabled: value)
                     }
                     
                     Spacer()

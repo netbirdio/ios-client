@@ -55,6 +55,7 @@ class ViewModel: ObservableObject {
             UserDefaults.standard.synchronize()
         }
     }
+    @Published var forceRelayConnection = true
     var preferences = Preferences.newPreferences()
     var buttonLock = false
     let defaults = UserDefaults.standard
@@ -74,6 +75,7 @@ class ViewModel: ObservableObject {
         self.routeViewModel = RoutesViewModel(networkExtensionAdapter: networkExtensionAdapter)
         self.rosenpassEnabled = self.getRosenpassEnabled()
         self.rosenpassPermissive = self.getRosenpassPermissive()
+        self.forceRelayConnection = self.getForcedRelayConnectionEnabled()
         
         $setupKey
             .removeDuplicates()
@@ -258,7 +260,6 @@ class ViewModel: ObservableObject {
         return result.boolValue
     }
     
-    
     func getRosenpassPermissive() -> Bool {
         var result = ObjCBool(false)
         do {
@@ -270,7 +271,6 @@ class ViewModel: ObservableObject {
         return result.boolValue
     }
     
-    
     func setRosenpassPermissive(permissive: Bool) {
         preferences.setRosenpassPermissive(permissive)
         do {
@@ -278,6 +278,22 @@ class ViewModel: ObservableObject {
         } catch {
             print("Failed to update rosenpass permissive settings")
         }
+    }
+    
+    func setForcedRelayConnection(enabled: Bool) {
+        preferences.setBogusVariable(enabled)
+    
+        do {
+            try preferences.commit()
+        } catch {
+            print("Failed to update forced relay connection settings")
+        }
+    }
+    
+    func getForcedRelayConnectionEnabled() -> Bool {
+        let myBogus = preferences.getBogusVariable()
+        print (myBogus)
+        return (myBogus as NSString).boolValue
     }
     
     func getDefaultStatus() -> StatusDetails {
