@@ -111,22 +111,25 @@ struct ServerView: View {
         SolidButton(text: isButtonDisabled ? "Verifying..." : "Change") {
             hideKeyboard()
             
-            // Button won't do anything if both fields are empty.
-            if managementServerUrl.isEmpty && setupKey.isEmpty {
+            // Change button won't do anything if both fields are empty.
+            if managementServerUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && setupKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return
             }
             
-            let serverUrl = managementServerUrl.isEmpty ? defaultManagementServerUrl : managementServerUrl
-            let key = setupKey
-            
-            if managementServerUrl.isEmpty {
-                managementServerUrl = defaultManagementServerUrl
+            var serverUrl = managementServerUrl.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if serverUrl.isEmpty {
+                serverUrl = defaultManagementServerUrl
             }
+            
+            managementServerUrl = serverUrl
+            
+            let key = setupKey.trimmingCharacters(in: .whitespacesAndNewlines)
             
             clearErrors()
 
             Task {
-                // update the UI
+                // Allow UI state changes to propagate before starting async work
                 await Task.yield()
                 
                 if !serverUrl.isEmpty && !key.isEmpty {
@@ -146,12 +149,12 @@ struct ServerView: View {
             managementServerUrl = defaultManagementServerUrl
 
             let serverUrl = defaultManagementServerUrl
-            let key = setupKey
+            let key = setupKey.trimmingCharacters(in: .whitespacesAndNewlines)
             
             clearErrors()
 
             Task {
-                // update the UI
+                // Allow UI state changes to propagate before starting async work
                 await Task.yield()
                 
                 if key.isEmpty {
