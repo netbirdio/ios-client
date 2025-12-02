@@ -53,8 +53,9 @@ private struct JustifiedTextRepresentable: UIViewRepresentable {
         DispatchQueue.main.async { [weak uiView] in
             guard let uiView = uiView, uiView.bounds.width > 0 else { return }
             
-            guard uiView.bounds.width > 0 else { return }
-            let newHeight = uiView.sizeThatFits(CGSize(width: uiView.bounds.width, height: .greatestFiniteMagnitude)).height
+            let targetSize = CGSize(width: uiView.bounds.width, height: .greatestFiniteMagnitude)
+            let newHeight = uiView.sizeThatFits(targetSize).height
+            
             if height != newHeight {
                 height = newHeight
             }
