@@ -4,8 +4,15 @@
 //
 //  Created by Pascal Fischer on 06.05.24.
 //
+//  Shared between iOS and tvOS.
+//  tvOS has its own dedicated view (TVPeersView) but this can be used as fallback.
+//
 
 import SwiftUI
+
+#if os(iOS)
+import UIKit
+#endif
 
 struct PeerTabView: View {
     @EnvironmentObject var viewModel: ViewModel
@@ -71,15 +78,15 @@ struct NoPeersView: View {
             Image("icon-empty-box")
                 .resizable()
                 .scaledToFit()
-                .frame(height: UIScreen.main.bounds.height * 0.2)
-                .padding(.top, UIScreen.main.bounds.height * 0.05)
+                .frame(height: Screen.height * 0.2)
+                .padding(.top, Screen.height * 0.05)
 
             Text("It looks like there are no machines that you can connect to...")
-                .font(.system(size: 18, weight: .regular))
+                .font(.system(size: 18 * Layout.fontScale, weight: .regular))
                 .foregroundColor(Color("TextPrimary"))
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, UIScreen.main.bounds.width * 0.075)
-                .padding(.top, UIScreen.main.bounds.height * 0.04)
+                .padding(.horizontal, Screen.width * 0.075)
+                .padding(.top, Screen.height * 0.04)
 
             if let url = URL(string: "https://docs.netbird.io") {
                 Link(destination: url) {
@@ -97,16 +104,16 @@ struct NoPeersView: View {
                                 )
                         )
                 }
-                .padding(.top, UIScreen.main.bounds.height * 0.04)
-                .padding(.horizontal, UIScreen.main.bounds.width * 0.05)
+                .padding(.top, Screen.height * 0.04)
+                .padding(.horizontal, Screen.width * 0.05)
             } else {
                 Text("Unable to load the documentation link.")
                     .font(.footnote)
                     .foregroundColor(.red)
-                    .padding(.top, UIScreen.main.bounds.height * 0.04)
+                    .padding(.top, Screen.height * 0.04)
             }
         }
-        .padding(.horizontal, UIScreen.main.bounds.width * 0.05)
+        .padding(.horizontal, Screen.width * 0.05)
     }
 }
 
@@ -186,6 +193,8 @@ struct PeerCardView: View {
 
     private func contextMenu(for peer: PeerInfo) -> some View {
         Group {
+            #if os(iOS)
+            // Clipboard is only available on iOS
             Button("Copy FQDN") {
                 UIPasteboard.general.string = peer.fqdn
                 print("Copied FQDN to clipboard")
@@ -209,6 +218,11 @@ struct PeerCardView: View {
                 }
                 peerViewModel.unfreezeDisplayedPeerList()
             }
+            #else
+            // tvOS: Show info instead of copy (no clipboard)
+            Text("FQDN: \(peer.fqdn)")
+            Text("IP: \(peer.ip)")
+            #endif
         }
     }
 }

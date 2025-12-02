@@ -28,9 +28,9 @@
 
  <br>
 
-# NetBird iOS Client
+# NetBird iOS & tvOS Client
 
-The NetBird iOS client allows connections from mobile devices running iOS 14.0+ to private resources in the NetBird network.
+The NetBird iOS/tvOS client allows connections from mobile devices running iOS 14.0+ and Apple TV running tvOS 17.0+ to private resources in the NetBird network.
 
 ## Install
 You can download and install the app from the App Store:
@@ -54,9 +54,9 @@ The code is divided into 4 parts:
 
 ## Requirements
 
-- iOS 14.0+
-- Xcode 12.0+
-- gomobile
+- iOS 14.0+ / tvOS 17.0+
+- Xcode 15.0+
+- gomobile (with tvOS support - see build instructions)
 
 ## Run locally
 
@@ -67,15 +67,47 @@ git clone https://github.com/netbirdio/netbird.git
 git clone https://github.com/netbirdio/ios-client.git
 ```
 
-Building the xcframework from the main netbird repo. This needs to be stored in the root directory of the app
-```
+Building the xcframework from the main netbird repo. This needs to be stored in the root directory of the app.
+
+**For iOS only:**
+```bash
 cd netbird
 gomobile bind -target=ios -bundleid=io.netbird.framework -o ../ios-client/NetBirdSDK.xcframework ./client/ios/NetBirdSDK
 ```
 
+**For iOS + tvOS (requires gomobile fork with tvOS support):**
+```bash
+cd netbird
+gomobile bind -target=ios,tvos -bundleid=io.netbird.framework -o ../ios-client/NetBirdSDK.xcframework ./client/ios/NetBirdSDK
+```
+
 Open the Xcode project, and we are ready to go.
 
-> **Note:** The app can not be run in the iOS simulator. To test the app, a physical device needs to be connected to Xcode via cable and set as the run destination.
+### Running on iOS Device
+
+> **Note:** The app cannot run in the iOS simulator. To test the app, a physical device needs to be connected to Xcode via cable and set as the run destination.
+
+### Running on Apple TV
+
+> **Note:** The app cannot run in the tvOS simulator. To test on Apple TV:
+>
+> 1. **Pair Apple TV with Xcode:**
+>    - Ensure your Mac and Apple TV are on the same Wi-Fi network
+>    - On Apple TV: Settings → Remotes and Devices → Remote App and Devices
+>    - In Xcode: Window → Devices and Simulators (⇧⌘2)
+>    - Select your Apple TV from "Discovered" and click "Pair"
+>    - Enter the 6-digit code shown on your Apple TV
+>
+> 2. **Enable Developer Mode on Apple TV (tvOS 16+):**
+>    - Settings → Privacy & Security → Developer Mode → ON
+>    - Apple TV will restart
+>
+> 3. **Build and Run:**
+>    - Select the "NetBird TV" scheme in Xcode
+>    - Choose your paired Apple TV as the run destination
+>    - Press ⌘R to build and run
+>
+> **Minimum Requirement:** Apple TV must be running tvOS 17.0 or later for VPN support.
 
 ## Other project repositories
 
@@ -84,3 +116,4 @@ NetBird project is composed of multiple repositories:
 - Dashboard: https://github.com/netbirdio/dashboard, contains the Administration UI for the management service
 - Documentations: https://github.com/netbirdio/docs, contains the documentation from https://netbird.io/docs
 - Android Client: https://github.com/netbirdio/android-client
+- iOS/tvOS Client: https://github.com/netbirdio/ios-client (this repository)

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import NetBirdSDK
 
 struct DomainConfig: Codable {
     var disabled: Bool

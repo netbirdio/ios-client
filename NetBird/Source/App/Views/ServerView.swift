@@ -46,11 +46,8 @@ struct ServerView: View {
                         return
                     }
                     if viewModel.setupKey == "" {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            isVerifyingServer = true
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            let sso = viewModel.updateManagementURL(url: viewModel.server)
+                        isVerifyingServer = true
+                        viewModel.updateManagementURL(url: viewModel.server) { sso in
                             switch sso {
                             case .none:
                                 viewModel.showInvalidServerAlert = true
@@ -66,28 +63,22 @@ struct ServerView: View {
                             case .some(false):
                                 showSetupKeyField = true
                             }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                isVerifyingServer = false
-                            }
+                            isVerifyingServer = false
                         }
                     } else {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            isVerifyingKey = true
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            do {
-                                try viewModel.setSetupKey(key: viewModel.setupKey)
+                        isVerifyingKey = true
+                        viewModel.setSetupKey(key: viewModel.setupKey) { error in
+                            if error != nil {
+                                viewModel.showInvalidSetupKeyAlert = true
+                            } else {
                                 self.presentationMode.wrappedValue.dismiss()
                                 viewModel.showServerChangedInfo = true
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                                     viewModel.showServerChangedInfo = false
                                 }
                                 viewModel.setupKey = ""
-                                isVerifyingKey = false
-                            } catch {
-                                viewModel.showInvalidSetupKeyAlert = true
-                                isVerifyingKey = false
                             }
+                            isVerifyingKey = false
                         }
                     }
                     print("use custom server")
@@ -95,16 +86,19 @@ struct ServerView: View {
                 .padding(.top, 5)
                 Button {
                     if !isVerifyingKey && !isVerifyingServer {
-                        let sso = viewModel.updateManagementURL(url: "https://api.netbird.io")
-                        print("use netbird server")
-                        if sso ?? false {
-                            self.presentationMode.wrappedValue.dismiss()
-                            viewModel.showServerChangedInfo = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                                viewModel.showServerChangedInfo = false
+                        isVerifyingServer = true
+                        viewModel.updateManagementURL(url: "https://api.netbird.io") { sso in
+                            print("use netbird server")
+                            if sso ?? false {
+                                self.presentationMode.wrappedValue.dismiss()
+                                viewModel.showServerChangedInfo = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                                    viewModel.showServerChangedInfo = false
+                                }
+                            } else {
+                                showSetupKeyField = true
                             }
-                        } else {
-                            showSetupKeyField = true
+                            isVerifyingServer = false
                         }
                     }
                 } label: {

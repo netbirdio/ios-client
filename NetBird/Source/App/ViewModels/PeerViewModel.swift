@@ -5,6 +5,7 @@
 //  Created by Pascal Fischer on 25.04.24.
 //
 
+import Foundation
 import Combine
 
 class PeerViewModel: ObservableObject {

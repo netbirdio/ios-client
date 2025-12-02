@@ -4,6 +4,9 @@
 //
 //  Created by Pascal Fischer on 06.05.24.
 //
+//  Shared between iOS and tvOS.
+//  Uses Screen helper for platform-independent sizing.
+//
 
 import SwiftUI
 
@@ -80,13 +83,13 @@ struct NoRoutesView: View {
     var body: some View {
         Group {
             Image("icon-empty-box")
-                .padding(.top, UIScreen.main.bounds.height * 0.05)
+                .padding(.top, Screen.height * 0.05)
             Text("It looks like there are no resources that you can connect to ...")
-                .font(.system(size: 18, weight: .regular))
+                .font(.system(size: 18 * Layout.fontScale, weight: .regular))
                 .foregroundColor(Color("TextPrimary"))
                 .multilineTextAlignment(.center)
-                .padding(.top, UIScreen.main.bounds.height * 0.04)
-                .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.075)
+                .padding(.top, Screen.height * 0.04)
+                .padding([.leading, .trailing], Screen.width * 0.075)
             Link(destination: URL(string: "https://docs.netbird.io/how-to/networks")!) {
                 Text("Learn why")
                     .font(.headline)
@@ -101,9 +104,9 @@ struct NoRoutesView: View {
                                     .stroke(Color.orange.darker(), lineWidth: 2)
                             )
                     )
-                .padding(.top, UIScreen.main.bounds.height * 0.04)
+                .padding(.top, Screen.height * 0.04)
             }
         }
-        .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.05)
+        .padding([.leading, .trailing], Screen.width * 0.05)
     }
 }

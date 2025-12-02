@@ -5,6 +5,7 @@
 //  Created by Pascal Fischer on 06.05.24.
 //
 
+import Foundation
 import Combine
 
 class RoutesViewModel: ObservableObject {

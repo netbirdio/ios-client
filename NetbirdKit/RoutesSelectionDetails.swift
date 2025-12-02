@@ -1,3 +1,11 @@
+//
+//  RoutesSelectionDetails.swift
+//  NetBird
+//
+
+import Foundation
+import Combine
+
 struct RoutesSelectionDetails: Codable {
     var all: Bool
     var append: Bool

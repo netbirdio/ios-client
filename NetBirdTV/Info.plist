@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Bundle Display Name -->
+	<key>CFBundleDisplayName</key>
+	<string>NetBird</string>
+	
+	<!-- App Category -->
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	
+	<!-- Minimum tvOS Version (17.0 required for VPN support) -->
+	<key>MinimumOSVersion</key>
+	<string>17.0</string>
+	
+	<!-- Launch Screen -->
+	<key>UILaunchScreen</key>
+	<dict/>
+	
+	<!-- User Interface Style -->
+	<key>UIUserInterfaceStyle</key>
+	<string>Automatic</string>
+</dict>
+</plist>
+
+

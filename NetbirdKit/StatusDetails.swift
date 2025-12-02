@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 struct StatusDetails: Codable {
     var ip: String

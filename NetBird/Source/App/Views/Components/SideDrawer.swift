@@ -4,9 +4,13 @@
 //
 //  Created by Pascal Fischer on 01.08.23.
 //
+//  iOS only: Side drawer menu for navigation.
+//  tvOS uses TVSettingsView (tab-based) instead.
+//
 
 import SwiftUI
 
+#if os(iOS)
 struct SideDrawer: View {
     @StateObject var viewModel: ViewModel
     @Binding var isShowing: Bool
@@ -164,3 +168,5 @@ struct SideDrawer_Previews: PreviewProvider {
         SideMenu(viewModel: ViewModel())
     }
 }
+
+#endif  // os(iOS)

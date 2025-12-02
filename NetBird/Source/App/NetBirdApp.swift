@@ -1,44 +1,92 @@
 //
-//  NetBirdiOSApp.swift
-//  NetBirdiOS
+//  NetBirdApp.swift
+//  NetBird
 //
 //  Created by Pascal Fischer on 01.08.23.
+//
+//  Main entry point for the NetBird app.
+//  Supports both iOS and tvOS platforms.
 //
 
 import SwiftUI
 import FirebaseCore
+
+// Firebase Performance is only available on iOS
+#if os(iOS)
 import FirebasePerformance
+#endif
 
+// MARK: - App Delegate (iOS only)
+#if os(iOS)
 class AppDelegate: NSObject, UIApplicationDelegate {
-  func application(_ application: UIApplication,
-                   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-      let options = FirebaseOptions(contentsOfFile: Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist")!)
-      FirebaseApp.configure(options: options!)
-    return true
-  }
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        // Configure Firebase with the plist file
+        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let options = FirebaseOptions(contentsOfFile: path) {
+            FirebaseApp.configure(options: options)
+        }
+        return true
+    }
 }
+#endif
 
-
+// MARK: - Main App Entry Point
 @main
 struct NetBirdApp: App {
     @StateObject var viewModel = ViewModel()
     @Environment(\.scenePhase) var scenePhase
     
+    #if os(iOS)
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    #endif
+    
+    init() {
+        // Configure Firebase on tvOS (no AppDelegate available)
+        #if os(tvOS)
+        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let options = FirebaseOptions(contentsOfFile: path) {
+            FirebaseApp.configure(options: options)
+        }
+        #endif
+    }
     
     var body: some Scene {
         WindowGroup {
             MainView()
                 .environmentObject(viewModel)
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) {_ in
+                #if os(iOS)
+                // iOS uses UIApplication notifications
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     print("App is active!")
                     viewModel.checkExtensionState()
                     viewModel.startPollingDetails()
                 }
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) {_ in
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                     print("App is inactive!")
                     viewModel.stopPollingDetails()
                 }
+                #endif
+                #if os(tvOS)
+                // tvOS uses scenePhase changes
+                .onChange(of: scenePhase) { phase in
+                    switch phase {
+                    case .active:
+                        print("App is active!")
+                        viewModel.checkExtensionState()
+                        viewModel.startPollingDetails()
+                    case .inactive, .background:
+                        print("App is inactive!")
+                        viewModel.stopPollingDetails()
+                    @unknown default:
+                        break
+                    }
+                }
+                #endif
         }
     }
 }
+
+
