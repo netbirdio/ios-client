@@ -203,8 +203,8 @@ struct ServerView: View {
         .navigationBarItems(leading: CustomBackButton(text: "Change Server", action: {
             presentationMode.wrappedValue.dismiss()
         }))
-        .onChange(of: serverViewModel.viewErrors.ssoNotSupportedError) { isSsoSupported in
-            if isSsoSupported != nil {
+        .onChange(of: serverViewModel.viewErrors.ssoNotSupportedError) { error in
+            if error != nil {
                 showSetupKeyField = true
                 symbolAsset = removeSymbol
             }
@@ -229,4 +229,5 @@ struct ServerView: View {
 
 #Preview {
     ServerView()
+        .environmentObject(ViewModel())
 }
