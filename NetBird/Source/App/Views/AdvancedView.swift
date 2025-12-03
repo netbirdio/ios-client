@@ -129,9 +129,6 @@ struct AdvancedView: View {
                     }
                     .toggleStyle(SwitchToggleStyle(tint: .orange))
                     .onChange(of: viewModel.forceRelayConnection) { value in
-                        if value {
-                            viewModel.forceRelayConnection = true
-                        }
                         viewModel.setForcedRelayConnection(enabled: value)
                     }
                     

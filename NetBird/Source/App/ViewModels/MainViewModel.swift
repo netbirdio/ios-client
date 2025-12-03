@@ -56,6 +56,7 @@ class ViewModel: ObservableObject {
         }
     }
     @Published var forceRelayConnection = true
+    
     var preferences = Preferences.newPreferences()
     var buttonLock = false
     let defaults = UserDefaults.standard
@@ -281,19 +282,20 @@ class ViewModel: ObservableObject {
     }
     
     func setForcedRelayConnection(enabled: Bool) {
-        preferences.setBogusVariable(enabled)
-    
         do {
-            try preferences.commit()
+            try preferences.setBogusVariable(enabled)
+            self.defaults.setValue(enabled, forKey: "force_relay_connection")
         } catch {
             print("Failed to update forced relay connection settings")
         }
     }
     
     func getForcedRelayConnectionEnabled() -> Bool {
-        let myBogus = preferences.getBogusVariable()
-        print (myBogus)
-        return (myBogus as NSString).boolValue
+        if self.defaults.object(forKey: "force_relay_connection") == nil {
+            return true
+        }
+        
+        return self.defaults.bool(forKey: "force_relay_connection")
     }
     
     func getDefaultStatus() -> StatusDetails {
