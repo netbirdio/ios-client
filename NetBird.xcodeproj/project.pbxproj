@@ -91,6 +91,10 @@
 		50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E6081F2A7979D600BAF09B /* SideDrawer.swift */; };
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
+		F1B292072EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */; };
+		F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */; };
+		F1B2920A2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */; };
+		F1B2920B2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -177,6 +181,8 @@
 		50E6081F2A7979D600BAF09B /* SideDrawer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SideDrawer.swift; sourceTree = "<group>"; };
 		50E608232A79966600BAF09B /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
+		F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvVarPackager.swift; sourceTree = "<group>"; };
+		F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalConstants.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -300,6 +306,8 @@
 		50C727EA2A82479B006E898D /* NetbirdKit */ = {
 			isa = PBXGroup;
 			children = (
+				F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */,
+				F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */,
 				50245A292A7BDB590034792B /* Preferences.swift */,
 				50245A2D2A7BDC470034792B /* NetworkChangeListener.swift */,
 				50CD81612AD0595E00CF830B /* DNSManager.swift */,
@@ -567,6 +575,7 @@
 				505118D12AD96ECA003027D3 /* key.c in Sources */,
 				50213A2D2A8D0AA30031D993 /* Preferences.swift in Sources */,
 				50CD81A82AD5504B00CF830B /* StatusDetails.swift in Sources */,
+				F1B2920B2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */,
 				50003BCA2AFD2F5E00E5EB6B /* ConnectionListener.swift in Sources */,
 				50213A262A8D0A870031D993 /* NetworkChangeListener.swift in Sources */,
 				50CD81502AD0355000CF830B /* PacketTunnelProviderSettingsManager.swift in Sources */,
@@ -574,6 +583,7 @@
 				50CD81B12AD5B94D00CF830B /* PeerCard.swift in Sources */,
 				50C78AD12A82BBFD006E898D /* Device.swift in Sources */,
 				505118CF2AD96ECA003027D3 /* x25519.c in Sources */,
+				F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -605,6 +615,7 @@
 				505118CE2AD96ECA003027D3 /* x25519.c in Sources */,
 				508BD8452AF04A990055E415 /* SafariView.swift in Sources */,
 				505118D02AD96ECA003027D3 /* key.c in Sources */,
+				F1B292072EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */,
 				50E608262A79968500BAF09B /* AdvancedView.swift in Sources */,
 				50E608242A79966600BAF09B /* AboutView.swift in Sources */,
 				50CD81622AD0595E00CF830B /* DNSManager.swift in Sources */,
@@ -615,6 +626,7 @@
 				50003BCE2AFD405600E5EB6B /* ConnectionListener.swift in Sources */,
 				50003BC72AFBD7F200E5EB6B /* NetBirdAdapter.swift in Sources */,
 				50E608132A7958B100BAF09B /* MainViewModel.swift in Sources */,
+				F1B2920A2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
