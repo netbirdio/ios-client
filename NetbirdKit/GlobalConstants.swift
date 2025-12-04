@@ -7,4 +7,5 @@
 
 struct GlobalConstants {
     static let keyForceRelayConnection = "isConnectionForceRelayed"
+    static let userPreferencesSuiteName = "group.io.netbird.app.userPreferences"
 }

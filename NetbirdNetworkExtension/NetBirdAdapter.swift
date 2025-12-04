@@ -103,8 +103,14 @@ public class NetBirdAdapter {
                 let connectionListener = ConnectionListener(adapter: self, completionHandler: completionHandler)
                 self.client.setConnectionListener(connectionListener)
                 
-                let userDefaults = UserDefaults(suiteName: "group.io.netbird.app")
+                let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
                 let envList = userDefaults != nil ? EnvVarPackager.getEnvironmentVariables(defaults: userDefaults!) : nil
+                
+                if envList == nil {
+                    print("envList is nil!")
+                } else {
+                    print(envList!.get(NetBirdSDKGetEnvKeyNBForceRelay()))
+                }
                 
                 try self.client.run(self.tunnelFileDescriptor ?? 0, interfaceName: self.interfaceName, envList: envList)
             } catch {

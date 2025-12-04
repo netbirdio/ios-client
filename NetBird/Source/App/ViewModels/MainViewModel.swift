@@ -282,20 +282,13 @@ class ViewModel: ObservableObject {
     }
     
     func setForcedRelayConnection(enabled: Bool) {
-        do {
-            try preferences.setBogusVariable(enabled)
-            self.defaults.setValue(enabled, forKey: "force_relay_connection")
-        } catch {
-            print("Failed to update forced relay connection settings")
-        }
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(enabled, forKey: GlobalConstants.keyForceRelayConnection)
     }
     
     func getForcedRelayConnectionEnabled() -> Bool {
-        if self.defaults.object(forKey: "force_relay_connection") == nil {
-            return true
-        }
-        
-        return self.defaults.bool(forKey: "force_relay_connection")
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        return userDefaults?.bool(forKey: GlobalConstants.keyForceRelayConnection) ?? true
     }
     
     func getDefaultStatus() -> StatusDetails {
