@@ -10,7 +10,6 @@ import SwiftUI
 struct AdvancedView: View {
     @EnvironmentObject var viewModel: ViewModel
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
-        
     
     var body: some View {
         ZStack {
@@ -142,13 +141,13 @@ struct AdvancedView: View {
             alertOverlay(isPresented: viewModel.showLogLevelChangedAlert, onDismiss: {
                 viewModel.showLogLevelChangedAlert = false
             }) {
-                LogLevelAlert(viewModel: viewModel, isPresented: $viewModel.showLogLevelChangedAlert)
+                LogLevelAlert(isPresented: $viewModel.showLogLevelChangedAlert)
             }
 
             alertOverlay(isPresented: viewModel.showForceRelayAlert, onDismiss: {
                 viewModel.showForceRelayAlert = false
             }) {
-                ForceRelayAlert(viewModel: viewModel)
+                ForceRelayAlert()
             }
         }
         .onAppear {
@@ -283,8 +282,8 @@ struct AdvancedView: View {
 }
 
 struct ForceRelayAlert: View {
-    @StateObject var viewModel: ViewModel
-    
+    @EnvironmentObject var viewModel: ViewModel
+
     var body: some View {
         VStack(spacing: 20) {
             Image("exclamation-circle")
@@ -315,9 +314,9 @@ struct ForceRelayAlert: View {
 }
 
 struct LogLevelAlert: View {
-    @StateObject var viewModel: ViewModel
+    @EnvironmentObject var viewModel: ViewModel
     @Binding var isPresented: Bool
-    
+
     var body: some View {
         VStack(spacing: 20) {
             Image("exclamation-circle")
