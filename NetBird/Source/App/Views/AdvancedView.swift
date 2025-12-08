@@ -153,6 +153,21 @@ struct AdvancedView: View {
                 LogLevelAlert(viewModel: viewModel, isPresented: $viewModel.showLogLevelChangedAlert)
                     .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
             }
+            
+            if viewModel.showForceRelayAlert {
+                Color.black.opacity(0.4)
+                    .edgesIgnoringSafeArea(.all)
+                    .onTapGesture {
+                        viewModel.buttonLock = true
+                        viewModel.showForceRelayAlert = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            viewModel.buttonLock = false
+                        }
+                    }
+                
+                ForceRelayAlert(viewModel: viewModel)
+                    .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+            }
         }
         .onAppear {
             viewModel.loadPreSharedKey()
@@ -260,6 +275,38 @@ struct AdvancedView: View {
 
         // Check if the decoded data is 32 bytes (256 bits)
         return data.count == 32
+    }
+}
+
+struct ForceRelayAlert: View {
+    @StateObject var viewModel: ViewModel
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Image("exclamation-circle")
+                .renderingMode(.template)
+                .padding(.top, 20)
+                .foregroundColor(Color.accentColor)
+            Text("To apply the setting, you will need to reconnect.")
+                .foregroundColor(Color("TextAlert"))
+                .multilineTextAlignment(.center)
+            HStack {
+                Spacer()
+                Button(action: {
+                    viewModel.showForceRelayAlert = false
+                }) {
+                    Text("OK")
+                        .padding()
+                        .foregroundColor(Color.accentColor)
+                }
+                .background(Color.clear)
+                .padding(.trailing)
+            }
+        }
+        .padding()
+        .background(Color("BgSideDrawer"))
+        .cornerRadius(15)
+        .shadow(radius: 10)
     }
 }
 

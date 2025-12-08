@@ -56,6 +56,7 @@ class ViewModel: ObservableObject {
         }
     }
     @Published var forceRelayConnection = true
+    @Published var showForceRelayAlert = false
     
     var preferences = Preferences.newPreferences()
     var buttonLock = false
@@ -284,6 +285,7 @@ class ViewModel: ObservableObject {
     func setForcedRelayConnection(enabled: Bool) {
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         userDefaults?.set(enabled, forKey: GlobalConstants.keyForceRelayConnection)
+        showForceRelayAlert = true
     }
     
     func getForcedRelayConnectionEnabled() -> Bool {
