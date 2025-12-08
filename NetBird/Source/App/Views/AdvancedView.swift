@@ -139,34 +139,16 @@ struct AdvancedView: View {
             }
             .ignoresSafeArea(.keyboard) // Prevents keyboard from shifting views up
             
-            if viewModel.showLogLevelChangedAlert {
-                Color.black.opacity(0.4)
-                    .edgesIgnoringSafeArea(.all)
-                    .onTapGesture {
-                        viewModel.buttonLock = true
-                        viewModel.showLogLevelChangedAlert = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            viewModel.buttonLock = false
-                        }
-                    }
-                
+            alertOverlay(isPresented: viewModel.showLogLevelChangedAlert, onDismiss: {
+                viewModel.showLogLevelChangedAlert = false
+            }) {
                 LogLevelAlert(viewModel: viewModel, isPresented: $viewModel.showLogLevelChangedAlert)
-                    .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
             }
-            
-            if viewModel.showForceRelayAlert {
-                Color.black.opacity(0.4)
-                    .edgesIgnoringSafeArea(.all)
-                    .onTapGesture {
-                        viewModel.buttonLock = true
-                        viewModel.showForceRelayAlert = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            viewModel.buttonLock = false
-                        }
-                    }
-                
+
+            alertOverlay(isPresented: viewModel.showForceRelayAlert, onDismiss: {
+                viewModel.showForceRelayAlert = false
+            }) {
                 ForceRelayAlert(viewModel: viewModel)
-                    .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
             }
         }
         .onAppear {
@@ -183,6 +165,28 @@ struct AdvancedView: View {
         }
     }
     
+    @ViewBuilder
+    private func alertOverlay<Content: View>(
+        isPresented: Bool,
+        onDismiss: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if isPresented {
+            Color.black.opacity(0.4)
+                .edgesIgnoringSafeArea(.all)
+                .onTapGesture {
+                    viewModel.buttonLock = true
+                    onDismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        viewModel.buttonLock = false
+                    }
+                }
+
+            content()
+                .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+        }
+    }
+
     func shareButtonTapped() {
         let fileManager = FileManager.default
         guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") else {
