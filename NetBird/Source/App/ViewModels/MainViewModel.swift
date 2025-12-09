@@ -259,6 +259,8 @@ class ViewModel: ObservableObject {
                     case .connected:
                         self.extensionStateText = "Connected"
                         self.connectPressed = false
+                        // Fetch routes when connected so the Networks counter is accurate on the home screen
+                        self.routeViewModel.getRoutes()
                     case .disconnected:
                         self.extensionStateText = "Disconnected"
                         self.disconnectPressed = false

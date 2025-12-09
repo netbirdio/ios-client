@@ -444,6 +444,19 @@ public class NetBirdAdapter {
         // Use default management URL for tvOS, empty for iOS (which handles it via ServerView)
         #if os(tvOS)
         let managementURL = Self.defaultManagementURL
+
+        // CRITICAL: On tvOS, config is stored in UserDefaults because file writes are blocked.
+        // Before creating the Auth object, we must restore the config to the file path so that
+        // NetBirdSDKNewAuth can read the existing identity (WireGuard keys, peer ID).
+        // Without this, a new identity would be created on every re-auth!
+        if Preferences.hasConfigInUserDefaults() {
+            adapterLogger.info("loginAsync: tvOS - restoring config from UserDefaults to file for re-auth")
+            if Preferences.restoreConfigFromUserDefaults() {
+                adapterLogger.info("loginAsync: tvOS - config restored successfully, existing identity will be preserved")
+            } else {
+                adapterLogger.warning("loginAsync: tvOS - failed to restore config, a new identity may be created")
+            }
+        }
         #else
         let managementURL = ""
         #endif
