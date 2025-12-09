@@ -131,6 +131,9 @@
 		50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E6081F2A7979D600BAF09B /* SideDrawer.swift */; };
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
+		F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
+		F1258DEA2ED7B7D600C0D205 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE92ED7B7D200C0D205 /* Extensions.swift */; };
+		F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292042EDE5608001D91B8 /* JustifiedText.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -266,6 +269,9 @@
 		50E6081F2A7979D600BAF09B /* SideDrawer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SideDrawer.swift; sourceTree = "<group>"; };
 		50E608232A79966600BAF09B /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
+		F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerViewModel.swift; sourceTree = "<group>"; };
+		F1258DE92ED7B7D200C0D205 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
+		F1B292042EDE5608001D91B8 /* JustifiedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JustifiedText.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -483,6 +489,7 @@
 		50E608012A7950C000BAF09B /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */,
 				50E608122A7958B100BAF09B /* MainViewModel.swift */,
 				50D402962BD9B89300D4AC5B /* PeerViewModel.swift */,
 				509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */,
@@ -502,6 +509,8 @@
 		50E608092A79557A00BAF09B /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				F1B292042EDE5608001D91B8 /* JustifiedText.swift */,
+				F1258DE92ED7B7D200C0D205 /* Extensions.swift */,
 				50E6081F2A7979D600BAF09B /* SideDrawer.swift */,
 				502455BC2A79B0480034792B /* CustomBackButton.swift */,
 				502455BE2A79B4500034792B /* SolidButton.swift */,
@@ -870,10 +879,12 @@
 				50D402972BD9B89300D4AC5B /* PeerViewModel.swift in Sources */,
 				506332022AF9415500BC8F0E /* CustomTextField.swift in Sources */,
 				50003BC42AFBD7D500E5EB6B /* PacketTunnelProvider.swift in Sources */,
+				F1258DEA2ED7B7D600C0D205 /* Extensions.swift in Sources */,
 				50216D8E2ACB1905009574C9 /* NetworkChangeListener.swift in Sources */,
 				50CD81A72AD5504B00CF830B /* StatusDetails.swift in Sources */,
 				505118CE2AD96ECA003027D3 /* x25519.c in Sources */,
 				508BD8452AF04A990055E415 /* SafariView.swift in Sources */,
+				F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */,
 				505118D02AD96ECA003027D3 /* key.c in Sources */,
 				50E608262A79968500BAF09B /* AdvancedView.swift in Sources */,
 				50E608242A79966600BAF09B /* AboutView.swift in Sources */,
@@ -884,6 +895,7 @@
 				50CD81B02AD5B94D00CF830B /* PeerCard.swift in Sources */,
 				50003BCE2AFD405600E5EB6B /* ConnectionListener.swift in Sources */,
 				50003BC72AFBD7F200E5EB6B /* NetBirdAdapter.swift in Sources */,
+				F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */,
 				50E608132A7958B100BAF09B /* MainViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1238,7 +1250,7 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -1267,7 +1279,7 @@
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gccgoimporter/testdata",
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge",
 				);
-				MARKETING_VERSION = 0.0.10;
+				MARKETING_VERSION = 0.0.13;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1292,7 +1304,7 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 94333M4JTA;
 				ENABLE_PREVIEWS = YES;
@@ -1321,7 +1333,7 @@
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gccgoimporter/testdata",
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge",
 				);
-				MARKETING_VERSION = 0.0.10;
+				MARKETING_VERSION = 0.0.13;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
