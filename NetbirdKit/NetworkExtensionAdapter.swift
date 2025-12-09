@@ -145,10 +145,17 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// Try to initialize the config file from the main app.
     /// This may work on tvOS where the extension doesn't have write access.
     private func initializeConfigFromApp() async {
+        // IMPORTANT: Skip initialization if config already exists in UserDefaults.
+        // SDK initialization is expensive (generates WireGuard/SSH keys ~5+ seconds).
+        if Preferences.hasConfigInUserDefaults() {
+            print("initializeConfigFromApp: Config already exists in UserDefaults, skipping SDK init")
+            return
+        }
+
         let configPath = Preferences.configFile()
         let fileManager = FileManager.default
 
-        // Check if config already exists
+        // Check if config already exists as a file
         if fileManager.fileExists(atPath: configPath) {
             print("initializeConfigFromApp: Config already exists at \(configPath)")
             return

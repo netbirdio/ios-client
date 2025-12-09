@@ -103,7 +103,18 @@ class ViewModel: ObservableObject {
         }
     }
     
-    var preferences: NetBirdSDKPreferences? = Preferences.newPreferences()
+    /// Preferences are loaded lazily on first access to avoid blocking app startup.
+    /// On tvOS, SDK initialization is expensive (generates WireGuard/SSH keys) and
+    /// should only happen when actually needed.
+    private var _preferences: NetBirdSDKPreferences?
+    private var _preferencesLoaded = false
+    var preferences: NetBirdSDKPreferences? {
+        if !_preferencesLoaded {
+            _preferencesLoaded = true
+            _preferences = Preferences.newPreferences()
+        }
+        return _preferences
+    }
     var buttonLock = false
     let defaults = UserDefaults.standard
     
@@ -137,9 +148,12 @@ class ViewModel: ObservableObject {
         self.traceLogsEnabled = logLevel == "TRACE"
         self.peerViewModel = PeerViewModel()
         self.routeViewModel = RoutesViewModel(networkExtensionAdapter: networkExtensionAdapter)
-        self.rosenpassEnabled = self.getRosenpassEnabled()
-        self.rosenpassPermissive = self.getRosenpassPermissive()
-        
+
+        // Don't load rosenpass settings during init - they trigger expensive SDK initialization.
+        // These will be loaded lazily when the settings view is accessed.
+        // self.rosenpassEnabled = self.getRosenpassEnabled()
+        // self.rosenpassPermissive = self.getRosenpassPermissive()
+
         $setupKey
             .removeDuplicates()
             .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
