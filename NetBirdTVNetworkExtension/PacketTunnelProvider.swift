@@ -58,6 +58,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         #else
         logger.info("startTunnel: skipping file-based logging on tvOS (sandbox blocks writes)")
         NSLog("NetBirdTV: skipping file-based logging on tvOS")
+
+        // CRITICAL: On tvOS, restore config from UserDefaults to file BEFORE the adapter is created.
+        // The lazy adapter creates NetBirdSDKNewClient() which reads from the config file path.
+        // If we don't restore the file first, the Client will be initialized with empty/missing config.
+        // This must happen BEFORE any access to `adapter` property.
+        if Preferences.hasConfigInUserDefaults() {
+            logger.info("startTunnel: tvOS - restoring config from UserDefaults to file BEFORE adapter init")
+            NSLog("NetBirdTV: restoring config from UserDefaults to file BEFORE adapter init")
+            if Preferences.restoreConfigFromUserDefaults() {
+                logger.info("startTunnel: tvOS - config file restored successfully")
+                NSLog("NetBirdTV: config file restored successfully")
+            } else {
+                logger.warning("startTunnel: tvOS - failed to restore config file, adapter may not work correctly")
+                NSLog("NetBirdTV: WARNING - failed to restore config file")
+            }
+        }
         #endif
 
         currentNetworkType = nil
