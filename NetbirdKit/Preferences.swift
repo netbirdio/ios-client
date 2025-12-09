@@ -54,28 +54,19 @@ class Preferences {
     /// Save config JSON to UserDefaults (works on tvOS where file writes fail)
     static func saveConfigToUserDefaults(_ configJSON: String) -> Bool {
         guard let defaults = sharedUserDefaults() else {
-            print("Preferences: Failed to get shared UserDefaults")
             return false
         }
         defaults.set(configJSON, forKey: configJSONKey)
         defaults.synchronize()
-        print("Preferences: Saved config to UserDefaults (\(configJSON.count) bytes)")
         return true
     }
 
     /// Load config JSON from UserDefaults
     static func loadConfigFromUserDefaults() -> String? {
         guard let defaults = sharedUserDefaults() else {
-            print("Preferences: Failed to get shared UserDefaults")
             return nil
         }
-        let config = defaults.string(forKey: configJSONKey)
-        if let config = config {
-            print("Preferences: Loaded config from UserDefaults (\(config.count) bytes)")
-        } else {
-            print("Preferences: No config found in UserDefaults")
-        }
-        return config
+        return defaults.string(forKey: configJSONKey)
     }
 
     /// Check if config exists in UserDefaults
@@ -93,12 +84,10 @@ class Preferences {
         }
         defaults.removeObject(forKey: configJSONKey)
         defaults.synchronize()
-        print("Preferences: Removed config from UserDefaults")
     }
 
     /// Restore config from UserDefaults to the config file path
     /// This is needed because the Go SDK reads from the file path
-    /// Returns true if config was restored successfully
     static func restoreConfigFromUserDefaults() -> Bool {
         guard let configJSON = loadConfigFromUserDefaults() else {
             return false
@@ -107,10 +96,8 @@ class Preferences {
         let path = configFile()
         do {
             try configJSON.write(toFile: path, atomically: false, encoding: .utf8)
-            print("Preferences: Restored config to file: \(path)")
             return true
         } catch {
-            print("Preferences: Failed to write config to file: \(error.localizedDescription)")
             return false
         }
     }

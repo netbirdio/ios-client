@@ -14,59 +14,43 @@ import os
 private let adapterLogger = Logger(subsystem: "io.netbird.adapter", category: "NetBirdAdapter")
 
 // URL Opener for Login Flow
-/// Handles OAuth URL opening and login success callbacks
 class LoginURLOpener: NSObject, NetBirdSDKURLOpenerProtocol {
-    /// Callback when URL needs to be opened (with user code for device flow)
     var onOpen: ((String, String) -> Void)?
-    /// Callback when login succeeds
     var onSuccess: (() -> Void)?
 
     func open(_ url: String?, userCode: String?) {
-        adapterLogger.info("LoginURLOpener.open() called with url=\(url ?? "nil", privacy: .public), userCode=\(userCode ?? "nil", privacy: .public)")
         guard let url = url else { return }
         onOpen?(url, userCode ?? "")
     }
 
     func onLoginSuccess() {
-        adapterLogger.info("LoginURLOpener.onLoginSuccess() called!")
-        print(">>> LoginURLOpener.onLoginSuccess() called! <<<")
         onSuccess?()
     }
 }
 
 // Error Listener for Async Operations
-/// Handles error callbacks from async SDK operations
 class LoginErrListener: NSObject, NetBirdSDKErrListenerProtocol {
     var onErrorCallback: ((Error?) -> Void)?
     var onSuccessCallback: (() -> Void)?
 
     func onError(_ err: Error?) {
-        adapterLogger.error("LoginErrListener.onError() called with: \(err?.localizedDescription ?? "nil", privacy: .public)")
-        print(">>> LoginErrListener.onError() called with: \(err?.localizedDescription ?? "nil") <<<")
         onErrorCallback?(err)
     }
 
     func onSuccess() {
-        // SDK calls this when the operation succeeds (e.g., device auth completed)
-        // This is NOT an error - call the success handler
-        adapterLogger.info("LoginErrListener.onSuccess() called!")
-        print(">>> LoginErrListener.onSuccess() called! <<<")
         onSuccessCallback?()
     }
 }
 
 // SSO Listener for Config Save
-/// Used to save config after successful login
 class LoginConfigSaveListener: NSObject, NetBirdSDKSSOListenerProtocol {
     var onResult: ((Bool?, Error?) -> Void)?
 
     func onSuccess(_ ssoSupported: Bool) {
-        adapterLogger.info("LoginConfigSaveListener.onSuccess() called with ssoSupported=\(ssoSupported)")
         onResult?(ssoSupported, nil)
     }
 
     func onError(_ error: Error?) {
-        adapterLogger.error("LoginConfigSaveListener.onError() called with: \(error?.localizedDescription ?? "nil", privacy: .public)")
         onResult?(nil, error)
     }
 }
@@ -240,7 +224,12 @@ public class NetBirdAdapter {
         self.tunnelManager = tunnelManager
         self.networkChangeListener = NetworkChangeListener(with: tunnelManager)
         self.dnsManager = DNSManager(with: tunnelManager)
-        self.client = NetBirdSDKNewClient(Preferences.configFile(), Preferences.stateFile(), Device.getName(), Device.getOsVersion(), Device.getOsName(), self.networkChangeListener, self.dnsManager)!
+
+        let deviceName = Device.getName()
+        let osVersion = Device.getOsVersion()
+        let osName = Device.getOsName()
+
+        self.client = NetBirdSDKNewClient(Preferences.configFile(), Preferences.stateFile(), deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager)!
     }
     
     /// Returns the tunnel device interface name, or nil on error.
@@ -274,18 +263,11 @@ public class NetBirdAdapter {
             do {
                 let fd = self.tunnelFileDescriptor ?? 0
                 let ifName = self.interfaceName ?? "unknown"
-                adapterLogger.info("start: tunnelFileDescriptor = \(fd), interfaceName = \(ifName, privacy: .public)")
-
-                if fd == 0 {
-                    adapterLogger.error("start: WARNING - File descriptor is 0, WireGuard may not work properly!")
-                }
 
                 let connectionListener = ConnectionListener(adapter: self, completionHandler: completionHandler)
                 self.client.setConnectionListener(connectionListener)
-                adapterLogger.info("start: Calling client.run() with fd=\(fd), interfaceName=\(ifName, privacy: .public)")
                 try self.client.run(fd, interfaceName: ifName)
             } catch {
-                adapterLogger.error("start: client.run() failed: \(error.localizedDescription, privacy: .public)")
                 completionHandler(NSError(domain: "io.netbird.NetbirdNetworkExtension", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Netbird client startup failed."]))
                 self.stop()
             }
@@ -315,11 +297,9 @@ public class NetBirdAdapter {
         onSuccess: @escaping () -> Void,
         onError: @escaping (Error?) -> Void
     ) {
-        adapterLogger.info("loginAsync: Starting async login with forceDeviceAuth=\(forceDeviceAuth)")
         self.isExecutingLogin = true
 
         // Track completion to prevent duplicate callbacks
-        // Both urlOpener.onLoginSuccess and errListener.onSuccess might be called
         var completionCalled = false
         let completionLock = NSLock()
 
@@ -327,51 +307,32 @@ public class NetBirdAdapter {
         var authRef: NetBirdSDKAuth?
 
         let handleSuccess: () -> Void = { [weak self] in
-            adapterLogger.info("loginAsync: handleSuccess called")
             completionLock.lock()
             guard !completionCalled else {
                 completionLock.unlock()
-                adapterLogger.info("loginAsync: Success already handled, ignoring duplicate")
                 return
             }
             completionCalled = true
             completionLock.unlock()
 
-            adapterLogger.info("loginAsync: Login succeeded, now saving config...")
-
             // After successful login, save the config to persist credentials
-            // The Auth.login() may authenticate but not write to disk
             if let auth = authRef {
-                // First, try to get config JSON and save to UserDefaults
-                // This is the tvOS-compatible storage that works when file writes fail
                 var getConfigError: NSError?
-                let configJSON = auth.getConfigJSON(&getConfigError)
-                if let error = getConfigError {
-                    adapterLogger.error("loginAsync: Failed to get config JSON: \(error.localizedDescription, privacy: .public)")
-                } else if !configJSON.isEmpty {
-                    adapterLogger.info("loginAsync: Got config JSON (\(configJSON.count) bytes), saving to UserDefaults")
-                    if Preferences.saveConfigToUserDefaults(configJSON) {
-                        adapterLogger.info("loginAsync: Config saved to UserDefaults successfully")
-                    } else {
-                        adapterLogger.error("loginAsync: Failed to save config to UserDefaults")
-                    }
-                } else {
-                    adapterLogger.warning("loginAsync: getConfigJSON returned empty string")
+                var configJSON = auth.getConfigJSON(&getConfigError)
+                if getConfigError == nil && !configJSON.isEmpty {
+                    #if os(tvOS)
+                    let correctDeviceName = Device.getName()
+                    configJSON = Self.updateDeviceNameInConfig(configJSON, newName: correctDeviceName)
+                    #endif
+
+                    _ = Preferences.saveConfigToUserDefaults(configJSON)
                 }
 
                 // Also try the file-based save (may fail on tvOS but works on iOS)
                 let saveListener = LoginConfigSaveListener()
-                saveListener.onResult = { success, error in
-                    if let error = error {
-                        adapterLogger.error("loginAsync: Failed to save config to file after login: \(error.localizedDescription, privacy: .public)")
-                    } else {
-                        adapterLogger.info("loginAsync: Config saved to file successfully after login, ssoSupported=\(success ?? false)")
-                    }
-                }
                 auth.saveConfigIfSSOSupported(saveListener)
             }
 
-            adapterLogger.info("loginAsync: Setting isExecutingLogin=false and calling onSuccess callback")
             self?.lastLoginResult = "success"
             self?.lastLoginError = ""
             self?.isExecutingLogin = false
@@ -382,17 +343,14 @@ public class NetBirdAdapter {
         }
 
         let handleError: (Error?) -> Void = { [weak self] error in
-            adapterLogger.error("loginAsync: handleError called with: \(error?.localizedDescription ?? "nil", privacy: .public)")
             completionLock.lock()
             guard !completionCalled else {
                 completionLock.unlock()
-                adapterLogger.info("loginAsync: Completion already handled, ignoring error")
                 return
             }
             completionCalled = true
             completionLock.unlock()
 
-            adapterLogger.info("loginAsync: Setting isExecutingLogin=false and calling onError callback")
             self?.lastLoginResult = "error"
             self?.lastLoginError = error?.localizedDescription ?? "unknown"
             self?.isExecutingLogin = false
@@ -404,35 +362,25 @@ public class NetBirdAdapter {
         // Create URL opener
         let urlOpener = LoginURLOpener()
         urlOpener.onOpen = { url, userCode in
-            // Go SDK calls this from a goroutine - dispatch to main thread
             DispatchQueue.main.async {
                 onURL(url, userCode)
             }
         }
         urlOpener.onSuccess = {
-            // Go SDK calls this from a goroutine - dispatch to main thread
             DispatchQueue.main.async {
-                adapterLogger.info("loginAsync: urlOpener.onLoginSuccess called via onSuccess closure")
                 handleSuccess()
             }
         }
 
         // Create error listener
-        // Note: The SDK's ErrListener protocol has both onSuccess() and onError()
-        // onSuccess() is called when device auth completes successfully via this listener
         let errListener = LoginErrListener()
         errListener.onSuccessCallback = {
-            // Go SDK calls this from a goroutine - dispatch to main thread
-            // This is called when the device auth polling succeeds
             DispatchQueue.main.async {
-                adapterLogger.info("loginAsync: errListener.onSuccessCallback called")
                 handleSuccess()
             }
         }
         errListener.onErrorCallback = { error in
-            // Go SDK calls this from a goroutine - dispatch to main thread
             DispatchQueue.main.async {
-                adapterLogger.error("loginAsync: errListener.onErrorCallback called with: \(error?.localizedDescription ?? "nil", privacy: .public)")
                 handleError(error)
             }
         }
@@ -445,38 +393,46 @@ public class NetBirdAdapter {
         #if os(tvOS)
         let managementURL = Self.defaultManagementURL
 
-        // CRITICAL: On tvOS, config is stored in UserDefaults because file writes are blocked.
-        // Before creating the Auth object, we must restore the config to the file path so that
-        // NetBirdSDKNewAuth can read the existing identity (WireGuard keys, peer ID).
-        // Without this, a new identity would be created on every re-auth!
+        // On tvOS, config is stored in UserDefaults because file writes are blocked.
+        // Restore the config to the file path so NetBirdSDKNewAuth can read the existing identity.
         if Preferences.hasConfigInUserDefaults() {
-            adapterLogger.info("loginAsync: tvOS - restoring config from UserDefaults to file for re-auth")
-            if Preferences.restoreConfigFromUserDefaults() {
-                adapterLogger.info("loginAsync: tvOS - config restored successfully, existing identity will be preserved")
-            } else {
-                adapterLogger.warning("loginAsync: tvOS - failed to restore config, a new identity may be created")
-            }
+            _ = Preferences.restoreConfigFromUserDefaults()
         }
         #else
         let managementURL = ""
         #endif
 
-        adapterLogger.info("loginAsync: Creating Auth object with configFile=\(Preferences.configFile(), privacy: .public), managementURL=\(managementURL, privacy: .public)")
-
         // Get Auth object and call login
         if let auth = NetBirdSDKNewAuth(Preferences.configFile(), managementURL, nil) {
-            // Store reference so handleSuccess can save config
             authRef = auth
-            adapterLogger.info("loginAsync: Auth object created, calling auth.login()")
+
+            #if os(tvOS)
+            let deviceName = Device.getName()
+            auth.login(withDeviceName: errListener, urlOpener: urlOpener, forceDeviceAuth: forceDeviceAuth, deviceName: deviceName)
+            #else
             auth.login(errListener, urlOpener: urlOpener, forceDeviceAuth: forceDeviceAuth)
-            adapterLogger.info("loginAsync: auth.login() returned (async operation started)")
+            #endif
         } else {
-            adapterLogger.error("loginAsync: Failed to create Auth object")
             handleError(NSError(domain: "io.netbird", code: 1002, userInfo: [NSLocalizedDescriptionKey: "Failed to create Auth object"]))
         }
     }
 
     public func stop() {
         self.client.stop()
+    }
+
+    // MARK: - Config Helpers
+
+    /// Update the device name in a config JSON string
+    static func updateDeviceNameInConfig(_ configJSON: String, newName: String) -> String {
+        let pattern = "\"DeviceName\"\\s*:\\s*\"[^\"]*\""
+        let replacement = "\"DeviceName\":\"\(newName)\""
+
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+            let range = NSRange(configJSON.startIndex..., in: configJSON)
+            return regex.stringByReplacingMatches(in: configJSON, options: [], range: range, withTemplate: replacement)
+        }
+
+        return configJSON
     }
 }

@@ -78,25 +78,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         currentNetworkType = nil
         startMonitoringNetworkChanges()
-        logger.info("startTunnel: network monitoring started")
 
-        // Initialize config file if it doesn't exist (tvOS only)
-        // This MUST be done in the extension because it has permission to write to the App Group
-        logger.info("startTunnel: calling initializeConfigIfNeeded()...")
-        NSLog("NetBirdTV: calling initializeConfigIfNeeded...")
+        // Initialize config if it doesn't exist (tvOS only)
         initializeConfigIfNeeded()
-        logger.info("startTunnel: initializeConfigIfNeeded() completed")
-        NSLog("NetBirdTV: initializeConfigIfNeeded completed")
 
-        logger.info("startTunnel: calling adapter.needsLogin()...")
-        NSLog("NetBirdTV: calling adapter.needsLogin...")
         let needsLogin = adapter.needsLogin()
-        logger.info("startTunnel: needsLogin = \(needsLogin, privacy: .public)")
-        NSLog("NetBirdTV: startTunnel needsLogin = %@", needsLogin ? "true" : "false")
 
         if needsLogin {
-            logger.info("startTunnel: Login required, returning error after 2 second delay")
-            NSLog("NetBirdTV: startTunnel Login required, returning error")
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 let error = NSError(
                     domain: "io.netbird.NetBirdTVNetworkExtension",
@@ -108,35 +96,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        logger.info("startTunnel: Login NOT required, starting adapter...")
-        NSLog("NetBirdTV: startTunnel Login NOT required, starting adapter")
         adapter.start { [self] error in
             if let error = error {
-                logger.error("startTunnel: adapter.start() FAILED: \(error.localizedDescription, privacy: .public)")
-                NSLog("NetBirdTV: adapter.start FAILED: %@", error.localizedDescription)
+                logger.error("startTunnel: adapter.start() failed: \(error.localizedDescription, privacy: .public)")
                 completionHandler(error)
             } else {
-                logger.info("startTunnel: adapter.start() SUCCEEDED - VPN is connected!")
-                NSLog("NetBirdTV: adapter.start SUCCEEDED - VPN is connected!")
                 completionHandler(nil)
             }
         }
-        logger.info("startTunnel: adapter.start() called, waiting for completion...")
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        logger.info("stopTunnel: Stopping tunnel, reason: \(String(describing: reason))")
         adapter.stop()
-        guard let pathMonitor = self.pathMonitor else {
-            logger.info("stopTunnel: pathMonitor is nil; nothing to cancel.")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                completionHandler()
-            }
-            return
+        if let pathMonitor = self.pathMonitor {
+            pathMonitor.cancel()
+            self.pathMonitor = nil
         }
-        pathMonitor.cancel()
-        self.pathMonitor = nil
-        logger.info("stopTunnel: Tunnel stopped successfully")
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             completionHandler()
         }
@@ -292,113 +267,52 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     /// Initialize config synchronously during startTunnel
-    /// This ensures the config is available before we check needsLogin()
     /// On tvOS, config is loaded from UserDefaults directly into memory (file writes are blocked)
     private func initializeConfigIfNeeded() {
-        logger.info("initializeConfigIfNeeded: ENTRY")
-        NSLog("NetBirdTV: initializeConfigIfNeeded ENTRY")
-
         let configPath = Preferences.configFile()
         let fileManager = FileManager.default
-        logger.info("initializeConfigIfNeeded: configPath = \(configPath, privacy: .public)")
 
         // Check if config already exists as a file
-        let fileExists = fileManager.fileExists(atPath: configPath)
-        logger.info("initializeConfigIfNeeded: fileExists = \(fileExists, privacy: .public)")
-        NSLog("NetBirdTV: configPath=%@, fileExists=%@", configPath, fileExists ? "true" : "false")
-
-        if fileExists {
-            logger.info("initializeConfigIfNeeded: Config file exists, returning early")
-            NSLog("NetBirdTV: Config file exists, returning early")
+        if fileManager.fileExists(atPath: configPath) {
             return
         }
 
         // On tvOS, try to load config from UserDefaults directly into memory
-        // (file writes to App Group are blocked on tvOS)
-        logger.info("initializeConfigIfNeeded: No config file, checking UserDefaults...")
-        let hasConfig = Preferences.hasConfigInUserDefaults()
-        logger.info("initializeConfigIfNeeded: hasConfigInUserDefaults = \(hasConfig, privacy: .public)")
-        NSLog("NetBirdTV: hasConfigInUserDefaults = %@", hasConfig ? "true" : "false")
-
-        if hasConfig {
-            logger.info("initializeConfigIfNeeded: Found config in UserDefaults, loading...")
-            NSLog("NetBirdTV: Found config in UserDefaults, loading...")
-            if let configJSON = Preferences.loadConfigFromUserDefaults() {
-                let configSize = configJSON.count
-                logger.info("initializeConfigIfNeeded: Got config JSON (\(configSize, privacy: .public) bytes)")
-                NSLog("NetBirdTV: Got config JSON (%d bytes)", configSize)
-
-                // Log first 200 chars of config for debugging (remove sensitive data)
-                let preview = String(configJSON.prefix(200))
-                logger.info("initializeConfigIfNeeded: Config preview: \(preview, privacy: .public)...")
+        if Preferences.hasConfigInUserDefaults() {
+            if var configJSON = Preferences.loadConfigFromUserDefaults() {
+                // Update the device name in config before loading
+                let correctDeviceName = Device.getName()
+                configJSON = NetBirdAdapter.updateDeviceNameInConfig(configJSON, newName: correctDeviceName)
 
                 do {
-                    logger.info("initializeConfigIfNeeded: Calling adapter.client.setConfigFromJSON()...")
-                    NSLog("NetBirdTV: Calling setConfigFromJSON...")
                     try adapter.client.setConfigFromJSON(configJSON)
-                    logger.info("initializeConfigIfNeeded: SUCCESS - config loaded into Client memory")
-                    NSLog("NetBirdTV: SUCCESS - config loaded into Client memory")
                     return
                 } catch {
-                    let errorMsg = error.localizedDescription
-                    logger.error("initializeConfigIfNeeded: FAILED to set config: \(errorMsg, privacy: .public)")
-                    NSLog("NetBirdTV: FAILED to set config: %@", errorMsg)
-                    // On tvOS, we cannot fall back to file-based config - it will fail
                     #if os(tvOS)
-                    logger.error("initializeConfigIfNeeded: tvOS - cannot fall back to file-based config")
-                    NSLog("NetBirdTV: tvOS - cannot fall back to file-based config, returning")
                     return
                     #endif
                 }
-            } else {
-                logger.warning("initializeConfigIfNeeded: Config key exists but failed to load string")
-                NSLog("NetBirdTV: Config key exists but failed to load string")
             }
-        } else {
-            logger.info("initializeConfigIfNeeded: No config in UserDefaults")
-            NSLog("NetBirdTV: No config in UserDefaults")
         }
 
         #if os(tvOS)
-        // On tvOS, if we get here without config, we cannot create one via file writes
-        // The user needs to authenticate first via the device code flow
-        logger.warning("initializeConfigIfNeeded: tvOS - no config available, user needs to authenticate")
-        NSLog("NetBirdTV: tvOS - no config available, user needs to authenticate")
-        // Return early on tvOS - file-based config initialization will fail
+        // On tvOS, if we get here without config, user needs to authenticate first
         #else
-        // On iOS, try to create config via file writes (this works on iOS)
-        logger.info("initializeConfigIfNeeded: No config found, initializing with default management URL: \(NetBirdAdapter.defaultManagementURL)")
-
-        // Create Auth object with default management URL
+        // On iOS, try to create config via file writes
         guard let auth = NetBirdSDKNewAuth(configPath, NetBirdAdapter.defaultManagementURL, nil) else {
-            logger.error("initializeConfigIfNeeded: Failed to create Auth object")
             return
         }
 
-        // Use a semaphore to make this synchronous
         let semaphore = DispatchSemaphore(value: 0)
 
         let listener = ConfigInitSSOListener()
-        listener.onResult = { ssoSupported, error in
-            if let error = error {
-                self.logger.error("initializeConfigIfNeeded: Error checking SSO - \(error.localizedDescription)")
-            } else if let supported = ssoSupported {
-                self.logger.info("initializeConfigIfNeeded: SSO supported = \(supported)")
-                let configExists = fileManager.fileExists(atPath: configPath)
-                self.logger.info("initializeConfigIfNeeded: Config exists after save = \(configExists)")
-            } else {
-                self.logger.warning("initializeConfigIfNeeded: Unknown result")
-            }
+        listener.onResult = { _, _ in
             semaphore.signal()
         }
 
         auth.saveConfigIfSSOSupported(listener)
 
-        // Wait for completion (with timeout)
-        let result = semaphore.wait(timeout: .now() + 10)
-        if result == .timedOut {
-            logger.warning("initializeConfigIfNeeded: Timed out waiting for config initialization")
-        }
+        _ = semaphore.wait(timeout: .now() + 10)
         #endif
     }
 
