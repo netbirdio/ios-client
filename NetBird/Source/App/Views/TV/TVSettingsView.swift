@@ -13,7 +13,6 @@ import UIKit
 
 #if os(tvOS)
 
-// MARK: - tvOS Color Helpers (local definition)
 private struct TVColors {
     static var textPrimary: Color {
         UIColor(named: "TextPrimary") != nil ? Color("TextPrimary") : .primary
@@ -45,9 +44,8 @@ struct TVSettingsView: View {
                 .ignoresSafeArea()
             
             HStack(spacing: 0) {
-                // MARK: Left Side - Settings List
+                // Left Side - Settings List
                 VStack(alignment: .leading, spacing: 30) {
-                    // Header
                     Text("Settings")
                         .font(.system(size: 48, weight: .bold))
                         .foregroundColor(TVColors.textPrimary)
@@ -56,7 +54,6 @@ struct TVSettingsView: View {
                     // Settings options
                     ScrollView {
                         VStack(spacing: 20) {
-                            // Server settings
                             TVSettingsSection(title: "Connection") {
                                 TVSettingsRow(
                                     icon: "server.rack",
@@ -66,7 +63,6 @@ struct TVSettingsView: View {
                                 )
                             }
                             
-                            // Advanced settings
                             TVSettingsSection(title: "Advanced") {
                                 TVSettingsToggleRow(
                                     icon: "ant.fill",
@@ -86,7 +82,6 @@ struct TVSettingsView: View {
                                 )
                             }
                             
-                            // Help section
                             TVSettingsSection(title: "Help") {
                                 TVSettingsRow(
                                     icon: "book.fill",
@@ -108,7 +103,7 @@ struct TVSettingsView: View {
                 .padding(80)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
-                // MARK: Right Side - NetBird Branding
+                // Right Side - NetBird Branding
                 VStack {
                     Spacer()
                     
@@ -141,7 +136,6 @@ struct TVSettingsView: View {
     }
 }
 
-// MARK: - Settings Section
 struct TVSettingsSection<Content: View>: View {
     let title: String
     @ViewBuilder let content: () -> Content
@@ -165,7 +159,6 @@ struct TVSettingsSection<Content: View>: View {
     }
 }
 
-// MARK: - Settings Row (Tappable)
 struct TVSettingsRow: View {
     let icon: String
     let title: String
@@ -212,7 +205,6 @@ struct TVSettingsRow: View {
     }
 }
 
-// MARK: - Settings Toggle Row
 struct TVSettingsToggleRow: View {
     let icon: String
     let title: String
@@ -265,7 +257,6 @@ struct TVSettingsToggleRow: View {
     }
 }
 
-// MARK: - Change Server Alert
 struct TVChangeServerAlert: View {
     @ObservedObject var viewModel: ViewModel
     
@@ -342,7 +333,6 @@ struct TVChangeServerAlert: View {
     }
 }
 
-// MARK: - Preview
 struct TVSettingsView_Previews: PreviewProvider {
     static var previews: some View {
         TVSettingsView()

@@ -16,7 +16,6 @@ import UIKit
 
 #if os(tvOS)
 
-// MARK: - tvOS Color Helpers (local definition)
 private struct TVColors {
     static var textPrimary: Color {
         UIColor(named: "TextPrimary") != nil ? Color("TextPrimary") : .primary
@@ -35,7 +34,6 @@ private struct TVColors {
     }
 }
 
-/// Displays the list of peers in a tvOS-friendly format.
 struct TVPeersView: View {
     @EnvironmentObject var viewModel: ViewModel
     
@@ -54,19 +52,17 @@ struct TVPeersView: View {
     }
 }
 
-// MARK: - Peer List Content
 struct TVPeerListContent: View {
     @EnvironmentObject var viewModel: ViewModel
     
     /// Currently selected peer for detail view
     @State private var selectedPeer: PeerInfo?
     
-    /// Search/filter text
     @State private var searchText = ""
     
     var body: some View {
         HStack(spacing: 0) {
-            // MARK: Left Side - Peer List
+            // Left Side - Peer List
             VStack(alignment: .leading, spacing: 20) {
                 // Header with count
                 HStack {
@@ -83,7 +79,6 @@ struct TVPeerListContent: View {
                 .padding(.horizontal, 50)
                 .padding(.top, 40)
                 
-                // Filter buttons
                 TVFilterBar(
                     options: ["All", "Connected", "Connecting", "Idle"],
                     selected: $viewModel.peerViewModel.selectionFilter
@@ -107,7 +102,7 @@ struct TVPeerListContent: View {
             }
             .frame(maxWidth: .infinity)
             
-            // MARK: Right Side - Peer Details
+            // Right Side - Peer Details
             if let peer = selectedPeer {
                 TVPeerDetailView(peer: peer)
                     .frame(width: 500)
@@ -116,7 +111,7 @@ struct TVPeerListContent: View {
         }
     }
     
-    // MARK: Computed Properties
+    // Computed Properties
     
     private var connectedCount: Int {
         viewModel.peerViewModel.peerInfo.filter { $0.connStatus == "Connected" }.count
@@ -131,7 +126,7 @@ struct TVPeerListContent: View {
     }
 }
 
-// MARK: - Individual Peer Card
+// Individual Peer Card
 struct TVPeerCard: View {
     let peer: PeerInfo
     let isSelected: Bool
@@ -204,13 +199,12 @@ struct TVPeerCard: View {
     }
 }
 
-// MARK: - Peer Detail Panel
+// Peer Detail Panel
 struct TVPeerDetailView: View {
     let peer: PeerInfo
     
     var body: some View {
         VStack(alignment: .leading, spacing: 30) {
-            // Header
             Text("Peer Details")
                 .font(.system(size: 32, weight: .bold))
                 .foregroundColor(TVColors.textPrimary)
@@ -246,7 +240,6 @@ struct TVPeerDetailView: View {
     }
 }
 
-// MARK: - Detail Row
 struct TVDetailRow: View {
     let label: String
     let value: String
@@ -264,7 +257,6 @@ struct TVDetailRow: View {
     }
 }
 
-// MARK: - Filter Bar
 struct TVFilterBar: View {
     let options: [String]
     @Binding var selected: String
@@ -311,7 +303,6 @@ struct TVFilterButton: View {
     }
 }
 
-// MARK: - Empty State
 struct TVNoPeersView: View {
     var body: some View {
         VStack(spacing: 40) {
@@ -333,7 +324,6 @@ struct TVNoPeersView: View {
     }
 }
 
-// MARK: - Preview
 struct TVPeersView_Previews: PreviewProvider {
     static var previews: some View {
         TVPeersView()

@@ -41,7 +41,7 @@ class Preferences {
         return logURL!.relativePath
     }
 
-    // MARK: - UserDefaults-based config storage for tvOS
+    // UserDefaults-based config storage for tvOS
     // tvOS sandbox prevents file writes to App Group containers, so we use UserDefaults instead
 
     private static let configJSONKey = "netbird_config_json"

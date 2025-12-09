@@ -219,7 +219,7 @@ struct PeerCardView: View {
                 peerViewModel.unfreezeDisplayedPeerList()
             }
             #else
-            // tvOS: Show info instead of copy (no clipboard)
+            // tvOS: Show info instead of copy
             Text("FQDN: \(peer.fqdn)")
             Text("IP: \(peer.ip)")
             #endif

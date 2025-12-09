@@ -21,7 +21,6 @@ import os
 
 private let buttonLogger = Logger(subsystem: "io.netbird.app", category: "TVConnectionButton")
 
-// MARK: - tvOS Color Helpers (local definition)
 private struct TVColors {
     static var textPrimary: Color {
         UIColor(named: "TextPrimary") != nil ? Color("TextPrimary") : .primary
@@ -40,37 +39,31 @@ private struct TVColors {
     }
 }
 
-/// The main view for Apple TV, using top-level tab navigation.
 struct TVMainView: View {
     @EnvironmentObject var viewModel: ViewModel
 
-    /// Currently selected tab
     @State private var selectedTab = 0
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            // MARK: - Connection Tab (Home)
             TVConnectionView()
                 .tabItem {
                     Label("Connection", systemImage: "network")
                 }
                 .tag(0)
 
-            // MARK: - Peers Tab
             TVPeersView()
                 .tabItem {
                     Label("Peers", systemImage: "person.3.fill")
                 }
                 .tag(1)
 
-            // MARK: - Networks Tab
             TVNetworksView()
                 .tabItem {
                     Label("Networks", systemImage: "globe")
                 }
                 .tag(2)
 
-            // MARK: - Settings Tab (replaces side drawer)
             TVSettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
@@ -78,7 +71,7 @@ struct TVMainView: View {
                 .tag(3)
         }
         .environmentObject(viewModel)
-        // MARK: - Authentication Sheet (QR Code + Device Code)
+        // Authentication Sheet (QR Code + Device Code)
         .fullScreenCover(isPresented: $viewModel.networkExtensionAdapter.showBrowser) {
             if let loginURL = viewModel.networkExtensionAdapter.loginURL {
                 TVAuthView(
@@ -86,17 +79,13 @@ struct TVMainView: View {
                     userCode: viewModel.networkExtensionAdapter.userCode,
                     isPresented: $viewModel.networkExtensionAdapter.showBrowser,
                     onCancel: {
-                        // User cancelled authentication
                         viewModel.networkExtensionAdapter.showBrowser = false
                     },
                     onComplete: {
-                        // Authentication completed - start VPN connection
                         print("Login completed, starting VPN connection...")
                         viewModel.networkExtensionAdapter.startVPNConnection()
                     },
                     checkLoginComplete: { completion in
-                        // Check if login is complete by asking the Network Extension directly
-                        // This is more reliable because it queries the same SDK client doing the login
                         viewModel.networkExtensionAdapter.checkLoginComplete { isComplete in
                             print("TVMainView: checkLoginComplete returned \(isComplete)")
                             completion(isComplete)
@@ -108,8 +97,6 @@ struct TVMainView: View {
     }
 }
 
-// MARK: - Connection View (Home Screen)
-/// The main connection screen showing VPN status and quick actions.
 struct TVConnectionView: View {
     @EnvironmentObject var viewModel: ViewModel
     
@@ -120,9 +107,8 @@ struct TVConnectionView: View {
                 .ignoresSafeArea()
             
             HStack(spacing: 100) {
-                // MARK: Left Side - Connection Control
+                // Left Side - Connection Control
                 VStack(spacing: 40) {
-                    // Logo
                     Image("netbird-logo-menu")
                         .resizable()
                         .scaledToFit()
@@ -141,7 +127,6 @@ struct TVConnectionView: View {
                             .foregroundColor(TVColors.textSecondary.opacity(0.8))
                     }
                     
-                    // Big Connect/Disconnect Button
                     TVConnectionButton(viewModel: viewModel)
                     
                     // Status text
@@ -151,7 +136,7 @@ struct TVConnectionView: View {
                 }
                 .frame(maxWidth: .infinity)
                 
-                // MARK: Right Side - Quick Stats
+                // Right Side - Quick Stats
                 VStack(alignment: .leading, spacing: 30) {
                     Text("Network Status")
                         .font(.system(size: 32, weight: .bold))
@@ -189,7 +174,7 @@ struct TVConnectionView: View {
         }
     }
     
-    // MARK: Computed Properties
+    // Computed Properties
     
     private var statusColor: Color {
         switch viewModel.extensionStateText {
@@ -221,8 +206,6 @@ struct TVConnectionView: View {
     }
 }
 
-// MARK: - Connection Button
-/// Large, focusable connect/disconnect button for tvOS.
 struct TVConnectionButton: View {
     @ObservedObject var viewModel: ViewModel
     
@@ -296,8 +279,6 @@ struct TVConnectionButton: View {
     }
 }
 
-// MARK: - Stat Card
-/// Displays a single statistic in a card format.
 struct TVStatCard: View {
     let icon: String
     let title: String
@@ -338,7 +319,6 @@ struct TVStatCard: View {
     }
 }
 
-// MARK: - Preview
 struct TVMainView_Previews: PreviewProvider {
     static var previews: some View {
         TVMainView()

@@ -12,7 +12,7 @@ import NetBirdSDK
 
 private let logger = Logger(subsystem: "io.netbird.app.tv.extension", category: "PacketTunnelProvider")
 
-// MARK: - SSO Listener for config initialization
+// SSO Listener for config initialization
 /// Used by initializeConfig to check if SSO is supported and save initial config
 class ConfigInitSSOListener: NSObject, NetBirdSDKSSOListenerProtocol {
     var onResult: ((Bool?, Error?) -> Void)?
@@ -65,7 +65,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         logger.info("startTunnel: network monitoring started")
 
         // Initialize config file if it doesn't exist (tvOS only)
-        // This must be done in the extension because it has permission to write to the App Group
+        // This MUST be done in the extension because it has permission to write to the App Group
         logger.info("startTunnel: calling initializeConfigIfNeeded()...")
         NSLog("NetBirdTV: calling initializeConfigIfNeeded...")
         initializeConfigIfNeeded()

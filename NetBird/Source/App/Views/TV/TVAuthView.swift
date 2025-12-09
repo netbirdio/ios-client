@@ -49,7 +49,7 @@ struct TVAuthView: View {
                 .ignoresSafeArea()
 
             HStack(spacing: 80) {
-                // MARK: Left Side - QR Code
+                // Left Side - QR Code
                 VStack(spacing: 30) {
                     Text("Scan to Sign In")
                         .font(.system(size: 36, weight: .bold))
@@ -85,12 +85,12 @@ struct TVAuthView: View {
                         .fill(Color.white.opacity(0.05))
                 )
 
-                // MARK: Divider
+                // Divider
                 Rectangle()
                     .fill(Color.white.opacity(0.2))
                     .frame(width: 2, height: 600)
 
-                // MARK: Right Side - Device Code
+                // Right Side - Device Code
                 VStack(spacing: 40) {
                     // App logo
                     Image("netbird-logo-menu")
@@ -169,7 +169,7 @@ struct TVAuthView: View {
         }
     }
 
-    // MARK: - Computed Properties
+    // Computed Properties
 
     /// The user code to display - prefers passed-in userCode, falls back to URL extraction
     private var displayUserCode: String? {
@@ -179,7 +179,7 @@ struct TVAuthView: View {
         return extractUserCode(from: loginURL)
     }
 
-    // MARK: - Helper Functions
+    // Helper Functions
 
     /// Generates a QR code image from the login URL
     private func generateQRCode() {

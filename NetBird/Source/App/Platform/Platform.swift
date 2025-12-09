@@ -10,9 +10,8 @@
 import SwiftUI
 import Combine
 
-// MARK: - Screen Size Abstraction
+// Screen Size Abstraction
 /// Replaces direct UIScreen.main.bounds usage which isn't ideal for tvOS.
-/// tvOS has fixed resolutions (1080p or 4K), while iOS varies by device.
 struct Screen {
     
     /// Screen width in points
@@ -25,7 +24,6 @@ struct Screen {
         #endif
     }
     
-    /// Screen height in points
     static var height: CGFloat {
         #if os(tvOS)
         return 1080
@@ -49,13 +47,10 @@ struct Screen {
     }
 }
 
-// MARK: - Device Type Detection
+// Device Type Detection
 /// Identifies what type of Apple device we're running on.
 /// Useful for conditional UI layouts and feature availability.
-/// Named DeviceType to avoid conflict with NetbirdKit/Device.swift
 struct DeviceType {
-    
-    /// True if running on Apple TV
     static var isTV: Bool {
         #if os(tvOS)
         return true
@@ -64,7 +59,6 @@ struct DeviceType {
         #endif
     }
     
-    /// True if running on iPad
     static var isPad: Bool {
         #if os(tvOS)
         return false
@@ -73,7 +67,6 @@ struct DeviceType {
         #endif
     }
     
-    /// True if running on iPhone
     static var isPhone: Bool {
         #if os(tvOS)
         return false
@@ -86,7 +79,7 @@ struct DeviceType {
     /// Useful for sizing UI elements proportionally.
     static var scaleFactor: CGFloat {
         if isTV {
-            return 2.0  // TV needs larger UI elements for 10-foot experience
+            return 2.0  // TV needs larger UI elements
         } else if isPad {
             return 1.3
         } else {
@@ -95,13 +88,7 @@ struct DeviceType {
     }
 }
 
-// MARK: - Platform Capabilities
-/// Describes what features are available on the current platform.
-/// Use this to conditionally show/hide UI or enable/disable features.
 struct PlatformCapabilities {
-    
-    /// Whether the device supports VPN/Network Extensions
-    /// Note: Requires tvOS 17+ for Apple TV
     static var supportsVPN: Bool {
         #if os(tvOS)
         if #available(tvOS 17.0, *) {
@@ -113,8 +100,6 @@ struct PlatformCapabilities {
         #endif
     }
     
-    /// Whether SFSafariViewController is available for in-app web browsing
-    /// tvOS doesn't have Safari, so we need alternative auth flows
     static var supportsSafariView: Bool {
         #if os(tvOS)
         return false
@@ -123,8 +108,6 @@ struct PlatformCapabilities {
         #endif
     }
     
-    /// Whether the device has a touchscreen
-    /// tvOS uses the Siri Remote (focus-based navigation)
     static var hasTouchScreen: Bool {
         #if os(tvOS)
         return false
@@ -133,8 +116,6 @@ struct PlatformCapabilities {
         #endif
     }
     
-    /// Whether clipboard/pasteboard is available
-    /// tvOS has limited clipboard support
     static var supportsClipboard: Bool {
         #if os(tvOS)
         return false
@@ -143,7 +124,6 @@ struct PlatformCapabilities {
         #endif
     }
     
-    /// Whether keyboard input is available
     static var supportsKeyboard: Bool {
         #if os(tvOS)
         // tvOS has on-screen keyboard but it's clunky
@@ -154,9 +134,6 @@ struct PlatformCapabilities {
     }
 }
 
-// MARK: - Layout Constants
-/// Pre-calculated layout values for consistent UI across platforms.
-/// These are tuned for each platform's typical viewing distance and interaction model.
 struct Layout {
     
     /// Standard padding for content edges
@@ -185,7 +162,7 @@ struct Layout {
     }
 }
 
-// MARK: - Scaled Font Helper
+// Scaled Font Helper
 /// Creates fonts that scale appropriately for each platform.
 extension Font {
     /// Creates a system font scaled for the current platform
@@ -194,7 +171,7 @@ extension Font {
     }
 }
 
-// MARK: - View Modifiers for Platform Adaptation
+// View Modifiers for Platform Adaptation
 extension View {
     /// Applies platform-appropriate padding
     func platformPadding(_ edges: Edge.Set = .all) -> some View {

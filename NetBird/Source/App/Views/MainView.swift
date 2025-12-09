@@ -26,8 +26,6 @@ struct MainView: View {
     }
 }
 
-// MARK: - iOS Main View
-/// The original iOS implementation, now wrapped for platform selection.
 #if os(iOS)
 struct iOSMainView: View {
     @EnvironmentObject var viewModel: ViewModel

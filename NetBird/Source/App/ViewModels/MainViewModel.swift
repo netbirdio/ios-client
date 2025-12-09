@@ -18,7 +18,6 @@ import NetBirdSDK
 import UIKit
 #endif
 
-// MARK: - SSO Listener for checking SSO support
 /// Used by updateManagementURL to check if SSO is supported
 class SSOCheckListener: NSObject, NetBirdSDKSSOListenerProtocol {
     var onResult: ((Bool?, Error?) -> Void)?
@@ -32,7 +31,7 @@ class SSOCheckListener: NSObject, NetBirdSDKSSOListenerProtocol {
     }
 }
 
-// MARK: - Error Listener for setup key login
+// Error Listener for setup key login
 /// Used by setSetupKey to handle async login result
 class SetupKeyErrListener: NSObject, NetBirdSDKErrListenerProtocol {
     var onResult: ((Error?) -> Void)?
@@ -46,18 +45,16 @@ class SetupKeyErrListener: NSObject, NetBirdSDKErrListenerProtocol {
     }
 }
 
-// MARK: - Main ViewModel
-/// Central ViewModel for the NetBird app, managing VPN state and UI.
-/// Works on both iOS and tvOS (tvOS 17+ required for VPN support).
+/// For both iOS and tvOS (tvOS 17+ required for VPN support).
 @MainActor
 class ViewModel: ObservableObject {
 
     private let logger = Logger(subsystem: "io.netbird.app", category: "ViewModel")
 
-    // MARK: - VPN Adapter (shared)
+    // VPN Adapter (shared)
     @Published var networkExtensionAdapter: NetworkExtensionAdapter
     
-    // MARK: - UI State (shared)
+    // UI State (shared)
     @Published var showSetupKeyPopup = false
     @Published var showChangeServerAlert = false
     @Published var showInvalidServerAlert = false
@@ -75,7 +72,6 @@ class ViewModel: ObservableObject {
     @Published var presentSideDrawer = false
     @Published var navigateToServerView = false
     
-    // MARK: - VPN State
     @Published var extensionState: NEVPNStatus = .disconnected
     @Published var managementStatus: ClientState = .disconnected
     @Published var statusDetailsValid = false
@@ -83,7 +79,6 @@ class ViewModel: ObservableObject {
     @Published var connectPressed = false
     @Published var disconnectPressed = false
     
-    // MARK: - Settings
     @Published var rosenpassEnabled = false
     @Published var rosenpassPermissive = false
     @Published var managementURL = ""
@@ -92,11 +87,10 @@ class ViewModel: ObservableObject {
     @Published var setupKey: String = ""
     @Published var presharedKeySecure = true
     
-    // MARK: - Device Info (persisted)
     @Published var fqdn = UserDefaults.standard.string(forKey: "fqdn") ?? ""
     @Published var ip = UserDefaults.standard.string(forKey: "ip") ?? ""
     
-    // MARK: - Trace Logging
+    // Debug
     @Published var traceLogsEnabled: Bool {
         didSet {
             self.showLogLevelChangedAlert = true
@@ -109,7 +103,6 @@ class ViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Properties
     var preferences: NetBirdSDKPreferences? = Preferences.newPreferences()
     var buttonLock = false
     let defaults = UserDefaults.standard
@@ -134,11 +127,9 @@ class ViewModel: ObservableObject {
     
     private var cancellables = Set<AnyCancellable>()
     
-    // MARK: - Child ViewModels
     @Published var peerViewModel: PeerViewModel
     @Published var routeViewModel: RoutesViewModel
     
-    // MARK: - Initialization
     init() {
         let networkExtensionAdapter = NetworkExtensionAdapter()
         self.networkExtensionAdapter = networkExtensionAdapter

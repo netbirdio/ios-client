@@ -12,7 +12,7 @@ import Combine
 import NetBirdSDK
 import os
 
-// MARK: - SSO Listener for config initialization
+// SSO Listener for config initialization
 /// Used to check if SSO is supported and save initial config
 class ConfigSSOListener: NSObject, NetBirdSDKSSOListenerProtocol {
     var onResult: ((Bool?, Error?) -> Void)?

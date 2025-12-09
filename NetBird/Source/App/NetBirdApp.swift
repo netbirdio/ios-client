@@ -16,7 +16,7 @@ import FirebaseCore
 import FirebasePerformance
 #endif
 
-// MARK: - App Delegate (iOS only)
+// App Delegate is iOS only
 #if os(iOS)
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(
@@ -33,7 +33,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 }
 #endif
 
-// MARK: - Main App Entry Point
 @main
 struct NetBirdApp: App {
     @StateObject var viewModel = ViewModel()
@@ -58,7 +57,6 @@ struct NetBirdApp: App {
             MainView()
                 .environmentObject(viewModel)
                 #if os(iOS)
-                // iOS uses UIApplication notifications
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     print("App is active!")
                     viewModel.checkExtensionState()

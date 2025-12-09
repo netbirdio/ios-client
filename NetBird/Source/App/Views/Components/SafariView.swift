@@ -3,7 +3,6 @@
 //  NetBird
 //
 //  iOS-only: Wraps SFSafariViewController for in-app web authentication.
-//  tvOS does not have Safari, so it uses TVAuthView instead.
 //
 
 import SwiftUI
@@ -12,8 +11,6 @@ import SwiftUI
 #if os(iOS)
 import SafariServices
 
-/// Presents Safari in-app for OAuth authentication flows.
-/// Used to handle login redirects without leaving the app.
 struct SafariView: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
     let url: URL

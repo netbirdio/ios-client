@@ -13,7 +13,7 @@ import os
 /// Logger for NetBirdAdapter - visible in Console.app
 private let adapterLogger = Logger(subsystem: "io.netbird.adapter", category: "NetBirdAdapter")
 
-// MARK: - URL Opener for Login Flow
+// URL Opener for Login Flow
 /// Handles OAuth URL opening and login success callbacks
 class LoginURLOpener: NSObject, NetBirdSDKURLOpenerProtocol {
     /// Callback when URL needs to be opened (with user code for device flow)
@@ -34,7 +34,7 @@ class LoginURLOpener: NSObject, NetBirdSDKURLOpenerProtocol {
     }
 }
 
-// MARK: - Error Listener for Async Operations
+// Error Listener for Async Operations
 /// Handles error callbacks from async SDK operations
 class LoginErrListener: NSObject, NetBirdSDKErrListenerProtocol {
     var onErrorCallback: ((Error?) -> Void)?
@@ -55,7 +55,7 @@ class LoginErrListener: NSObject, NetBirdSDKErrListenerProtocol {
     }
 }
 
-// MARK: - SSO Listener for Config Save
+// SSO Listener for Config Save
 /// Used to save config after successful login
 class LoginConfigSaveListener: NSObject, NetBirdSDKSSOListenerProtocol {
     var onResult: ((Bool?, Error?) -> Void)?

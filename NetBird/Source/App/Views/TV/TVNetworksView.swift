@@ -13,7 +13,6 @@ import UIKit
 
 #if os(tvOS)
 
-// MARK: - tvOS Color Helpers (local definition)
 private struct TVColors {
     static var textPrimary: Color {
         UIColor(named: "TextPrimary") != nil ? Color("TextPrimary") : .primary
@@ -35,7 +34,7 @@ struct TVNetworksView: View {
     
     var body: some View {
         ZStack {
-            TVColors.bgMenu
+        TVColors.bgMenu
                 .ignoresSafeArea()
             
             if viewModel.extensionStateText == "Connected" &&
@@ -51,7 +50,6 @@ struct TVNetworksView: View {
     }
 }
 
-// MARK: - Network List Content
 struct TVNetworkListContent: View {
     @EnvironmentObject var viewModel: ViewModel
     
@@ -60,7 +58,6 @@ struct TVNetworkListContent: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // Header
             HStack {
                 Text("Networks")
                     .font(.system(size: 48, weight: .bold))
@@ -73,7 +70,6 @@ struct TVNetworkListContent: View {
                     .font(.system(size: 24))
                     .foregroundColor(TVColors.textSecondary)
                 
-                // Refresh button
                 Button(action: refresh) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 28))
@@ -89,7 +85,6 @@ struct TVNetworkListContent: View {
             .padding(.horizontal, 80)
             .padding(.top, 40)
             
-            // Filter bar
             TVFilterBar(
                 options: ["All", "Enabled", "Disabled"],
                 selected: $viewModel.routeViewModel.selectionFilter
@@ -118,7 +113,7 @@ struct TVNetworkListContent: View {
         }
     }
     
-    // MARK: Computed Properties
+    // Computed Properties
     
     private var activeCount: Int {
         viewModel.routeViewModel.routeInfo.filter { $0.selected }.count
@@ -128,7 +123,7 @@ struct TVNetworkListContent: View {
         viewModel.routeViewModel.routeInfo.count
     }
     
-    // MARK: Actions
+    // Actions
     
     private func refresh() {
         isRefreshing = true
@@ -140,7 +135,7 @@ struct TVNetworkListContent: View {
     }
 }
 
-// MARK: - Individual Network Card
+// Individual Network Card
 struct TVNetworkCard: View {
     let route: RoutesSelectionInfo
     @ObservedObject var routeViewModel: RoutesViewModel
@@ -178,7 +173,6 @@ struct TVNetworkCard: View {
                 
                 Spacer()
                 
-                // Enabled/Disabled badge
                 Text(route.selected ? "Enabled" : "Disabled")
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(route.selected ? .green : .gray)
@@ -211,7 +205,6 @@ struct TVNetworkCard: View {
     }
 }
 
-// MARK: - Empty State
 struct TVNoNetworksView: View {
     var body: some View {
         VStack(spacing: 40) {
@@ -239,7 +232,6 @@ struct TVNoNetworksView: View {
     }
 }
 
-// MARK: - Preview
 struct TVNetworksView_Previews: PreviewProvider {
     static var previews: some View {
         TVNetworksView()
