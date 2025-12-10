@@ -282,10 +282,11 @@ class ViewModel: ObservableObject {
         }
     }
     
-    func setForcedRelayConnection(enabled: Bool) {
+    func setForcedRelayConnection(isEnabled: Bool) {
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
-        userDefaults?.set(enabled, forKey: GlobalConstants.keyForceRelayConnection)
-        showForceRelayAlert = true
+        userDefaults?.set(isEnabled, forKey: GlobalConstants.keyForceRelayConnection)
+        self.forceRelayConnection = isEnabled
+        self.showForceRelayAlert = true
     }
     
     func getForcedRelayConnectionEnabled() -> Bool {
