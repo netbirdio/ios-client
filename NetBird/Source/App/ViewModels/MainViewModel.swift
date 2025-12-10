@@ -291,6 +291,7 @@ class ViewModel: ObservableObject {
     
     func getForcedRelayConnectionEnabled() -> Bool {
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.register(defaults: [GlobalConstants.keyForceRelayConnection: true])
         return userDefaults?.bool(forKey: GlobalConstants.keyForceRelayConnection) ?? true
     }
     
