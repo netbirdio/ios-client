@@ -141,7 +141,7 @@ struct AdvancedView: View {
             alertOverlay(isPresented: viewModel.showLogLevelChangedAlert, onDismiss: {
                 viewModel.showLogLevelChangedAlert = false
             }) {
-                LogLevelAlert(isPresented: $viewModel.showLogLevelChangedAlert)
+                LogLevelAlert()
             }
 
             alertOverlay(isPresented: viewModel.showForceRelayAlert, onDismiss: {
@@ -315,7 +315,6 @@ struct ForceRelayAlert: View {
 
 struct LogLevelAlert: View {
     @EnvironmentObject var viewModel: ViewModel
-    @Binding var isPresented: Bool
 
     var body: some View {
         VStack(spacing: 20) {
@@ -328,7 +327,7 @@ struct LogLevelAlert: View {
                 .foregroundColor(Color("TextAlert"))
                 .multilineTextAlignment(.center)
             SolidButton(text: "Confirm") {
-                isPresented.toggle()
+                viewModel.showLogLevelChangedAlert = false
             }
             .padding(.top, 20)
         }
