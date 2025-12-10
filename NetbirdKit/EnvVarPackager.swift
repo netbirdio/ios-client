@@ -11,13 +11,8 @@ class EnvVarPackager {
             return nil
         }
         
-        var forceRelayConnection : Bool
-        
-        if defaults.object(forKey: GlobalConstants.keyForceRelayConnection) == nil {
-            forceRelayConnection = true
-        } else {
-            forceRelayConnection = defaults.bool(forKey: GlobalConstants.keyForceRelayConnection)
-        }
+        defaults.register(defaults: [GlobalConstants.keyForceRelayConnection: true])
+        let forceRelayConnection = defaults.bool(forKey: GlobalConstants.keyForceRelayConnection)
         
         envList.put(NetBirdSDKGetEnvKeyNBForceRelay(), value: String(forceRelayConnection))
         
