@@ -228,7 +228,34 @@ public class NetBirdAdapter {
         let osVersion = Device.getOsVersion()
         let osName = Device.getOsName()
 
+        #if os(tvOS)
+        // On tvOS, the filesystem is blocked for the App Group container.
+        // Create the client with empty paths and load config from local storage instead.
+        self.client = NetBirdSDKNewClient("", "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager)!
+
+        // Try to load config from extension-local storage first (set via IPC from main app)
+        // This is more reliable than shared UserDefaults which doesn't work on tvOS
+        var configJSON: String? = UserDefaults.standard.string(forKey: "netbird_config_json_local")
+
+        // Fall back to shared UserDefaults (may work in some cases)
+        if configJSON == nil {
+            configJSON = Preferences.loadConfigFromUserDefaults()
+        }
+
+        if let configJSON = configJSON {
+            let updatedConfig = Self.updateDeviceNameInConfig(configJSON, newName: deviceName)
+            do {
+                try self.client.setConfigFromJSON(updatedConfig)
+                adapterLogger.info("init: tvOS - loaded config successfully")
+            } catch {
+                adapterLogger.error("init: tvOS - failed to load config: \(error.localizedDescription)")
+            }
+        } else {
+            adapterLogger.info("init: tvOS - no config found, client initialized without config")
+        }
+        #else
         self.client = NetBirdSDKNewClient(Preferences.configFile(), Preferences.stateFile(), deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager)!
+        #endif
     }
     
     /// Returns the tunnel device interface name, or nil on error.
@@ -390,12 +417,24 @@ public class NetBirdAdapter {
 
         // Use default management URL for tvOS, empty for iOS (which handles it via ServerView)
         #if os(tvOS)
-        let managementURL = Self.defaultManagementURL
+        // On tvOS, config may be stored in extension-local UserDefaults (via IPC) or shared UserDefaults.
+        // Try local first, then fall back to shared.
+        var managementURL = Self.defaultManagementURL
 
-        // On tvOS, config is stored in UserDefaults because file writes are blocked.
-        // Restore the config to the file path so NetBirdSDKNewAuth can read the existing identity.
-        if Preferences.hasConfigInUserDefaults() {
-            _ = Preferences.restoreConfigFromUserDefaults()
+        // First try extension-local storage (set via IPC from main app)
+        var configJSON: String? = UserDefaults.standard.string(forKey: "netbird_config_json_local")
+
+        // Fall back to shared UserDefaults
+        if configJSON == nil {
+            configJSON = Preferences.loadConfigFromUserDefaults()
+        }
+
+        if let configJSON = configJSON,
+           let storedURL = Self.extractManagementURL(from: configJSON) {
+            adapterLogger.info("loginAsync: Using management URL from config: \(storedURL, privacy: .public)")
+            managementURL = storedURL
+        } else {
+            adapterLogger.info("loginAsync: No config found, using default management URL")
         }
         #else
         let managementURL = ""
@@ -421,6 +460,20 @@ public class NetBirdAdapter {
     }
 
     // MARK: - Config Helpers
+
+    /// Extract the management URL from a config JSON string
+    /// Returns nil if not found or empty
+    static func extractManagementURL(from configJSON: String) -> String? {
+        // Look for "ManagementURL":"..." pattern
+        let pattern = "\"ManagementURL\"\\s*:\\s*\"([^\"]*)\""
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
+              let match = regex.firstMatch(in: configJSON, options: [], range: NSRange(configJSON.startIndex..., in: configJSON)),
+              let urlRange = Range(match.range(at: 1), in: configJSON) else {
+            return nil
+        }
+        let url = String(configJSON[urlRange])
+        return url.isEmpty ? nil : url
+    }
 
     /// Update the device name in a config JSON string
     static func updateDeviceNameInConfig(_ configJSON: String, newName: String) -> String {

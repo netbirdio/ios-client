@@ -143,55 +143,37 @@ public class NetworkExtensionAdapter: ObservableObject {
 
     #if os(tvOS)
     /// Try to initialize the config file from the main app.
-    /// This may work on tvOS where the extension doesn't have write access.
+    /// On tvOS, shared UserDefaults doesn't work, so we also send config via IPC.
     private func initializeConfigFromApp() async {
-        // IMPORTANT: Skip initialization if config already exists in UserDefaults.
-        // SDK initialization is expensive (generates WireGuard/SSH keys ~5+ seconds).
-        if Preferences.hasConfigInUserDefaults() {
-            print("initializeConfigFromApp: Config already exists in UserDefaults, skipping SDK init")
+        // Check if config exists in main app's UserDefaults
+        // Note: Shared UserDefaults doesn't work on tvOS between app and extension,
+        // but we can still use it to store config in the main app
+        if let configJSON = Preferences.loadConfigFromUserDefaults(), !configJSON.isEmpty {
+            logger.info("initializeConfigFromApp: Config exists in UserDefaults, sending to extension via IPC")
+            // Send config to extension via IPC since shared UserDefaults doesn't work
+            await sendConfigToExtensionAsync(configJSON)
             return
         }
 
         let configPath = Preferences.configFile()
         let fileManager = FileManager.default
 
-        // Check if config already exists as a file
+        // Check if config already exists as a file (unlikely on tvOS but check anyway)
         if fileManager.fileExists(atPath: configPath) {
-            print("initializeConfigFromApp: Config already exists at \(configPath)")
+            logger.info("initializeConfigFromApp: Config already exists at \(configPath)")
             return
         }
 
-        print("initializeConfigFromApp: No config found, attempting to create from main app...")
+        logger.info("initializeConfigFromApp: No config found, user needs to configure server first")
+        // Don't automatically create config with default URL - user should go through ServerView
+    }
 
-        // Try to create the config using the SDK
-        // This creates a new config with WireGuard keys and saves it
-        guard let auth = NetBirdSDKNewAuth(configPath, "https://api.netbird.io", nil) else {
-            print("initializeConfigFromApp: Failed to create Auth object")
-            return
-        }
-
-        // Use withCheckedContinuation for proper async/await pattern
-        let success: Bool = await withCheckedContinuation { continuation in
-            let listener = ConfigSSOListener()
-            listener.onResult = { ssoSupported, error in
-                if let error = error {
-                    print("initializeConfigFromApp: Error - \(error.localizedDescription)")
-                    continuation.resume(returning: false)
-                } else if ssoSupported != nil {
-                    let configExists = fileManager.fileExists(atPath: configPath)
-                    print("initializeConfigFromApp: Config exists after save = \(configExists)")
-                    continuation.resume(returning: configExists)
-                } else {
-                    continuation.resume(returning: false)
-                }
+    /// Async wrapper for sendConfigToExtension
+    private func sendConfigToExtensionAsync(_ configJSON: String) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            sendConfigToExtension(configJSON) { _ in
+                continuation.resume()
             }
-            auth.saveConfigIfSSOSupported(listener)
-        }
-
-        if success {
-            print("initializeConfigFromApp: Successfully created config from main app!")
-        } else {
-            print("initializeConfigFromApp: Failed to create config from main app (extension will try)")
         }
     }
     #endif
@@ -562,6 +544,43 @@ public class NetworkExtensionAdapter: ObservableObject {
     func stopTimer() {
         self.timer.invalidate()
     }
+
+    #if os(tvOS)
+    /// Send config JSON to the Network Extension via IPC
+    /// On tvOS, shared UserDefaults doesn't work between app and extension,
+    /// so we transfer config directly via IPC
+    func sendConfigToExtension(_ configJSON: String, completion: ((Bool) -> Void)? = nil) {
+        guard let session = self.session else {
+            logger.warning("sendConfigToExtension: No session available")
+            completion?(false)
+            return
+        }
+
+        let messageString = "SetConfig:\(configJSON)"
+        guard let messageData = messageString.data(using: .utf8) else {
+            logger.error("sendConfigToExtension: Failed to convert message to Data")
+            completion?(false)
+            return
+        }
+
+        do {
+            try session.sendProviderMessage(messageData) { response in
+                if let response = response,
+                   let responseString = String(data: response, encoding: .utf8),
+                   responseString == "true" {
+                    self.logger.info("sendConfigToExtension: Config sent successfully")
+                    completion?(true)
+                } else {
+                    self.logger.warning("sendConfigToExtension: Extension did not confirm receipt")
+                    completion?(false)
+                }
+            }
+        } catch {
+            logger.error("sendConfigToExtension: Failed to send message: \(error.localizedDescription)")
+            completion?(false)
+        }
+    }
+    #endif
 
     func getExtensionStatus(completion: @escaping (NEVPNStatus) -> Void) {
         Task {

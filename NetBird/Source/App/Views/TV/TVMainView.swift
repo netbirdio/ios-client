@@ -71,6 +71,11 @@ struct TVMainView: View {
                 .tag(3)
         }
         .environmentObject(viewModel)
+        // Server configuration sheet (change server)
+        .fullScreenCover(isPresented: $viewModel.navigateToServerView) {
+            TVServerView(isPresented: $viewModel.navigateToServerView)
+                .environmentObject(viewModel)
+        }
         // Authentication Sheet (QR Code + Device Code)
         .fullScreenCover(isPresented: $viewModel.networkExtensionAdapter.showBrowser) {
             if let loginURL = viewModel.networkExtensionAdapter.loginURL {

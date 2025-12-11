@@ -7,6 +7,7 @@
 
 import Combine
 import NetBirdSDK
+import Foundation
 
 // MARK: - SDK Listener Implementations
 
@@ -118,7 +119,7 @@ class ServerViewModel : ObservableObject {
 
     private func getAuthenticator(url managementServerUrl: String) async -> NetBirdSDKAuth? {
         let configPath = self.configurationFilePath
-        let detachedTask = Task.detached(priority: .background) -> (NetBirdSDKAuth?, String?) in
+        let detachedTask = Task.detached(priority: .background) { () -> (NetBirdSDKAuth?, String?) in
             var error: NSError?
             let authenticator = NetBirdSDKNewAuth(configPath, managementServerUrl, &error)
 
@@ -165,6 +166,10 @@ class ServerViewModel : ObservableObject {
                 onSuccess: { [weak self] ssoSupported in
                     Task { @MainActor in
                         if ssoSupported {
+                            // On tvOS, try to save config to UserDefaults since file writes may have failed
+                            #if os(tvOS)
+                            self?.saveConfigToUserDefaults(authenticator: authenticator)
+                            #endif
                             self?.isOperationSuccessful = true
                         } else {
                             self?.isUiEnabled = true
@@ -175,8 +180,22 @@ class ServerViewModel : ObservableObject {
                 },
                 onError: { [weak self] error in
                     Task { @MainActor in
+                        let errorMessage = error.localizedDescription
+
+                        // On tvOS, file permission errors mean SSO check succeeded but file save failed
+                        // We can still proceed by saving to UserDefaults instead
+                        #if os(tvOS)
+                        if errorMessage.contains("operation not permitted") || errorMessage.contains("permission denied") {
+                            print("tvOS: File write failed, saving config to UserDefaults")
+                            self?.saveConfigToUserDefaults(authenticator: authenticator)
+                            self?.isOperationSuccessful = true
+                            continuation.resume()
+                            return
+                        }
+                        #endif
+
                         self?.isUiEnabled = true
-                        self?.handleSdkErrorMessage(errorMessage: error.localizedDescription)
+                        self?.handleSdkErrorMessage(errorMessage: errorMessage)
                         continuation.resume()
                     }
                 }
@@ -185,6 +204,27 @@ class ServerViewModel : ObservableObject {
             authenticator.saveConfigIfSSOSupported(listener)
         }
     }
+
+    #if os(tvOS)
+    /// On tvOS, save the config JSON to UserDefaults since file writes are blocked
+    private func saveConfigToUserDefaults(authenticator: NetBirdSDKAuth) {
+        var error: NSError?
+        let configJSON = authenticator.getConfigJSON(&error)
+
+        if let error = error {
+            print("tvOS: Failed to get config JSON: \(error.localizedDescription)")
+            return
+        }
+
+        if !configJSON.isEmpty {
+            if Preferences.saveConfigToUserDefaults(configJSON) {
+                print("tvOS: Config saved to UserDefaults successfully")
+            } else {
+                print("tvOS: Failed to save config to UserDefaults")
+            }
+        }
+    }
+    #endif
 
     func loginWithSetupKey(managementServerUrl: String, setupKey: String) async {
         // disable UI here
@@ -220,14 +260,32 @@ class ServerViewModel : ObservableObject {
             let listener = ErrListenerImpl(
                 onSuccess: { [weak self] in
                     Task { @MainActor in
+                        // On tvOS, try to save config to UserDefaults since file writes may have failed
+                        #if os(tvOS)
+                        self?.saveConfigToUserDefaults(authenticator: authenticator)
+                        #endif
                         self?.isOperationSuccessful = true
                         continuation.resume()
                     }
                 },
                 onError: { [weak self] error in
                     Task { @MainActor in
+                        let errorMessage = error.localizedDescription
+
+                        // On tvOS, file permission errors mean login succeeded but file save failed
+                        // We can still proceed by saving to UserDefaults instead
+                        #if os(tvOS)
+                        if errorMessage.contains("operation not permitted") || errorMessage.contains("permission denied") {
+                            print("tvOS: File write failed, saving config to UserDefaults")
+                            self?.saveConfigToUserDefaults(authenticator: authenticator)
+                            self?.isOperationSuccessful = true
+                            continuation.resume()
+                            return
+                        }
+                        #endif
+
                         self?.isUiEnabled = true
-                        self?.handleSdkErrorMessage(errorMessage: error.localizedDescription)
+                        self?.handleSdkErrorMessage(errorMessage: errorMessage)
                         continuation.resume()
                     }
                 }

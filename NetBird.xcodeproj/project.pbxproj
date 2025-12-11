@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		36F90EF57603411B9916FDD6 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
+		3A9A981B20EF47C1907CC877 /* TVServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8BCB110545747678AA5A9C2 /* TVServerView.swift */; };
 		441C5AFE2EDF0DD20055EEFC /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50245A532A80431B0034792B /* NetworkExtension.framework */; };
 		441C5B062EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 441C5AFD2EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		443782BF2EDF284A00F9FA94 /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782BD2EDF284A00F9FA94 /* Platform.swift */; };
@@ -262,7 +264,7 @@
 		50CD81A62AD5504B00CF830B /* StatusDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusDetails.swift; sourceTree = "<group>"; };
 		50CD81AF2AD5B94D00CF830B /* PeerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerCard.swift; sourceTree = "<group>"; };
 		50CD84352AD82F9400CF830B /* ServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerView.swift; sourceTree = "<group>"; };
-		50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = NetBirdSDK.xcframework; path = NetBirdSDK.xcframework; sourceTree = "<group>"; };
+		50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = NetBirdSDK.xcframework; sourceTree = "<group>"; };
 		50D402962BD9B89300D4AC5B /* PeerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerViewModel.swift; sourceTree = "<group>"; };
 		50E608022A7950CB00BAF09B /* Device.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Device.swift; sourceTree = "<group>"; };
 		50E608122A7958B100BAF09B /* MainViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewModel.swift; sourceTree = "<group>"; };
@@ -272,6 +274,7 @@
 		F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerViewModel.swift; sourceTree = "<group>"; };
 		F1258DE92ED7B7D200C0D205 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		F1B292042EDE5608001D91B8 /* JustifiedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JustifiedText.swift; sourceTree = "<group>"; };
+		F8BCB110545747678AA5A9C2 /* TVServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVServerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -361,6 +364,7 @@
 				443782C12EDF288A00F9FA94 /* TVNetworksView.swift */,
 				443782C22EDF288A00F9FA94 /* TVPeersView.swift */,
 				443782C32EDF288A00F9FA94 /* TVSettingsView.swift */,
+				F8BCB110545747678AA5A9C2 /* TVServerView.swift */,
 			);
 			name = TV;
 			path = Views/TV;
@@ -809,6 +813,8 @@
 				443782CD2EDF298B00F9FA94 /* MainViewModel.swift in Sources */,
 				443782CE2EDF298B00F9FA94 /* RoutesViewModel.swift in Sources */,
 				443782C52EDF288A00F9FA94 /* TVSettingsView.swift in Sources */,
+				3A9A981B20EF47C1907CC877 /* TVServerView.swift in Sources */,
+				36F90EF57603411B9916FDD6 /* ServerViewModel.swift in Sources */,
 				443782C92EDF293400F9FA94 /* NetBirdApp.swift in Sources */,
 				443782C62EDF288A00F9FA94 /* TVPeersView.swift in Sources */,
 				443782C72EDF288A00F9FA94 /* TVNetworksView.swift in Sources */,

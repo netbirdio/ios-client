@@ -367,7 +367,7 @@ struct TVChangeServerAlert: View {
         .onAppear {
             focusedButton = .cancel
         }
-        .onChange(of: focusedButton) { newValue in
+        .onChange(of: focusedButton) { _, newValue in
             if let newValue = newValue {
                 lastFocusedButton = newValue
             } else {

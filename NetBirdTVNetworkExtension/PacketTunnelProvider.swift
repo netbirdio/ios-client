@@ -59,28 +59,19 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         logger.info("startTunnel: skipping file-based logging on tvOS (sandbox blocks writes)")
         NSLog("NetBirdTV: skipping file-based logging on tvOS")
 
-        // CRITICAL: On tvOS, restore config from UserDefaults to file BEFORE the adapter is created.
-        // The lazy adapter creates NetBirdSDKNewClient() which reads from the config file path.
-        // If we don't restore the file first, the Client will be initialized with empty/missing config.
-        // This must happen BEFORE any access to `adapter` property.
+        // On tvOS, config is loaded from UserDefaults directly in NetBirdAdapter.init()
+        // No need to restore to file - the adapter handles this internally.
         if Preferences.hasConfigInUserDefaults() {
-            logger.info("startTunnel: tvOS - restoring config from UserDefaults to file BEFORE adapter init")
-            NSLog("NetBirdTV: restoring config from UserDefaults to file BEFORE adapter init")
-            if Preferences.restoreConfigFromUserDefaults() {
-                logger.info("startTunnel: tvOS - config file restored successfully")
-                NSLog("NetBirdTV: config file restored successfully")
-            } else {
-                logger.warning("startTunnel: tvOS - failed to restore config file, adapter may not work correctly")
-                NSLog("NetBirdTV: WARNING - failed to restore config file")
-            }
+            logger.info("startTunnel: tvOS - config found in UserDefaults, will be loaded by adapter")
+            NSLog("NetBirdTV: config found in UserDefaults")
+        } else {
+            logger.info("startTunnel: tvOS - no config in UserDefaults, login will be required")
+            NSLog("NetBirdTV: no config in UserDefaults")
         }
         #endif
 
         currentNetworkType = nil
         startMonitoringNetworkChanges()
-
-        // Initialize config if it doesn't exist (tvOS only)
-        initializeConfigIfNeeded()
 
         let needsLogin = adapter.needsLogin()
 
@@ -151,6 +142,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case let s where s.hasPrefix("Deselect-"):
             let id = String(s.dropFirst("Deselect-".count))
             deselectRoute(id: id)
+        case let s where s.hasPrefix("SetConfig:"):
+            // On tvOS, receive config JSON from main app via IPC
+            // This bypasses the broken shared UserDefaults
+            let configJSON = String(s.dropFirst("SetConfig:".count))
+            setConfigFromMainApp(configJSON: configJSON, completionHandler: completionHandler)
         default:
             logger.warning("handleAppMessage: Unknown message: \(string)")
         }
@@ -217,7 +213,36 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         completionHandler(data)
     }
 
-    /// Initialize config with default management URL for tvOS
+    /// Receive config JSON from main app via IPC and save it locally
+    /// On tvOS, shared UserDefaults doesn't work between app and extension,
+    /// so we use IPC to transfer the config directly
+    func setConfigFromMainApp(configJSON: String, completionHandler: ((Data?) -> Void)?) {
+        logger.info("setConfigFromMainApp: Received config from main app (\(configJSON.count) chars)")
+
+        // Save to extension-local UserDefaults (not shared App Group)
+        UserDefaults.standard.set(configJSON, forKey: "netbird_config_json_local")
+        UserDefaults.standard.synchronize()
+
+        // Also try to load into the adapter's client if it exists
+        do {
+            let deviceName = Device.getName()
+            let updatedConfig = NetBirdAdapter.updateDeviceNameInConfig(configJSON, newName: deviceName)
+            try adapter.client.setConfigFromJSON(updatedConfig)
+            logger.info("setConfigFromMainApp: Loaded config into SDK client successfully")
+        } catch {
+            logger.error("setConfigFromMainApp: Failed to load config into SDK client: \(error.localizedDescription)")
+        }
+
+        let data = "true".data(using: .utf8)
+        completionHandler?(data)
+    }
+
+    /// Load config from extension-local storage (used on tvOS where shared UserDefaults fails)
+    static func loadLocalConfig() -> String? {
+        return UserDefaults.standard.string(forKey: "netbird_config_json_local")
+    }
+
+    /// Initialize config with management URL for tvOS
     /// This must be done in the extension because it has permission to write to the App Group container
     func initializeConfig(completionHandler: @escaping (Data?) -> Void) {
         let configPath = Preferences.configFile()
@@ -231,10 +256,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        logger.info("initializeConfig: No config found, initializing with default management URL")
+        // On tvOS, try to get management URL from UserDefaults config first
+        var managementURL = NetBirdAdapter.defaultManagementURL
+        if let configJSON = Preferences.loadConfigFromUserDefaults(),
+           let storedURL = NetBirdAdapter.extractManagementURL(from: configJSON) {
+            logger.info("initializeConfig: Using management URL from UserDefaults: \(storedURL, privacy: .public)")
+            managementURL = storedURL
+        } else {
+            logger.info("initializeConfig: No config in UserDefaults, using default management URL")
+        }
 
-        // Create Auth object with default management URL
-        guard let auth = NetBirdSDKNewAuth(configPath, NetBirdAdapter.defaultManagementURL, nil) else {
+        logger.info("initializeConfig: No config file found, initializing with management URL: \(managementURL, privacy: .public)")
+
+        // Create Auth object with the management URL
+        guard let auth = NetBirdSDKNewAuth(configPath, managementURL, nil) else {
             logger.error("initializeConfig: Failed to create Auth object")
             let data = "false".data(using: .utf8)
             completionHandler(data)
@@ -267,8 +302,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     /// Initialize config synchronously during startTunnel
-    /// On tvOS, config is loaded from UserDefaults directly into memory (file writes are blocked)
+    /// On tvOS, config is loaded from UserDefaults directly in NetBirdAdapter.init()
+    /// This function is kept for compatibility but is mostly a no-op on tvOS.
     private func initializeConfigIfNeeded() {
+        #if os(tvOS)
+        // On tvOS, config loading is handled by NetBirdAdapter.init()
+        // which reads from UserDefaults and calls setConfigFromJSON()
+        // Nothing to do here.
+        logger.info("initializeConfigIfNeeded: tvOS - config loading handled by adapter init")
+        #else
         let configPath = Preferences.configFile()
         let fileManager = FileManager.default
 
@@ -277,27 +319,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        // On tvOS, try to load config from UserDefaults directly into memory
-        if Preferences.hasConfigInUserDefaults() {
-            if var configJSON = Preferences.loadConfigFromUserDefaults() {
-                // Update the device name in config before loading
-                let correctDeviceName = Device.getName()
-                configJSON = NetBirdAdapter.updateDeviceNameInConfig(configJSON, newName: correctDeviceName)
-
-                do {
-                    try adapter.client.setConfigFromJSON(configJSON)
-                    return
-                } catch {
-                    #if os(tvOS)
-                    return
-                    #endif
-                }
-            }
-        }
-
-        #if os(tvOS)
-        // On tvOS, if we get here without config, user needs to authenticate first
-        #else
         // On iOS, try to create config via file writes
         guard let auth = NetBirdSDKNewAuth(configPath, NetBirdAdapter.defaultManagementURL, nil) else {
             return
@@ -360,14 +381,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     func loginTV(completionHandler: @escaping (Data?) -> Void) {
         logger.info("loginTV: Starting device code authentication flow")
 
-        // Initialize config file BEFORE attempting login
-        // This ensures the Auth object has a valid config to save credentials to
-        initializeConfigIfNeeded()
+        // Log which management URL will be used (from UserDefaults or default)
+        if let configJSON = Preferences.loadConfigFromUserDefaults(),
+           let storedURL = NetBirdAdapter.extractManagementURL(from: configJSON) {
+            logger.info("loginTV: Will use management URL from UserDefaults: \(storedURL, privacy: .public)")
+        } else {
+            logger.info("loginTV: No config in UserDefaults, will use default management URL: \(NetBirdAdapter.defaultManagementURL, privacy: .public)")
+        }
 
-        // Verify config was created
-        let configPath = Preferences.configFile()
-        let configExists = FileManager.default.fileExists(atPath: configPath)
-        logger.info("loginTV: After initializeConfigIfNeeded, configExists=\(configExists), path=\(configPath)")
+        // Initialize config - mostly a no-op on tvOS since adapter handles it
+        initializeConfigIfNeeded()
 
         // Track if we've already sent the URL to the app
         var urlSentToApp = false
