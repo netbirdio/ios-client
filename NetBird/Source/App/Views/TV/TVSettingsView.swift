@@ -288,32 +288,36 @@ struct TVSettingsInfoRow: View {
 
 struct TVChangeServerAlert: View {
     @ObservedObject var viewModel: ViewModel
-    
-    @FocusState private var confirmFocused: Bool
-    @FocusState private var cancelFocused: Bool
-    
+
+    private enum FocusedButton {
+        case cancel, confirm
+    }
+
+    @FocusState private var focusedButton: FocusedButton?
+    @State private var lastFocusedButton: FocusedButton = .cancel
+
     var body: some View {
         ZStack {
             // Dimmed background
             Color.black.opacity(0.7)
                 .ignoresSafeArea()
-            
+
             // Alert box
             VStack(spacing: 40) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 60))
                     .foregroundColor(.orange)
-                
+
                 Text("Change Server?")
                     .font(.system(size: 40, weight: .bold))
                     .foregroundColor(TVColors.textAlert)
-                
+
                 Text("This will disconnect from the current server and erase local configuration.")
                     .font(.system(size: 24))
                     .foregroundColor(TVColors.textAlert)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 500)
-                
+
                 HStack(spacing: 40) {
                     // Cancel button
                     Button(action: {
@@ -330,8 +334,8 @@ struct TVChangeServerAlert: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .focused($cancelFocused)
-                    
+                    .focused($focusedButton, equals: .cancel)
+
                     // Confirm button
                     Button(action: {
                         viewModel.close()
@@ -350,14 +354,26 @@ struct TVChangeServerAlert: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .focused($confirmFocused)
+                    .focused($focusedButton, equals: .confirm)
                 }
+                .focusSection()
             }
             .padding(60)
             .background(
                 RoundedRectangle(cornerRadius: 30)
                     .fill(TVColors.bgSideDrawer)
             )
+        }
+        .onAppear {
+            focusedButton = .cancel
+        }
+        .onChange(of: focusedButton) { newValue in
+            if let newValue = newValue {
+                lastFocusedButton = newValue
+            } else {
+                // Focus escaped - pull it back
+                focusedButton = lastFocusedButton
+            }
         }
     }
 }
