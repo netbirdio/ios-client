@@ -147,6 +147,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // This bypasses the broken shared UserDefaults
             let configJSON = String(s.dropFirst("SetConfig:".count))
             setConfigFromMainApp(configJSON: configJSON, completionHandler: completionHandler)
+        case "ClearConfig":
+            // Clear the extension-local config on logout
+            clearLocalConfig(completionHandler: completionHandler)
         default:
             logger.warning("handleAppMessage: Unknown message: \(string)")
         }
@@ -240,6 +243,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Load config from extension-local storage (used on tvOS where shared UserDefaults fails)
     static func loadLocalConfig() -> String? {
         return UserDefaults.standard.string(forKey: "netbird_config_json_local")
+    }
+
+    /// Clear extension-local config on logout
+    /// Called via IPC from main app when user logs out
+    func clearLocalConfig(completionHandler: ((Data?) -> Void)?) {
+        logger.info("clearLocalConfig: Clearing extension-local config")
+
+        // Remove from extension-local UserDefaults
+        UserDefaults.standard.removeObject(forKey: "netbird_config_json_local")
+        UserDefaults.standard.synchronize()
+
+        logger.info("clearLocalConfig: Local config cleared")
+        let data = "true".data(using: .utf8)
+        completionHandler?(data)
     }
 
     /// Initialize config with management URL for tvOS

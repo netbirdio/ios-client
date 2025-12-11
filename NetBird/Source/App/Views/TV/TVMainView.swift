@@ -21,24 +21,6 @@ import os
 
 private let buttonLogger = Logger(subsystem: "io.netbird.app", category: "TVConnectionButton")
 
-private struct TVColors {
-    static var textPrimary: Color {
-        UIColor(named: "TextPrimary") != nil ? Color("TextPrimary") : .primary
-    }
-    static var textSecondary: Color {
-        UIColor(named: "TextSecondary") != nil ? Color("TextSecondary") : .secondary
-    }
-    static var bgMenu: Color {
-        UIColor(named: "BgMenu") != nil ? Color("BgMenu") : Color(white: 0.1)
-    }
-    static var bgPrimary: Color {
-        UIColor(named: "BgPrimary") != nil ? Color("BgPrimary") : Color(white: 0.15)
-    }
-    static var bgSecondary: Color {
-        UIColor(named: "BgSecondary") != nil ? Color("BgSecondary") : Color(white: 0.08)
-    }
-}
-
 struct TVMainView: View {
     @EnvironmentObject var viewModel: ViewModel
 

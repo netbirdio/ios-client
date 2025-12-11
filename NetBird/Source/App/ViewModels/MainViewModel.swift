@@ -14,10 +14,6 @@ import os
 import Combine
 import NetBirdSDK
 
-#if os(iOS)
-import UIKit
-#endif
-
 /// Used by updateManagementURL to check if SSO is supported
 class SSOCheckListener: NSObject, NetBirdSDKSSOListenerProtocol {
     var onResult: ((Bool?, Error?) -> Void)?
@@ -117,24 +113,6 @@ class ViewModel: ObservableObject {
     }
     var buttonLock = false
     let defaults = UserDefaults.standard
-    
-    /// Device type detection - platform-safe
-    var isIpad: Bool {
-        #if os(iOS)
-        return UIDevice.current.userInterfaceIdiom == .pad
-        #else
-        return false
-        #endif
-    }
-    
-    /// True if running on Apple TV
-    var isTV: Bool {
-        #if os(tvOS)
-        return true
-        #else
-        return false
-        #endif
-    }
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -311,6 +289,14 @@ class ViewModel: ObservableObject {
         self.fqdn = ""
         defaults.removeObject(forKey: "ip")
         defaults.removeObject(forKey: "fqdn")
+
+        // Clear config from UserDefaults (used on tvOS)
+        Preferences.removeConfigFromUserDefaults()
+
+        #if os(tvOS)
+        // Also clear extension-local config to prevent stale credentials
+        networkExtensionAdapter.clearExtensionConfig()
+        #endif
     }
     
     func setSetupKey(key: String, completion: @escaping (Error?) -> Void) {

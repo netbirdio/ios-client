@@ -13,21 +13,6 @@ import UIKit
 
 #if os(tvOS)
 
-private struct TVColors {
-    static var textPrimary: Color {
-        UIColor(named: "TextPrimary") != nil ? Color("TextPrimary") : .primary
-    }
-    static var textSecondary: Color {
-        UIColor(named: "TextSecondary") != nil ? Color("TextSecondary") : .secondary
-    }
-    static var bgMenu: Color {
-        UIColor(named: "BgMenu") != nil ? Color("BgMenu") : Color(white: 0.1)
-    }
-    static var bgPrimary: Color {
-        UIColor(named: "BgPrimary") != nil ? Color("BgPrimary") : Color(white: 0.15)
-    }
-}
-
 /// Displays the list of network routes in a tvOS-friendly format.
 struct TVNetworksView: View {
     @EnvironmentObject var viewModel: ViewModel

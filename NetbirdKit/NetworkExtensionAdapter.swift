@@ -580,6 +580,40 @@ public class NetworkExtensionAdapter: ObservableObject {
             completion?(false)
         }
     }
+
+    /// Clear extension-local config on logout
+    /// This ensures the extension doesn't have stale credentials after logout
+    func clearExtensionConfig(completion: ((Bool) -> Void)? = nil) {
+        guard let session = self.session else {
+            logger.warning("clearExtensionConfig: No session available")
+            completion?(false)
+            return
+        }
+
+        let messageString = "ClearConfig"
+        guard let messageData = messageString.data(using: .utf8) else {
+            logger.error("clearExtensionConfig: Failed to convert message to Data")
+            completion?(false)
+            return
+        }
+
+        do {
+            try session.sendProviderMessage(messageData) { response in
+                if let response = response,
+                   let responseString = String(data: response, encoding: .utf8),
+                   responseString == "true" {
+                    self.logger.info("clearExtensionConfig: Extension config cleared successfully")
+                    completion?(true)
+                } else {
+                    self.logger.warning("clearExtensionConfig: Extension did not confirm clearing")
+                    completion?(false)
+                }
+            }
+        } catch {
+            logger.error("clearExtensionConfig: Failed to send message: \(error.localizedDescription)")
+            completion?(false)
+        }
+    }
     #endif
 
     func getExtensionStatus(completion: @escaping (NEVPNStatus) -> Void) {

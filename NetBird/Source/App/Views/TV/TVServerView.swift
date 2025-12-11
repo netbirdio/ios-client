@@ -18,24 +18,6 @@ import NetBirdSDK
 
 #if os(tvOS)
 
-private struct TVColors {
-    static var textPrimary: Color {
-        UIColor(named: "TextPrimary") != nil ? Color("TextPrimary") : .primary
-    }
-    static var textSecondary: Color {
-        UIColor(named: "TextSecondary") != nil ? Color("TextSecondary") : .secondary
-    }
-    static var bgMenu: Color {
-        UIColor(named: "BgMenu") != nil ? Color("BgMenu") : Color(white: 0.1)
-    }
-    static var bgPrimary: Color {
-        UIColor(named: "BgPrimary") != nil ? Color("BgPrimary") : Color(white: 0.15)
-    }
-    static var bgSideDrawer: Color {
-        UIColor(named: "BgSideDrawer") != nil ? Color("BgSideDrawer") : Color(white: 0.2)
-    }
-}
-
 struct TVServerView: View {
     @EnvironmentObject var viewModel: ViewModel
     @Binding var isPresented: Bool
