@@ -24,7 +24,10 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
     
     func onConnected() {
         adapter.clientState = .connected
-        self.completionHandler(nil)
+        
+        DispatchQueue.main.async {
+            self.completionHandler(nil)
+        }
     }
     
     func onConnecting() {
