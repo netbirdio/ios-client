@@ -58,21 +58,35 @@ struct TVNetworkListContent: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            // Header (non-focusable)
             HStack {
                 Text("Networks")
                     .font(.system(size: 48, weight: .bold))
                     .foregroundColor(TVColors.textPrimary)
-                
+
                 Spacer()
-                
+
                 // Stats
                 Text("\(activeCount) of \(totalCount) enabled")
                     .font(.system(size: 24))
                     .foregroundColor(TVColors.textSecondary)
-                
+            }
+            .padding(.horizontal, 80)
+            .padding(.top, 40)
+
+            // Filter bar with refresh button (all focusable items on same row)
+            HStack {
+                TVFilterBar(
+                    options: ["All", "Enabled", "Disabled"],
+                    selected: $viewModel.routeViewModel.selectionFilter
+                )
+
+                Spacer()
+
                 Button(action: refresh) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 28))
+                        .foregroundColor(TVColors.textSecondary)
                         .rotationEffect(.degrees(isRefreshing ? 360 : 0))
                         .animation(
                             isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
@@ -80,17 +94,10 @@ struct TVNetworkListContent: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .padding(.leading, 30)
             }
             .padding(.horizontal, 80)
-            .padding(.top, 40)
-            
-            TVFilterBar(
-                options: ["All", "Enabled", "Disabled"],
-                selected: $viewModel.routeViewModel.selectionFilter
-            )
-            .padding(.horizontal, 80)
-            
+            .padding(.bottom, 30)
+
             // Network grid
             ScrollView {
                 LazyVGrid(
@@ -107,6 +114,7 @@ struct TVNetworkListContent: View {
                         )
                     }
                 }
+                .padding(.top, 15)
                 .padding(.horizontal, 80)
                 .padding(.bottom, 80)
             }
@@ -139,9 +147,9 @@ struct TVNetworkListContent: View {
 struct TVNetworkCard: View {
     let route: RoutesSelectionInfo
     @ObservedObject var routeViewModel: RoutesViewModel
-    
+
     @FocusState private var isFocused: Bool
-    
+
     var body: some View {
         Button(action: toggleRoute) {
             HStack(spacing: 25) {
@@ -150,32 +158,30 @@ struct TVNetworkCard: View {
                     Circle()
                         .fill(route.selected ? Color.green : Color.gray.opacity(0.3))
                         .frame(width: 50, height: 50)
-                    
+
                     Image(systemName: route.selected ? "checkmark" : "xmark")
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.white)
                 }
-                
+
                 // Route info
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(route.network ?? route.name)
+                    Text(route.name)
                         .font(.system(size: 26, weight: .semibold))
-                        .foregroundColor(TVColors.textPrimary)
+                        .foregroundColor(isFocused ? .white : TVColors.textPrimary)
                         .lineLimit(1)
-                    
-                    if let domains = route.domains, !domains.isEmpty {
-                        Text(domains.map { $0.domain }.joined(separator: ", "))
-                            .font(.system(size: 20))
-                            .foregroundColor(TVColors.textSecondary)
-                            .lineLimit(2)
-                    }
+
+                    Text(routeDisplayText)
+                        .font(.system(size: 20))
+                        .foregroundColor(isFocused ? .white.opacity(0.8) : TVColors.textSecondary)
+                        .lineLimit(2)
                 }
-                
+
                 Spacer()
-                
+
                 Text(route.selected ? "Enabled" : "Disabled")
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(route.selected ? .green : .gray)
+                    .foregroundColor(isFocused ? .white : (route.selected ? .green : .gray))
             }
             .padding(30)
             .background(
@@ -196,6 +202,16 @@ struct TVNetworkCard: View {
         .focused($isFocused)
     }
     
+    private var routeDisplayText: String {
+        if route.network == "invalid Prefix" {
+            if let domains = route.domains, domains.count > 2 {
+                return "\(domains.count) Domains"
+            }
+            return route.domains?.map { $0.domain }.joined(separator: ", ") ?? ""
+        }
+        return route.network ?? ""
+    }
+
     private func toggleRoute() {
         if route.selected {
             routeViewModel.deselectRoute(route: route)

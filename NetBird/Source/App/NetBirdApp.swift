@@ -69,8 +69,8 @@ struct NetBirdApp: App {
                 #endif
                 #if os(tvOS)
                 // tvOS uses scenePhase changes
-                .onChange(of: scenePhase) { phase in
-                    switch phase {
+                .onChange(of: scenePhase) { _, newPhase in
+                    switch newPhase {
                     case .active:
                         print("App is active!")
                         viewModel.checkExtensionState()

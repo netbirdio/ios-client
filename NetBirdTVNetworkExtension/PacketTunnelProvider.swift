@@ -96,7 +96,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        adapter.start { [self] error in
+        adapter.start { error in
             if let error = error {
                 logger.error("startTunnel: adapter.start() failed: \(error.localizedDescription, privacy: .public)")
                 completionHandler(error)
@@ -201,7 +201,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     func restartClient() {
         logger.info("restartClient: Restarting client due to network change")
         adapter.stop()
-        adapter.start { [self] error in
+        adapter.start { error in
             if let error = error {
                 logger.error("restartClient: Error restarting client: \(error.localizedDescription)")
             } else {
@@ -243,7 +243,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         // Use an SSO listener to save the config
         let listener = ConfigInitSSOListener()
-        listener.onResult = { [self] ssoSupported, error in
+        listener.onResult = { ssoSupported, error in
             if let error = error {
                 logger.error("initializeConfig: Error checking SSO - \(error.localizedDescription)")
                 let data = "false".data(using: .utf8)
@@ -377,7 +377,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         adapter.loginAsync(
             forceDeviceAuth: true,
-            onURL: { [self] url, userCode in
+            onURL: { url, userCode in
                 // Return URL and user code in pipe-separated format
                 logger.info("loginTV: onURL callback triggered!")
                 logger.info("loginTV: Received URL and userCode, sending to app")
@@ -391,7 +391,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 let data = response.data(using: .utf8)
                 completionHandler(data)
             },
-            onSuccess: { [self] in
+            onSuccess: {
                 // Login completed - the app will detect this via polling
                 // and start the VPN tunnel via startVPNConnection()
                 logger.info("loginTV: Login completed successfully!")
@@ -404,7 +404,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 logger.info("loginTV: configFile exists = \(fileManager.fileExists(atPath: configPath))")
                 logger.info("loginTV: stateFile exists = \(fileManager.fileExists(atPath: statePath))")
             },
-            onError: { [self] error in
+            onError: { error in
                 // Log with privacy: .public to avoid iOS privacy redaction
                 if let nsError = error as NSError? {
                     logger.error("loginTV: Login failed - domain: \(nsError.domain, privacy: .public), code: \(nsError.code, privacy: .public), description: \(nsError.localizedDescription, privacy: .public)")
@@ -563,7 +563,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func setTunnelSettings(tunnelNetworkSettings: NEPacketTunnelNetworkSettings) {
-        setTunnelNetworkSettings(tunnelNetworkSettings) { [self] error in
+        setTunnelNetworkSettings(tunnelNetworkSettings) { error in
             if let error = error {
                 logger.error("setTunnelSettings: Error assigning routes: \(error.localizedDescription)")
                 return

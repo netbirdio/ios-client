@@ -136,9 +136,8 @@ public class NetBirdAdapter {
     private func findTunnelFileDescriptorTvOS() -> Int32? {
         // Constants from sys/kern_control.h (not in tvOS SDK but exist in kernel)
         let AF_SYSTEM: UInt8 = 32
-        let AF_SYS_CONTROL: UInt16 = 2
-        let SYSPROTO_CONTROL: Int32 = 2
-        let UTUN_OPT_IFNAME: Int32 = 2
+        // Note: AF_SYS_CONTROL, SYSPROTO_CONTROL, UTUN_OPT_IFNAME are documented here
+        // but used as literals (2) in getsockopt calls below for clarity
         // CTLIOCGINFO = _IOWR('N', 3, struct ctl_info) = 0xC0644E03
         let CTLIOCGINFO: UInt = 0xC0644E03
 
@@ -155,7 +154,7 @@ public class NetBirdAdapter {
 
         // Set ctl_name to "com.apple.net.utun_control" at offset 4
         let ctlName = "com.apple.net.utun_control"
-        ctlName.withCString { cstr in
+        _ = ctlName.withCString { cstr in
             memcpy(ctlInfo.advanced(by: 4), cstr, strlen(cstr) + 1)
         }
 

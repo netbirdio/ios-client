@@ -62,7 +62,7 @@ struct TVSettingsView: View {
                                     action: { viewModel.showChangeServerAlert = true }
                                 )
                             }
-                            
+
                             TVSettingsSection(title: "Advanced") {
                                 TVSettingsToggleRow(
                                     icon: "ant.fill",
@@ -70,7 +70,7 @@ struct TVSettingsView: View {
                                     subtitle: "Enable detailed logs for troubleshooting",
                                     isOn: $viewModel.traceLogsEnabled
                                 )
-                                
+
                                 TVSettingsToggleRow(
                                     icon: "shield.lefthalf.filled",
                                     title: "Rosenpass",
@@ -81,23 +81,23 @@ struct TVSettingsView: View {
                                     )
                                 )
                             }
-                            
-                            TVSettingsSection(title: "Help") {
-                                TVSettingsRow(
+
+                            TVSettingsSection(title: "Info") {
+                                TVSettingsInfoRow(
                                     icon: "book.fill",
                                     title: "Documentation",
-                                    subtitle: "docs.netbird.io",
-                                    action: nil  // Can't open URLs directly on tvOS
+                                    subtitle: "docs.netbird.io"
                                 )
-                                
-                                TVSettingsRow(
+
+                                TVSettingsInfoRow(
                                     icon: "info.circle.fill",
-                                    title: "About",
-                                    subtitle: "Version \(appVersion)",
-                                    action: nil
+                                    title: "Version",
+                                    subtitle: appVersion
                                 )
                             }
                         }
+                        .padding(.top, 15)
+                        .padding(.bottom, 50)
                     }
                 }
                 .padding(80)
@@ -164,9 +164,9 @@ struct TVSettingsRow: View {
     let title: String
     let subtitle: String
     let action: (() -> Void)?
-    
+
     @FocusState private var isFocused: Bool
-    
+
     var body: some View {
         Button(action: { action?() }) {
             HStack(spacing: 20) {
@@ -174,23 +174,23 @@ struct TVSettingsRow: View {
                     .font(.system(size: 28))
                     .foregroundColor(.accentColor)
                     .frame(width: 40)
-                
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(TVColors.textPrimary)
-                    
+                        .foregroundColor(isFocused ? .white : TVColors.textPrimary)
+
                     Text(subtitle)
                         .font(.system(size: 18))
-                        .foregroundColor(TVColors.textSecondary)
+                        .foregroundColor(isFocused ? .white.opacity(0.8) : TVColors.textSecondary)
                 }
-                
+
                 Spacer()
-                
+
                 if action != nil {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 20))
-                        .foregroundColor(TVColors.textSecondary)
+                        .foregroundColor(isFocused ? .white : TVColors.textSecondary)
                 }
             }
             .padding(.vertical, 10)
@@ -210,9 +210,9 @@ struct TVSettingsToggleRow: View {
     let title: String
     let subtitle: String
     @Binding var isOn: Bool
-    
+
     @FocusState private var isFocused: Bool
-    
+
     var body: some View {
         Button(action: { isOn.toggle() }) {
             HStack(spacing: 20) {
@@ -220,25 +220,25 @@ struct TVSettingsToggleRow: View {
                     .font(.system(size: 28))
                     .foregroundColor(.accentColor)
                     .frame(width: 40)
-                
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(TVColors.textPrimary)
-                    
+                        .foregroundColor(isFocused ? .white : TVColors.textPrimary)
+
                     Text(subtitle)
                         .font(.system(size: 18))
-                        .foregroundColor(TVColors.textSecondary)
+                        .foregroundColor(isFocused ? .white.opacity(0.8) : TVColors.textSecondary)
                 }
-                
+
                 Spacer()
-                
+
                 // Custom toggle for better TV visibility
                 ZStack {
                     Capsule()
                         .fill(isOn ? Color.green : Color.gray.opacity(0.3))
                         .frame(width: 70, height: 40)
-                    
+
                     Circle()
                         .fill(Color.white)
                         .frame(width: 32, height: 32)
@@ -254,6 +254,35 @@ struct TVSettingsToggleRow: View {
         }
         .buttonStyle(.plain)
         .focused($isFocused)
+    }
+}
+
+/// Non-focusable informational row (for display-only items like Documentation URL, Version)
+struct TVSettingsInfoRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 20) {
+            Image(systemName: icon)
+                .font(.system(size: 28))
+                .foregroundColor(TVColors.textSecondary.opacity(0.6))
+                .frame(width: 40)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(TVColors.textSecondary)
+
+                Text(subtitle)
+                    .font(.system(size: 18))
+                    .foregroundColor(TVColors.textSecondary.opacity(0.7))
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 10)
     }
 }
 

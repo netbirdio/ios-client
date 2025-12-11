@@ -84,7 +84,8 @@ struct TVPeerListContent: View {
                     selected: $viewModel.peerViewModel.selectionFilter
                 )
                 .padding(.horizontal, 50)
-                
+                .padding(.bottom, 30)
+
                 // Peer list (scrollable, focus-navigable)
                 ScrollView {
                     LazyVStack(spacing: 15) {
@@ -96,6 +97,7 @@ struct TVPeerListContent: View {
                             )
                         }
                     }
+                    .padding(.top, 15)
                     .padding(.horizontal, 50)
                     .padding(.bottom, 50)
                 }
@@ -260,9 +262,9 @@ struct TVDetailRow: View {
 struct TVFilterBar: View {
     let options: [String]
     @Binding var selected: String
-    
+
     var body: some View {
-        HStack(spacing: 15) {
+        HStack(spacing: 35) {
             ForEach(options, id: \.self) { option in
                 TVFilterButton(
                     title: option,
@@ -279,24 +281,22 @@ struct TVFilterButton: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
-    
+
     @FocusState private var isFocused: Bool
-    
+
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .white : TVColors.textSecondary)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
+                .font(.system(size: 22, weight: isSelected || isFocused ? .semibold : .regular))
+                .foregroundColor(isSelected || isFocused ? .white : TVColors.textSecondary)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 14)
                 .background(
                     Capsule()
-                        .fill(isSelected ? Color.accentColor : TVColors.bgPrimary)
+                        .fill(isSelected ? Color.accentColor : (isFocused ? Color.gray.opacity(0.5) : TVColors.bgPrimary))
                 )
-                .overlay(
-                    Capsule()
-                        .stroke(isFocused ? Color.white : Color.clear, lineWidth: 3)
-                )
+                .scaleEffect(isFocused ? 1.05 : 1.0)
+                .animation(.easeInOut(duration: 0.15), value: isFocused)
         }
         .buttonStyle(.plain)
         .focused($isFocused)

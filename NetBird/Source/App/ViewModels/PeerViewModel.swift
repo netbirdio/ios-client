@@ -42,9 +42,6 @@ class PeerViewModel: ObservableObject {
             return displayedPeersBackup
         } else {
             displayedPeersBackup = filteredPeers
-            let conn = filteredPeers.filter{ peer in
-                peer.connStatus == "Connected"
-            }
             return filteredPeers
         }
     }
