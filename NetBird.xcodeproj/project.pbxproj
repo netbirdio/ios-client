@@ -27,6 +27,10 @@
 		443782D52EDF29A800F9FA94 /* StatusDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81A62AD5504B00CF830B /* StatusDetails.swift */; };
 		443782D62EDF29A800F9FA94 /* ClientState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50003BCB2AFD3B0C00E5EB6B /* ClientState.swift */; };
 		443782D72EDF29A800F9FA94 /* NetworkExtensionAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50216D922ACB2488009574C9 /* NetworkExtensionAdapter.swift */; };
+		445B5F732EECAE32008932B8 /* GlobalConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */; };
+		445B5F742EECAE4E008932B8 /* EnvVarPackager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */; };
+		445B5F752EECAF01008932B8 /* GlobalConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */; };
+		445B5F762EECAF02008932B8 /* EnvVarPackager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */; };
 		44DCF5A62EDF45C00026078E /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
 		44DCF5A72EDF45C00026078E /* NetBirdSDK.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		44DCF5AC2EDF45FC0026078E /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
@@ -136,6 +140,10 @@
 		F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 		F1258DEA2ED7B7D600C0D205 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE92ED7B7D200C0D205 /* Extensions.swift */; };
 		F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292042EDE5608001D91B8 /* JustifiedText.swift */; };
+		F1B292072EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */; };
+		F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */; };
+		F1B2920A2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */; };
+		F1B2920B2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -275,6 +283,8 @@
 		F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerViewModel.swift; sourceTree = "<group>"; };
 		F1258DE92ED7B7D200C0D205 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		F1B292042EDE5608001D91B8 /* JustifiedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JustifiedText.swift; sourceTree = "<group>"; };
+		F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvVarPackager.swift; sourceTree = "<group>"; };
+		F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalConstants.swift; sourceTree = "<group>"; };
 		F8BCB110545747678AA5A9C2 /* TVServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVServerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -464,6 +474,8 @@
 		50C727EA2A82479B006E898D /* NetbirdKit */ = {
 			isa = PBXGroup;
 			children = (
+				F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */,
+				F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */,
 				50245A292A7BDB590034792B /* Preferences.swift */,
 				50245A2D2A7BDC470034792B /* NetworkChangeListener.swift */,
 				50CD81612AD0595E00CF830B /* DNSManager.swift */,
@@ -802,6 +814,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				445B5F752EECAF01008932B8 /* GlobalConstants.swift in Sources */,
+				445B5F762EECAF02008932B8 /* EnvVarPackager.swift in Sources */,
 				443782D02EDF29A800F9FA94 /* Device.swift in Sources */,
 				443782D12EDF29A800F9FA94 /* Preferences.swift in Sources */,
 				443782D42EDF29A800F9FA94 /* RoutesSelectionDetails.swift in Sources */,
@@ -831,8 +845,10 @@
 			files = (
 				44F3E3982EE2F89200C87FEC /* NetworkChangeListener.swift in Sources */,
 				44F3E38B2EE214D300C87FEC /* PacketTunnelProviderSettingsManager.swift in Sources */,
+				445B5F742EECAE4E008932B8 /* EnvVarPackager.swift in Sources */,
 				44F3E38D2EE2151100C87FEC /* Device.swift in Sources */,
 				44F3E38E2EE2151100C87FEC /* RoutesSelectionDetails.swift in Sources */,
+				445B5F732EECAE32008932B8 /* GlobalConstants.swift in Sources */,
 				44F3E38F2EE2151100C87FEC /* DNSManager.swift in Sources */,
 				44F3E3902EE2151100C87FEC /* StatusDetails.swift in Sources */,
 				44F3E3912EE2151100C87FEC /* ClientState.swift in Sources */,
@@ -854,6 +870,7 @@
 				505118D12AD96ECA003027D3 /* key.c in Sources */,
 				50213A2D2A8D0AA30031D993 /* Preferences.swift in Sources */,
 				50CD81A82AD5504B00CF830B /* StatusDetails.swift in Sources */,
+				F1B2920B2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */,
 				50003BCA2AFD2F5E00E5EB6B /* ConnectionListener.swift in Sources */,
 				50213A262A8D0A870031D993 /* NetworkChangeListener.swift in Sources */,
 				50CD81502AD0355000CF830B /* PacketTunnelProviderSettingsManager.swift in Sources */,
@@ -861,6 +878,7 @@
 				50CD81B12AD5B94D00CF830B /* PeerCard.swift in Sources */,
 				50C78AD12A82BBFD006E898D /* Device.swift in Sources */,
 				505118CF2AD96ECA003027D3 /* x25519.c in Sources */,
+				F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -894,6 +912,7 @@
 				508BD8452AF04A990055E415 /* SafariView.swift in Sources */,
 				F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */,
 				505118D02AD96ECA003027D3 /* key.c in Sources */,
+				F1B292072EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */,
 				50E608262A79968500BAF09B /* AdvancedView.swift in Sources */,
 				50E608242A79966600BAF09B /* AboutView.swift in Sources */,
 				50CD81622AD0595E00CF830B /* DNSManager.swift in Sources */,
@@ -905,6 +924,7 @@
 				50003BC72AFBD7F200E5EB6B /* NetBirdAdapter.swift in Sources */,
 				F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */,
 				50E608132A7958B100BAF09B /* MainViewModel.swift in Sources */,
+				F1B2920A2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

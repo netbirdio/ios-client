@@ -98,7 +98,9 @@ class ViewModel: ObservableObject {
             UserDefaults.standard.synchronize()
         }
     }
-    
+    @Published var forceRelayConnection = true
+    @Published var showForceRelayAlert = false
+
     /// Preferences are loaded lazily on first access to avoid blocking app startup.
     /// On tvOS, SDK initialization is expensive (generates WireGuard/SSH keys) and
     /// should only happen when actually needed.
@@ -131,6 +133,9 @@ class ViewModel: ObservableObject {
         // These will be loaded lazily when the settings view is accessed.
         // self.rosenpassEnabled = self.getRosenpassEnabled()
         // self.rosenpassPermissive = self.getRosenpassPermissive()
+
+        // forceRelayConnection uses UserDefaults (not SDK), so it's safe to load during init
+        self.forceRelayConnection = self.getForcedRelayConnectionEnabled()
 
         $setupKey
             .removeDuplicates()
@@ -388,7 +393,6 @@ class ViewModel: ObservableObject {
         return result.boolValue
     }
 
-
     func getRosenpassPermissive() -> Bool {
         guard let preferences = preferences else {
             print("getRosenpassPermissive: Preferences not available")
@@ -404,7 +408,6 @@ class ViewModel: ObservableObject {
         return result.boolValue
     }
 
-
     func setRosenpassPermissive(permissive: Bool) {
         guard let preferences = preferences else {
             print("setRosenpassPermissive: Preferences not available")
@@ -416,6 +419,25 @@ class ViewModel: ObservableObject {
         } catch {
             print("Failed to update rosenpass permissive settings")
         }
+    }
+    
+    func setForcedRelayConnection(isEnabled: Bool) {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(isEnabled, forKey: GlobalConstants.keyForceRelayConnection)
+        self.forceRelayConnection = isEnabled
+        self.showForceRelayAlert = true
+    }
+    
+    func getForcedRelayConnectionEnabled() -> Bool {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        #if os(iOS)
+        userDefaults?.register(defaults: [GlobalConstants.keyForceRelayConnection: true])
+        return userDefaults?.bool(forKey: GlobalConstants.keyForceRelayConnection) ?? true
+        #else
+        // forced relay battery optimization not need on Apple Tv
+        userDefaults?.register(defaults: [GlobalConstants.keyForceRelayConnection: false])
+        return userDefaults?.bool(forKey: GlobalConstants.keyForceRelayConnection) ?? false
+        #endif
     }
     
     func getDefaultStatus() -> StatusDetails {
