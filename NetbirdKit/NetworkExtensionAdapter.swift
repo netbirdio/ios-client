@@ -366,8 +366,9 @@ public class NetworkExtensionAdapter: ObservableObject {
             // Values already captured on pollingQueue, use them directly
             intervalToUse = providedInterval
             backgroundStateToUse = providedBackgroundState
-            // Update lastTimerInterval on pollingQueue
-            pollingQueue.async { [weak self] in
+            // Update lastTimerInterval synchronously to prevent race condition
+            // This is safe because we're not in a deadlock situation (values already captured)
+            pollingQueue.sync { [weak self] in
                 guard let self = self else { return }
                 self.lastTimerInterval = providedInterval
             }
