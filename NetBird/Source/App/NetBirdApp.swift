@@ -55,15 +55,6 @@ struct NetBirdApp: App {
                         break
                     }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) {_ in
-                    print("App is active!")
-                    viewModel.checkExtensionState()
-                    viewModel.startPollingDetails()
-                }
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) {_ in
-                    print("App is inactive!")
-                    viewModel.stopPollingDetails()
-                }
         }
     }
 }
