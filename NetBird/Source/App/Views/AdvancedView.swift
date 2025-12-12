@@ -10,7 +10,6 @@ import SwiftUI
 struct AdvancedView: View {
     @EnvironmentObject var viewModel: ViewModel
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
-        
     
     var body: some View {
         ZStack {
@@ -32,7 +31,7 @@ struct AdvancedView: View {
                         .padding(.top, 3)
                         .fixedSize(horizontal: false, vertical: true)
                     
-                    CustomTextField(placeholder: "Add a pre-shared key", text: $viewModel.presharedKey, secure: $viewModel.presharedKeySecure)
+                    CustomTextField(placeholder: "Add a pre-shared key", text: $viewModel.presharedKey, secure: $viewModel.presharedKeySecure, height: 48)
                         .padding(.top, 3)
                         .onChange(of: viewModel.presharedKey) { value in
                             checkForValidPresharedKey(text: value)
@@ -61,7 +60,7 @@ struct AdvancedView: View {
                         .padding([.top, .bottom])
                     
                     Toggle(isOn: $viewModel.traceLogsEnabled) {
-                        Text("Enable Trace logs.")
+                        Text("Enable Trace logs")
                             .multilineTextAlignment(.leading)
                             .font(.system(size: 18, weight: .regular))
                             .foregroundColor(Color("TextSecondary"))
@@ -79,7 +78,7 @@ struct AdvancedView: View {
                         .padding([.top, .bottom])
                     
                     Toggle(isOn: $viewModel.rosenpassEnabled) {
-                        Text("Enable Rosenpass.")
+                        Text("Enable Rosenpass")
                             .multilineTextAlignment(.leading)
                             .font(.system(size: 18, weight: .regular))
                             .foregroundColor(Color("TextSecondary"))
@@ -95,7 +94,7 @@ struct AdvancedView: View {
                     }
                     
                     Toggle(isOn: $viewModel.rosenpassPermissive) {
-                        Text("Enable Rosenpass permissive mode.")
+                        Text("Enable Rosenpass permissive mode")
                             .multilineTextAlignment(.leading)
                             .font(.system(size: 18, weight: .regular))
                             .foregroundColor(Color("TextSecondary"))
@@ -110,6 +109,28 @@ struct AdvancedView: View {
                         viewModel.setRosenpassPermissive(permissive: value)
                     }
                     
+                    Divider()
+                        .padding([.top, .bottom])
+                    
+                    Text("Network & Security")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(Color("TextPrimary"))
+                        .padding(.top, 8)
+                        .fixedSize(horizontal: false, vertical: true)
+                    
+                    Toggle(isOn: $viewModel.forceRelayConnection) {
+                        Text("Force relay connection")
+                            .multilineTextAlignment(.leading)
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(Color("TextSecondary"))
+                            .padding(.top, 3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: .orange))
+                    .onChange(of: viewModel.forceRelayConnection) { value in
+                        viewModel.setForcedRelayConnection(isEnabled: value)
+                    }
+                    
                     Spacer()
                 }
                 .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.10)
@@ -117,19 +138,16 @@ struct AdvancedView: View {
             }
             .ignoresSafeArea(.keyboard) // Prevents keyboard from shifting views up
             
-            if viewModel.showLogLevelChangedAlert {
-                Color.black.opacity(0.4)
-                    .edgesIgnoringSafeArea(.all)
-                    .onTapGesture {
-                        viewModel.buttonLock = true
-                        viewModel.showLogLevelChangedAlert = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            viewModel.buttonLock = false
-                        }
-                    }
-                
-                LogLevelAlert(viewModel: viewModel, isPresented: $viewModel.showLogLevelChangedAlert)
-                    .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+            alertOverlay(isPresented: viewModel.showLogLevelChangedAlert, onDismiss: {
+                viewModel.showLogLevelChangedAlert = false
+            }) {
+                LogLevelAlert()
+            }
+
+            alertOverlay(isPresented: viewModel.showForceRelayAlert, onDismiss: {
+                viewModel.showForceRelayAlert = false
+            }) {
+                ForceRelayAlert()
             }
         }
         .onAppear {
@@ -146,6 +164,28 @@ struct AdvancedView: View {
         }
     }
     
+    @ViewBuilder
+    private func alertOverlay<Content: View>(
+        isPresented: Bool,
+        onDismiss: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if isPresented {
+            Color.black.opacity(0.4)
+                .edgesIgnoringSafeArea(.all)
+                .onTapGesture {
+                    viewModel.buttonLock = true
+                    onDismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        viewModel.buttonLock = false
+                    }
+                }
+
+            content()
+                .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+        }
+    }
+
     func shareButtonTapped() {
         let fileManager = FileManager.default
         guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") else {
@@ -241,10 +281,41 @@ struct AdvancedView: View {
     }
 }
 
+struct ForceRelayAlert: View {
+    @EnvironmentObject var viewModel: ViewModel
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image("exclamation-circle")
+                .renderingMode(.template)
+                .padding(.top, 20)
+                .foregroundColor(Color.accentColor)
+            Text("To apply the setting, you will need to reconnect.")
+                .foregroundColor(Color("TextAlert"))
+                .multilineTextAlignment(.center)
+            HStack {
+                Spacer()
+                Button(action: {
+                    viewModel.showForceRelayAlert = false
+                }) {
+                    Text("OK")
+                        .padding()
+                        .foregroundColor(Color.accentColor)
+                }
+                .background(Color.clear)
+                .padding(.trailing)
+            }
+        }
+        .padding()
+        .background(Color("BgSideDrawer"))
+        .cornerRadius(15)
+        .shadow(radius: 10)
+    }
+}
+
 struct LogLevelAlert: View {
-    @StateObject var viewModel: ViewModel
-    @Binding var isPresented: Bool
-    
+    @EnvironmentObject var viewModel: ViewModel
+
     var body: some View {
         VStack(spacing: 20) {
             Image("exclamation-circle")
@@ -256,7 +327,7 @@ struct LogLevelAlert: View {
                 .foregroundColor(Color("TextAlert"))
                 .multilineTextAlignment(.center)
             SolidButton(text: "Confirm") {
-                isPresented.toggle()
+                viewModel.showLogLevelChangedAlert = false
             }
             .padding(.top, 20)
         }

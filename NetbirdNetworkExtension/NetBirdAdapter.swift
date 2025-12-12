@@ -97,11 +97,16 @@ public class NetBirdAdapter {
     }
     
     public func start(completionHandler: @escaping (Error?) -> Void) {
+        // Export env vars here.
         DispatchQueue.global().async {
             do {
                 let connectionListener = ConnectionListener(adapter: self, completionHandler: completionHandler)
                 self.client.setConnectionListener(connectionListener)
-                try self.client.run(self.tunnelFileDescriptor ?? 0, interfaceName: self.interfaceName)
+                
+                let envList = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName).flatMap { EnvVarPackager.getEnvironmentVariables(defaults: $0)
+                }
+                
+                try self.client.run(self.tunnelFileDescriptor ?? 0, interfaceName: self.interfaceName, envList: envList)
             } catch {
                 completionHandler(NSError(domain: "io.netbird.NetbirdNetworkExtension", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Netbird client startup failed."]))
                 self.stop()

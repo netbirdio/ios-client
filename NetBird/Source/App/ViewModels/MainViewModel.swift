@@ -55,6 +55,9 @@ class ViewModel: ObservableObject {
             UserDefaults.standard.synchronize()
         }
     }
+    @Published var forceRelayConnection = true
+    @Published var showForceRelayAlert = false
+    
     var preferences = Preferences.newPreferences()
     var buttonLock = false
     let defaults = UserDefaults.standard
@@ -74,6 +77,7 @@ class ViewModel: ObservableObject {
         self.routeViewModel = RoutesViewModel(networkExtensionAdapter: networkExtensionAdapter)
         self.rosenpassEnabled = self.getRosenpassEnabled()
         self.rosenpassPermissive = self.getRosenpassPermissive()
+        self.forceRelayConnection = self.getForcedRelayConnectionEnabled()
         
         $setupKey
             .removeDuplicates()
@@ -258,7 +262,6 @@ class ViewModel: ObservableObject {
         return result.boolValue
     }
     
-    
     func getRosenpassPermissive() -> Bool {
         var result = ObjCBool(false)
         do {
@@ -270,7 +273,6 @@ class ViewModel: ObservableObject {
         return result.boolValue
     }
     
-    
     func setRosenpassPermissive(permissive: Bool) {
         preferences.setRosenpassPermissive(permissive)
         do {
@@ -278,6 +280,19 @@ class ViewModel: ObservableObject {
         } catch {
             print("Failed to update rosenpass permissive settings")
         }
+    }
+    
+    func setForcedRelayConnection(isEnabled: Bool) {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(isEnabled, forKey: GlobalConstants.keyForceRelayConnection)
+        self.forceRelayConnection = isEnabled
+        self.showForceRelayAlert = true
+    }
+    
+    func getForcedRelayConnectionEnabled() -> Bool {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.register(defaults: [GlobalConstants.keyForceRelayConnection: true])
+        return userDefaults?.bool(forKey: GlobalConstants.keyForceRelayConnection) ?? true
     }
     
     func getDefaultStatus() -> StatusDetails {
