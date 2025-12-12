@@ -350,8 +350,10 @@ public class NetworkExtensionAdapter: ObservableObject {
         
         // Determine polling interval based on app state - must read from pollingQueue to avoid race conditions
         var interval: TimeInterval = minPollingInterval
+        var backgroundState: Bool = false
         pollingQueue.sync {
-            interval = isInBackground ? backgroundPollingInterval : currentPollingInterval
+            backgroundState = isInBackground
+            interval = backgroundState ? backgroundPollingInterval : currentPollingInterval
             lastTimerInterval = interval
         }
         
@@ -370,7 +372,7 @@ public class NetworkExtensionAdapter: ObservableObject {
             // Add timer to main RunLoop
             RunLoop.main.add(self.timer, forMode: .common)
             
-            print("Started polling with interval: \(interval)s (background: \(self.isInBackground))")
+            print("Started polling with interval: \(interval)s (background: \(backgroundState))")
         }
     }
     
