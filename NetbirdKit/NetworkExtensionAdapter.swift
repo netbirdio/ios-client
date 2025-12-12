@@ -430,7 +430,8 @@ public class NetworkExtensionAdapter: ObservableObject {
     
     func setBackgroundMode(_ inBackground: Bool) {
         // All state mutations must happen on pollingQueue to prevent race conditions
-        pollingQueue.async { [weak self] in
+        // Use sync to ensure state is updated before startTimer reads it (fixes timing issue)
+        pollingQueue.sync { [weak self] in
             guard let self = self else { return }
             let wasInBackground = self.isInBackground
             self.isInBackground = inBackground
