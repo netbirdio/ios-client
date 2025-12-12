@@ -132,11 +132,15 @@ class ViewModel: ObservableObject {
                     self.lastExtensionStateCheck = now
                 }
                 
-                if self.extensionState == .disconnected && self.extensionStateText == "Connected" {
-                    self.showAuthenticationRequired = true
-                    self.extensionStateText = "Disconnected"
-                    // Reset flag when extension state changes to disconnected
+                // Reset stop guard when extension disconnects (unconditional to avoid coupling to extensionStateText)
+                if self.extensionState == .disconnected {
                     self.hasStoppedForLoginFailure = false
+                    
+                    // UX logic: Update UI state if needed
+                    if self.extensionStateText == "Connected" {
+                        self.showAuthenticationRequired = true
+                        self.extensionStateText = "Disconnected"
+                    }
                 }
                 
                 if details.ip != self.ip || details.fqdn != self.fqdn || details.managementStatus != self.managementStatus
