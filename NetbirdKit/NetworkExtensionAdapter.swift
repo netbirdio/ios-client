@@ -20,6 +20,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     let decoder = PropertyListDecoder()
     
     // Battery optimization: Adaptive polling
+    // All state variables must be accessed only from pollingQueue to prevent race conditions
     private var currentPollingInterval: TimeInterval = 10.0 // Start with 10 seconds
     private var consecutiveStablePolls: Int = 0
     private var lastStatusHash: Int = 0
@@ -324,6 +325,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     
     private func restartTimerIfNeeded(completion: @escaping (StatusDetails) -> Void) {
+        // This function is called from pollingQueue, so we can safely access state variables
         // Only restart if interval changed significantly (more than 2 seconds difference)
         let targetInterval = isInBackground ? backgroundPollingInterval : currentPollingInterval
         
@@ -346,9 +348,12 @@ public class NetworkExtensionAdapter: ObservableObject {
         // Initial fetch
         self.fetchData(completion: completion)
         
-        // Determine polling interval based on app state
-        let interval = isInBackground ? backgroundPollingInterval : currentPollingInterval
-        lastTimerInterval = interval
+        // Determine polling interval based on app state - must read from pollingQueue to avoid race conditions
+        var interval: TimeInterval = minPollingInterval
+        pollingQueue.sync {
+            interval = isInBackground ? backgroundPollingInterval : currentPollingInterval
+            lastTimerInterval = interval
+        }
         
         // Create timer - must be on main thread for RunLoop
         DispatchQueue.main.async { [weak self] in
@@ -371,19 +376,27 @@ public class NetworkExtensionAdapter: ObservableObject {
     
     func stopTimer() {
         self.timer.invalidate()
-        self.consecutiveStablePolls = 0
-        self.currentPollingInterval = minPollingInterval
+        // Reset state variables - must be done on pollingQueue to avoid race conditions
+        pollingQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.consecutiveStablePolls = 0
+            self.currentPollingInterval = self.minPollingInterval
+        }
     }
     
     func setBackgroundMode(_ inBackground: Bool) {
-        let wasInBackground = isInBackground
-        isInBackground = inBackground
-        
-        // Restart timer with appropriate interval if state changed
-        if wasInBackground != inBackground && timer.isValid {
-            let interval = inBackground ? backgroundPollingInterval : currentPollingInterval
-            print("App state changed to \(inBackground ? "background" : "foreground"), adjusting polling interval to \(interval)s")
-            // Timer will be restarted on next fetchData call
+        // All state mutations must happen on pollingQueue to prevent race conditions
+        pollingQueue.async { [weak self] in
+            guard let self = self else { return }
+            let wasInBackground = self.isInBackground
+            self.isInBackground = inBackground
+            
+            // Restart timer with appropriate interval if state changed
+            if wasInBackground != inBackground {
+                let interval = inBackground ? self.backgroundPollingInterval : self.currentPollingInterval
+                print("App state changed to \(inBackground ? "background" : "foreground"), adjusting polling interval to \(interval)s")
+                // Timer will be restarted on next fetchData call via restartTimerIfNeeded
+            }
         }
     }
 
