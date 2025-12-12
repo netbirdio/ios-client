@@ -89,7 +89,7 @@ Open the Xcode project, and we are ready to go.
 
 ### Running on Apple TV
 
-> **Note:** The app cannot run in the tvOS simulator. To test the app, a physical device running tvOS 17.0 or later needs to be paired with Xcode
+> **Note:** The app cannot run in the tvOS simulator. To test the app, a physical device running tvOS 17.0 or later needs to be [paired with Xcode](https://support.apple.com/en-us/101262).
 
 ## Other project repositories
 
