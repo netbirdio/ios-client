@@ -311,6 +311,11 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
     
+    // Hash includes only core connectivity fields (ip, fqdn, managementStatus, peer.ip, peer.connStatus, peer count)
+    // and deliberately omits peer.relayed, peer.direct, peer.connStatusUpdate, and peer.routes.
+    // This hash is used to decide polling frequency for battery optimization: only major connectivity
+    // changes trigger fast (10s) polling, while secondary/visual-only updates use slower intervals.
+    // MainViewModel performs more detailed comparisons for UI updates.
     private func calculateStatusHash(_ status: StatusDetails) -> Int {
         var hasher = Hasher()
         hasher.combine(status.ip)
