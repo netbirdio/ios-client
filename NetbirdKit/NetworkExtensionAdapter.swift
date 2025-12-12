@@ -419,8 +419,9 @@ public class NetworkExtensionAdapter: ObservableObject {
     
     func stopTimer() {
         self.timer.invalidate()
-        // Reset state variables and set isPollingActive to false - must be done on pollingQueue to avoid race conditions
-        pollingQueue.async { [weak self] in
+        // Reset state variables and set isPollingActive to false synchronously to prevent race condition
+        // Must use sync to ensure flag is set before in-flight fetchData callbacks can check it
+        pollingQueue.sync { [weak self] in
             guard let self = self else { return }
             self.consecutiveStablePolls = 0
             self.currentPollingInterval = self.minPollingInterval
