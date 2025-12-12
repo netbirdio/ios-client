@@ -233,14 +233,10 @@ public class NetBirdAdapter {
         // Create the client with empty paths and load config from local storage instead.
         self.client = NetBirdSDKNewClient("", "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager)!
 
-        // Try to load config from extension-local storage first (set via IPC from main app)
-        // This is more reliable than shared UserDefaults which doesn't work on tvOS
-        var configJSON: String? = UserDefaults.standard.string(forKey: "netbird_config_json_local")
-
-        // Fall back to shared UserDefaults (may work in some cases)
-        if configJSON == nil {
-            configJSON = Preferences.loadConfigFromUserDefaults()
-        }
+        // Load config from extension-local storage (set via IPC from main app)
+        // Note: Shared App Group UserDefaults does NOT work on tvOS between app and extension
+        // due to sandbox restrictions. Config must be transferred via IPC.
+        let configJSON: String? = UserDefaults.standard.string(forKey: "netbird_config_json_local")
 
         if let configJSON = configJSON {
             let updatedConfig = Self.updateDeviceNameInConfig(configJSON, newName: deviceName)
@@ -417,17 +413,11 @@ public class NetBirdAdapter {
 
         // Use default management URL for tvOS, empty for iOS (which handles it via ServerView)
         #if os(tvOS)
-        // On tvOS, config may be stored in extension-local UserDefaults (via IPC) or shared UserDefaults.
-        // Try local first, then fall back to shared.
+        // On tvOS, config is stored in extension-local UserDefaults (transferred via IPC from main app).
+        // Note: Shared App Group UserDefaults does NOT work on tvOS due to sandbox restrictions.
         var managementURL = Self.defaultManagementURL
 
-        // First try extension-local storage (set via IPC from main app)
-        var configJSON: String? = UserDefaults.standard.string(forKey: "netbird_config_json_local")
-
-        // Fall back to shared UserDefaults
-        if configJSON == nil {
-            configJSON = Preferences.loadConfigFromUserDefaults()
-        }
+        let configJSON: String? = UserDefaults.standard.string(forKey: "netbird_config_json_local")
 
         if let configJSON = configJSON,
            let storedURL = Self.extractManagementURL(from: configJSON) {

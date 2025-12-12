@@ -69,13 +69,29 @@ struct TVMainView: View {
                         viewModel.networkExtensionAdapter.showBrowser = false
                     },
                     onComplete: {
+                        #if DEBUG
                         print("Login completed, starting VPN connection...")
+                        #endif
+                        viewModel.networkExtensionAdapter.showBrowser = false
                         viewModel.networkExtensionAdapter.startVPNConnection()
+                    },
+                    onError: { errorMessage in
+                        #if DEBUG
+                        print("Login error: \(errorMessage)")
+                        #endif
+                        // Error is displayed in the auth view - user can dismiss manually
                     },
                     checkLoginComplete: { completion in
                         viewModel.networkExtensionAdapter.checkLoginComplete { isComplete in
+                            #if DEBUG
                             print("TVMainView: checkLoginComplete returned \(isComplete)")
+                            #endif
                             completion(isComplete)
+                        }
+                    },
+                    checkLoginError: { completion in
+                        viewModel.networkExtensionAdapter.checkLoginError { errorMessage in
+                            completion(errorMessage)
                         }
                     }
                 )

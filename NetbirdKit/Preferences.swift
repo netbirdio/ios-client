@@ -8,6 +8,37 @@
 import Foundation
 import NetBirdSDK
 
+/// Preferences manages configuration file paths and UserDefaults-based config storage.
+///
+/// ## tvOS Config Storage Architecture
+///
+/// On tvOS, the standard App Group shared container does NOT work for IPC between the main app
+/// and the Network Extension due to sandbox restrictions. The error you'll see is:
+/// `Using kCFPreferencesAnyUser with a container is only allowed for System Containers`
+///
+/// To work around this, tvOS uses a different architecture:
+///
+/// ### Config Flow on tvOS:
+/// 1. **Main App** → User enters server URL in TVServerView
+/// 2. **Main App** → ServerViewModel saves config to shared UserDefaults (`saveConfigToUserDefaults`)
+///    - This step is for the main app's own reference only
+/// 3. **Main App** → NetworkExtensionAdapter sends config via IPC (`sendConfigToExtension`)
+///    - Uses `sendProviderMessage` with "SetConfig:{json}" format
+/// 4. **Extension** → PacketTunnelProvider receives config via `handleAppMessage`
+/// 5. **Extension** → Saves to extension-local UserDefaults (`UserDefaults.standard`)
+///    - Key: "netbird_config_json_local"
+///    - This is the authoritative source for the extension
+/// 6. **Extension** → NetBirdAdapter.init() loads from extension-local UserDefaults
+///
+/// ### Key Points:
+/// - Shared App Group UserDefaults does NOT work between app and extension on tvOS
+/// - Extension-local `UserDefaults.standard` is the authoritative config source for the extension
+/// - Config must be transferred via IPC using `sendProviderMessage`/`handleAppMessage`
+/// - The main app's shared UserDefaults is only for the app's own use (e.g., displaying current URL)
+///
+/// ### iOS Behavior:
+/// On iOS, file-based config storage works normally via the App Group container.
+/// The UserDefaults methods here are primarily for tvOS compatibility.
 class Preferences {
     #if os(tvOS)
     static let appGroupIdentifier = "group.io.netbird.app.tv"

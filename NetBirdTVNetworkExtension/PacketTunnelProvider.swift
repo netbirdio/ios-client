@@ -57,16 +57,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         #else
         logger.info("startTunnel: skipping file-based logging on tvOS (sandbox blocks writes)")
-        NSLog("NetBirdTV: skipping file-based logging on tvOS")
 
         // On tvOS, config is loaded from UserDefaults directly in NetBirdAdapter.init()
         // No need to restore to file - the adapter handles this internally.
         if Preferences.hasConfigInUserDefaults() {
             logger.info("startTunnel: tvOS - config found in UserDefaults, will be loaded by adapter")
-            NSLog("NetBirdTV: config found in UserDefaults")
         } else {
             logger.info("startTunnel: tvOS - no config in UserDefaults, login will be required")
-            NSLog("NetBirdTV: no config in UserDefaults")
         }
         #endif
 

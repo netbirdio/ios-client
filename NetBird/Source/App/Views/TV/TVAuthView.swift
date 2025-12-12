@@ -33,14 +33,23 @@ struct TVAuthView: View {
     /// Called when authentication completes (detected via polling)
     var onComplete: (() -> Void)?
 
+    /// Called when authentication fails (e.g., device code expires, server rejects)
+    var onError: ((String) -> Void)?
+
     /// Reference to check login status (async - calls completion with true if login is complete)
     var checkLoginComplete: ((@escaping (Bool) -> Void) -> Void)?
+
+    /// Reference to check for login errors (async - calls completion with error message or nil)
+    var checkLoginError: ((@escaping (String?) -> Void) -> Void)?
 
     /// Polling timer to check if login completed
     @State private var pollTimer: Timer?
 
     /// QR code image generated from login URL
     @State private var qrCodeImage: UIImage?
+
+    /// Error message to display if authentication fails
+    @State private var errorMessage: String?
 
     var body: some View {
         ZStack {
@@ -122,17 +131,37 @@ struct TVAuthView: View {
                         }
                     }
 
-                    // Loading indicator
-                    HStack(spacing: 15) {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(1.2)
+                    // Error message or loading indicator
+                    if let error = errorMessage {
+                        VStack(spacing: 15) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 36))
+                                .foregroundColor(.orange)
 
-                        Text("Waiting for sign-in...")
-                            .font(.system(size: 22))
-                            .foregroundColor(.gray)
+                            Text(error)
+                                .font(.system(size: 20))
+                                .foregroundColor(.orange)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: 400)
+                        }
+                        .padding(20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.orange.opacity(0.1))
+                        )
+                        .padding(.top, 20)
+                    } else {
+                        HStack(spacing: 15) {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(1.2)
+
+                            Text("Waiting for sign-in...")
+                                .font(.system(size: 22))
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.top, 20)
                     }
-                    .padding(.top, 20)
 
                     // Cancel button
                     Button(action: {
@@ -231,30 +260,59 @@ struct TVAuthView: View {
 
     /// Starts polling to check if authentication completed
     private func startPollingForCompletion() {
+        #if DEBUG
         print("TVAuthView: Starting polling for login completion")
+        #endif
         pollTimer?.invalidate()
 
-        // Capture the closures we need
+        // Capture the closures and bindings we need
+        // SwiftUI structs are value types, so we capture these by value
         let checkComplete = self.checkLoginComplete
+        let checkError = self.checkLoginError
         let onCompleteHandler = self.onComplete
+        let onErrorHandler = self.onError
 
         // Schedule timer on main run loop to ensure it fires
-        let timer = Timer(timeInterval: 2.0, repeats: true) { [self] timer in
+        let timer = Timer(timeInterval: 2.0, repeats: true) { timer in
+            #if DEBUG
             print("TVAuthView: Poll tick - checking login status via extension IPC...")
+            #endif
+
+            // First check for errors
+            if let checkError = checkError {
+                checkError { errorMsg in
+                    DispatchQueue.main.async {
+                        if let errorMsg = errorMsg {
+                            #if DEBUG
+                            print("TVAuthView: Login error detected: \(errorMsg)")
+                            #endif
+                            timer.invalidate()
+                            onErrorHandler?(errorMsg)
+                            // Don't auto-dismiss - let user see the error and cancel
+                            return
+                        }
+                    }
+                }
+            }
 
             guard let checkComplete = checkComplete else {
+                #if DEBUG
                 print("TVAuthView: No checkLoginComplete closure provided")
+                #endif
                 return
             }
 
             checkComplete { isComplete in
                 DispatchQueue.main.async {
+                    #if DEBUG
                     print("TVAuthView: Login complete = \(isComplete)")
+                    #endif
                     if isComplete {
+                        #if DEBUG
                         print("TVAuthView: Login detected as complete, dismissing auth view")
+                        #endif
                         timer.invalidate()
                         onCompleteHandler?()
-                        self.isPresented = false
                     }
                 }
             }
@@ -263,19 +321,25 @@ struct TVAuthView: View {
         pollTimer = timer
 
         // Fire immediately once to check current status
+        #if DEBUG
         print("TVAuthView: Performing initial login check...")
+        #endif
         guard let checkComplete = checkComplete else {
+            #if DEBUG
             print("TVAuthView: No checkLoginComplete closure provided")
+            #endif
             return
         }
         checkComplete { isComplete in
             DispatchQueue.main.async {
+                #if DEBUG
                 print("TVAuthView: Initial check - login complete = \(isComplete)")
+                #endif
                 if isComplete {
+                    #if DEBUG
                     print("TVAuthView: Login already complete, dismissing auth view")
-                    self.pollTimer?.invalidate()
+                    #endif
                     onCompleteHandler?()
-                    self.isPresented = false
                 }
             }
         }

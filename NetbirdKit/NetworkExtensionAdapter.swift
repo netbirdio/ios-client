@@ -304,7 +304,7 @@ public class NetworkExtensionAdapter: ObservableObject {
                 continuation.resume(returning: urlString)
             }
         }
-        
+
         self.loginURL = loginURLString
         self.showBrowser = true
     }
@@ -333,7 +333,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     func stop() -> Void {
         self.vpnManager?.connection.stopVPNTunnel()
     }
-    
+
     func login(completion: @escaping (String) -> Void) {
         if self.session == nil {
             logger.error("login: No session available for login")
@@ -424,6 +424,54 @@ public class NetworkExtensionAdapter: ObservableObject {
         } catch {
             print("checkLoginComplete: Failed to send message - \(error)")
             completion(false)
+        }
+    }
+
+    /// Check if there's a login error from the extension
+    /// Returns the error message via completion handler, or nil if no error
+    func checkLoginError(completion: @escaping (String?) -> Void) {
+        guard let session = self.session else {
+            completion(nil)
+            return
+        }
+
+        let messageString = "IsLoginComplete"
+        guard let messageData = messageString.data(using: .utf8) else {
+            completion(nil)
+            return
+        }
+
+        do {
+            try session.sendProviderMessage(messageData) { response in
+                if let response = response,
+                   let responseString = String(data: response, encoding: .utf8) {
+                    // Parse diagnostic format: "result|isExecuting|loginRequired|configExists|stateExists|lastResult|lastError"
+                    let parts = responseString.components(separatedBy: "|")
+                    if parts.count >= 7 {
+                        let lastResult = parts[5]
+                        let lastError = parts[6]
+                        // Only report error if lastResult is "error" and there's an actual error message
+                        if lastResult == "error" && !lastError.isEmpty {
+                            // Make the error message more user-friendly
+                            var friendlyError = lastError
+                            if lastError.contains("no peer auth method provided") {
+                                friendlyError = "This server doesn't support device code authentication. Please use a setup key instead."
+                            } else if lastError.contains("expired") || lastError.contains("token") {
+                                friendlyError = "The device code has expired. Please try again."
+                            } else if lastError.contains("denied") || lastError.contains("rejected") {
+                                friendlyError = "Authentication was denied. Please try again."
+                            }
+                            completion(friendlyError)
+                            return
+                        }
+                    }
+                    completion(nil)
+                } else {
+                    completion(nil)
+                }
+            }
+        } catch {
+            completion(nil)
         }
     }
 
