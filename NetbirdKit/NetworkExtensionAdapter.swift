@@ -332,36 +332,63 @@ public class NetworkExtensionAdapter: ObservableObject {
         // Check if we need to restart timer
         if abs(lastTimerInterval - targetInterval) > 2.0 {
             lastTimerInterval = targetInterval
+            // Capture state values here (on pollingQueue) to avoid deadlock
+            let intervalToUse = targetInterval
+            let backgroundStateToUse = isInBackground
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 if self.timer.isValid {
                     self.timer.invalidate()
                 }
-                self.startTimer(completion: completion)
+                // Pass values directly to avoid pollingQueue.sync call from main thread
+                self.startTimer(interval: intervalToUse, backgroundState: backgroundStateToUse, completion: completion)
             }
         }
     }
     
     func startTimer(completion: @escaping (StatusDetails) -> Void) {
+        startTimer(interval: nil, backgroundState: nil, completion: completion)
+    }
+    
+    private func startTimer(interval: TimeInterval?, backgroundState: Bool?, completion: @escaping (StatusDetails) -> Void) {
         self.timer.invalidate()
         
         // Initial fetch
         self.fetchData(completion: completion)
         
-        // Determine polling interval based on app state - must read from pollingQueue to avoid race conditions
-        var interval: TimeInterval = minPollingInterval
-        var backgroundState: Bool = false
-        pollingQueue.sync {
-            backgroundState = isInBackground
-            interval = backgroundState ? backgroundPollingInterval : currentPollingInterval
-            lastTimerInterval = interval
+        // Determine polling interval based on app state
+        // If values are provided (from restartTimerIfNeeded), use them to avoid deadlock
+        // Otherwise, read from pollingQueue (when called directly from main thread)
+        let intervalToUse: TimeInterval
+        let backgroundStateToUse: Bool
+        
+        if let providedInterval = interval, let providedBackgroundState = backgroundState {
+            // Values already captured on pollingQueue, use them directly
+            intervalToUse = providedInterval
+            backgroundStateToUse = providedBackgroundState
+            // Update lastTimerInterval on pollingQueue
+            pollingQueue.async { [weak self] in
+                guard let self = self else { return }
+                self.lastTimerInterval = providedInterval
+            }
+        } else {
+            // Called directly, must read from pollingQueue (but this is safe as we're not in a deadlock situation)
+            var intervalValue: TimeInterval = minPollingInterval
+            var backgroundValue: Bool = false
+            pollingQueue.sync {
+                backgroundValue = isInBackground
+                intervalValue = backgroundValue ? backgroundPollingInterval : currentPollingInterval
+                lastTimerInterval = intervalValue
+            }
+            intervalToUse = intervalValue
+            backgroundStateToUse = backgroundValue
         }
         
         // Create timer - must be on main thread for RunLoop
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
-            self.timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            self.timer = Timer(timeInterval: intervalToUse, repeats: true) { [weak self] _ in
                 guard let self = self else { return }
                 // Use background queue for actual network work
                 self.pollingQueue.async {
@@ -372,7 +399,7 @@ public class NetworkExtensionAdapter: ObservableObject {
             // Add timer to main RunLoop
             RunLoop.main.add(self.timer, forMode: .common)
             
-            print("Started polling with interval: \(interval)s (background: \(backgroundState))")
+            print("Started polling with interval: \(intervalToUse)s (background: \(backgroundStateToUse))")
         }
     }
     
