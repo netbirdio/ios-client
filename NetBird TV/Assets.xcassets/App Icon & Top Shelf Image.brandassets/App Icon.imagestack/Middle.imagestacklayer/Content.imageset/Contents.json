@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "netbird-tvos-icon.png",
       "idiom" : "tv",
       "scale" : "1x"
     },

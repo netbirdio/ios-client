@@ -89,25 +89,7 @@ Open the Xcode project, and we are ready to go.
 
 ### Running on Apple TV
 
-> **Note:** The app cannot run in the tvOS simulator. To test on Apple TV:
->
-> 1. **Pair Apple TV with Xcode:**
->    - Ensure your Mac and Apple TV are on the same Wi-Fi network
->    - On Apple TV: Settings → Remotes and Devices → Remote App and Devices
->    - In Xcode: Window → Devices and Simulators (⇧⌘2)
->    - Select your Apple TV from "Discovered" and click "Pair"
->    - Enter the 6-digit code shown on your Apple TV
->
-> 2. **Enable Developer Mode on Apple TV (tvOS 16+):**
->    - Settings → Privacy & Security → Developer Mode → ON
->    - Apple TV will restart
->
-> 3. **Build and Run:**
->    - Select the "NetBird TV" scheme in Xcode
->    - Choose your paired Apple TV as the run destination
->    - Press ⌘R to build and run
->
-> **Minimum Requirement:** Apple TV must be running tvOS 17.0 or later for VPN support.
+> **Note:** The app cannot run in the tvOS simulator. To test the app, a physical device running tvOS 17.0 or later needs to be paired with Xcode
 
 ## Other project repositories
 
