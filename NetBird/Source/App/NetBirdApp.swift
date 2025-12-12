@@ -46,9 +46,12 @@ struct NetBirdApp: App {
                     case .background:
                         print("App moved to background")
                         viewModel.networkExtensionAdapter.setBackgroundMode(true)
+                        viewModel.stopPollingDetails()
                     case .active:
                         print("App became active")
                         viewModel.networkExtensionAdapter.setBackgroundMode(false)
+                        viewModel.checkExtensionState()
+                        viewModel.startPollingDetails()
                     case .inactive:
                         break
                     @unknown default:
