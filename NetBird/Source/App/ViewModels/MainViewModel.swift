@@ -121,7 +121,7 @@ class ViewModel: ObservableObject {
             guard let self = self else { return }
             
             // Ensure all UI updates happen on the main thread
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 // Battery optimization: Only check extension state periodically, not on every poll
                 let now = Date()
                 if now.timeIntervalSince(self.lastExtensionStateCheck) >= self.extensionStateCheckInterval {
