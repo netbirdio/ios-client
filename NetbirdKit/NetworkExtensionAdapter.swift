@@ -260,7 +260,16 @@ public class NetworkExtensionAdapter: ObservableObject {
                 try session.sendProviderMessage(messageData) { [weak self] response in
                     guard let self = self else { return }
                     
-                    if let response = response {
+                    // Serialize all response handling and state mutations through pollingQueue
+                    self.pollingQueue.async { [weak self] in
+                        guard let self = self else { return }
+                        
+                        guard let response = response else {
+                            let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
+                            completion(defaultStatus)
+                            return
+                        }
+                        
                         do {
                             let decodedStatus = try self.decoder.decode(StatusDetails.self, from: response)
                             
@@ -286,14 +295,11 @@ public class NetworkExtensionAdapter: ObservableObject {
                             self.restartTimerIfNeeded(completion: completion)
                             
                             completion(decodedStatus)
-                            return
                         } catch {
                             print("Failed to decode status details.")
+                            let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
+                            completion(defaultStatus)
                         }
-                    } else {
-                        let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
-                        completion(defaultStatus)
-                        return
                     }
                 }
             } catch {
