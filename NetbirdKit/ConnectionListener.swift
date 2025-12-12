@@ -36,6 +36,7 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
     
     func onDisconnected() {
         adapter.clientState = .disconnected
+        adapter.notifyStopCompleted()
     }
     
     func onDisconnecting() {

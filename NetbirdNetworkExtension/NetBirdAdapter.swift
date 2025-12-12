@@ -58,6 +58,8 @@ public class NetBirdAdapter {
         return nil
     }
     
+    private var stopCompletionHandler: (() -> Void)?
+    
     // MARK: - Initialization
 
     /// Designated initializer.
@@ -123,7 +125,21 @@ public class NetBirdAdapter {
         return self.client.loginForMobile()
     }
     
-    public func stop() {
+    public func stop(completionHandler: (() -> Void)? = nil) {
+        self.stopCompletionHandler = completionHandler
         self.client.stop()
+        
+        // Fallback timeout (15 seconds) in case onDisconnected doesn't fire
+        if completionHandler != nil {
+            DispatchQueue.global().asyncAfter(deadline: .now() + 15) { [weak self] in
+              self?.notifyStopCompleted()
+            }
+        }
+    }
+    
+    func notifyStopCompleted() {
+        guard let handler = self.stopCompletionHandler else { return }
+        self.stopCompletionHandler = nil
+        handler()
     }
 }

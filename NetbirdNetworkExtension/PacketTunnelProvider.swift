@@ -147,10 +147,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func restartClient() {
-        adapter.stop()
-        adapter.start { error in
-            if let error = error {
-                print("Error restarting client: \(error.localizedDescription)")
+        adapter.stop { [weak self] in
+            self?.adapter.start { error in
+                if let error = error {
+                    Analytics.logEvent("packet_tunnel_provider", parameters: [
+                        "level": "ERROR",
+                        "method": "restartClient",
+                        "error" : error.localizedDescription
+                    ])
+                    print("Error restarting client: \(error.localizedDescription)")
+                }
             }
         }
     }
