@@ -26,6 +26,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     private var lastStatusHash: Int = 0
     private var isInBackground: Bool = false
     private var lastTimerInterval: TimeInterval = 10.0 // Track last set interval
+    private var isPollingActive: Bool = false // Prevents in-flight responses from recreating timer after stopTimer()
     private let pollingQueue = DispatchQueue(label: "com.netbird.polling", qos: .utility)
     
     // Polling intervals (in seconds)
@@ -331,6 +332,11 @@ public class NetworkExtensionAdapter: ObservableObject {
     
     private func restartTimerIfNeeded(completion: @escaping (StatusDetails) -> Void) {
         // This function is called from pollingQueue, so we can safely access state variables
+        // Bail early if polling was stopped to prevent in-flight responses from recreating timer
+        guard isPollingActive else {
+            return
+        }
+        
         // Only restart if interval changed significantly (more than 2 seconds difference)
         let targetInterval = isInBackground ? backgroundPollingInterval : currentPollingInterval
         
@@ -411,11 +417,12 @@ public class NetworkExtensionAdapter: ObservableObject {
     
     func stopTimer() {
         self.timer.invalidate()
-        // Reset state variables - must be done on pollingQueue to avoid race conditions
+        // Reset state variables and set isPollingActive to false - must be done on pollingQueue to avoid race conditions
         pollingQueue.async { [weak self] in
             guard let self = self else { return }
             self.consecutiveStablePolls = 0
             self.currentPollingInterval = self.minPollingInterval
+            self.isPollingActive = false
         }
     }
     
