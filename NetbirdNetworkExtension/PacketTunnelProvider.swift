@@ -315,33 +315,58 @@ func initializeLogging(loglevel: String) {
     var error: NSError?
     var success = false
     
-    let logMessage = "Starting new log file from extension" + "\n"
+    let logMessage = "\n--- Engine restart at \(Date()) ---\n"
+    let maxLogSize: UInt64 = 5 * 1024 * 1024  // 5MB
+    let keepSize: UInt64 = 2 * 1024 * 1024    // Keep last 2MB after truncation
         
     guard let logURLValid = logURL else {
             print("Failed to get the log file URL.")
             return
-        }
+    }
     
-    if fileManager.fileExists(atPath: logURLValid.path) {
-        if let fileHandle = try? FileHandle(forWritingTo: logURLValid) {
-            do {
-                try "".write(to: logURLValid, atomically: true, encoding: .utf8)
-            } catch {
-                print("Error handling the log file: \(error)")
-            }
-            if let data = logMessage.data(using: .utf8) {
-                fileHandle.write(data)
-            }
-            fileHandle.closeFile()
-        } else {
-            print("Failed to open the log file for writing.")
+//    if fileManager.fileExists(atPath: logURLValid.path) {
+//        if let fileHandle = try? FileHandle(forWritingTo: logURLValid) {
+//            do {
+//                try "".write(to: logURLValid, atomically: true, encoding: .utf8)
+//            } catch {
+//                print("Error handling the log file: \(error)")
+//            }
+//            if let data = logMessage.data(using: .utf8) {
+//                fileHandle.write(data)
+//            }
+//            fileHandle.closeFile()
+//        } else {
+//            print("Failed to open the log file for writing.")
+//        }
+//    } else {
+//        do {
+//            try logMessage.write(to: logURLValid, atomically: true, encoding: .utf8)
+//        } catch {
+//            print("Failed to write to the log file: \(error.localizedDescription)")
+//        }
+//    }
+    
+    // Create file if it doesn't exist
+    if !fileManager.fileExists(atPath: logURLValid.path) {
+        fileManager.createFile(atPath: logURLValid.path, contents: nil)
+    }
+    
+    // Check file size and truncate if needed
+    if let attributes = try? fileManager.attributesOfItem(atPath: logURLValid.path),
+       let fileSize = attributes[.size] as? UInt64,
+       fileSize > maxLogSize {
+            truncateLogFile(at: logURLValid, keepingLast: keepSize)
+    }
+
+    // Append to existing file
+    if let fileHandle = try? FileHandle(forWritingTo: logURLValid) {
+        fileHandle.seekToEndOfFile()
+        
+        if let data = logMessage.data(using: .utf8) {
+            fileHandle.write(data)
         }
-    } else {
-        do {
-            try logMessage.write(to: logURLValid, atomically: true, encoding: .utf8)
-        } catch {
-            print("Failed to write to the log file: \(error.localizedDescription)")
-        }
+        
+        fileHandle.closeFile()
     }
     
     if let logPath = logURL?.path {
@@ -351,3 +376,35 @@ func initializeLogging(loglevel: String) {
        print("Failed to initialize log: \(actualError.localizedDescription)")
    }
 }
+
+func truncateLogFile(at url: URL, keepingLast bytesToKeep: UInt64) {
+      do {
+          let fileHandle = try FileHandle(forReadingFrom: url)
+          let fileSize = fileHandle.seekToEndOfFile()
+
+          if fileSize <= bytesToKeep {
+              fileHandle.closeFile()
+              return
+          }
+
+          // Seek to position where we want to start keeping
+          let startPosition = fileSize - bytesToKeep
+          fileHandle.seek(toFileOffset: startPosition)
+          let dataToKeep = fileHandle.readDataToEndOfFile()
+          fileHandle.closeFile()
+
+          // Find first newline to avoid partial line at start
+          if let newlineIndex = dataToKeep.firstIndex(of: UInt8(ascii: "\n")) {
+              let cleanData = dataToKeep.suffix(from: dataToKeep.index(after: newlineIndex))
+              let header = "--- Log truncated at \(Date()) ---\n".data(using: .utf8) ?? Data()
+              try (header + cleanData).write(to: url)
+          } else {
+              let header = "--- Log truncated at \(Date()) ---\n".data(using: .utf8) ?? Data()
+              try (header + dataToKeep).write(to: url)
+          }
+
+          print("Log file truncated, kept last \(bytesToKeep) bytes")
+      } catch {
+          print("Failed to truncate log file: \(error.localizedDescription)")
+      }
+  }
