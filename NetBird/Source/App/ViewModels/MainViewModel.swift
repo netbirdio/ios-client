@@ -116,6 +116,9 @@ class ViewModel: ObservableObject {
     private var lastExtensionStateCheck: Date = Date.distantPast
     private let extensionStateCheckInterval: TimeInterval = 30.0 // Check every 30 seconds instead of every poll
     
+    // Prevent repeated stop() calls due to asynchronous state update timing
+    private var hasStoppedForLoginFailure: Bool = false
+    
     func startPollingDetails() {
         networkExtensionAdapter.startTimer { [weak self] details in
             guard let self = self else { return }
@@ -132,6 +135,8 @@ class ViewModel: ObservableObject {
                 if self.extensionState == .disconnected && self.extensionStateText == "Connected" {
                     self.showAuthenticationRequired = true
                     self.extensionStateText = "Disconnected"
+                    // Reset flag when extension state changes to disconnected
+                    self.hasStoppedForLoginFailure = false
                 }
                 
                 if details.ip != self.ip || details.fqdn != self.fqdn || details.managementStatus != self.managementStatus
@@ -150,7 +155,13 @@ class ViewModel: ObservableObject {
                         self.managementStatus = details.managementStatus
                     }
                     
-                    if details.managementStatus == .disconnected && self.extensionState == .connected && self.networkExtensionAdapter.isLoginRequired() {
+                    // Prevent repeated stop() calls due to asynchronous state update timing
+                    // Only call stop() once per login failure state, until extensionState updates
+                    if details.managementStatus == .disconnected && 
+                       self.extensionState == .connected && 
+                       self.networkExtensionAdapter.isLoginRequired() &&
+                       !self.hasStoppedForLoginFailure {
+                        self.hasStoppedForLoginFailure = true
                         self.networkExtensionAdapter.stop()
                         self.showAuthenticationRequired = true
                     }
