@@ -32,6 +32,31 @@ struct NetBirdApp: App {
                 .environmentObject(viewModel)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) {_ in
                     print("App is active!")
+                    viewModel.networkExtensionAdapter.setBackgroundMode(false)
+                    viewModel.checkExtensionState()
+                    viewModel.startPollingDetails()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) {_ in
+                    print("App is inactive!")
+                    viewModel.networkExtensionAdapter.setBackgroundMode(true)
+                    viewModel.stopPollingDetails()
+                }
+                .onChange(of: scenePhase) { newPhase in
+                    switch newPhase {
+                    case .background:
+                        print("App moved to background")
+                        viewModel.networkExtensionAdapter.setBackgroundMode(true)
+                    case .active:
+                        print("App became active")
+                        viewModel.networkExtensionAdapter.setBackgroundMode(false)
+                    case .inactive:
+                        break
+                    @unknown default:
+                        break
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) {_ in
+                    print("App is active!")
                     viewModel.checkExtensionState()
                     viewModel.startPollingDetails()
                 }

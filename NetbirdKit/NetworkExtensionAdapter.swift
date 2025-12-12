@@ -17,7 +17,20 @@ public class NetworkExtensionAdapter: ObservableObject {
     var extensionID = "io.netbird.app.NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
     
-    let decoder = PropertyListDecoder()    
+    let decoder = PropertyListDecoder()
+    
+    // Battery optimization: Adaptive polling
+    private var currentPollingInterval: TimeInterval = 10.0 // Start with 10 seconds
+    private var consecutiveStablePolls: Int = 0
+    private var lastStatusHash: Int = 0
+    private var isInBackground: Bool = false
+    private var lastTimerInterval: TimeInterval = 10.0 // Track last set interval
+    private let pollingQueue = DispatchQueue(label: "com.netbird.polling", qos: .utility)
+    
+    // Polling intervals (in seconds)
+    private let minPollingInterval: TimeInterval = 10.0  // When changes detected
+    private let stablePollingInterval: TimeInterval = 20.0  // When stable
+    private let backgroundPollingInterval: TimeInterval = 60.0  // In background
     
     @Published var timer : Timer
     
@@ -244,10 +257,34 @@ public class NetworkExtensionAdapter: ObservableObject {
         let messageString = "Status"
         if let messageData = messageString.data(using: .utf8) {
             do {
-                try session.sendProviderMessage(messageData) { response in
+                try session.sendProviderMessage(messageData) { [weak self] response in
+                    guard let self = self else { return }
+                    
                     if let response = response {
                         do {
                             let decodedStatus = try self.decoder.decode(StatusDetails.self, from: response)
+                            
+                            // Calculate hash to detect changes
+                            let statusHash = self.calculateStatusHash(decodedStatus)
+                            let hasChanged = statusHash != self.lastStatusHash
+                            
+                            if hasChanged {
+                                // Status changed - use faster polling
+                                self.consecutiveStablePolls = 0
+                                self.currentPollingInterval = self.minPollingInterval
+                                self.lastStatusHash = statusHash
+                                print("Status changed, using fast polling (\(self.currentPollingInterval)s)")
+                            } else {
+                                // Status stable - gradually increase interval
+                                self.consecutiveStablePolls += 1
+                                if self.consecutiveStablePolls > 3 {
+                                    self.currentPollingInterval = self.stablePollingInterval
+                                }
+                            }
+                            
+                            // Restart timer with new interval if needed
+                            self.restartTimerIfNeeded(completion: completion)
+                            
                             completion(decodedStatus)
                             return
                         } catch {
@@ -267,16 +304,81 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
     
+    private func calculateStatusHash(_ status: StatusDetails) -> Int {
+        var hasher = Hasher()
+        hasher.combine(status.ip)
+        hasher.combine(status.fqdn)
+        hasher.combine(status.managementStatus)
+        hasher.combine(status.peerInfo.count)
+        for peer in status.peerInfo {
+            hasher.combine(peer.ip)
+            hasher.combine(peer.connStatus)
+        }
+        return hasher.finalize()
+    }
+    
+    private func restartTimerIfNeeded(completion: @escaping (StatusDetails) -> Void) {
+        // Only restart if interval changed significantly (more than 2 seconds difference)
+        let targetInterval = isInBackground ? backgroundPollingInterval : currentPollingInterval
+        
+        // Check if we need to restart timer
+        if abs(lastTimerInterval - targetInterval) > 2.0 {
+            lastTimerInterval = targetInterval
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                if self.timer.isValid {
+                    self.timer.invalidate()
+                }
+                self.startTimer(completion: completion)
+            }
+        }
+    }
+    
     func startTimer(completion: @escaping (StatusDetails) -> Void) {
         self.timer.invalidate()
+        
+        // Initial fetch
         self.fetchData(completion: completion)
-        self.timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true, block: { _ in
-            self.fetchData(completion: completion)
-        })
+        
+        // Determine polling interval based on app state
+        let interval = isInBackground ? backgroundPollingInterval : currentPollingInterval
+        lastTimerInterval = interval
+        
+        // Create timer - must be on main thread for RunLoop
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+                guard let self = self else { return }
+                // Use background queue for actual network work
+                self.pollingQueue.async {
+                    self.fetchData(completion: completion)
+                }
+            }
+            
+            // Add timer to main RunLoop
+            RunLoop.main.add(self.timer, forMode: .common)
+            
+            print("Started polling with interval: \(interval)s (background: \(self.isInBackground))")
+        }
     }
     
     func stopTimer() {
         self.timer.invalidate()
+        self.consecutiveStablePolls = 0
+        self.currentPollingInterval = minPollingInterval
+    }
+    
+    func setBackgroundMode(_ inBackground: Bool) {
+        let wasInBackground = isInBackground
+        isInBackground = inBackground
+        
+        // Restart timer with appropriate interval if state changed
+        if wasInBackground != inBackground && timer.isValid {
+            let interval = inBackground ? backgroundPollingInterval : currentPollingInterval
+            print("App state changed to \(inBackground ? "background" : "foreground"), adjusting polling interval to \(interval)s")
+            // Timer will be restarted on next fetchData call
+        }
     }
 
     func getExtensionStatus(completion: @escaping (NEVPNStatus) -> Void) {

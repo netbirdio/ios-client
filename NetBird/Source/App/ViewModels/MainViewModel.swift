@@ -112,41 +112,53 @@ class ViewModel: ObservableObject {
         }
     }
     
+    // Battery optimization: Track last extension state check
+    private var lastExtensionStateCheck: Date = Date.distantPast
+    private let extensionStateCheckInterval: TimeInterval = 30.0 // Check every 30 seconds instead of every poll
+    
     func startPollingDetails() {
-        networkExtensionAdapter.startTimer { details in
+        networkExtensionAdapter.startTimer { [weak self] details in
+            guard let self = self else { return }
             
-            self.checkExtensionState()
-            if self.extensionState == .disconnected && self.extensionStateText == "Connected" {
-                self.showAuthenticationRequired = true
-                self.extensionStateText = "Disconnected"
-            }
-            
-            if details.ip != self.ip || details.fqdn != self.fqdn || details.managementStatus != self.managementStatus
-            {
-                if !details.fqdn.isEmpty && details.fqdn != self.fqdn {
-                    self.defaults.set(details.fqdn, forKey: "fqdn")
-                    self.fqdn = details.fqdn
-                    
-                }
-                if !details.ip.isEmpty && details.ip != self.ip {
-                    self.defaults.set(details.ip, forKey: "ip")
-                    self.ip = details.ip
-                }
-                print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(self.networkExtensionAdapter.isLoginRequired())")
-                
-                if details.managementStatus != self.managementStatus {
-                    self.managementStatus = details.managementStatus
+            // Ensure all UI updates happen on the main thread
+            DispatchQueue.main.async {
+                // Battery optimization: Only check extension state periodically, not on every poll
+                let now = Date()
+                if now.timeIntervalSince(self.lastExtensionStateCheck) >= self.extensionStateCheckInterval {
+                    self.checkExtensionState()
+                    self.lastExtensionStateCheck = now
                 }
                 
-                if details.managementStatus == .disconnected && self.extensionState == .connected && self.networkExtensionAdapter.isLoginRequired() {
-                    self.networkExtensionAdapter.stop()
+                if self.extensionState == .disconnected && self.extensionStateText == "Connected" {
                     self.showAuthenticationRequired = true
+                    self.extensionStateText = "Disconnected"
                 }
-            }
-            
-            self.statusDetailsValid = true
-            
-            let sortedPeerInfo = details.peerInfo.sorted(by: { a, b in
+                
+                if details.ip != self.ip || details.fqdn != self.fqdn || details.managementStatus != self.managementStatus
+                {
+                    if !details.fqdn.isEmpty && details.fqdn != self.fqdn {
+                        self.defaults.set(details.fqdn, forKey: "fqdn")
+                        self.fqdn = details.fqdn
+                    }
+                    if !details.ip.isEmpty && details.ip != self.ip {
+                        self.defaults.set(details.ip, forKey: "ip")
+                        self.ip = details.ip
+                    }
+                    print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(self.networkExtensionAdapter.isLoginRequired())")
+                    
+                    if details.managementStatus != self.managementStatus {
+                        self.managementStatus = details.managementStatus
+                    }
+                    
+                    if details.managementStatus == .disconnected && self.extensionState == .connected && self.networkExtensionAdapter.isLoginRequired() {
+                        self.networkExtensionAdapter.stop()
+                        self.showAuthenticationRequired = true
+                    }
+                }
+                
+                self.statusDetailsValid = true
+                
+                let sortedPeerInfo = details.peerInfo.sorted(by: { a, b in
                 a.ip < b.ip
             })
             if sortedPeerInfo.count != self.peerViewModel.peerInfo.count || !sortedPeerInfo.elementsEqual(self.peerViewModel.peerInfo, by: { a, b in
