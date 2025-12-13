@@ -27,22 +27,14 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache-dependency-path: netbird/go.sum
 
       - name: Install gomobile
-        run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          gomobile init
+        run: go install golang.org/x/mobile/cmd/gomobile@latest
 
       - name: Build NetBirdSDK xcframework
-        run: |
-          cd netbird
-          gomobile bind \
-            -target=ios \
-            -bundleid=io.netbird.framework \
-            -o ../NetBirdSDK.xcframework \
-            ./client/ios/NetBirdSDK
+        run: ./build-go-lib.sh ./netbird
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.1.app
