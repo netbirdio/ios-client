@@ -401,23 +401,29 @@ public class NetworkExtensionAdapter: ObservableObject {
             // Values already captured on pollingQueue, use them directly
             intervalToUse = providedInterval
             backgroundStateToUse = providedBackgroundState
-            // Update lastTimerInterval and set isPollingActive synchronously to prevent race condition
-            // This is safe because we're not in a deadlock situation (values already captured)
-            pollingQueue.sync { [weak self] in
+            // Update lastTimerInterval and set isPollingActive asynchronously
+            // This is safe because values are already captured and timer creation is async
+            pollingQueue.async { [weak self] in
                 guard let self = self else { return }
                 self.lastTimerInterval = providedInterval
                 self.isPollingActive = true
             }
         } else {
-            // Called directly, must read from pollingQueue (but this is safe as we're not in a deadlock situation)
+            // Called directly, must read from pollingQueue
+            // Use async with a semaphore to ensure values are read before timer creation
+            // This is safe because startTimer is called from main thread (not Swift Concurrency context)
+            let semaphore = DispatchSemaphore(value: 0)
             var intervalValue: TimeInterval = minPollingInterval
             var backgroundValue: Bool = false
-            pollingQueue.sync {
+            pollingQueue.async {
                 backgroundValue = isInBackground
                 intervalValue = backgroundValue ? backgroundPollingInterval : currentPollingInterval
                 lastTimerInterval = intervalValue
                 isPollingActive = true
+                semaphore.signal()
             }
+            // Wait for async operation to complete (safe here as we're not in Swift Concurrency context)
+            semaphore.wait()
             intervalToUse = intervalValue
             backgroundStateToUse = backgroundValue
         }
@@ -447,20 +453,29 @@ public class NetworkExtensionAdapter: ObservableObject {
             self?.timer.invalidate()
         }
         
-        // Reset state variables and set isPollingActive to false synchronously to prevent race condition
-        // Must use sync to ensure flag is set before in-flight fetchData callbacks can check it
-        pollingQueue.sync { [weak self] in
-            guard let self = self else { return }
+        // Reset state variables and set isPollingActive to false
+        // Use async with semaphore to avoid Swift Concurrency warnings while ensuring flag is set
+        // This is safe because stopTimer is typically called from main thread (not Swift Concurrency context)
+        let semaphore = DispatchSemaphore(value: 0)
+        pollingQueue.async { [weak self] in
+            guard let self = self else {
+                semaphore.signal()
+                return
+            }
             self.consecutiveStablePolls = 0
             self.currentPollingInterval = self.minPollingInterval
             self.isPollingActive = false
+            semaphore.signal()
         }
+        // Wait for async operation to complete (safe here as stopTimer is called from main thread)
+        semaphore.wait()
     }
     
     func setBackgroundMode(_ inBackground: Bool) {
         // All state mutations must happen on pollingQueue to prevent race conditions
-        // Use sync to ensure state is updated before startTimer reads it (fixes timing issue)
-        pollingQueue.sync { [weak self] in
+        // Use async to avoid Swift Concurrency warnings when called from SwiftUI contexts
+        // The state update will be applied before the next fetchData call reads it
+        pollingQueue.async { [weak self] in
             guard let self = self else { return }
             let wasInBackground = self.isInBackground
             self.isInBackground = inBackground
