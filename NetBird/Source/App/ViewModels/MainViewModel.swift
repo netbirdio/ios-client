@@ -213,7 +213,7 @@ class ViewModel: ObservableObject {
                     a.ip < b.ip
                 })
                 if sortedPeerInfo.count != self.peerViewModel.peerInfo.count || !sortedPeerInfo.elementsEqual(self.peerViewModel.peerInfo, by: { a, b in
-                    a.ip == b.ip && a.connStatus == b.connStatus && a.relayed == b.relayed && a.direct == b.direct && a.connStatusUpdate == b.connStatusUpdate && a.routes.count == b.routes.count
+                    a.ip == b.ip && a.connStatus == b.connStatus && a.relayed == b.relayed && a.direct == b.direct && a.connStatusUpdate == b.connStatusUpdate && Set(a.routes) == Set(b.routes)
                 }) {
                     print("Setting new peer info: \(sortedPeerInfo.count) Peers")
                     self.peerViewModel.peerInfo = sortedPeerInfo
