@@ -42,7 +42,10 @@ struct NetBirdApp: App {
                         viewModel.checkExtensionState()
                         viewModel.startPollingDetails()
                     case .inactive:
-                        break
+                        print("App became inactive")
+                        // Stop polling when app becomes inactive (e.g., app switcher, control center)
+                        // This saves battery during brief periods when app is visible but not receiving user input
+                        viewModel.stopPollingDetails()
                     @unknown default:
                         break
                     }
