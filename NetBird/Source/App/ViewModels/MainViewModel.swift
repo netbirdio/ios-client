@@ -118,21 +118,33 @@ class ViewModel: ObservableObject {
         connectionPollingTask?.cancel()
         
         connectionPollingTask = Task { @MainActor in
-            guard attempt < maxAttempts else {
-                print("Max attempts reached for extension state polling")
-                return
+            var currentAttempt = attempt
+            while currentAttempt < maxAttempts {
+                guard !Task.isCancelled else {
+                    print("Connection polling task was cancelled")
+                    return
+                }
+                
+                checkExtensionState()
+                
+                // If connected, stop polling (checkExtensionState will start polling if needed)
+                if self.extensionState == .connected {
+                    print("Extension connected, stopping state polling")
+                    return
+                }
+                
+                // Wait 1 second before next check
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                
+                guard !Task.isCancelled else {
+                    print("Connection polling task was cancelled during sleep")
+                    return
+                }
+                
+                currentAttempt += 1
             }
             
-            checkExtensionState()
-            
-            // Check again after 1 second if not connected yet
-            // Stop polling once connected (handled in checkExtensionState)
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            guard !Task.isCancelled else { return }
-            
-            if self.extensionState != .connected {
-                self.pollExtensionStateUntilConnected(attempt: attempt + 1, maxAttempts: maxAttempts)
-            }
+            print("Max attempts reached for extension state polling")
         }
     }
     
