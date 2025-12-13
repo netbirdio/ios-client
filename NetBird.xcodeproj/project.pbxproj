@@ -82,7 +82,6 @@
 		50CD81A72AD5504B00CF830B /* StatusDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81A62AD5504B00CF830B /* StatusDetails.swift */; };
 		50CD81A82AD5504B00CF830B /* StatusDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81A62AD5504B00CF830B /* StatusDetails.swift */; };
 		50CD81B02AD5B94D00CF830B /* PeerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81AF2AD5B94D00CF830B /* PeerCard.swift */; };
-		50CD81B12AD5B94D00CF830B /* PeerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81AF2AD5B94D00CF830B /* PeerCard.swift */; };
 		50CD84362AD82F9400CF830B /* ServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD84352AD82F9400CF830B /* ServerView.swift */; };
 		50D402942BD9143900D4AC5B /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
 		50D402952BD9143900D4AC5B /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
@@ -594,7 +593,6 @@
 				50213A262A8D0A870031D993 /* NetworkChangeListener.swift in Sources */,
 				50CD81502AD0355000CF830B /* PacketTunnelProviderSettingsManager.swift in Sources */,
 				50003BCD2AFD3B2B00E5EB6B /* ClientState.swift in Sources */,
-				50CD81B12AD5B94D00CF830B /* PeerCard.swift in Sources */,
 				50C78AD12A82BBFD006E898D /* Device.swift in Sources */,
 				505118CF2AD96ECA003027D3 /* x25519.c in Sources */,
 				F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */,
