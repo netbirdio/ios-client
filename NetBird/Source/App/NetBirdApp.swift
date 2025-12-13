@@ -38,12 +38,10 @@ struct NetBirdApp: App {
                         viewModel.stopPollingDetails()
                     case .active:
                         print("App became active")
-                        // Update background/inactive state asynchronously (non-blocking)
-                        // Dispatch to main queue to avoid blocking app launch
-                        DispatchQueue.main.async {
-                            viewModel.networkExtensionAdapter.setBackgroundMode(false)
-                            viewModel.networkExtensionAdapter.setInactiveMode(false)
-                        }
+                        // Don't call setBackgroundMode(false) or setInactiveMode(false) here:
+                        // - Initial state is already false (foreground, active)
+                        // - These functions use semaphore.wait() which could block
+                        // - State will be updated when app actually transitions from background/inactive
                         // Don't call checkExtensionState() here - it will be called automatically when needed:
                         // - When user taps connect (pollExtensionStateUntilConnected)
                         // - When extension becomes connected (checkExtensionState in startPollingDetails)
