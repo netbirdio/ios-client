@@ -159,13 +159,8 @@ class ViewModel: ObservableObject {
                     }
                     
                     // Compute isLoginRequired() once to avoid UI hitching from multiple calls
-                    // Only evaluate when needed (disconnected status check)
-                    let loginRequired: Bool
-                    if details.managementStatus == .disconnected && self.extensionState == .connected {
-                        loginRequired = self.networkExtensionAdapter.isLoginRequired()
-                    } else {
-                        loginRequired = false // Not needed for other cases
-                    }
+                    // Always compute for accurate debug output, but only use in condition when relevant
+                    let loginRequired = self.networkExtensionAdapter.isLoginRequired()
                     
                     print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(loginRequired)")
                     
