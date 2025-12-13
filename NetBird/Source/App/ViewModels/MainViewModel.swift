@@ -203,9 +203,17 @@ class ViewModel: ObservableObject {
         networkExtensionAdapter.getExtensionStatus { status in
             let statuses : [NEVPNStatus] = [.connected, .disconnected, .connecting, .disconnecting]
             DispatchQueue.main.async {
+                let wasConnected = self.extensionState == .connected
                 if statuses.contains(status) && self.extensionState != status {
                     print("Changing extension status")
                     self.extensionState = status
+                    
+                    // Start polling when extension becomes connected (if not already polling)
+                    // This ensures polling starts immediately after connect() without waiting for .active event
+                    if status == .connected && !wasConnected {
+                        print("Extension connected, starting polling")
+                        self.startPollingDetails()
+                    }
                 }
             }
         }
