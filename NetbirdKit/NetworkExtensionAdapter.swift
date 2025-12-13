@@ -362,12 +362,17 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     
     private func startTimer(interval: TimeInterval?, backgroundState: Bool?, completion: @escaping (StatusDetails) -> Void) {
-        // Invalidate timer on main thread where it was scheduled
-        DispatchQueue.main.async { [weak self] in
-            self?.timer.invalidate()
+        // Invalidate timer synchronously on main thread to prevent old timer from running concurrently
+        // This is safe because startTimer is either called from main thread or via restartTimerIfNeeded's main.async
+        if Thread.isMainThread {
+            self.timer.invalidate()
+        } else {
+            DispatchQueue.main.sync { [weak self] in
+                self?.timer.invalidate()
+            }
         }
         
-        // Initial fetch
+        // Initial fetch (only after timer is invalidated to prevent concurrent execution)
         self.fetchData(completion: completion)
         
         // Determine polling interval based on app state
