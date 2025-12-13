@@ -17,7 +17,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     var extensionID = "io.netbird.app.NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
     
-    let decoder = PropertyListDecoder()
+    private let decoder = PropertyListDecoder()
     
     // Battery optimization: Adaptive polling
     // All state variables must be accessed only from pollingQueue to prevent race conditions
@@ -268,7 +268,10 @@ public class NetworkExtensionAdapter: ObservableObject {
                         
                         guard let response = response else {
                             let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
-                            completion(defaultStatus)
+                            // Dispatch completion to main queue for thread safety
+                            DispatchQueue.main.async {
+                                completion(defaultStatus)
+                            }
                             return
                         }
                         
@@ -296,11 +299,17 @@ public class NetworkExtensionAdapter: ObservableObject {
                             // Restart timer with new interval if needed
                             self.restartTimerIfNeeded(completion: completion)
                             
-                            completion(decodedStatus)
+                            // Dispatch completion to main queue for thread safety
+                            DispatchQueue.main.async {
+                                completion(decodedStatus)
+                            }
                         } catch {
                             print("Failed to decode status details.")
                             let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
-                            completion(defaultStatus)
+                            // Dispatch completion to main queue for thread safety
+                            DispatchQueue.main.async {
+                                completion(defaultStatus)
+                            }
                         }
                     }
                 }
