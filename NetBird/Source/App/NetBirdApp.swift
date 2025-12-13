@@ -46,23 +46,13 @@ struct NetBirdApp: App {
                         }
                         // Check extension state asynchronously without blocking app launch
                         // This ensures app can start even if extension is not configured or not running
-                        // Only check if extension state is not already known (first launch scenario)
-                        // On first launch, extensionState defaults to .disconnected, so we can skip the check
-                        // This prevents blocking if extension doesn't exist yet
-                        if viewModel.extensionState == .disconnected {
-                            // On first launch or when disconnected, check extension state with delay
-                            // This allows app to fully load before attempting to check extension status
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                viewModel.checkExtensionState()
-                                // Only start polling if extension is connected to avoid unnecessary fetchData calls
-                                // startTimer() invalidates existing timer and calls fetchData(), which is wasteful if not connected
-                                if viewModel.extensionState == .connected {
-                                    viewModel.startPollingDetails()
-                                }
-                            }
-                        } else {
-                            // Extension state is already known (not first launch), check immediately
+                        // getExtensionStatus() has fallback to .disconnected if extension doesn't exist
+                        // Delay allows app to fully load before attempting to check extension status
+                        // This is especially important on first launch when extension doesn't exist yet
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                             viewModel.checkExtensionState()
+                            // Only start polling if extension is connected to avoid unnecessary fetchData calls
+                            // startTimer() invalidates existing timer and calls fetchData(), which is wasteful if not connected
                             if viewModel.extensionState == .connected {
                                 viewModel.startPollingDetails()
                             }
