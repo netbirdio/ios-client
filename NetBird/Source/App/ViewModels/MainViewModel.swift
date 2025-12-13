@@ -139,6 +139,7 @@ class ViewModel: ObservableObject {
                 print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(self.networkExtensionAdapter.isLoginRequired())")
                 
                 if details.managementStatus != self.managementStatus {
+                    print("Changing managementStatus from \(self.managementStatus) to \(details.managementStatus)")
                     self.managementStatus = details.managementStatus
                 }
                 
@@ -172,7 +173,7 @@ class ViewModel: ObservableObject {
             let statuses : [NEVPNStatus] = [.connected, .disconnected, .connecting, .disconnecting]
             DispatchQueue.main.async {
                 if statuses.contains(status) && self.extensionState != status {
-                    print("Changing extension status")
+                    print("Changing extension status from \(self.extensionState.rawValue) to \(status.rawValue)")
                     self.extensionState = status
                 }
             }
