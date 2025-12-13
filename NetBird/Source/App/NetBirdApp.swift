@@ -40,9 +40,14 @@ struct NetBirdApp: App {
                         print("App became active")
                         // Delay state updates to avoid blocking app launch
                         // These operations use semaphores that could block if pollingQueue is busy
+                        // checkExtensionState() is delayed to prevent blocking if extension is not configured
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             viewModel.networkExtensionAdapter.setBackgroundMode(false)
                             viewModel.networkExtensionAdapter.setInactiveMode(false)
+                        }
+                        // Check extension state asynchronously without blocking app launch
+                        // This ensures app can start even if extension is not configured or not running
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                             viewModel.checkExtensionState()
                             // Only start polling if extension is connected to avoid unnecessary fetchData calls
                             // startTimer() invalidates existing timer and calls fetchData(), which is wasteful if not connected
