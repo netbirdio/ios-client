@@ -25,6 +25,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     private var consecutiveStablePolls: Int = 0
     private var lastStatusHash: Int = 0
     private var isInBackground: Bool = false
+    private var isInactive: Bool = false // Track inactive state (e.g., app switcher, control center)
     private var lastTimerInterval: TimeInterval = 10.0 // Track last set interval
     private var isPollingActive: Bool = false // Prevents in-flight responses from recreating timer after stopTimer()
     private let pollingQueue = DispatchQueue(label: "com.netbird.polling", qos: .utility)
@@ -32,6 +33,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     // Polling intervals (in seconds)
     private let minPollingInterval: TimeInterval = 10.0  // When changes detected
     private let stablePollingInterval: TimeInterval = 20.0  // When stable
+    private let inactivePollingInterval: TimeInterval = 30.0  // When inactive (e.g., app switcher, control center)
     private let backgroundPollingInterval: TimeInterval = 60.0  // In background
     
     @Published var timer : Timer
@@ -347,7 +349,15 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
         
         // Only restart if interval changed significantly (more than 2 seconds difference)
-        let targetInterval = isInBackground ? backgroundPollingInterval : currentPollingInterval
+        // Priority: background > inactive > current (foreground)
+        let targetInterval: TimeInterval
+        if isInBackground {
+            targetInterval = backgroundPollingInterval
+        } else if isInactive {
+            targetInterval = inactivePollingInterval
+        } else {
+            targetInterval = currentPollingInterval
+        }
         
         // Check if we need to restart timer
         if abs(lastTimerInterval - targetInterval) > 2.0 {
@@ -417,7 +427,15 @@ public class NetworkExtensionAdapter: ObservableObject {
             var backgroundValue: Bool = false
             pollingQueue.async {
                 backgroundValue = isInBackground
-                intervalValue = backgroundValue ? backgroundPollingInterval : currentPollingInterval
+                let inactiveValue = isInactive
+                // Priority: background > inactive > current (foreground)
+                if backgroundValue {
+                    intervalValue = backgroundPollingInterval
+                } else if inactiveValue {
+                    intervalValue = inactivePollingInterval
+                } else {
+                    intervalValue = currentPollingInterval
+                }
                 lastTimerInterval = intervalValue
                 isPollingActive = true
                 semaphore.signal()
@@ -486,7 +504,7 @@ public class NetworkExtensionAdapter: ObservableObject {
             
             // Restart timer with appropriate interval if state changed
             if wasInBackground != inBackground {
-                let interval = inBackground ? self.backgroundPollingInterval : self.currentPollingInterval
+                let interval = inBackground ? self.backgroundPollingInterval : (self.isInactive ? self.inactivePollingInterval : self.currentPollingInterval)
                 print("App state changed to \(inBackground ? "background" : "foreground"), adjusting polling interval to \(interval)s")
                 // Timer will be restarted on next fetchData call via restartTimerIfNeeded
             }
@@ -494,6 +512,40 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
         // Wait for async operation to complete to ensure state is updated before startTimer() reads it
         // This is safe because setBackgroundMode is called from main thread (not Swift Concurrency context)
+        semaphore.wait()
+    }
+    
+    func setInactiveMode(_ inactive: Bool) {
+        // All state mutations must happen on pollingQueue to prevent race conditions
+        // Use async with semaphore to ensure state is updated before startTimer() reads it
+        // Semaphore is safe because setInactiveMode is called from main thread (SwiftUI context, not Swift Concurrency)
+        let semaphore = DispatchSemaphore(value: 0)
+        pollingQueue.async { [weak self] in
+            guard let self = self else {
+                semaphore.signal()
+                return
+            }
+            let wasInactive = self.isInactive
+            self.isInactive = inactive
+            
+            // Restart timer with appropriate interval if state changed
+            if wasInactive != inactive {
+                // Priority: background > inactive > current (foreground)
+                let interval: TimeInterval
+                if self.isInBackground {
+                    interval = self.backgroundPollingInterval
+                } else if inactive {
+                    interval = self.inactivePollingInterval
+                } else {
+                    interval = self.currentPollingInterval
+                }
+                print("App state changed to \(inactive ? "inactive" : "active"), adjusting polling interval to \(interval)s")
+                // Timer will be restarted on next fetchData call via restartTimerIfNeeded
+            }
+            semaphore.signal()
+        }
+        // Wait for async operation to complete to ensure state is updated before startTimer() reads it
+        // This is safe because setInactiveMode is called from main thread (not Swift Concurrency context)
         semaphore.wait()
     }
 

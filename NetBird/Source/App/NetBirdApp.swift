@@ -39,13 +39,14 @@ struct NetBirdApp: App {
                     case .active:
                         print("App became active")
                         viewModel.networkExtensionAdapter.setBackgroundMode(false)
+                        viewModel.networkExtensionAdapter.setInactiveMode(false)
                         viewModel.checkExtensionState()
                         viewModel.startPollingDetails()
                     case .inactive:
                         print("App became inactive")
-                        // Stop polling when app becomes inactive (e.g., app switcher, control center)
-                        // This saves battery during brief periods when app is visible but not receiving user input
-                        viewModel.stopPollingDetails()
+                        // Use slower polling when app becomes inactive (e.g., app switcher, control center)
+                        // This maintains VPN connection monitoring while saving battery during brief inactive periods
+                        viewModel.networkExtensionAdapter.setInactiveMode(true)
                     @unknown default:
                         break
                     }
