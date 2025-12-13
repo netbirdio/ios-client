@@ -362,7 +362,10 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     
     private func startTimer(interval: TimeInterval?, backgroundState: Bool?, completion: @escaping (StatusDetails) -> Void) {
-        self.timer.invalidate()
+        // Invalidate timer on main thread where it was scheduled
+        DispatchQueue.main.async { [weak self] in
+            self?.timer.invalidate()
+        }
         
         // Initial fetch
         self.fetchData(completion: completion)
@@ -418,7 +421,11 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     
     func stopTimer() {
-        self.timer.invalidate()
+        // Invalidate timer on main thread where it was scheduled
+        DispatchQueue.main.async { [weak self] in
+            self?.timer.invalidate()
+        }
+        
         // Reset state variables and set isPollingActive to false synchronously to prevent race condition
         // Must use sync to ensure flag is set before in-flight fetchData callbacks can check it
         pollingQueue.sync { [weak self] in
