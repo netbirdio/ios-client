@@ -362,17 +362,24 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     
     private func startTimer(interval: TimeInterval?, backgroundState: Bool?, completion: @escaping (StatusDetails) -> Void) {
+        // Enforce precondition: must not be called from pollingQueue to avoid deadlock
+        // startTimer is called either from main thread (MainViewModel) or via restartTimerIfNeeded's main.async
+        dispatchPrecondition(condition: .notOnQueue(pollingQueue))
+        
         // Invalidate timer synchronously on main thread to prevent old timer from running concurrently
         // This is safe because startTimer is either called from main thread or via restartTimerIfNeeded's main.async
         if Thread.isMainThread {
             self.timer.invalidate()
         } else {
-            DispatchQueue.main.sync { [weak self] in
+            // Use async to avoid deadlock if main thread is blocked in pollingQueue.sync
+            // The isPollingActive flag prevents old timer callbacks from executing
+            DispatchQueue.main.async { [weak self] in
                 self?.timer.invalidate()
             }
         }
         
         // Initial fetch (only after timer is invalidated to prevent concurrent execution)
+        // Note: If not on main thread, invalidation is async, but isPollingActive flag provides protection
         self.fetchData(completion: completion)
         
         // Determine polling interval based on app state
