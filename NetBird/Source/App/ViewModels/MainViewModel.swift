@@ -100,6 +100,9 @@ class ViewModel: ObservableObject {
             Task {
                 await self.networkExtensionAdapter.start()
                 print("Connected pressed set to false")
+                // Check extension state immediately after start to trigger polling if connected
+                // This ensures polling starts right away without waiting for periodic check
+                self.checkExtensionState()
             }
         }
     }
