@@ -471,6 +471,11 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     
     func stopTimer() {
+        // IMPORTANT: Must not be called from Swift Concurrency context (Task, async function)
+        // as semaphore.wait() would block the cooperative thread pool and potentially deadlock.
+        // This function must be called from main thread or synchronous context only.
+        dispatchPrecondition(condition: .notOnQueue(pollingQueue))
+        
         // Invalidate timer on main thread where it was scheduled
         DispatchQueue.main.async { [weak self] in
             self?.timer.invalidate()
@@ -478,7 +483,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         
         // Reset state variables and set isPollingActive to false
         // Use async with semaphore to avoid Swift Concurrency warnings while ensuring flag is set
-        // This is safe because stopTimer is typically called from main thread (not Swift Concurrency context)
+        // This is safe because stopTimer is called from main thread (enforced by precondition above)
         let semaphore = DispatchSemaphore(value: 0)
         pollingQueue.async { [weak self] in
             guard let self = self else {
