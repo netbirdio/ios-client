@@ -156,7 +156,14 @@ class ViewModel: ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 self.buttonLock = false
             }
+            // Set UI state to "Disconnecting" immediately for better UX
+            self.extensionStateText = "Disconnecting"
             self.networkExtensionAdapter.stop()
+            
+            // Check extension state immediately to update UI
+            // This ensures UI updates immediately when extension becomes disconnected
+            // instead of waiting for the 30s periodic check
+            self.checkExtensionState()
         }
     }
     
