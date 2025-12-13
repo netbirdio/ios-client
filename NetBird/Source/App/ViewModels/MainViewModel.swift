@@ -150,6 +150,9 @@ class ViewModel: ObservableObject {
     // Prevent repeated stop() calls due to asynchronous state update timing
     private var hasStoppedForLoginFailure: Bool = false
     
+    // Track connection polling task to cancel it if connect() is called again
+    private var connectionPollingTask: Task<Void, Never>?
+    
     func startPollingDetails() {
         networkExtensionAdapter.startTimer { [weak self] details in
             guard let self = self else { return }
