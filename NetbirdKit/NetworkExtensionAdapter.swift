@@ -473,10 +473,14 @@ public class NetworkExtensionAdapter: ObservableObject {
     
     func setBackgroundMode(_ inBackground: Bool) {
         // All state mutations must happen on pollingQueue to prevent race conditions
-        // Use async to avoid Swift Concurrency warnings when called from SwiftUI contexts
-        // The state update will be applied before the next fetchData call reads it
+        // Use async with semaphore to ensure state is updated before startTimer() reads it
+        // Semaphore is safe because setBackgroundMode is called from main thread (SwiftUI context, not Swift Concurrency)
+        let semaphore = DispatchSemaphore(value: 0)
         pollingQueue.async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self else {
+                semaphore.signal()
+                return
+            }
             let wasInBackground = self.isInBackground
             self.isInBackground = inBackground
             
@@ -486,7 +490,11 @@ public class NetworkExtensionAdapter: ObservableObject {
                 print("App state changed to \(inBackground ? "background" : "foreground"), adjusting polling interval to \(interval)s")
                 // Timer will be restarted on next fetchData call via restartTimerIfNeeded
             }
+            semaphore.signal()
         }
+        // Wait for async operation to complete to ensure state is updated before startTimer() reads it
+        // This is safe because setBackgroundMode is called from main thread (not Swift Concurrency context)
+        semaphore.wait()
     }
 
     func getExtensionStatus(completion: @escaping (NEVPNStatus) -> Void) {
