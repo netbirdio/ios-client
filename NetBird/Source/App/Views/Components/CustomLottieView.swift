@@ -145,6 +145,13 @@ struct CustomLottieView: UIViewRepresentable {
                 guard let self = self else { return }
                 if self.extensionStatus == .disconnected {
                     self.playFadeOut(uiView: uiView, startFrame: self.disconnectingFadeOut.startFrame, endFrame: self.disconnectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Disconnected")
+                } else if self.engineStatus == .connected {
+                    // Engine reconnected (e.g., after network switch) - show connected state
+                    self.isPlaying = false
+                    DispatchQueue.main.async {
+                        viewModel.extensionStateText = "Connected"
+                    }
+                    uiView.currentFrame = self.connectedFrame
                 } else {
                     DispatchQueue.main.async {
                         viewModel.connectPressed = false
@@ -163,6 +170,13 @@ struct CustomLottieView: UIViewRepresentable {
                 guard let self = self else { return }
                 if self.extensionStatus == .disconnected {
                     self.playFadeOut(uiView: uiView, startFrame: self.disconnectingFadeOut.startFrame, endFrame: self.disconnectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Disconnected")
+                } else if self.engineStatus == .connected {
+                    // Engine reconnected (e.g., after network switch) - show connected state
+                    self.isPlaying = false
+                    DispatchQueue.main.async {
+                        viewModel.extensionStateText = "Connected"
+                    }
+                    uiView.currentFrame = self.connectedFrame
                 } else {
                     playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
                 }
