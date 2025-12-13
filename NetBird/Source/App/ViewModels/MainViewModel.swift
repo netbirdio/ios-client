@@ -178,15 +178,15 @@ class ViewModel: ObservableObject {
                 self.statusDetailsValid = true
                 
                 let sortedPeerInfo = details.peerInfo.sorted(by: { a, b in
-                a.ip < b.ip
-            })
-            if sortedPeerInfo.count != self.peerViewModel.peerInfo.count || !sortedPeerInfo.elementsEqual(self.peerViewModel.peerInfo, by: { a, b in
-                a.ip == b.ip && a.connStatus == b.connStatus && a.relayed == b.relayed && a.direct == b.direct && a.connStatusUpdate == b.connStatusUpdate && a.routes.count == b.routes.count
-            }) {
-                print("Setting new peer info: \(sortedPeerInfo.count) Peers")
-                self.peerViewModel.peerInfo = sortedPeerInfo
+                    a.ip < b.ip
+                })
+                if sortedPeerInfo.count != self.peerViewModel.peerInfo.count || !sortedPeerInfo.elementsEqual(self.peerViewModel.peerInfo, by: { a, b in
+                    a.ip == b.ip && a.connStatus == b.connStatus && a.relayed == b.relayed && a.direct == b.direct && a.connStatusUpdate == b.connStatusUpdate && a.routes.count == b.routes.count
+                }) {
+                    print("Setting new peer info: \(sortedPeerInfo.count) Peers")
+                    self.peerViewModel.peerInfo = sortedPeerInfo
+                }
             }
-            
         }
     }
     
