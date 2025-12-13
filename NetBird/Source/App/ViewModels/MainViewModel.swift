@@ -97,12 +97,36 @@ class ViewModel: ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 self.buttonLock = false
             }
+            // Set UI state to "Connecting" immediately for better UX
+            self.extensionStateText = "Connecting"
             Task {
                 await self.networkExtensionAdapter.start()
                 print("Connected pressed set to false")
-                // Check extension state immediately after start to trigger polling if connected
-                // This ensures polling starts right away without waiting for periodic check
-                self.checkExtensionState()
+                
+                // Poll extension state repeatedly with short intervals until connected
+                // This ensures UI updates immediately when extension becomes connected
+                // instead of waiting for the 30s periodic check
+                self.pollExtensionStateUntilConnected(attempt: 0, maxAttempts: 15)
+            }
+        }
+    }
+    
+    // Poll extension state repeatedly until connected or max attempts reached
+    // This provides immediate UI feedback after connect() instead of waiting for periodic check
+    private func pollExtensionStateUntilConnected(attempt: Int, maxAttempts: Int) {
+        guard attempt < maxAttempts else {
+            print("Max attempts reached for extension state polling")
+            return
+        }
+        
+        checkExtensionState()
+        
+        // Check again after 1 second if not connected yet
+        // Stop polling once connected (handled in checkExtensionState)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self = self else { return }
+            if self.extensionState != .connected {
+                self.pollExtensionStateUntilConnected(attempt: attempt + 1, maxAttempts: maxAttempts)
             }
         }
     }
