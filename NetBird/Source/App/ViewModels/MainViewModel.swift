@@ -97,10 +97,54 @@ class ViewModel: ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 self.buttonLock = false
             }
+            // Set UI state to "Connecting" immediately for better UX
+            self.extensionStateText = "Connecting"
             Task {
                 await self.networkExtensionAdapter.start()
                 print("Connected pressed set to false")
+                
+                // Poll extension state repeatedly with short intervals until connected
+                // This ensures UI updates immediately when extension becomes connected
+                // instead of waiting for the 30s periodic check
+                self.pollExtensionStateUntilConnected(attempt: 0, maxAttempts: 15)
             }
+        }
+    }
+    
+    // Poll extension state repeatedly until connected or max attempts reached
+    // This provides immediate UI feedback after connect() instead of waiting for periodic check
+    private func pollExtensionStateUntilConnected(attempt: Int, maxAttempts: Int) {
+        // Cancel existing polling task if connect() was called again
+        connectionPollingTask?.cancel()
+        
+        connectionPollingTask = Task { @MainActor in
+            var currentAttempt = attempt
+            while currentAttempt < maxAttempts {
+                guard !Task.isCancelled else {
+                    print("Connection polling task was cancelled")
+                    return
+                }
+                
+                checkExtensionState()
+                
+                // If connected, stop polling (checkExtensionState will start polling if needed)
+                if self.extensionState == .connected {
+                    print("Extension connected, stopping state polling")
+                    return
+                }
+                
+                // Wait 1 second before next check
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                
+                guard !Task.isCancelled else {
+                    print("Connection polling task was cancelled during sleep")
+                    return
+                }
+                
+                currentAttempt += 1
+            }
+            
+            print("Max attempts reached for extension state polling")
         }
     }
     
@@ -112,54 +156,96 @@ class ViewModel: ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 self.buttonLock = false
             }
+            // Set UI state to "Disconnecting" immediately for better UX
+            self.extensionStateText = "Disconnecting"
             self.networkExtensionAdapter.stop()
+            
+            // Check extension state immediately to update UI
+            // This ensures UI updates immediately when extension becomes disconnected
+            // instead of waiting for the 30s periodic check
+            self.checkExtensionState()
         }
     }
     
+    // Battery optimization: Track last extension state check
+    private var lastExtensionStateCheck: Date = Date.distantPast
+    private let extensionStateCheckInterval: TimeInterval = 30.0 // Check every 30 seconds instead of every poll
+    
+    // Prevent repeated stop() calls due to asynchronous state update timing
+    private var hasStoppedForLoginFailure: Bool = false
+    
+    // Track connection polling task to cancel it if connect() is called again
+    private var connectionPollingTask: Task<Void, Never>?
+    
     func startPollingDetails() {
-        networkExtensionAdapter.startTimer { details in
+        networkExtensionAdapter.startTimer { [weak self] details in
+            guard let self = self else { return }
             
-            self.checkExtensionState()
-            if self.extensionState == .disconnected && self.extensionStateText == "Connected" {
-                self.showAuthenticationRequired = true
-                self.extensionStateText = "Disconnected"
-            }
-            
-            if details.ip != self.ip || details.fqdn != self.fqdn || details.managementStatus != self.managementStatus
-            {
-                if !details.fqdn.isEmpty && details.fqdn != self.fqdn {
-                    self.defaults.set(details.fqdn, forKey: "fqdn")
-                    self.fqdn = details.fqdn
+            // Ensure all UI updates happen on the main thread
+            Task { @MainActor in
+                // Battery optimization: Only check extension state periodically, not on every poll
+                let now = Date()
+                if now.timeIntervalSince(self.lastExtensionStateCheck) >= self.extensionStateCheckInterval {
+                    self.checkExtensionState()
+                    self.lastExtensionStateCheck = now
+                }
+                
+                // Reset stop guard when extension disconnects (unconditional to avoid coupling to extensionStateText)
+                if self.extensionState == .disconnected {
+                    self.hasStoppedForLoginFailure = false
                     
-                }
-                if !details.ip.isEmpty && details.ip != self.ip {
-                    self.defaults.set(details.ip, forKey: "ip")
-                    self.ip = details.ip
-                }
-                print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(self.networkExtensionAdapter.isLoginRequired())")
-                
-                if details.managementStatus != self.managementStatus {
-                    self.managementStatus = details.managementStatus
+                    // UX logic: Update UI state if needed
+                    if self.extensionStateText == "Connected" {
+                        self.showAuthenticationRequired = true
+                        self.extensionStateText = "Disconnected"
+                    }
                 }
                 
-                if details.managementStatus == .disconnected && self.extensionState == .connected && self.networkExtensionAdapter.isLoginRequired() {
-                    self.networkExtensionAdapter.stop()
-                    self.showAuthenticationRequired = true
+                if details.ip != self.ip || details.fqdn != self.fqdn || details.managementStatus != self.managementStatus
+                {
+                    if !details.fqdn.isEmpty && details.fqdn != self.fqdn {
+                        self.defaults.set(details.fqdn, forKey: "fqdn")
+                        self.fqdn = details.fqdn
+                    }
+                    if !details.ip.isEmpty && details.ip != self.ip {
+                        self.defaults.set(details.ip, forKey: "ip")
+                        self.ip = details.ip
+                    }
+                    
+                    // Compute isLoginRequired() once to avoid UI hitching from multiple calls
+                    // Always compute for accurate debug output, but only use in condition when relevant
+                    let loginRequired = self.networkExtensionAdapter.isLoginRequired()
+                    
+                    print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(loginRequired)")
+                    
+                    if details.managementStatus != self.managementStatus {
+                        self.managementStatus = details.managementStatus
+                    }
+                    
+                    // Prevent repeated stop() calls due to asynchronous state update timing
+                    // Only call stop() once per login failure state, until extensionState updates
+                    if details.managementStatus == .disconnected && 
+                       self.extensionState == .connected && 
+                       loginRequired &&
+                       !self.hasStoppedForLoginFailure {
+                        self.hasStoppedForLoginFailure = true
+                        self.networkExtensionAdapter.stop()
+                        self.showAuthenticationRequired = true
+                    }
+                }
+                
+                self.statusDetailsValid = true
+                
+                let sortedPeerInfo = details.peerInfo.sorted(by: { a, b in
+                    a.ip < b.ip
+                })
+                if sortedPeerInfo.count != self.peerViewModel.peerInfo.count || !sortedPeerInfo.elementsEqual(self.peerViewModel.peerInfo, by: { a, b in
+                    a.ip == b.ip && a.connStatus == b.connStatus && a.relayed == b.relayed && a.direct == b.direct && a.connStatusUpdate == b.connStatusUpdate && Set(a.routes) == Set(b.routes)
+                }) {
+                    print("Setting new peer info: \(sortedPeerInfo.count) Peers")
+                    self.peerViewModel.peerInfo = sortedPeerInfo
                 }
             }
-            
-            self.statusDetailsValid = true
-            
-            let sortedPeerInfo = details.peerInfo.sorted(by: { a, b in
-                a.ip < b.ip
-            })
-            if sortedPeerInfo.count != self.peerViewModel.peerInfo.count || !sortedPeerInfo.elementsEqual(self.peerViewModel.peerInfo, by: { a, b in
-                a.ip == b.ip && a.connStatus == b.connStatus && a.relayed == b.relayed && a.direct == b.direct && a.connStatusUpdate == b.connStatusUpdate && a.routes.count == b.routes.count
-            }) {
-                print("Setting new peer info: \(sortedPeerInfo.count) Peers")
-                self.peerViewModel.peerInfo = sortedPeerInfo
-            }
-            
         }
     }
     
@@ -171,9 +257,27 @@ class ViewModel: ObservableObject {
         networkExtensionAdapter.getExtensionStatus { status in
             let statuses : [NEVPNStatus] = [.connected, .disconnected, .connecting, .disconnecting]
             DispatchQueue.main.async {
+                let wasConnected = self.extensionState == .connected
                 if statuses.contains(status) && self.extensionState != status {
                     print("Changing extension status")
                     self.extensionState = status
+                    
+                    // Update extensionStateText immediately for better UX
+                    // CustomLottieView will also update it, but this ensures immediate feedback
+                    if status == .connected {
+                        self.extensionStateText = "Connected"
+                    } else if status == .connecting {
+                        self.extensionStateText = "Connecting"
+                    } else if status == .disconnected {
+                        self.extensionStateText = "Disconnected"
+                    }
+                    
+                    // Start polling when extension becomes connected (if not already polling)
+                    // This ensures polling starts immediately after connect() without waiting for .active event
+                    if status == .connected && !wasConnected {
+                        print("Extension connected, starting polling")
+                        self.startPollingDetails()
+                    }
                 }
             }
         }

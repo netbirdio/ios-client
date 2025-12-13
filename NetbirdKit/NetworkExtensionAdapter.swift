@@ -17,7 +17,26 @@ public class NetworkExtensionAdapter: ObservableObject {
     var extensionID = "io.netbird.app.NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
     
-    let decoder = PropertyListDecoder()    
+    private let decoder = PropertyListDecoder()
+    
+    // Battery optimization: Adaptive polling
+    // All state variables must be accessed only from pollingQueue to prevent race conditions
+    private var currentPollingInterval: TimeInterval = 10.0 // Start with 10 seconds
+    private var consecutiveStablePolls: Int = 0
+    private var lastStatusHash: Int = 0
+    private var isInBackground: Bool = false
+    private var isInactive: Bool = false // Track inactive state (e.g., app switcher, control center)
+    private var lastTimerInterval: TimeInterval = 10.0 // Track last set interval
+    private var isPollingActive: Bool = false // Prevents in-flight responses from recreating timer after stopTimer()
+    // Use userInitiated QoS to avoid priority inversion when main thread waits on this queue
+    // Main thread (user-interactive) should not be blocked by utility-priority work
+    private let pollingQueue = DispatchQueue(label: "com.netbird.polling", qos: .userInitiated)
+    
+    // Polling intervals (in seconds)
+    private let minPollingInterval: TimeInterval = 10.0  // When changes detected
+    private let stablePollingInterval: TimeInterval = 20.0  // When stable
+    private let inactivePollingInterval: TimeInterval = 30.0  // When inactive (e.g., app switcher, control center)
+    private let backgroundPollingInterval: TimeInterval = 60.0  // In background
     
     @Published var timer : Timer
     
@@ -244,19 +263,58 @@ public class NetworkExtensionAdapter: ObservableObject {
         let messageString = "Status"
         if let messageData = messageString.data(using: .utf8) {
             do {
-                try session.sendProviderMessage(messageData) { response in
-                    if let response = response {
+                try session.sendProviderMessage(messageData) { [weak self] response in
+                    guard let self = self else { return }
+                    
+                    // Serialize all response handling and state mutations through pollingQueue
+                    self.pollingQueue.async { [weak self] in
+                        guard let self = self else { return }
+                        
+                        guard let response = response else {
+                            let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
+                            // Dispatch completion to main queue for thread safety
+                            DispatchQueue.main.async {
+                                completion(defaultStatus)
+                            }
+                            return
+                        }
+                        
                         do {
                             let decodedStatus = try self.decoder.decode(StatusDetails.self, from: response)
-                            completion(decodedStatus)
-                            return
+                            
+                            // Calculate hash to detect changes
+                            let statusHash = self.calculateStatusHash(decodedStatus)
+                            let hasChanged = statusHash != self.lastStatusHash
+                            
+                            if hasChanged {
+                                // Status changed - use faster polling
+                                self.consecutiveStablePolls = 0
+                                self.currentPollingInterval = self.minPollingInterval
+                                self.lastStatusHash = statusHash
+                                print("Status changed, using fast polling (\(self.currentPollingInterval)s)")
+                            } else {
+                                // Status stable - gradually increase interval
+                                self.consecutiveStablePolls += 1
+                                if self.consecutiveStablePolls > 3 {
+                                    self.currentPollingInterval = self.stablePollingInterval
+                                }
+                            }
+                            
+                            // Restart timer with new interval if needed
+                            self.restartTimerIfNeeded(completion: completion)
+                            
+                            // Dispatch completion to main queue for thread safety
+                            DispatchQueue.main.async {
+                                completion(decodedStatus)
+                            }
                         } catch {
                             print("Failed to decode status details.")
+                            let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
+                            // Dispatch completion to main queue for thread safety
+                            DispatchQueue.main.async {
+                                completion(defaultStatus)
+                            }
                         }
-                    } else {
-                        let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
-                        completion(defaultStatus)
-                        return
                     }
                 }
             } catch {
@@ -267,27 +325,272 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
     
+    // Hash includes only core connectivity fields (ip, fqdn, managementStatus, peer.ip, peer.connStatus, peer count)
+    // and deliberately omits peer.relayed, peer.direct, peer.connStatusUpdate, and peer.routes.
+    // This hash is used to decide polling frequency for battery optimization: only major connectivity
+    // changes trigger fast (10s) polling, while secondary/visual-only updates use slower intervals.
+    // MainViewModel performs more detailed comparisons for UI updates.
+    private func calculateStatusHash(_ status: StatusDetails) -> Int {
+        var hasher = Hasher()
+        hasher.combine(status.ip)
+        hasher.combine(status.fqdn)
+        hasher.combine(status.managementStatus)
+        hasher.combine(status.peerInfo.count)
+        for peer in status.peerInfo {
+            hasher.combine(peer.ip)
+            hasher.combine(peer.connStatus)
+        }
+        return hasher.finalize()
+    }
+    
+    private func restartTimerIfNeeded(completion: @escaping (StatusDetails) -> Void) {
+        // This function is called from pollingQueue, so we can safely access state variables
+        // Bail early if polling was stopped to prevent in-flight responses from recreating timer
+        guard isPollingActive else {
+            return
+        }
+        
+        // Only restart if interval changed significantly (more than 2 seconds difference)
+        // Priority: background > inactive > current (foreground)
+        let targetInterval: TimeInterval
+        if isInBackground {
+            targetInterval = backgroundPollingInterval
+        } else if isInactive {
+            targetInterval = inactivePollingInterval
+        } else {
+            targetInterval = currentPollingInterval
+        }
+        
+        // Check if we need to restart timer
+        if abs(lastTimerInterval - targetInterval) > 2.0 {
+            lastTimerInterval = targetInterval
+            // Capture state values here (on pollingQueue) to avoid deadlock
+            let intervalToUse = targetInterval
+            let backgroundStateToUse = isInBackground
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                if self.timer.isValid {
+                    self.timer.invalidate()
+                }
+                // Pass values directly to avoid pollingQueue.sync call from main thread
+                self.startTimer(interval: intervalToUse, backgroundState: backgroundStateToUse, completion: completion)
+            }
+        }
+    }
+    
     func startTimer(completion: @escaping (StatusDetails) -> Void) {
-        self.timer.invalidate()
+        startTimer(interval: nil, backgroundState: nil, completion: completion)
+    }
+    
+    private func startTimer(interval: TimeInterval?, backgroundState: Bool?, completion: @escaping (StatusDetails) -> Void) {
+        // Enforce precondition: must not be called from pollingQueue to avoid deadlock
+        // startTimer is called either from main thread (MainViewModel) or via restartTimerIfNeeded's main.async
+        dispatchPrecondition(condition: .notOnQueue(pollingQueue))
+        
+        // Invalidate timer synchronously on main thread to prevent old timer from running concurrently
+        // This is safe because startTimer is either called from main thread or via restartTimerIfNeeded's main.async
+        if Thread.isMainThread {
+            self.timer.invalidate()
+        } else {
+            // Use async to avoid deadlock if main thread is blocked in pollingQueue.sync
+            // The isPollingActive flag prevents old timer callbacks from executing
+            DispatchQueue.main.async { [weak self] in
+                self?.timer.invalidate()
+            }
+        }
+        
+        // Initial fetch (only after timer is invalidated to prevent concurrent execution)
+        // Note: If not on main thread, invalidation is async, but isPollingActive flag provides protection
         self.fetchData(completion: completion)
-        self.timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true, block: { _ in
-            self.fetchData(completion: completion)
-        })
+        
+        // Determine polling interval based on app state
+        // If values are provided (from restartTimerIfNeeded), use them to avoid deadlock
+        // Otherwise, read from pollingQueue (when called directly from main thread)
+        let intervalToUse: TimeInterval
+        let backgroundStateToUse: Bool
+        
+        if let providedInterval = interval, let providedBackgroundState = backgroundState {
+            // Values already captured on pollingQueue, use them directly
+            intervalToUse = providedInterval
+            backgroundStateToUse = providedBackgroundState
+            // Update lastTimerInterval and set isPollingActive asynchronously
+            // This is safe because values are already captured and timer creation is async
+            pollingQueue.async { [weak self] in
+                guard let self = self else { return }
+                self.lastTimerInterval = providedInterval
+                self.isPollingActive = true
+            }
+        } else {
+            // Called directly, must read from pollingQueue
+            // Use async with a semaphore to ensure values are read before timer creation
+            // This is safe because startTimer is called from main thread (not Swift Concurrency context)
+            let semaphore = DispatchSemaphore(value: 0)
+            var intervalValue: TimeInterval = minPollingInterval
+            var backgroundValue: Bool = false
+            pollingQueue.async {
+                backgroundValue = isInBackground
+                let inactiveValue = isInactive
+                // Priority: background > inactive > current (foreground)
+                if backgroundValue {
+                    intervalValue = backgroundPollingInterval
+                } else if inactiveValue {
+                    intervalValue = inactivePollingInterval
+                } else {
+                    intervalValue = currentPollingInterval
+                }
+                lastTimerInterval = intervalValue
+                isPollingActive = true
+                semaphore.signal()
+            }
+            // Wait for async operation to complete (safe here as we're not in Swift Concurrency context)
+            semaphore.wait()
+            intervalToUse = intervalValue
+            backgroundStateToUse = backgroundValue
+        }
+        
+        // Create timer - must be on main thread for RunLoop
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.timer = Timer(timeInterval: intervalToUse, repeats: true) { [weak self] _ in
+                guard let self = self else { return }
+                // Use background queue for actual network work
+                self.pollingQueue.async {
+                    // Guard against timer firing after stopTimer() sets isPollingActive = false
+                    // Timer invalidation is async, so this check prevents unnecessary work
+                    guard self.isPollingActive else { return }
+                    self.fetchData(completion: completion)
+                }
+            }
+            
+            // Add timer to main RunLoop
+            RunLoop.main.add(self.timer, forMode: .common)
+            
+            print("Started polling with interval: \(intervalToUse)s (background: \(backgroundStateToUse))")
+        }
     }
     
     func stopTimer() {
-        self.timer.invalidate()
+        // IMPORTANT: Must not be called from Swift Concurrency context (Task, async function)
+        // as semaphore.wait() would block the cooperative thread pool and potentially deadlock.
+        // This function must be called from main thread or synchronous context only.
+        dispatchPrecondition(condition: .notOnQueue(pollingQueue))
+        
+        // Invalidate timer on main thread where it was scheduled
+        DispatchQueue.main.async { [weak self] in
+            self?.timer.invalidate()
+        }
+        
+        // Reset state variables and set isPollingActive to false
+        // Use async with semaphore to avoid Swift Concurrency warnings while ensuring flag is set
+        // This is safe because stopTimer is called from main thread (enforced by precondition above)
+        let semaphore = DispatchSemaphore(value: 0)
+        pollingQueue.async { [weak self] in
+            guard let self = self else {
+                semaphore.signal()
+                return
+            }
+            self.consecutiveStablePolls = 0
+            self.currentPollingInterval = self.minPollingInterval
+            self.isPollingActive = false
+            semaphore.signal()
+        }
+        // Wait for async operation to complete (safe here as stopTimer is called from main thread)
+        semaphore.wait()
+    }
+    
+    func setBackgroundMode(_ inBackground: Bool) {
+        // All state mutations must happen on pollingQueue to prevent race conditions
+        // Use async with semaphore to ensure state is updated before startTimer() reads it
+        // Semaphore is safe because setBackgroundMode is called from main thread (SwiftUI context, not Swift Concurrency)
+        let semaphore = DispatchSemaphore(value: 0)
+        pollingQueue.async { [weak self] in
+            guard let self = self else {
+                semaphore.signal()
+                return
+            }
+            let wasInBackground = self.isInBackground
+            self.isInBackground = inBackground
+            
+            // Restart timer with appropriate interval if state changed
+            if wasInBackground != inBackground {
+                let interval = inBackground ? self.backgroundPollingInterval : (self.isInactive ? self.inactivePollingInterval : self.currentPollingInterval)
+                print("App state changed to \(inBackground ? "background" : "foreground"), adjusting polling interval to \(interval)s")
+                // Timer will be restarted on next fetchData call via restartTimerIfNeeded
+            }
+            semaphore.signal()
+        }
+        // Wait for async operation to complete to ensure state is updated before startTimer() reads it
+        // This is safe because setBackgroundMode is called from main thread (not Swift Concurrency context)
+        semaphore.wait()
+    }
+    
+    func setInactiveMode(_ inactive: Bool) {
+        // All state mutations must happen on pollingQueue to prevent race conditions
+        // Use async with semaphore to ensure state is updated before startTimer() reads it
+        // Semaphore is safe because setInactiveMode is called from main thread (SwiftUI context, not Swift Concurrency)
+        let semaphore = DispatchSemaphore(value: 0)
+        pollingQueue.async { [weak self] in
+            guard let self = self else {
+                semaphore.signal()
+                return
+            }
+            let wasInactive = self.isInactive
+            self.isInactive = inactive
+            
+            // Restart timer with appropriate interval if state changed
+            if wasInactive != inactive {
+                // Priority: background > inactive > current (foreground)
+                let interval: TimeInterval
+                if self.isInBackground {
+                    interval = self.backgroundPollingInterval
+                } else if inactive {
+                    interval = self.inactivePollingInterval
+                } else {
+                    interval = self.currentPollingInterval
+                }
+                print("App state changed to \(inactive ? "inactive" : "active"), adjusting polling interval to \(interval)s")
+                // Timer will be restarted on next fetchData call via restartTimerIfNeeded
+            }
+            semaphore.signal()
+        }
+        // Wait for async operation to complete to ensure state is updated before startTimer() reads it
+        // This is safe because setInactiveMode is called from main thread (not Swift Concurrency context)
+        semaphore.wait()
     }
 
     func getExtensionStatus(completion: @escaping (NEVPNStatus) -> Void) {
-        Task {
-            do {
-                let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-                if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
-                    completion(manager.connection.status)
+        // Serialize loadAllFromPreferences() calls to prevent concurrent access
+        // This is especially important when pollExtensionStateUntilConnected() calls
+        // checkExtensionState() multiple times per second, which would otherwise
+        // spawn multiple concurrent Task instances calling loadAllFromPreferences()
+        // Note: Task is created outside pollingQueue to avoid blocking the queue with async work
+        pollingQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Create Task outside pollingQueue to avoid blocking the serial queue
+            // The async work (loadAllFromPreferences) will run concurrently, but
+            // we ensure only one call to getExtensionStatus is processed at a time
+            Task {
+                do {
+                    let managers = try await NETunnelProviderManager.loadAllFromPreferences()
+                    if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
+                        DispatchQueue.main.async {
+                            completion(manager.connection.status)
+                        }
+                    } else {
+                        // No manager found, return disconnected status
+                        DispatchQueue.main.async {
+                            completion(.disconnected)
+                        }
+                    }
+                } catch {
+                    print("Error loading from preferences: \(error)")
+                    // Return disconnected status on error to prevent UI hang
+                    DispatchQueue.main.async {
+                        completion(.disconnected)
+                    }
                 }
-            } catch {
-                print("Error loading from preferences: \(error)")
             }
         }
     }

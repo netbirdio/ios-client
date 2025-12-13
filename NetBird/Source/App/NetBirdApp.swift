@@ -30,14 +30,35 @@ struct NetBirdApp: App {
         WindowGroup {
             MainView()
                 .environmentObject(viewModel)
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) {_ in
-                    print("App is active!")
-                    viewModel.checkExtensionState()
-                    viewModel.startPollingDetails()
-                }
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) {_ in
-                    print("App is inactive!")
-                    viewModel.stopPollingDetails()
+                .onChange(of: scenePhase) { newPhase in
+                    switch newPhase {
+                    case .background:
+                        print("App moved to background")
+                        viewModel.networkExtensionAdapter.setBackgroundMode(true)
+                        viewModel.stopPollingDetails()
+                    case .active:
+                        print("App became active")
+                        // Don't call setBackgroundMode(false) or setInactiveMode(false) here:
+                        // - Initial state is already false (foreground, active)
+                        // - These functions use semaphore.wait() which could block
+                        // - State will be updated when app actually transitions from background/inactive
+                        // Don't call checkExtensionState() here - it will be called automatically when needed:
+                        // - When user taps connect (pollExtensionStateUntilConnected)
+                        // - When extension becomes connected (checkExtensionState in startPollingDetails)
+                        // - Periodically during polling (every 30s)
+                        // This prevents blocking app launch, especially on first launch when extension doesn't exist
+                        // Only start polling if extension is already connected (from previous session)
+                        if viewModel.extensionState == .connected {
+                            viewModel.startPollingDetails()
+                        }
+                    case .inactive:
+                        print("App became inactive")
+                        // Use slower polling when app becomes inactive (e.g., app switcher, control center)
+                        // This maintains VPN connection monitoring while saving battery during brief inactive periods
+                        viewModel.networkExtensionAdapter.setInactiveMode(true)
+                    @unknown default:
+                        break
+                    }
                 }
         }
     }
