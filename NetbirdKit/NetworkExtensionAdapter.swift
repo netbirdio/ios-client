@@ -28,7 +28,9 @@ public class NetworkExtensionAdapter: ObservableObject {
     private var isInactive: Bool = false // Track inactive state (e.g., app switcher, control center)
     private var lastTimerInterval: TimeInterval = 10.0 // Track last set interval
     private var isPollingActive: Bool = false // Prevents in-flight responses from recreating timer after stopTimer()
-    private let pollingQueue = DispatchQueue(label: "com.netbird.polling", qos: .utility)
+    // Use userInitiated QoS to avoid priority inversion when main thread waits on this queue
+    // Main thread (user-interactive) should not be blocked by utility-priority work
+    private let pollingQueue = DispatchQueue(label: "com.netbird.polling", qos: .userInitiated)
     
     // Polling intervals (in seconds)
     private let minPollingInterval: TimeInterval = 10.0  // When changes detected
