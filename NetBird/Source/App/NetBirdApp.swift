@@ -41,7 +41,11 @@ struct NetBirdApp: App {
                         viewModel.networkExtensionAdapter.setBackgroundMode(false)
                         viewModel.networkExtensionAdapter.setInactiveMode(false)
                         viewModel.checkExtensionState()
-                        viewModel.startPollingDetails()
+                        // Only start polling if extension is connected to avoid unnecessary fetchData calls
+                        // startTimer() invalidates existing timer and calls fetchData(), which is wasteful if not connected
+                        if viewModel.extensionState == .connected {
+                            viewModel.startPollingDetails()
+                        }
                     case .inactive:
                         print("App became inactive")
                         // Use slower polling when app becomes inactive (e.g., app switcher, control center)
