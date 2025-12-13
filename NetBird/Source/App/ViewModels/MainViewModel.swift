@@ -235,6 +235,16 @@ class ViewModel: ObservableObject {
                     print("Changing extension status")
                     self.extensionState = status
                     
+                    // Update extensionStateText immediately for better UX
+                    // CustomLottieView will also update it, but this ensures immediate feedback
+                    if status == .connected {
+                        self.extensionStateText = "Connected"
+                    } else if status == .connecting {
+                        self.extensionStateText = "Connecting"
+                    } else if status == .disconnected {
+                        self.extensionStateText = "Disconnected"
+                    }
+                    
                     // Start polling when extension becomes connected (if not already polling)
                     // This ensures polling starts immediately after connect() without waiting for .active event
                     if status == .connected && !wasConnected {
