@@ -157,7 +157,17 @@ class ViewModel: ObservableObject {
                         self.defaults.set(details.ip, forKey: "ip")
                         self.ip = details.ip
                     }
-                    print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(self.networkExtensionAdapter.isLoginRequired())")
+                    
+                    // Compute isLoginRequired() once to avoid UI hitching from multiple calls
+                    // Only evaluate when needed (disconnected status check)
+                    let loginRequired: Bool
+                    if details.managementStatus == .disconnected && self.extensionState == .connected {
+                        loginRequired = self.networkExtensionAdapter.isLoginRequired()
+                    } else {
+                        loginRequired = false // Not needed for other cases
+                    }
+                    
+                    print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(loginRequired)")
                     
                     if details.managementStatus != self.managementStatus {
                         self.managementStatus = details.managementStatus
@@ -167,7 +177,7 @@ class ViewModel: ObservableObject {
                     // Only call stop() once per login failure state, until extensionState updates
                     if details.managementStatus == .disconnected && 
                        self.extensionState == .connected && 
-                       self.networkExtensionAdapter.isLoginRequired() &&
+                       loginRequired &&
                        !self.hasStoppedForLoginFailure {
                         self.hasStoppedForLoginFailure = true
                         self.networkExtensionAdapter.stop()
