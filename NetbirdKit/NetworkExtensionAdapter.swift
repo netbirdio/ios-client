@@ -8,16 +8,29 @@
 import Foundation
 import NetworkExtension
 import SwiftUI
+import NetBirdSDK
 
 public class NetworkExtensionAdapter: ObservableObject {
-        
+
     var session : NETunnelProviderSession?
     var vpnManager: NETunnelProviderManager?
-    
+
     var extensionID = "io.netbird.app.NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
-    
-    let decoder = PropertyListDecoder()    
+
+    let decoder = PropertyListDecoder()
+
+    private lazy var cachedClient: NetBirdSDKClient? = {
+        NetBirdSDKNewClient(
+            Preferences.configFile(),
+            Preferences.stateFile(),
+            Device.getName(),
+            Device.getOsVersion(),
+            Device.getOsName(),
+            nil,
+            nil
+        )
+    }()    
     
     @Published var timer : Timer
     
@@ -93,11 +106,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     
     public func isLoginRequired() -> Bool {
-        guard let client = NetBirdSDKNewClient(Preferences.configFile(), Preferences.stateFile(), Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
-            print("Failed to initialize client")
-            return true
-        }
-        return client.isLoginRequired()
+        return cachedClient?.isLoginRequired() ?? true
     }
 
     class ObserverBox {
