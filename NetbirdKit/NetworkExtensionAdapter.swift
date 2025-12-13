@@ -560,14 +560,24 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
 
     func getExtensionStatus(completion: @escaping (NEVPNStatus) -> Void) {
-        Task {
-            do {
-                let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-                if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
-                    completion(manager.connection.status)
+        // Serialize loadAllFromPreferences() calls to prevent concurrent access
+        // This is especially important when pollExtensionStateUntilConnected() calls
+        // checkExtensionState() multiple times per second, which would otherwise
+        // spawn multiple concurrent Task instances calling loadAllFromPreferences()
+        pollingQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            Task {
+                do {
+                    let managers = try await NETunnelProviderManager.loadAllFromPreferences()
+                    if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
+                        DispatchQueue.main.async {
+                            completion(manager.connection.status)
+                        }
+                    }
+                } catch {
+                    print("Error loading from preferences: \(error)")
                 }
-            } catch {
-                print("Error loading from preferences: \(error)")
             }
         }
     }
