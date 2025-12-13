@@ -38,24 +38,20 @@ struct NetBirdApp: App {
                         viewModel.stopPollingDetails()
                     case .active:
                         print("App became active")
-                        // Delay state updates to avoid blocking app launch
-                        // These operations use semaphores that could block if pollingQueue is busy
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        // Update background/inactive state asynchronously (non-blocking)
+                        // Dispatch to main queue to avoid blocking app launch
+                        DispatchQueue.main.async {
                             viewModel.networkExtensionAdapter.setBackgroundMode(false)
                             viewModel.networkExtensionAdapter.setInactiveMode(false)
                         }
-                        // Check extension state asynchronously without blocking app launch
-                        // This ensures app can start even if extension is not configured or not running
-                        // getExtensionStatus() has fallback to .disconnected if extension doesn't exist
-                        // Delay allows app to fully load before attempting to check extension status
-                        // This is especially important on first launch when extension doesn't exist yet
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            viewModel.checkExtensionState()
-                            // Only start polling if extension is connected to avoid unnecessary fetchData calls
-                            // startTimer() invalidates existing timer and calls fetchData(), which is wasteful if not connected
-                            if viewModel.extensionState == .connected {
-                                viewModel.startPollingDetails()
-                            }
+                        // Don't call checkExtensionState() here - it will be called automatically when needed:
+                        // - When user taps connect (pollExtensionStateUntilConnected)
+                        // - When extension becomes connected (checkExtensionState in startPollingDetails)
+                        // - Periodically during polling (every 30s)
+                        // This prevents blocking app launch, especially on first launch when extension doesn't exist
+                        // Only start polling if extension is already connected (from previous session)
+                        if viewModel.extensionState == .connected {
+                            viewModel.startPollingDetails()
                         }
                     case .inactive:
                         print("App became inactive")
