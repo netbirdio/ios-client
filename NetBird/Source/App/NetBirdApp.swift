@@ -38,13 +38,17 @@ struct NetBirdApp: App {
                         viewModel.stopPollingDetails()
                     case .active:
                         print("App became active")
-                        viewModel.networkExtensionAdapter.setBackgroundMode(false)
-                        viewModel.networkExtensionAdapter.setInactiveMode(false)
-                        viewModel.checkExtensionState()
-                        // Only start polling if extension is connected to avoid unnecessary fetchData calls
-                        // startTimer() invalidates existing timer and calls fetchData(), which is wasteful if not connected
-                        if viewModel.extensionState == .connected {
-                            viewModel.startPollingDetails()
+                        // Delay state updates to avoid blocking app launch
+                        // These operations use semaphores that could block if pollingQueue is busy
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            viewModel.networkExtensionAdapter.setBackgroundMode(false)
+                            viewModel.networkExtensionAdapter.setInactiveMode(false)
+                            viewModel.checkExtensionState()
+                            // Only start polling if extension is connected to avoid unnecessary fetchData calls
+                            // startTimer() invalidates existing timer and calls fetchData(), which is wasteful if not connected
+                            if viewModel.extensionState == .connected {
+                                viewModel.startPollingDetails()
+                            }
                         }
                     case .inactive:
                         print("App became inactive")
