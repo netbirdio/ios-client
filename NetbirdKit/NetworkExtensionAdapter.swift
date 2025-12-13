@@ -456,6 +456,9 @@ public class NetworkExtensionAdapter: ObservableObject {
                 guard let self = self else { return }
                 // Use background queue for actual network work
                 self.pollingQueue.async {
+                    // Guard against timer firing after stopTimer() sets isPollingActive = false
+                    // Timer invalidation is async, so this check prevents unnecessary work
+                    guard self.isPollingActive else { return }
                     self.fetchData(completion: completion)
                 }
             }
