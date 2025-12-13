@@ -116,7 +116,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     func handleNetworkChange(path: Network.NWPath) {
         guard path.status == .satisfied else {
-            print("No network connection.")
+            AppLogger.shared.log("No network connection")
             return
         }
 
@@ -131,31 +131,35 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }()
 
         guard let networkType = newNetworkType else {
-            print("Connected to an unsupported network type.")
+            AppLogger.shared.log("Connected to an unsupported network type")
             return
         }
 
         if currentNetworkType != networkType {
-            print("Network type changed to \(networkType).")
+            AppLogger.shared.log("Network type changed: \(String(describing: currentNetworkType)) -> \(networkType)")
             if currentNetworkType != nil {
                 restartClient()
             }
             currentNetworkType = networkType
-        } else {
-            print("Network type remains the same: \(networkType).")
         }
     }
 
     func restartClient() {
+        AppLogger.shared.log("restartClient: starting restart sequence")
+        adapter.isRestarting = true
         adapter.stop { [weak self] in
+            AppLogger.shared.log("restartClient: stop completed, starting client")
             self?.adapter.start { error in
                 if let error = error {
+                    self?.adapter.isRestarting = false
+                    AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
                     Analytics.logEvent("packet_tunnel_provider", parameters: [
                         "level": "ERROR",
                         "method": "restartClient",
                         "error" : error.localizedDescription
                     ])
-                    print("Error restarting client: \(error.localizedDescription)")
+                } else {
+                    AppLogger.shared.log("restartClient: start completed successfully")
                 }
             }
         }

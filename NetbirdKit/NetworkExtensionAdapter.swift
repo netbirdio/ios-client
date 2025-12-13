@@ -10,19 +10,21 @@ import NetworkExtension
 import SwiftUI
 
 public class NetworkExtensionAdapter: ObservableObject {
-        
+
     var session : NETunnelProviderSession?
     var vpnManager: NETunnelProviderManager?
-    
+
     var extensionID = "io.netbird.app.NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
-    
-    let decoder = PropertyListDecoder()    
-    
+
+    let decoder = PropertyListDecoder()
+
     @Published var timer : Timer
-    
+
     @Published var showBrowser = false
     @Published var loginURL : String?
+
+    private var isFetchingStatus = false
     
     init() {
         self.timer = Timer()
@@ -235,23 +237,31 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     
     func fetchData(completion: @escaping (StatusDetails) -> Void) {
+        guard !isFetchingStatus else {
+            return
+        }
+
         guard let session = self.session else {
             let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
             completion(defaultStatus)
             return
         }
-        
+
+        isFetchingStatus = true
         let messageString = "Status"
         if let messageData = messageString.data(using: .utf8) {
             do {
-                try session.sendProviderMessage(messageData) { response in
+                try session.sendProviderMessage(messageData) { [weak self] response in
+                    defer { self?.isFetchingStatus = false }
                     if let response = response {
                         do {
-                            let decodedStatus = try self.decoder.decode(StatusDetails.self, from: response)
-                            completion(decodedStatus)
+                            let decodedStatus = try self?.decoder.decode(StatusDetails.self, from: response)
+                            if let status = decodedStatus {
+                                completion(status)
+                            }
                             return
                         } catch {
-                            print("Failed to decode status details.")
+                            AppLogger.shared.log("Failed to decode status details.")
                         }
                     } else {
                         let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
@@ -260,10 +270,12 @@ public class NetworkExtensionAdapter: ObservableObject {
                     }
                 }
             } catch {
-                print("Failed to send Provider message")
+                isFetchingStatus = false
+                AppLogger.shared.log("Failed to send Provider message")
             }
         } else {
-            print("Error converting message to Data")
+            isFetchingStatus = false
+            AppLogger.shared.log("Error converting message to Data")
         }
     }
     

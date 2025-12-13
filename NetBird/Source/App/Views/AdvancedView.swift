@@ -187,42 +187,52 @@ struct AdvancedView: View {
     }
 
     func shareButtonTapped() {
-        let fileManager = FileManager.default
-        guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") else {
-            print("Failed to retrieve the group URL")
+        guard let documentsDir = getDocumentsDirectory() else {
+            AppLogger.shared.log("Failed to get documents directory")
             return
         }
 
-        let logURL = groupURL.appendingPathComponent("logfile.log")
+        var filesToShare: [URL] = []
 
-        do {
-            let logData = try String(contentsOf: logURL, encoding: .utf8)
-            let fileName = "netbird-log.txt"
-            guard let filePath = getDocumentsDirectory()?.appendingPathComponent(fileName) else {
-                print("Failed to get file path")
-                return
-            }
-            
+        // Export Go SDK logs
+        if let goLogURL = AppLogger.getGoLogFileURL() {
             do {
-                try logData.write(to: filePath, atomically: true, encoding: .utf8)
-                
-                let activityViewController = UIActivityViewController(activityItems: [filePath], applicationActivities: nil)
-                
-                activityViewController.excludedActivityTypes = [
-                    .assignToContact,
-                    .saveToCameraRoll
-                ]
-                
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let rootViewController = windowScene.windows.first?.rootViewController {
-                    rootViewController.present(activityViewController, animated: true, completion: nil)
-                }
+                let goLogData = try String(contentsOf: goLogURL, encoding: .utf8)
+                let goLogPath = documentsDir.appendingPathComponent("netbird-engine.log")
+                try goLogData.write(to: goLogPath, atomically: true, encoding: .utf8)
+                filesToShare.append(goLogPath)
             } catch {
-                print("Failed to write to file: \(error.localizedDescription)")
+                AppLogger.shared.log("Failed to read Go log data: \(error)")
             }
-        } catch {
-            print("Failed to read log data: \(error)")
+        }
+
+        // Export Swift logs
+        if let swiftLogURL = AppLogger.getLogFileURL() {
+            do {
+                let swiftLogData = try String(contentsOf: swiftLogURL, encoding: .utf8)
+                let swiftLogPath = documentsDir.appendingPathComponent("netbird-app.log")
+                try swiftLogData.write(to: swiftLogPath, atomically: true, encoding: .utf8)
+                filesToShare.append(swiftLogPath)
+            } catch {
+                AppLogger.shared.log("Failed to read Swift log data: \(error)")
+            }
+        }
+
+        guard !filesToShare.isEmpty else {
+            AppLogger.shared.log("No log files to share")
             return
+        }
+
+        let activityViewController = UIActivityViewController(activityItems: filesToShare, applicationActivities: nil)
+
+        activityViewController.excludedActivityTypes = [
+            .assignToContact,
+            .saveToCameraRoll
+        ]
+
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootViewController = windowScene.windows.first?.rootViewController {
+            rootViewController.present(activityViewController, animated: true, completion: nil)
         }
     }
         

@@ -22,8 +22,13 @@ public class NetBirdAdapter {
     private let dnsManager: DNSManager
     
     public var isExecutingLogin = false
-    
+
     var clientState : ClientState = .disconnected
+
+    /// Flag indicating the client is restarting (e.g., due to network type change).
+    /// When true, intermediate state changes (connecting/disconnecting) are suppressed
+    /// to prevent UI animation state machine from getting confused.
+    var isRestarting = false
             
     /// Tunnel device file descriptor.
     public var tunnelFileDescriptor: Int32? {

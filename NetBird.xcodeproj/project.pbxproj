@@ -91,13 +91,15 @@
 		50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E6081F2A7979D600BAF09B /* SideDrawer.swift */; };
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
+		978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
+		978FC4712EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
+		F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
+		F1258DEA2ED7B7D600C0D205 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE92ED7B7D200C0D205 /* Extensions.swift */; };
+		F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292042EDE5608001D91B8 /* JustifiedText.swift */; };
 		F1B292072EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */; };
 		F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */; };
 		F1B2920A2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */; };
 		F1B2920B2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */; };
-		F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
-		F1258DEA2ED7B7D600C0D205 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE92ED7B7D200C0D205 /* Extensions.swift */; };
-		F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292042EDE5608001D91B8 /* JustifiedText.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -184,11 +186,12 @@
 		50E6081F2A7979D600BAF09B /* SideDrawer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SideDrawer.swift; sourceTree = "<group>"; };
 		50E608232A79966600BAF09B /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
-		F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvVarPackager.swift; sourceTree = "<group>"; };
-		F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalConstants.swift; sourceTree = "<group>"; };
+		978FC46F2EEDF167002D0EB8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerViewModel.swift; sourceTree = "<group>"; };
 		F1258DE92ED7B7D200C0D205 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		F1B292042EDE5608001D91B8 /* JustifiedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JustifiedText.swift; sourceTree = "<group>"; };
+		F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvVarPackager.swift; sourceTree = "<group>"; };
+		F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalConstants.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -312,6 +315,7 @@
 		50C727EA2A82479B006E898D /* NetbirdKit */ = {
 			isa = PBXGroup;
 			children = (
+				978FC46F2EEDF167002D0EB8 /* AppLogger.swift */,
 				F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */,
 				F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */,
 				50245A292A7BDB590034792B /* Preferences.swift */,
@@ -578,6 +582,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				50CD81632AD0595E00CF830B /* DNSManager.swift in Sources */,
+				978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */,
 				50C5D3102BDD96CF003159BE /* RoutesSelectionDetails.swift in Sources */,
 				50C727ED2A824C10006E898D /* NetBirdAdapter.swift in Sources */,
 				50245A572A80431C0034792B /* PacketTunnelProvider.swift in Sources */,
@@ -611,6 +616,7 @@
 				502455BF2A79B4500034792B /* SolidButton.swift in Sources */,
 				50BB17412C30239400518BCA /* RouteCard.swift in Sources */,
 				505344B92C3EFE4C00223065 /* TransparentGradientButton.swift in Sources */,
+				978FC4712EEDF167002D0EB8 /* AppLogger.swift in Sources */,
 				50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */,
 				50216D932ACB2488009574C9 /* NetworkExtensionAdapter.swift in Sources */,
 				509CCD6C2BE90D0E00B7C2D8 /* PeerTabView.swift in Sources */,
@@ -837,7 +843,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -866,12 +872,12 @@
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gccgoimporter/testdata",
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge",
 				);
-				MARKETING_VERSION = 0.0.13;
+				MARKETING_VERSION = 0.0.14;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "NetBird-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -889,7 +895,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -918,12 +924,12 @@
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gccgoimporter/testdata",
 					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge",
 				);
-				MARKETING_VERSION = 0.0.13;
+				MARKETING_VERSION = 0.0.14;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "NetBird-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
