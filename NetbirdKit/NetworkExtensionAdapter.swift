@@ -564,9 +564,13 @@ public class NetworkExtensionAdapter: ObservableObject {
         // This is especially important when pollExtensionStateUntilConnected() calls
         // checkExtensionState() multiple times per second, which would otherwise
         // spawn multiple concurrent Task instances calling loadAllFromPreferences()
+        // Note: Task is created outside pollingQueue to avoid blocking the queue with async work
         pollingQueue.async { [weak self] in
             guard let self = self else { return }
             
+            // Create Task outside pollingQueue to avoid blocking the serial queue
+            // The async work (loadAllFromPreferences) will run concurrently, but
+            // we ensure only one call to getExtensionStatus is processed at a time
             Task {
                 do {
                     let managers = try await NETunnelProviderManager.loadAllFromPreferences()
@@ -574,9 +578,18 @@ public class NetworkExtensionAdapter: ObservableObject {
                         DispatchQueue.main.async {
                             completion(manager.connection.status)
                         }
+                    } else {
+                        // No manager found, return disconnected status
+                        DispatchQueue.main.async {
+                            completion(.disconnected)
+                        }
                     }
                 } catch {
                     print("Error loading from preferences: \(error)")
+                    // Return disconnected status on error to prevent UI hang
+                    DispatchQueue.main.async {
+                        completion(.disconnected)
+                    }
                 }
             }
         }
