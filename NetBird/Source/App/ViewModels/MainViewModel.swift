@@ -114,17 +114,22 @@ class ViewModel: ObservableObject {
     // Poll extension state repeatedly until connected or max attempts reached
     // This provides immediate UI feedback after connect() instead of waiting for periodic check
     private func pollExtensionStateUntilConnected(attempt: Int, maxAttempts: Int) {
-        guard attempt < maxAttempts else {
-            print("Max attempts reached for extension state polling")
-            return
-        }
+        // Cancel existing polling task if connect() was called again
+        connectionPollingTask?.cancel()
         
-        checkExtensionState()
-        
-        // Check again after 1 second if not connected yet
-        // Stop polling once connected (handled in checkExtensionState)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self = self else { return }
+        connectionPollingTask = Task { @MainActor in
+            guard attempt < maxAttempts else {
+                print("Max attempts reached for extension state polling")
+                return
+            }
+            
+            checkExtensionState()
+            
+            // Check again after 1 second if not connected yet
+            // Stop polling once connected (handled in checkExtensionState)
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            
             if self.extensionState != .connected {
                 self.pollExtensionStateUntilConnected(attempt: attempt + 1, maxAttempts: maxAttempts)
             }
