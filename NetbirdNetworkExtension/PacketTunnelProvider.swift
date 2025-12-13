@@ -29,18 +29,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     var currentNetworkType: NWInterface.InterfaceType?
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
-        guard let googleServicePlistPath = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-              let firebaseOptions = FirebaseOptions(contentsOfFile: googleServicePlistPath) else {
-            let error = NSError(
-                domain: "io.netbird.NetbirdNetworkExtension",
-                code: 1002,
-                userInfo: [NSLocalizedDescriptionKey: "Could not load Firebase configuration."]
-            )
-            completionHandler(error)
-            return
+        if let googleServicePlistPath = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let firebaseOptions = FirebaseOptions(contentsOfFile: googleServicePlistPath) {
+            FirebaseApp.configure(options: firebaseOptions)
         }
-
-        FirebaseApp.configure(options: firebaseOptions)
 
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)

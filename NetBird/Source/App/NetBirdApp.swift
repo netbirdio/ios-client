@@ -12,8 +12,10 @@ import FirebasePerformance
 class AppDelegate: NSObject, UIApplicationDelegate {
   func application(_ application: UIApplication,
                    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-      let options = FirebaseOptions(contentsOfFile: Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist")!)
-      FirebaseApp.configure(options: options!)
+      if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+         let options = FirebaseOptions(contentsOfFile: path) {
+          FirebaseApp.configure(options: options)
+      }
     return true
   }
 }

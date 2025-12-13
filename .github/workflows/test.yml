@@ -1,0 +1,79 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build for Simulator
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout ios-client
+        uses: actions/checkout@v4
+
+      - name: Checkout netbird
+        uses: actions/checkout@v4
+        with:
+          repository: netbirdio/netbird
+          path: netbird
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: netbird/go.sum
+
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          gomobile init
+
+      - name: Build NetBirdSDK xcframework
+        run: |
+          cd netbird
+          gomobile bind \
+            -target=ios \
+            -bundleid=io.netbird.framework \
+            -o ../NetBirdSDK.xcframework \
+            ./client/ios/NetBirdSDK
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.1.app
+
+      - name: Install xcpretty
+        run: gem install xcpretty
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project NetBird.xcodeproj \
+            -scheme NetBird
+
+      - name: Build for Simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project NetBird.xcodeproj \
+            -scheme NetBird \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty --color
+
+      # Note: The app requires a physical device to run.
+      # Unit tests can be added here when available:
+      # - name: Run Tests
+      #   run: |
+      #     set -o pipefail
+      #     xcodebuild test \
+      #       -project NetBird.xcodeproj \
+      #       -scheme NetBird \
+      #       -destination 'platform=iOS Simulator,name=iPhone 16' \
+      #       | xcpretty --color
