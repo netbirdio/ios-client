@@ -31,10 +31,10 @@ jobs:
           cache-dependency-path: netbird/go.sum
 
       - name: Install gomobile
-        run: go install golang.org/x/mobile/cmd/gomobile@latest
+        run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
 
       - name: Build NetBirdSDK xcframework
-        run: ./build-go-lib.sh ./netbird
+        run: ./build-go-lib.sh $PWD/netbird
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.1.app
@@ -58,14 +58,3 @@ jobs:
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             | xcpretty --color
-
-      # Note: The app requires a physical device to run.
-      # Unit tests can be added here when available:
-      # - name: Run Tests
-      #   run: |
-      #     set -o pipefail
-      #     xcodebuild test \
-      #       -project NetBird.xcodeproj \
-      #       -scheme NetBird \
-      #       -destination 'platform=iOS Simulator,name=iPhone 16' \
-      #       | xcpretty --color
