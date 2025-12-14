@@ -61,8 +61,8 @@ The code is divided into 4 parts:
 ## Requirements
 
 - iOS 14.0+
-- Xcode 16.0+
-- Go 1.23+
+- Xcode 16.1+
+- Go 1.24+
 - gomobile
 
 ## Run locally
