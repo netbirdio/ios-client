@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout ios-client
         uses: actions/checkout@v4
+        with:
+          path: ios-client
 
       - name: Checkout netbird
         uses: actions/checkout@v4
@@ -34,18 +36,22 @@ jobs:
         run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
 
       - name: Build NetBirdSDK xcframework
-        run: ./build-go-lib.sh $PWD/netbird
+        working-directory: ios-client
+        run: ./build-go-lib.sh ../netbird
 
       - name: Install xcpretty
+        working-directory: ios-client
         run: gem install xcpretty
 
       - name: Resolve Swift packages
+        working-directory: ios-client
         run: |
           xcodebuild -resolvePackageDependencies \
             -project NetBird.xcodeproj \
             -scheme NetBird
 
       - name: Build for Simulator
+        working-directory: ios-client
         run: |
           set -o pipefail
           xcodebuild build \
