@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1C4E6A81CD33FF6D2DEFF8D5 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91FA1F06D3375864C74EAB3B /* Foundation.framework */; };
+		1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */; };
 		50003BBC2AFBCA6B00E5EB6B /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = 50003BBB2AFBCA6B00E5EB6B /* FirebasePerformance */; };
 		50003BBE2AFBCA7900E5EB6B /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = 50003BBD2AFBCA7900E5EB6B /* FirebasePerformance */; };
 		50003BC42AFBD7D500E5EB6B /* PacketTunnelProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50245A562A80431C0034792B /* PacketTunnelProvider.swift */; };
@@ -80,8 +82,10 @@
 		50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E6081F2A7979D600BAF09B /* SideDrawer.swift */; };
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
+		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
 		978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
 		978FC4712EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
+		9CC0E000AE3F165CA72FD465 /* AppLoggerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */; };
 		F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 		F1258DEA2ED7B7D600C0D205 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE92ED7B7D200C0D205 /* Extensions.swift */; };
 		F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292042EDE5608001D91B8 /* JustifiedText.swift */; };
@@ -92,6 +96,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		075441E07E64305C28EF192A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 50A8910F2A792A15007C48FC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 50A891162A792A15007C48FC;
+			remoteInfo = NetBird;
+		};
 		50245A5A2A80431C0034792B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 50A8910F2A792A15007C48FC /* Project object */;
@@ -116,6 +127,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlobalConstantsTests.swift; sourceTree = "<group>"; };
 		50003BC82AFD2F0C00E5EB6B /* ConnectionListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionListener.swift; sourceTree = "<group>"; };
 		50003BCB2AFD3B0C00E5EB6B /* ClientState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientState.swift; sourceTree = "<group>"; };
 		501B0DC52AE04DDE004BE7A7 /* button-disconnecting.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "button-disconnecting.json"; sourceTree = "<group>"; };
@@ -151,6 +163,7 @@
 		506331FA2AF52AB900BC8F0E /* CustomLottieView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomLottieView.swift; sourceTree = "<group>"; };
 		506331FF2AF9197700BC8F0E /* button-full2-dark.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "button-full2-dark.json"; sourceTree = "<group>"; };
 		506332012AF9415500BC8F0E /* CustomTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTextField.swift; sourceTree = "<group>"; };
+		50733EE9CE10FEDDA61600B8 /* NetBirdTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NetBirdTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		508BD8442AF04A990055E415 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
 		509CCD672BE8FFBF00B7C2D8 /* TabBarButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarButton.swift; sourceTree = "<group>"; };
 		509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutesViewModel.swift; sourceTree = "<group>"; };
@@ -175,6 +188,9 @@
 		50E6081F2A7979D600BAF09B /* SideDrawer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SideDrawer.swift; sourceTree = "<group>"; };
 		50E608232A79966600BAF09B /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
+		53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedUserDefaultsTests.swift; sourceTree = "<group>"; };
+		8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppLoggerTests.swift; sourceTree = "<group>"; };
+		91FA1F06D3375864C74EAB3B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		978FC46F2EEDF167002D0EB8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerViewModel.swift; sourceTree = "<group>"; };
 		F1258DE92ED7B7D200C0D205 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
@@ -213,6 +229,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5AEE671F5AD9A52DB8CAA111 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1C4E6A81CD33FF6D2DEFF8D5 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -237,6 +261,7 @@
 			children = (
 				50245A192A7BCE830034792B /* libresolv.tbd */,
 				50245A532A80431B0034792B /* NetworkExtension.framework */,
+				82DA5029784B2E0DD517575B /* iOS */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -278,6 +303,7 @@
 				505118C72AD96ECA003027D3 /* WireGuardKitC */,
 				50A891182A792A15007C48FC /* Products */,
 				50245A182A7BCE830034792B /* Frameworks */,
+				651C942641826A7AA94ED369 /* NetBirdTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -286,6 +312,7 @@
 			children = (
 				50A891172A792A15007C48FC /* NetBird.app */,
 				50245A522A80431B0034792B /* NetbirdNetworkExtension.appex */,
+				50733EE9CE10FEDDA61600B8 /* NetBirdTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -383,6 +410,25 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		651C942641826A7AA94ED369 /* NetBirdTests */ = {
+			isa = PBXGroup;
+			children = (
+				3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */,
+				8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */,
+				53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */,
+			);
+			name = NetBirdTests;
+			path = NetBirdTests;
+			sourceTree = "<group>";
+		};
+		82DA5029784B2E0DD517575B /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				91FA1F06D3375864C74EAB3B /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -438,6 +484,24 @@
 			productReference = 50A891172A792A15007C48FC /* NetBird.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C4BEBDBD1DC2C4D7764C202C /* NetBirdTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2220A9ADFD7D3298B5431E55 /* Build configuration list for PBXNativeTarget "NetBirdTests" */;
+			buildPhases = (
+				75C1F1B3030A2B3C26074DAB /* Sources */,
+				5AEE671F5AD9A52DB8CAA111 /* Frameworks */,
+				867D87D69DACEF5CF82E9A1B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				544A834AF876CA67355D4DFA /* PBXTargetDependency */,
+			);
+			name = NetBirdTests;
+			productName = NetBirdTests;
+			productReference = 50733EE9CE10FEDDA61600B8 /* NetBirdTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -477,6 +541,7 @@
 			targets = (
 				50A891162A792A15007C48FC /* NetBird */,
 				50245A512A80431B0034792B /* NetbirdNetworkExtension */,
+				C4BEBDBD1DC2C4D7764C202C /* NetBirdTests */,
 			);
 		};
 /* End PBXProject section */
@@ -503,6 +568,13 @@
 				501B0DDB2AE04DDE004BE7A7 /* button-connected.json in Resources */,
 				501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
 				501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		867D87D69DACEF5CF82E9A1B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -624,6 +696,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		75C1F1B3030A2B3C26074DAB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */,
+				9CC0E000AE3F165CA72FD465 /* AppLoggerTests.swift in Sources */,
+				1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -632,9 +714,38 @@
 			target = 50245A512A80431B0034792B /* NetbirdNetworkExtension */;
 			targetProxy = 50245A5A2A80431C0034792B /* PBXContainerItemProxy */;
 		};
+		544A834AF876CA67355D4DFA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = NetBird;
+			target = 50A891162A792A15007C48FC /* NetBird */;
+			targetProxy = 075441E07E64305C28EF192A /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		10D34E0ECAF1104BDC8395E0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = TA739QLA7A;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NetBird.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NetBird";
+			};
+			name = Debug;
+		};
 		50245A5E2A80431C0034792B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -913,9 +1024,42 @@
 			};
 			name = Release;
 		};
+		9D05AFD5853A133CCADBCC3C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = TA739QLA7A;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NetBird.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NetBird";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		2220A9ADFD7D3298B5431E55 /* Build configuration list for PBXNativeTarget "NetBirdTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9D05AFD5853A133CCADBCC3C /* Release */,
+				10D34E0ECAF1104BDC8395E0 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		50245A5D2A80431C0034792B /* Build configuration list for PBXNativeTarget "NetbirdNetworkExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
