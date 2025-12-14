@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout ios-client
         uses: actions/checkout@v4
+        with:
+          path: ios-client
 
       - name: Checkout netbird
         uses: actions/checkout@v4
@@ -33,19 +35,45 @@ jobs:
       - name: Install gomobile
         run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
 
+      - name: Debug - List files before xcframework build
+        working-directory: ios-client
+        run: |
+          echo "=== Before xcframework build ==="
+          ls -la NetBird/Source/App/Views/ || echo "Views dir missing BEFORE"
+
       - name: Build NetBirdSDK xcframework
-        run: ./build-go-lib.sh $PWD/netbird
+        working-directory: ios-client
+        run: ./build-go-lib.sh ../netbird
+
+      - name: Debug - List files after xcframework build
+        working-directory: ios-client
+        run: |
+          echo "=== After xcframework build ==="
+          ls -la NetBird/ || echo "NetBird dir missing"
+          ls -la NetBird/Source/App/Views/ || echo "Views dir missing AFTER"
 
       - name: Install xcpretty
+        working-directory: ios-client
         run: gem install xcpretty
 
+      - name: Debug - List Source files
+        working-directory: ios-client
+        run: |
+          echo "=== Checking NetBird/Source/App structure ==="
+          ls -la NetBird/Source/App/ || echo "App dir not found"
+          ls -la NetBird/Source/App/Views/ || echo "Views dir not found"
+          ls -la NetBird/Source/App/Views/Components/ || echo "Components dir not found"
+          ls -la NetBird/Source/App/ViewModels/ || echo "ViewModels dir not found"
+
       - name: Resolve Swift packages
+        working-directory: ios-client
         run: |
           xcodebuild -resolvePackageDependencies \
             -project NetBird.xcodeproj \
             -scheme NetBird
 
       - name: Build iOS App
+        working-directory: ios-client
         run: |
           set -o pipefail
           xcodebuild build \
@@ -59,6 +87,7 @@ jobs:
             | xcpretty --color
 
       - name: Build Network Extension
+        working-directory: ios-client
         run: |
           set -o pipefail
           xcodebuild build \
