@@ -187,8 +187,13 @@ struct AdvancedView: View {
     }
 
     func shareButtonTapped() {
-        guard let documentsDir = getDocumentsDirectory() else {
-            AppLogger.shared.log("Failed to get documents directory")
+        let fileManager = FileManager.default
+        let tempDir = fileManager.temporaryDirectory.appendingPathComponent("netbird-logs-\(UUID().uuidString)")
+
+        do {
+            try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        } catch {
+            AppLogger.shared.log("Failed to create temp directory: \(error)")
             return
         }
 
@@ -198,11 +203,11 @@ struct AdvancedView: View {
         if let goLogURL = AppLogger.getGoLogFileURL() {
             do {
                 let goLogData = try String(contentsOf: goLogURL, encoding: .utf8)
-                let goLogPath = documentsDir.appendingPathComponent("netbird-engine.log")
+                let goLogPath = tempDir.appendingPathComponent("netbird-engine.log")
                 try goLogData.write(to: goLogPath, atomically: true, encoding: .utf8)
                 filesToShare.append(goLogPath)
             } catch {
-                AppLogger.shared.log("Failed to read Go log data: \(error)")
+                AppLogger.shared.log("Failed to export Go log: \(error)")
             }
         }
 
@@ -210,16 +215,17 @@ struct AdvancedView: View {
         if let swiftLogURL = AppLogger.getLogFileURL() {
             do {
                 let swiftLogData = try String(contentsOf: swiftLogURL, encoding: .utf8)
-                let swiftLogPath = documentsDir.appendingPathComponent("netbird-app.log")
+                let swiftLogPath = tempDir.appendingPathComponent("netbird-app.log")
                 try swiftLogData.write(to: swiftLogPath, atomically: true, encoding: .utf8)
                 filesToShare.append(swiftLogPath)
             } catch {
-                AppLogger.shared.log("Failed to read Swift log data: \(error)")
+                AppLogger.shared.log("Failed to export Swift log: \(error)")
             }
         }
 
         guard !filesToShare.isEmpty else {
             AppLogger.shared.log("No log files to share")
+            try? FileManager.default.removeItem(at: tempDir)
             return
         }
 
@@ -229,6 +235,15 @@ struct AdvancedView: View {
             .assignToContact,
             .saveToCameraRoll
         ]
+
+        // Clean up temp files after share completes (success or cancel)
+        activityViewController.completionWithItemsHandler = { _, _, _, _ in
+            do {
+                try FileManager.default.removeItem(at: tempDir)
+            } catch {
+                AppLogger.shared.log("Failed to cleanup temp log files: \(error)")
+            }
+        }
 
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let rootViewController = windowScene.windows.first?.rootViewController {
@@ -242,11 +257,6 @@ struct AdvancedView: View {
             }
             rootViewController.present(activityViewController, animated: true, completion: nil)
         }
-    }
-        
-    func getDocumentsDirectory() -> URL? {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        return paths.first
     }
 
     func checkForValidPresharedKey(text: String) {
