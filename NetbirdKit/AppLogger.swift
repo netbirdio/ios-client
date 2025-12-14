@@ -16,6 +16,7 @@ public class AppLogger {
     private var fileHandle: FileHandle?
     private var logFileURL: URL?
     private var isReady = false
+    private let setupSemaphore = DispatchSemaphore(value: 0)
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -44,6 +45,7 @@ public class AppLogger {
 
         guard let baseURL = containerURL else {
             print("AppLogger: No writable container found")
+            setupSemaphore.signal()
             return
         }
 
@@ -53,17 +55,22 @@ public class AppLogger {
                 try fileManager.createDirectory(at: baseURL, withIntermediateDirectories: true)
             } catch {
                 print("AppLogger: Failed to create directory: \(error)")
+                setupSemaphore.signal()
                 return
             }
         }
 
         logFileURL = baseURL.appendingPathComponent(logFileName)
-        guard let url = logFileURL else { return }
+        guard let url = logFileURL else {
+            setupSemaphore.signal()
+            return
+        }
 
         if !fileManager.fileExists(atPath: url.path) {
             let created = fileManager.createFile(atPath: url.path, contents: nil)
             if !created {
                 print("AppLogger: Failed to create log file at \(url.path)")
+                setupSemaphore.signal()
                 return
             }
         }
@@ -75,6 +82,7 @@ public class AppLogger {
         } catch {
             print("AppLogger: Failed to open log file: \(error)")
         }
+        setupSemaphore.signal()
     }
 
     public func log(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
@@ -129,6 +137,10 @@ public class AppLogger {
     }
 
     public static func getLogFileURL() -> URL? {
+        // Wait for setup to complete (with timeout to avoid blocking forever)
+        _ = shared.setupSemaphore.wait(timeout: .now() + 2.0)
+        shared.setupSemaphore.signal()  // Re-signal for future calls
+
         guard let url = shared.logFileURL,
               FileManager.default.fileExists(atPath: url.path) else {
             return nil

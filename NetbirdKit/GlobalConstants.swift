@@ -8,5 +8,6 @@
 struct GlobalConstants {
     static let keyForceRelayConnection = "isConnectionForceRelayed"
     static let keyLoginRequired = "netbird.loginRequired"
+    static let keyNetworkUnavailable = "netbird.networkUnavailable"
     static let userPreferencesSuiteName = "group.io.netbird.app"
 }

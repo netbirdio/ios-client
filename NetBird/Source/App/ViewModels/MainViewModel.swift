@@ -58,7 +58,8 @@ class ViewModel: ObservableObject {
     }
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
-    
+    @Published var networkUnavailable = false
+
     var preferences = Preferences.newPreferences()
     var buttonLock = false
     let defaults = UserDefaults.standard
@@ -119,13 +120,15 @@ class ViewModel: ObservableObject {
     
     func startPollingDetails() {
         networkExtensionAdapter.startTimer { details in
-            
+
             self.checkExtensionState()
+            self.checkNetworkUnavailableFlag()
+
             if self.extensionState == .disconnected && self.extensionStateText == "Connected" {
                 self.showAuthenticationRequired = true
                 self.extensionStateText = "Disconnected"
             }
-            
+
             if details.ip != self.ip || details.fqdn != self.fqdn || details.managementStatus != self.managementStatus
             {
                 if !details.fqdn.isEmpty && details.fqdn != self.fqdn {
@@ -342,6 +345,18 @@ class ViewModel: ObservableObject {
 
         // Reload preferences for new server
         preferences = Preferences.newPreferences()
+    }
+
+    /// Checks shared app-group container for network unavailable flag set by the network extension.
+    /// Updates the networkUnavailable property to trigger UI animation changes.
+    func checkNetworkUnavailableFlag() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        let isUnavailable = userDefaults?.bool(forKey: GlobalConstants.keyNetworkUnavailable) ?? false
+
+        if isUnavailable != networkUnavailable {
+            AppLogger.shared.log("Network unavailable flag changed: \(isUnavailable)")
+            networkUnavailable = isUnavailable
+        }
     }
 
     /// Checks shared app-group container for login required flag set by the network extension.

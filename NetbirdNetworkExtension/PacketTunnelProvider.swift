@@ -27,6 +27,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Network state variables - accessed only on monitorQueue for thread safety
     private var currentNetworkType: NWInterface.InterfaceType?
     private var wasStoppedDueToNoNetwork = false
+    private var isRestartInProgress = false
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
@@ -36,6 +37,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         monitorQueue.async { [weak self] in
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
+            self?.isRestartInProgress = false
         }
         startMonitoringNetworkChanges()
 
@@ -57,6 +59,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         monitorQueue.async { [weak self] in
             self?.wasStoppedDueToNoNetwork = false
+            self?.isRestartInProgress = false
         }
         adapter.stop()
         guard let pathMonitor = self.pathMonitor else {
@@ -111,41 +114,24 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         if path.status != .satisfied {
             AppLogger.shared.log("No network connection detected")
 
-            // Stop engine if running and not already stopped for this reason
-            // Note: We do NOT set isRestarting here because we're just stopping, not restarting
-            // This allows the UI to properly show disconnecting/disconnected state
-            if !wasStoppedDueToNoNetwork && adapter.clientState != .disconnected {
-                AppLogger.shared.log("Stopping engine due to no network (airplane mode?)")
+            // Signal UI to show disconnecting animation via shared flag
+            // We don't call adapter.stop() to avoid race conditions with Go SDK callbacks
+            // The Go SDK will handle network loss internally and reconnect when available
+            if !wasStoppedDueToNoNetwork {
+                AppLogger.shared.log("Network unavailable - signaling UI for disconnecting animation, clientState=\(adapter.clientState)")
                 wasStoppedDueToNoNetwork = true
                 currentNetworkType = nil
-                adapter.stop { [weak self] in
-                    AppLogger.shared.log("Engine stopped due to no network")
-                }
+                setNetworkUnavailableFlag(true)
             }
             return
         }
 
-        // Network is back - check if we need to restart
+        // Network is available again
         if wasStoppedDueToNoNetwork {
-            AppLogger.shared.log("Network restored after unavailability")
+            AppLogger.shared.log("Network restored after unavailability - signaling UI")
             wasStoppedDueToNoNetwork = false
-
-            if adapter.needsLogin() {
-                AppLogger.shared.log("Login required after network restore - signaling main app")
-                signalLoginRequired()
-                // Leave app in stopped state - user needs to open app to login
-            } else {
-                AppLogger.shared.log("Restarting engine after network restore")
-                adapter.isRestarting = true
-                adapter.start { [weak self] error in
-                    self?.adapter.isRestarting = false
-                    if let error = error {
-                        AppLogger.shared.log("Restart after network restore failed: \(error.localizedDescription)")
-                    } else {
-                        AppLogger.shared.log("Engine restarted after network restore")
-                    }
-                }
-            }
+            setNetworkUnavailableFlag(false)
+            // Don't need to restart - Go SDK handles reconnection automatically
             return
         }
 
@@ -175,12 +161,18 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func restartClient() {
+        if isRestartInProgress {
+            AppLogger.shared.log("restartClient: skipping - restart already in progress")
+            return
+        }
         AppLogger.shared.log("restartClient: starting restart sequence")
+        isRestartInProgress = true
         adapter.isRestarting = true
         adapter.stop { [weak self] in
             AppLogger.shared.log("restartClient: stop completed, starting client")
             self?.adapter.start { error in
                 self?.adapter.isRestarting = false
+                self?.isRestartInProgress = false
                 if let error = error {
                     AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
                 } else {
@@ -230,6 +222,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 }
             }
         }
+    }
+
+    func setNetworkUnavailableFlag(_ unavailable: Bool) {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(unavailable, forKey: GlobalConstants.keyNetworkUnavailable)
+        userDefaults?.synchronize()
+        AppLogger.shared.log("Network unavailable flag set to \(unavailable)")
     }
 
     func login(completionHandler: (Data?) -> Void) {
