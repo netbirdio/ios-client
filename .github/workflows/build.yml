@@ -12,7 +12,7 @@ concurrency:
 jobs:
   build:
     name: Build iOS App
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - name: Checkout ios-client
@@ -37,7 +37,7 @@ jobs:
         run: ./build-go-lib.sh $PWD/netbird
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.1.app
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app
 
       - name: Install xcpretty
         run: gem install xcpretty
