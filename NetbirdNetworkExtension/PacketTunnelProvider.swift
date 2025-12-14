@@ -180,12 +180,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         adapter.stop { [weak self] in
             AppLogger.shared.log("restartClient: stop completed, starting client")
             self?.adapter.start { error in
+                self?.adapter.isRestarting = false
                 if let error = error {
-                    self?.adapter.isRestarting = false
                     AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
                 } else {
-                    // Note: isRestarting is already cleared by onConnected() callback
-                    self?.adapter.isRestarting = false
                     AppLogger.shared.log("restartClient: start completed successfully")
                 }
             }
