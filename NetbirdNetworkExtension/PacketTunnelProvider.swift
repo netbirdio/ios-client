@@ -8,10 +8,6 @@
 import NetworkExtension
 import Network
 import os
-import Firebase
-import FirebaseCrashlytics
-import FirebaseCore
-import FirebasePerformance
 import UserNotifications
 
 
@@ -33,12 +29,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var wasStoppedDueToNoNetwork = false
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
-        if FirebaseApp.app() == nil,
-           let googleServicePlistPath = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-           let firebaseOptions = FirebaseOptions(contentsOfFile: googleServicePlistPath) {
-            FirebaseApp.configure(options: firebaseOptions)
-        }
-
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
         }
@@ -193,11 +183,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 if let error = error {
                     self?.adapter.isRestarting = false
                     AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
-                    Analytics.logEvent("packet_tunnel_provider", parameters: [
-                        "level": "ERROR",
-                        "method": "restartClient",
-                        "error" : error.localizedDescription
-                    ])
                 } else {
                     // Note: isRestarting is already cleared by onConnected() callback
                     self?.adapter.isRestarting = false
