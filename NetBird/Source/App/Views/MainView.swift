@@ -430,8 +430,7 @@ struct ChangeServerAlert: View {
                 .foregroundColor(Color("TextAlert"))
                 .multilineTextAlignment(.center)
             SolidButton(text: "Confirm") {
-                viewModel.close()
-                viewModel.clearDetails()
+                viewModel.handleServerChanged()
                 isPresented.toggle()
                 viewModel.navigateToServerView = true
             }

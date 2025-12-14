@@ -137,16 +137,14 @@ class ViewModel: ObservableObject {
                     self.defaults.set(details.ip, forKey: "ip")
                     self.ip = details.ip
                 }
-                print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(self.networkExtensionAdapter.isLoginRequired())")
+                print("Status: \(details.managementStatus) - Extension: \(self.extensionState)")
                 
                 if details.managementStatus != self.managementStatus {
                     self.managementStatus = details.managementStatus
                 }
                 
-                if details.managementStatus == .disconnected && self.extensionState == .connected && self.networkExtensionAdapter.isLoginRequired() {
-                    self.networkExtensionAdapter.stop()
-                    self.showAuthenticationRequired = true
-                }
+                // Login required detection is handled by the network extension via signalLoginRequired()
+                // The app checks for this flag in checkLoginRequiredFlag() when becoming active
             }
             
             self.statusDetailsValid = true
@@ -314,6 +312,36 @@ class ViewModel: ObservableObject {
         } catch {
             print("Failed to read the log file: \(error.localizedDescription)")
         }
+    }
+
+    /// Handles server change completion by stopping the engine and resetting all connection state.
+    func handleServerChanged() {
+        AppLogger.shared.log("Server changed - stopping engine and resetting state")
+
+        // Reset connection flags first to update UI immediately
+        connectPressed = false
+        disconnectPressed = false
+        buttonLock = false
+
+        // Reset connection state
+        extensionState = .disconnected
+        extensionStateText = "Disconnected"
+        managementStatus = .disconnected
+        statusDetailsValid = false
+
+        // Clear peer info
+        peerViewModel.peerInfo = []
+
+        // Clear connection details
+        clearDetails()
+
+        // Stop the network extension in background (non-blocking)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.networkExtensionAdapter.stop()
+        }
+
+        // Reload preferences for new server
+        preferences = Preferences.newPreferences()
     }
 
     /// Checks shared app-group container for login required flag set by the network extension.

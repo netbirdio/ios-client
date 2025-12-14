@@ -112,13 +112,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             AppLogger.shared.log("No network connection detected")
 
             // Stop engine if running and not already stopped for this reason
+            // Note: We do NOT set isRestarting here because we're just stopping, not restarting
+            // This allows the UI to properly show disconnecting/disconnected state
             if !wasStoppedDueToNoNetwork && adapter.clientState != .disconnected {
                 AppLogger.shared.log("Stopping engine due to no network (airplane mode?)")
                 wasStoppedDueToNoNetwork = true
                 currentNetworkType = nil
-                adapter.isRestarting = true
                 adapter.stop { [weak self] in
-                    self?.adapter.isRestarting = false
                     AppLogger.shared.log("Engine stopped due to no network")
                 }
             }

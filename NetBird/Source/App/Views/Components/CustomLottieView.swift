@@ -28,7 +28,21 @@ struct CustomLottieView: UIViewRepresentable {
             context.coordinator.engineStatus = engineStatus
             context.coordinator.connectPressed = connectPressed
             context.coordinator.disconnectPressed = disconnectPressed
-            
+
+            // Force reset to disconnected state when all flags indicate disconnected
+            // This handles cases like server change where we need to immediately reset
+            let shouldForceReset = extensionStatus == .disconnected
+                && !connectPressed
+                && !disconnectPressed
+                && engineStatus == .disconnected
+
+            if shouldForceReset {
+                context.coordinator.isPlaying = false
+                uiView.stop()
+                uiView.currentFrame = context.coordinator.disconnectedFrame
+                return
+            }
+
             if context.coordinator.isPlaying {
                 print("Is still playing")
                 return
@@ -52,9 +66,15 @@ struct CustomLottieView: UIViewRepresentable {
                 case .connecting:
                     context.coordinator.playConnectingLoop(uiView: uiView, viewModel: viewModel)
                 case .disconnected:
-                    break
+                    // Engine disconnected but tunnel still up - show disconnected state
+                    DispatchQueue.main.async {
+                        viewModel.extensionStateText = "Disconnected"
+                    }
+                    uiView.currentFrame = context.coordinator.disconnectedFrame
                 case .disconnecting:
-                    break
+                    DispatchQueue.main.async {
+                        context.coordinator.playDisconnectingFadeIn(uiView: uiView, viewModel: viewModel)
+                    }
                 }
             case .disconnected:
                 if connectPressed {

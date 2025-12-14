@@ -417,7 +417,6 @@
 				8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */,
 				53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */,
 			);
-			name = NetBirdTests;
 			path = NetBirdTests;
 			sourceTree = "<group>";
 		};
@@ -930,7 +929,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -982,7 +981,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
