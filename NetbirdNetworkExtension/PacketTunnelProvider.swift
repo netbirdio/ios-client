@@ -12,6 +12,7 @@ import Firebase
 import FirebaseCrashlytics
 import FirebaseCore
 import FirebasePerformance
+import UserNotifications
 
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
@@ -28,6 +29,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     let monitorQueue = DispatchQueue(label: "NetworkMonitor")
     var currentNetworkType: NWInterface.InterfaceType?
 
+    /// Tracks if engine was stopped due to network unavailability (e.g., airplane mode)
+    var wasStoppedDueToNoNetwork = false
+
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let googleServicePlistPath = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
            let firebaseOptions = FirebaseOptions(contentsOfFile: googleServicePlistPath) {
@@ -39,6 +43,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         currentNetworkType = nil
+        wasStoppedDueToNoNetwork = false
         startMonitoringNetworkChanges()
 
         if adapter.needsLogin() {
@@ -57,6 +62,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        wasStoppedDueToNoNetwork = false
         adapter.stop()
         guard let pathMonitor = self.pathMonitor else {
             print("pathMonitor is nil; nothing to cancel.")
@@ -107,11 +113,48 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func handleNetworkChange(path: Network.NWPath) {
-        guard path.status == .satisfied else {
-            AppLogger.shared.log("No network connection")
+        if path.status != .satisfied {
+            AppLogger.shared.log("No network connection detected")
+
+            // Stop engine if running and not already stopped for this reason
+            if !wasStoppedDueToNoNetwork && adapter.clientState != .disconnected {
+                AppLogger.shared.log("Stopping engine due to no network (airplane mode?)")
+                wasStoppedDueToNoNetwork = true
+                currentNetworkType = nil
+                adapter.isRestarting = true
+                adapter.stop { [weak self] in
+                    self?.adapter.isRestarting = false
+                    AppLogger.shared.log("Engine stopped due to no network")
+                }
+            }
             return
         }
 
+        // Network is back - check if we need to restart
+        if wasStoppedDueToNoNetwork {
+            AppLogger.shared.log("Network restored after unavailability")
+            wasStoppedDueToNoNetwork = false
+
+            if adapter.needsLogin() {
+                AppLogger.shared.log("Login required after network restore - sending notification")
+                sendLoginRequiredNotification()
+                // Leave app in stopped state - user needs to open app to login
+            } else {
+                AppLogger.shared.log("Restarting engine after network restore")
+                adapter.isRestarting = true
+                adapter.start { [weak self] error in
+                    self?.adapter.isRestarting = false
+                    if let error = error {
+                        AppLogger.shared.log("Restart after network restore failed: \(error.localizedDescription)")
+                    } else {
+                        AppLogger.shared.log("Engine restarted after network restore")
+                    }
+                }
+            }
+            return
+        }
+
+        // Handle wifi <-> cellular transitions
         let newNetworkType: NWInterface.InterfaceType? = {
             if path.usesInterfaceType(.wifi) {
                 return .wifi
@@ -155,6 +198,27 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     self?.adapter.isRestarting = false
                     AppLogger.shared.log("restartClient: start completed successfully")
                 }
+            }
+        }
+    }
+
+    func sendLoginRequiredNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "NetBird"
+        content.body = "Login required. Please open the app to reconnect."
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "netbird.login.required",
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                AppLogger.shared.log("Failed to send login notification: \(error.localizedDescription)")
+            } else {
+                AppLogger.shared.log("Login required notification sent")
             }
         }
     }
