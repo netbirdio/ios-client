@@ -43,8 +43,6 @@
 		505119112AE03F68003027D3 /* FirebaseAnalyticsSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 505119102AE03F68003027D3 /* FirebaseAnalyticsSwift */; };
 		505119132AE03F68003027D3 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 505119122AE03F68003027D3 /* FirebaseAppCheck */; };
 		505344B92C3EFE4C00223065 /* TransparentGradientButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 505344B82C3EFE4C00223065 /* TransparentGradientButton.swift */; };
-		506331F82AF1676B00BC8F0E /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 506331F72AF1676B00BC8F0E /* GoogleService-Info.plist */; };
-		506331F92AF1676B00BC8F0E /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 506331F72AF1676B00BC8F0E /* GoogleService-Info.plist */; };
 		506331FB2AF52AB900BC8F0E /* CustomLottieView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 506331FA2AF52AB900BC8F0E /* CustomLottieView.swift */; };
 		506331FE2AF53CFF00BC8F0E /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 506331FD2AF53CFF00BC8F0E /* Lottie */; };
 		506332002AF9197700BC8F0E /* button-full2-dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 506331FF2AF9197700BC8F0E /* button-full2-dark.json */; };
@@ -488,7 +486,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				506331F92AF1676B00BC8F0E /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -504,7 +501,6 @@
 				501B0DCD2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD12AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
 				501B0DDB2AE04DDE004BE7A7 /* button-connected.json in Resources */,
-				506331F82AF1676B00BC8F0E /* GoogleService-Info.plist in Resources */,
 				501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
 				501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */,
 			);
@@ -524,7 +520,6 @@
 				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}",
 				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${PRODUCT_NAME}",
 				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Info.plist",
-				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/GoogleService-Info.plist",
 				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
 			);
 			outputFileListPaths = (
@@ -533,7 +528,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\n\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
+			shellScript = "# Skip Crashlytics upload if GoogleService-Info.plist is not present\nGOOGLE_PLIST=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleService-Info.plist\"\nif [ ! -f \"$GOOGLE_PLIST\" ]; then\n    echo \"GoogleService-Info.plist not found. Skipping Crashlytics upload.\"\n    exit 0\nfi\n\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
 		};
 		508BD8522AF158F80055E415 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -546,7 +541,6 @@
 				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}",
 				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${PRODUCT_NAME}",
 				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Info.plist",
-				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/GoogleService-Info.plist",
 				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
 			);
 			outputFileListPaths = (
@@ -555,7 +549,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\n\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
+			shellScript = "# Skip Crashlytics upload if GoogleService-Info.plist is not present\nGOOGLE_PLIST=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleService-Info.plist\"\nif [ ! -f \"$GOOGLE_PLIST\" ]; then\n    echo \"GoogleService-Info.plist not found. Skipping Crashlytics upload.\"\n    exit 0\nfi\n\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
