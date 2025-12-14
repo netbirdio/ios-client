@@ -186,14 +186,14 @@ struct CustomLottieView: UIViewRepresentable {
                 } else if self.engineStatus == .connected && self.extensionStatus == .connected {
                     // Engine recovered to connected during internal restart (e.g., network switch)
                     // Extension never disconnected, so skip fade out and go directly to connected state
-                    self.isPlaying = false
                     DispatchQueue.main.async {
+                        self.isPlaying = false
+                        uiView.currentFrame = self.connectedFrame
                         viewModel.extensionStateText = "Connected"
                         viewModel.connectPressed = false
                         viewModel.disconnectPressed = false
                         viewModel.routeViewModel.getRoutes()
                     }
-                    uiView.currentFrame = self.connectedFrame
                 } else {
                     playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
                 }
