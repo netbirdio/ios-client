@@ -12,7 +12,7 @@ concurrency:
 jobs:
   test:
     name: Build for Simulator
-    runs-on: macos-15
+    runs-on: macos-14
 
     steps:
       - name: Checkout ios-client
