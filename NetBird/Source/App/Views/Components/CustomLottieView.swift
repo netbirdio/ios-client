@@ -58,13 +58,11 @@ struct CustomLottieView: UIViewRepresentable {
             }
 
             if context.coordinator.isPlaying {
-                print("Is still playing")
                 return
             }
             // Act based on the new status
             switch extensionStatus {
             case .connected:
-                print("Management status changed to \(engineStatus)")
                 if disconnectPressed {
                     DispatchQueue.main.async {
                         context.coordinator.playDisconnectingFadeIn(uiView: uiView, viewModel: viewModel)
@@ -165,7 +163,6 @@ struct CustomLottieView: UIViewRepresentable {
                 if self.engineStatus == .connected {
                     self.playFadeOut(uiView: uiView, startFrame: self.connectingFadeOut.startFrame, endFrame: self.connectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Connected")
                 } else if (self.engineStatus == .disconnecting || self.extensionStatus == .disconnecting || self.engineStatus == .disconnected || self.extensionStatus == .disconnected) && !(self.connectPressed ?? false) {
-                    print("Connected pressed = \(String(describing: self.connectPressed?.description))")
                     self.playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
                 } else if !(self.connectPressed ?? false) && self.engineStatus == .connecting {
                     // Automatic reconnection (not user-initiated) stuck in connecting state

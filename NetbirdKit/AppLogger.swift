@@ -11,7 +11,7 @@ public class AppLogger {
     public static let shared = AppLogger()
 
     private let logFileName = "swift-log.log"
-    private let maxLogSize: UInt64 = 5 * 1024 * 1024  // 5 MB
+    private let maxLogSize: UInt64 = 100 * 1024  // 100 KB
     private let queue = DispatchQueue(label: "io.netbird.logger", qos: .utility)
     private var fileHandle: FileHandle?
     private var logFileURL: URL?
