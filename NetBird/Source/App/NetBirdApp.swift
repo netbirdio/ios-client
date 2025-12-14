@@ -35,6 +35,7 @@ struct NetBirdApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) {_ in
                     print("App is active!")
                     viewModel.checkExtensionState()
+                    viewModel.checkLoginRequiredFlag()
                     viewModel.startPollingDetails()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) {_ in

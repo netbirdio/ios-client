@@ -9,6 +9,7 @@ import UIKit
 import NetworkExtension
 import os
 import Combine
+import UserNotifications
 
 @MainActor
 class ViewModel: ObservableObject {
@@ -312,6 +313,51 @@ class ViewModel: ObservableObject {
             print(logContents)
         } catch {
             print("Failed to read the log file: \(error.localizedDescription)")
+        }
+    }
+
+    /// Checks shared app-group container for login required flag set by the network extension.
+    /// If set, schedules a local notification (if authorized) and shows the authentication UI.
+    func checkLoginRequiredFlag() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        guard userDefaults?.bool(forKey: GlobalConstants.keyLoginRequired) == true else {
+            return
+        }
+
+        // Clear the flag immediately
+        userDefaults?.set(false, forKey: GlobalConstants.keyLoginRequired)
+        userDefaults?.synchronize()
+
+        AppLogger.shared.log("Login required flag detected from extension")
+
+        // Show authentication required UI
+        self.showAuthenticationRequired = true
+
+        // Schedule local notification if authorized
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else {
+                AppLogger.shared.log("Notifications not authorized, skipping notification")
+                return
+            }
+
+            let content = UNMutableNotificationContent()
+            content.title = "NetBird"
+            content.body = "Login required. Please open the app to reconnect."
+            content.sound = .default
+
+            let request = UNNotificationRequest(
+                identifier: "netbird.login.required",
+                content: content,
+                trigger: nil
+            )
+
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    AppLogger.shared.log("Failed to schedule login notification: \(error.localizedDescription)")
+                } else {
+                    AppLogger.shared.log("Login required notification scheduled from main app")
+                }
+            }
         }
     }
 }

@@ -141,8 +141,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             wasStoppedDueToNoNetwork = false
 
             if adapter.needsLogin() {
-                AppLogger.shared.log("Login required after network restore - sending notification")
-                sendLoginRequiredNotification()
+                AppLogger.shared.log("Login required after network restore - signaling main app")
+                signalLoginRequired()
                 // Leave app in stopped state - user needs to open app to login
             } else {
                 AppLogger.shared.log("Restarting engine after network restore")
@@ -207,23 +207,44 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
-    func sendLoginRequiredNotification() {
-        let content = UNMutableNotificationContent()
-        content.title = "NetBird"
-        content.body = "Login required. Please open the app to reconnect."
-        content.sound = .default
+    /// Signals login required by persisting a flag to the shared app-group container.
+    /// The main app reads this flag when it becomes active and handles notification scheduling.
+    /// Direct notification from extension is best-effort only since NEPacketTunnelProvider
+    /// notification scheduling is unreliable.
+    func signalLoginRequired() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(true, forKey: GlobalConstants.keyLoginRequired)
+        userDefaults?.synchronize()
+        AppLogger.shared.log("Login required flag set in shared container")
 
-        let request = UNNotificationRequest(
-            identifier: "netbird.login.required",
-            content: content,
-            trigger: nil
-        )
+        // Best-effort notification attempt from extension (may not work reliably)
+        sendLoginNotificationBestEffort()
+    }
 
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                AppLogger.shared.log("Failed to send login notification: \(error.localizedDescription)")
-            } else {
-                AppLogger.shared.log("Login required notification sent")
+    private func sendLoginNotificationBestEffort() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else {
+                AppLogger.shared.log("Notifications not authorized, skipping extension notification attempt")
+                return
+            }
+
+            let content = UNMutableNotificationContent()
+            content.title = "NetBird"
+            content.body = "Login required. Please open the app to reconnect."
+            content.sound = .default
+
+            let request = UNNotificationRequest(
+                identifier: "netbird.login.required",
+                content: content,
+                trigger: nil
+            )
+
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    AppLogger.shared.log("Extension notification attempt failed (expected): \(error.localizedDescription)")
+                } else {
+                    AppLogger.shared.log("Extension notification attempt succeeded")
+                }
             }
         }
     }
