@@ -17,21 +17,13 @@
 		50003BCE2AFD405600E5EB6B /* ConnectionListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50003BC82AFD2F0C00E5EB6B /* ConnectionListener.swift */; };
 		50051DE02AE69A8100AFBDC4 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 50051DDF2AE69A8100AFBDC4 /* FirebaseCrashlytics */; };
 		501B0DCD2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DC52AE04DDE004BE7A7 /* button-disconnecting.json */; };
-		501B0DCE2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DC52AE04DDE004BE7A7 /* button-disconnecting.json */; };
 		501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DC62AE04DDE004BE7A7 /* button-connecting-loop.json */; };
-		501B0DD02AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DC62AE04DDE004BE7A7 /* button-connecting-loop.json */; };
 		501B0DD12AE04DDE004BE7A7 /* logo_NetBird.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DC72AE04DDE004BE7A7 /* logo_NetBird.json */; };
-		501B0DD22AE04DDE004BE7A7 /* logo_NetBird.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DC72AE04DDE004BE7A7 /* logo_NetBird.json */; };
 		501B0DD32AE04DDE004BE7A7 /* loading.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DC82AE04DDE004BE7A7 /* loading.json */; };
-		501B0DD42AE04DDE004BE7A7 /* loading.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DC82AE04DDE004BE7A7 /* loading.json */; };
 		501B0DD52AE04DDE004BE7A7 /* button-start-connecting.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DC92AE04DDE004BE7A7 /* button-start-connecting.json */; };
-		501B0DD62AE04DDE004BE7A7 /* button-start-connecting.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DC92AE04DDE004BE7A7 /* button-start-connecting.json */; };
 		501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DCA2AE04DDE004BE7A7 /* button-full2.json */; };
-		501B0DD82AE04DDE004BE7A7 /* button-full2.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DCA2AE04DDE004BE7A7 /* button-full2.json */; };
 		501B0DD92AE04DDE004BE7A7 /* button-full.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DCB2AE04DDE004BE7A7 /* button-full.json */; };
-		501B0DDA2AE04DDE004BE7A7 /* button-full.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DCB2AE04DDE004BE7A7 /* button-full.json */; };
 		501B0DDB2AE04DDE004BE7A7 /* button-connected.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DCC2AE04DDE004BE7A7 /* button-connected.json */; };
-		501B0DDC2AE04DDE004BE7A7 /* button-connected.json in Resources */ = {isa = PBXBuildFile; fileRef = 501B0DCC2AE04DDE004BE7A7 /* button-connected.json */; };
 		50213A262A8D0A870031D993 /* NetworkChangeListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50245A2D2A7BDC470034792B /* NetworkChangeListener.swift */; };
 		50213A2D2A8D0AA30031D993 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50245A292A7BDB590034792B /* Preferences.swift */; };
 		50216D892ACB18EE009574C9 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50245A292A7BDB590034792B /* Preferences.swift */; };
@@ -496,15 +488,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				501B0DCE2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
-				501B0DD22AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
-				501B0DDC2AE04DDE004BE7A7 /* button-connected.json in Resources */,
-				501B0DD62AE04DDE004BE7A7 /* button-start-connecting.json in Resources */,
-				501B0DDA2AE04DDE004BE7A7 /* button-full.json in Resources */,
-				501B0DD02AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
 				506331F92AF1676B00BC8F0E /* GoogleService-Info.plist in Resources */,
-				501B0DD82AE04DDE004BE7A7 /* button-full2.json in Resources */,
-				501B0DD42AE04DDE004BE7A7 /* loading.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
