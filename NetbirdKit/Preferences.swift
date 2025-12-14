@@ -15,16 +15,22 @@ class Preferences {
 
     static func configFile() -> String {
         let fileManager = FileManager.default
-        let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
-        let logURL = groupURL?.appendingPathComponent("netbird.cfg")
-        return logURL!.relativePath
+        if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") {
+            return groupURL.appendingPathComponent("netbird.cfg").relativePath
+        }
+        // Fallback for testing or when app group is not available
+        let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
+        return (documentsPath as NSString).appendingPathComponent("netbird.cfg")
     }
     
     static func stateFile() -> String {
         let fileManager = FileManager.default
-        let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
-        let logURL = groupURL?.appendingPathComponent("state.json")
-        return logURL!.relativePath
+        if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") {
+            return groupURL.appendingPathComponent("state.json").relativePath
+        }
+        // Fallback for testing or when app group is not available
+        let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
+        return (documentsPath as NSString).appendingPathComponent("state.json")
     }
     
 }
