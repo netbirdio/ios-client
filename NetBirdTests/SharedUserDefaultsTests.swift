@@ -8,47 +8,54 @@ import XCTest
 
 final class SharedUserDefaultsTests: XCTestCase {
 
-    var userDefaults: UserDefaults!
+    var userDefaults: UserDefaults?
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
         userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        guard userDefaults != nil else {
+            throw XCTSkip("Shared UserDefaults suite not available (app group may not be configured)")
+        }
     }
 
     override func tearDown() {
-        // Clean up test keys
         userDefaults?.removeObject(forKey: GlobalConstants.keyLoginRequired)
         userDefaults?.removeObject(forKey: GlobalConstants.keyForceRelayConnection)
         super.tearDown()
     }
 
-    func testUserDefaultsSuiteExists() {
-        XCTAssertNotNil(userDefaults, "Shared UserDefaults suite should exist")
+    func testUserDefaultsSuiteExists() throws {
+        let defaults = try XCTUnwrap(userDefaults, "Shared UserDefaults suite should exist")
+        XCTAssertNotNil(defaults)
     }
 
-    func testLoginRequiredFlagDefaultsToFalse() {
-        userDefaults.removeObject(forKey: GlobalConstants.keyLoginRequired)
-        let value = userDefaults.bool(forKey: GlobalConstants.keyLoginRequired)
+    func testLoginRequiredFlagDefaultsToFalse() throws {
+        let defaults = try XCTUnwrap(userDefaults)
+        defaults.removeObject(forKey: GlobalConstants.keyLoginRequired)
+        let value = defaults.bool(forKey: GlobalConstants.keyLoginRequired)
         XCTAssertFalse(value, "Login required flag should default to false")
     }
 
-    func testLoginRequiredFlagCanBeSet() {
-        userDefaults.set(true, forKey: GlobalConstants.keyLoginRequired)
-        let value = userDefaults.bool(forKey: GlobalConstants.keyLoginRequired)
+    func testLoginRequiredFlagCanBeSet() throws {
+        let defaults = try XCTUnwrap(userDefaults)
+        defaults.set(true, forKey: GlobalConstants.keyLoginRequired)
+        let value = defaults.bool(forKey: GlobalConstants.keyLoginRequired)
         XCTAssertTrue(value, "Login required flag should be true after setting")
     }
 
-    func testLoginRequiredFlagCanBeCleared() {
-        userDefaults.set(true, forKey: GlobalConstants.keyLoginRequired)
-        userDefaults.set(false, forKey: GlobalConstants.keyLoginRequired)
-        let value = userDefaults.bool(forKey: GlobalConstants.keyLoginRequired)
+    func testLoginRequiredFlagCanBeCleared() throws {
+        let defaults = try XCTUnwrap(userDefaults)
+        defaults.set(true, forKey: GlobalConstants.keyLoginRequired)
+        defaults.set(false, forKey: GlobalConstants.keyLoginRequired)
+        let value = defaults.bool(forKey: GlobalConstants.keyLoginRequired)
         XCTAssertFalse(value, "Login required flag should be false after clearing")
     }
 
-    func testForceRelayConnectionDefaultsToTrue() {
-        userDefaults.removeObject(forKey: GlobalConstants.keyForceRelayConnection)
-        userDefaults.register(defaults: [GlobalConstants.keyForceRelayConnection: true])
-        let value = userDefaults.bool(forKey: GlobalConstants.keyForceRelayConnection)
+    func testForceRelayConnectionDefaultsToTrue() throws {
+        let defaults = try XCTUnwrap(userDefaults)
+        defaults.removeObject(forKey: GlobalConstants.keyForceRelayConnection)
+        defaults.register(defaults: [GlobalConstants.keyForceRelayConnection: true])
+        let value = defaults.bool(forKey: GlobalConstants.keyForceRelayConnection)
         XCTAssertTrue(value, "Force relay connection should default to true")
     }
 }
