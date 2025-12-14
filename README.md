@@ -5,16 +5,16 @@
  </p>
    <p>
       <a href="https://github.com/netbirdio/netbird/blob/main/LICENSE">
-        <img height="20" src="https://www.gnu.org/graphics/gplv3-88x31.png" />
+        <img height="20" src="https://www.gnu.org/graphics/gplv3-88x31.png" alt="License: GPL-3.0" />
       </a>
      <a href="https://join.slack.com/t/netbirdio/shared_invite/zt-vrahf41g-ik1v7fV8du6t0RwxSrJ96A">
-         <img src="https://img.shields.io/badge/slack-@netbird-red.svg?logo=slack"/>
+         <img src="https://img.shields.io/badge/slack-@netbird-red.svg?logo=slack" alt="Slack"/>
       </a>
       <a href="https://github.com/netbirdio/ios-client/actions/workflows/build.yml">
-         <img src="https://github.com/netbirdio/ios-client/actions/workflows/build.yml/badge.svg"/>
+         <img src="https://github.com/netbirdio/ios-client/actions/workflows/build.yml/badge.svg" alt="Build Status"/>
       </a>
       <a href="https://github.com/netbirdio/ios-client/actions/workflows/test.yml">
-         <img src="https://github.com/netbirdio/ios-client/actions/workflows/test.yml/badge.svg"/>
+         <img src="https://github.com/netbirdio/ios-client/actions/workflows/test.yml/badge.svg" alt="Test Status"/>
       </a>
    </p>
  </div>

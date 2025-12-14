@@ -253,20 +253,17 @@ public class NetworkExtensionAdapter: ObservableObject {
             do {
                 try session.sendProviderMessage(messageData) { [weak self] response in
                     defer { self?.isFetchingStatus = false }
-                    if let response = response {
-                        do {
-                            let decodedStatus = try self?.decoder.decode(StatusDetails.self, from: response)
-                            if let status = decodedStatus {
-                                completion(status)
-                            }
-                            return
-                        } catch {
-                            AppLogger.shared.log("Failed to decode status details.")
-                        }
-                    } else {
-                        let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
+                    let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
+                    guard let response = response else {
                         completion(defaultStatus)
                         return
+                    }
+                    do {
+                        let decodedStatus = try self?.decoder.decode(StatusDetails.self, from: response)
+                        completion(decodedStatus ?? defaultStatus)
+                    } catch {
+                        AppLogger.shared.log("Failed to decode status details: \(error)")
+                        completion(defaultStatus)
                     }
                 }
             } catch {

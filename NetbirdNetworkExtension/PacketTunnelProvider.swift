@@ -151,6 +151,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                         "error" : error.localizedDescription
                     ])
                 } else {
+                    // Note: isRestarting is already cleared by onConnected() callback
+                    self?.adapter.isRestarting = false
                     AppLogger.shared.log("restartClient: start completed successfully")
                 }
             }

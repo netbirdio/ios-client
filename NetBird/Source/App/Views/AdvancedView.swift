@@ -240,33 +240,7 @@ struct AdvancedView: View {
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
         return paths.first
     }
-    
-    func saveLogFile(at url: URL?) {
-        guard let url = url else { return }
 
-        let fileManager = FileManager.default
-        guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") else {
-                print("Failed to retrieve the group URL")
-                return
-            }
-
-            let logURL = groupURL.appendingPathComponent("logfile.log")
-
-            do {
-                let logData = try String(contentsOf: logURL, encoding: .utf8)
-                let fileURL = url.appendingPathComponent("netbird.log")
-                do {
-                    try logData.write(to: fileURL, atomically: true, encoding: .utf8)
-                    print("Log file saved successfully.")
-                } catch {
-                    print("Failed to save log file: \(error)")
-                }
-            } catch {
-                print("Failed to read log data: \(error)")
-                return
-            }
-    }
-    
     func checkForValidPresharedKey(text: String) {
         if isValidBase64EncodedString(text) {
             viewModel.showInvalidPresharedKeyAlert = false

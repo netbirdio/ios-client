@@ -131,9 +131,15 @@ public class NetBirdAdapter {
     }
     
     public func stop(completionHandler: (() -> Void)? = nil) {
+        // Call any pending handler before setting a new one
+        if let existingHandler = self.stopCompletionHandler {
+            self.stopCompletionHandler = nil
+            existingHandler()
+        }
+
         self.stopCompletionHandler = completionHandler
         self.client.stop()
-        
+
         // Fallback timeout (15 seconds) in case onDisconnected doesn't fire
         if completionHandler != nil {
             DispatchQueue.global().asyncAfter(deadline: .now() + 15) { [weak self] in
