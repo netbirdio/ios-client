@@ -27,13 +27,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     var pathMonitor: NWPathMonitor?
     let monitorQueue = DispatchQueue(label: "NetworkMonitor")
-    var currentNetworkType: NWInterface.InterfaceType?
 
-    /// Tracks if engine was stopped due to network unavailability (e.g., airplane mode)
-    var wasStoppedDueToNoNetwork = false
+    /// Network state variables - accessed only on monitorQueue for thread safety
+    private var currentNetworkType: NWInterface.InterfaceType?
+    private var wasStoppedDueToNoNetwork = false
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
-        if let googleServicePlistPath = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+        if FirebaseApp.app() == nil,
+           let googleServicePlistPath = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
            let firebaseOptions = FirebaseOptions(contentsOfFile: googleServicePlistPath) {
             FirebaseApp.configure(options: firebaseOptions)
         }
@@ -42,8 +43,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             initializeLogging(loglevel: logLevel)
         }
 
-        currentNetworkType = nil
-        wasStoppedDueToNoNetwork = false
+        monitorQueue.async { [weak self] in
+            self?.currentNetworkType = nil
+            self?.wasStoppedDueToNoNetwork = false
+        }
         startMonitoringNetworkChanges()
 
         if adapter.needsLogin() {
@@ -62,7 +65,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        wasStoppedDueToNoNetwork = false
+        monitorQueue.async { [weak self] in
+            self?.wasStoppedDueToNoNetwork = false
+        }
         adapter.stop()
         guard let pathMonitor = self.pathMonitor else {
             print("pathMonitor is nil; nothing to cancel.")
