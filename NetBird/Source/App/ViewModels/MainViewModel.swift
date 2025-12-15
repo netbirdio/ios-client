@@ -336,10 +336,11 @@ class ViewModel: ObservableObject {
 
         // Clear connection details
         clearDetails()
-
+ 
         // Stop the network extension in background (non-blocking)
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.networkExtensionAdapter.stop()
+        let adapter = self.networkExtensionAdapter
+        Task.detached {
+            adapter.stop()
         }
 
         // Reload preferences for new server
