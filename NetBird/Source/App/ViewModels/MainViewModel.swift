@@ -321,6 +321,9 @@ class ViewModel: ObservableObject {
     func handleServerChanged() {
         AppLogger.shared.log("Server changed - stopping engine and resetting state")
 
+        // Stop polling to prevent transitional states from updating UI
+        stopPollingDetails()
+        
         // Reset connection flags first to update UI immediately
         connectPressed = false
         disconnectPressed = false
@@ -330,17 +333,17 @@ class ViewModel: ObservableObject {
         extensionState = .disconnected
         extensionStateText = "Disconnected"
         managementStatus = .disconnected
-        statusDetailsValid = false
 
         // Clear peer info
         peerViewModel.peerInfo = []
 
         // Clear connection details
         clearDetails()
-
+ 
         // Stop the network extension in background (non-blocking)
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.networkExtensionAdapter.stop()
+        let adapter = self.networkExtensionAdapter
+        Task.detached {
+            adapter.stop()
         }
 
         // Reload preferences for new server

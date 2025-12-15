@@ -122,6 +122,11 @@ struct MainView: View {
                         SideDrawer(viewModel: viewModel, isShowing: $viewModel.presentSideDrawer)
                         NavigationLink("", destination: ServerView(), isActive: $viewModel.navigateToServerView)
                             .hidden()
+                            .onChange(of: viewModel.navigateToServerView) { newValue in
+                                  if !newValue {
+                                      viewModel.startPollingDetails()
+                                  }
+                            }
                         if viewModel.networkExtensionAdapter.showBrowser,
                            let loginURLString = viewModel.networkExtensionAdapter.loginURL,
                            let loginURL = URL(string: loginURLString)
