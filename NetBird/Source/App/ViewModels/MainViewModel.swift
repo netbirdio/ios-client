@@ -330,7 +330,6 @@ class ViewModel: ObservableObject {
         extensionState = .disconnected
         extensionStateText = "Disconnected"
         managementStatus = .disconnected
-        statusDetailsValid = false
 
         // Clear peer info
         peerViewModel.peerInfo = []
