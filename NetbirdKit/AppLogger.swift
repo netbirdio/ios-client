@@ -18,9 +18,9 @@ public class AppLogger {
     private var isReady = false
     private let setupSemaphore = DispatchSemaphore(value: 0)
 
-    private let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+    private let iso8601Formatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate, .withFullTime, .withFractionalSeconds]
         return formatter
     }()
 
@@ -87,7 +87,7 @@ public class AppLogger {
 
     public func log(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
         let fileName = (file as NSString).lastPathComponent
-        let timestamp = dateFormatter.string(from: Date())
+        let timestamp = iso8601Formatter.string(from: Date())
         let logMessage = "[\(timestamp)] [\(fileName):\(line)] \(message)\n"
 
         print(logMessage, terminator: "")
