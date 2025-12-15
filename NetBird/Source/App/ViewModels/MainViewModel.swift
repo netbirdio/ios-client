@@ -321,6 +321,9 @@ class ViewModel: ObservableObject {
     func handleServerChanged() {
         AppLogger.shared.log("Server changed - stopping engine and resetting state")
 
+        // Stop polling to prevent transitional states from updating UI
+        stopPollingDetails()
+        
         // Reset connection flags first to update UI immediately
         connectPressed = false
         disconnectPressed = false
