@@ -28,6 +28,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var currentNetworkType: NWInterface.InterfaceType?
     private var wasStoppedDueToNoNetwork = false
     private var isRestartInProgress = false
+    
+    private var networkChangeWorkItem: DispatchWorkItem?
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
@@ -57,6 +59,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        networkChangeWorkItem?.cancel()
+        networkChangeWorkItem = nil
+        
         monitorQueue.async { [weak self] in
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
@@ -113,6 +118,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     func handleNetworkChange(path: Network.NWPath) {
         if path.status != .satisfied {
             AppLogger.shared.log("No network connection detected")
+            
+            // Cancel any pending restart
+            networkChangeWorkItem?.cancel()
+            networkChangeWorkItem = nil
 
             // Signal UI to show disconnecting animation via shared flag
             // We don't call adapter.stop() to avoid race conditions with Go SDK callbacks
@@ -154,9 +163,21 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         if currentNetworkType != networkType {
             AppLogger.shared.log("Network type changed: \(String(describing: currentNetworkType)) -> \(networkType)")
+            
+            // Cancel any pending restart from previous rapid change
+            networkChangeWorkItem?.cancel()
+            networkChangeWorkItem = nil
+            
             if currentNetworkType != nil {
-                restartClient()
+                // Debounce: schedule restart after 1 second
+                let workItem = DispatchWorkItem { [weak self] in
+                    self?.restartClient()
+                }
+                
+                networkChangeWorkItem = workItem
+                monitorQueue.asyncAfter(deadline: .now() + 1.0, execute: workItem)
             }
+            
             currentNetworkType = networkType
         }
     }
