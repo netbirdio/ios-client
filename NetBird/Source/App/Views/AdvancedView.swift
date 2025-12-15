@@ -187,75 +187,81 @@ struct AdvancedView: View {
     }
 
     func shareButtonTapped() {
-        let fileManager = FileManager.default
-        let tempDir = fileManager.temporaryDirectory.appendingPathComponent("netbird-logs-\(UUID().uuidString)")
-
-        do {
-            try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        } catch {
-            AppLogger.shared.log("Failed to create temp directory: \(error)")
-            return
-        }
-
-        var filesToShare: [URL] = []
-
-        // Export Go SDK logs
-        if let goLogURL = AppLogger.getGoLogFileURL() {
+        Task.detached(priority: .utility) {
+            let fileManager = FileManager.default
+            let tempDir = fileManager.temporaryDirectory.appendingPathComponent("netbird-logs-\(UUID().uuidString)")
+            
             do {
-                let goLogData = try String(contentsOf: goLogURL, encoding: .utf8)
-                let goLogPath = tempDir.appendingPathComponent("netbird-engine.log")
-                try goLogData.write(to: goLogPath, atomically: true, encoding: .utf8)
-                filesToShare.append(goLogPath)
+                try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
             } catch {
-                AppLogger.shared.log("Failed to export Go log: \(error)")
+                AppLogger.shared.log("Failed to create temp directory: \(error)")
+                return
             }
-        }
-
-        // Export Swift logs
-        if let swiftLogURL = AppLogger.getLogFileURL() {
-            do {
-                let swiftLogData = try String(contentsOf: swiftLogURL, encoding: .utf8)
-                let swiftLogPath = tempDir.appendingPathComponent("netbird-app.log")
-                try swiftLogData.write(to: swiftLogPath, atomically: true, encoding: .utf8)
-                filesToShare.append(swiftLogPath)
-            } catch {
-                AppLogger.shared.log("Failed to export Swift log: \(error)")
+            
+            var filesToShare: [URL] = []
+            
+            // Export Go SDK logs
+            if let goLogURL = AppLogger.getGoLogFileURL() {
+                do {
+                    let goLogData = try String(contentsOf: goLogURL, encoding: .utf8)
+                    let goLogPath = tempDir.appendingPathComponent("netbird-engine.log")
+                    try goLogData.write(to: goLogPath, atomically: true, encoding: .utf8)
+                    filesToShare.append(goLogPath)
+                } catch {
+                    AppLogger.shared.log("Failed to export Go log: \(error)")
+                }
             }
-        }
-
-        guard !filesToShare.isEmpty else {
-            AppLogger.shared.log("No log files to share")
-            try? FileManager.default.removeItem(at: tempDir)
-            return
-        }
-
-        let activityViewController = UIActivityViewController(activityItems: filesToShare, applicationActivities: nil)
-
-        activityViewController.excludedActivityTypes = [
-            .assignToContact,
-            .saveToCameraRoll
-        ]
-
-        // Clean up temp files after share completes (success or cancel)
-        activityViewController.completionWithItemsHandler = { _, _, _, _ in
-            do {
-                try FileManager.default.removeItem(at: tempDir)
-            } catch {
-                AppLogger.shared.log("Failed to cleanup temp log files: \(error)")
+            
+            // Export Swift logs
+            if let swiftLogURL = AppLogger.getLogFileURL() {
+                do {
+                    let swiftLogData = try String(contentsOf: swiftLogURL, encoding: .utf8)
+                    let swiftLogPath = tempDir.appendingPathComponent("netbird-app.log")
+                    try swiftLogData.write(to: swiftLogPath, atomically: true, encoding: .utf8)
+                    filesToShare.append(swiftLogPath)
+                } catch {
+                    AppLogger.shared.log("Failed to export Swift log: \(error)")
+                }
             }
-        }
-
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootViewController = windowScene.windows.first?.rootViewController {
-            // Configure popover for iPad to prevent crash
-            if let popover = activityViewController.popoverPresentationController {
-                popover.sourceView = rootViewController.view
-                popover.sourceRect = CGRect(x: rootViewController.view.bounds.midX,
-                                            y: rootViewController.view.bounds.midY,
-                                            width: 0, height: 0)
-                popover.permittedArrowDirections = []
+            
+            guard !filesToShare.isEmpty else {
+                AppLogger.shared.log("No log files to share")
+                try? FileManager.default.removeItem(at: tempDir)
+                return
             }
-            rootViewController.present(activityViewController, animated: true, completion: nil)
+            
+            let readOnlyFilesToShare = filesToShare
+            
+            await MainActor.run {
+                let activityViewController = UIActivityViewController(activityItems: readOnlyFilesToShare, applicationActivities: nil)
+                
+                activityViewController.excludedActivityTypes = [
+                    .assignToContact,
+                    .saveToCameraRoll
+                ]
+                
+                // Clean up temp files after share completes (success or cancel)
+                activityViewController.completionWithItemsHandler = { _, _, _, _ in
+                    do {
+                        try FileManager.default.removeItem(at: tempDir)
+                    } catch {
+                        AppLogger.shared.log("Failed to cleanup temp log files: \(error)")
+                    }
+                }
+                
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootViewController = windowScene.windows.first?.rootViewController {
+                    // Configure popover for iPad to prevent crash
+                    if let popover = activityViewController.popoverPresentationController {
+                        popover.sourceView = rootViewController.view
+                        popover.sourceRect = CGRect(x: rootViewController.view.bounds.midX,
+                                                    y: rootViewController.view.bounds.midY,
+                                                    width: 0, height: 0)
+                        popover.permittedArrowDirections = []
+                    }
+                    rootViewController.present(activityViewController, animated: true, completion: nil)
+                }
+            }
         }
     }
 
