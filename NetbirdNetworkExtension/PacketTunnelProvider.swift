@@ -40,8 +40,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
+            self?.startMonitoringNetworkChanges()
         }
-        startMonitoringNetworkChanges()
 
         if adapter.needsLogin() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
