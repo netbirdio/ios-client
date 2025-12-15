@@ -24,7 +24,12 @@ public class NetworkExtensionAdapter: ObservableObject {
     @Published var showBrowser = false
     @Published var loginURL : String?
 
-    private var isFetchingStatus = false
+    private let fetchLock = NSLock()
+    private var _isFetchingStatus = false
+    private var isFetchingStatus: Bool {
+        get { fetchLock.lock(); defer { fetchLock.unlock() }; return _isFetchingStatus }
+        set { fetchLock.lock(); defer { fetchLock.unlock() }; _isFetchingStatus = newValue }
+    }
     
     init() {
         self.timer = Timer()
