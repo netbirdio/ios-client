@@ -16,24 +16,25 @@ class Preferences {
         return prefs
     }
 
-    static func configFile() -> String {
+    static func getFilePath(fileName: String) -> String {
         let fileManager = FileManager.default
-        if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") {
-            return groupURL.appendingPathComponent("netbird.cfg").relativePath
+        if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
+            return groupURL.appendingPathComponent(fileName).relativePath
         }
+        
         // Fallback for testing or when app group is not available
-        let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
-        return (documentsPath as NSString).appendingPathComponent("netbird.cfg")
+        // (prefer non-user-visible dir)
+        let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
+        return (baseURL ?? fileManager.temporaryDirectory).appendingPathComponent(fileName).path
+    }
+    
+    static func configFile() -> String {
+        return getFilePath(fileName: GlobalConstants.configFileName)
     }
     
     static func stateFile() -> String {
-        let fileManager = FileManager.default
-        if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") {
-            return groupURL.appendingPathComponent("state.json").relativePath
-        }
-        // Fallback for testing or when app group is not available
-        let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
-        return (documentsPath as NSString).appendingPathComponent("state.json")
+        return getFilePath(fileName: GlobalConstants.stateFileName)
     }
     
 }
