@@ -10,7 +10,10 @@ import NetBirdSDK
 
 class Preferences {
     static func newPreferences() -> NetBirdSDKPreferences {
-        return NetBirdSDKNewPreferences(configFile(), stateFile())!
+        guard let prefs = NetBirdSDKNewPreferences(configFile(), stateFile()) else {
+            preconditionFailure("Failed to create NetBirdSDKPreferences")
+        }
+        return prefs
     }
 
     static func configFile() -> String {
