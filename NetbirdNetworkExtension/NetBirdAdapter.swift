@@ -41,6 +41,8 @@ public class NetBirdAdapter {
         get { isRestartingLock.lock(); defer { isRestartingLock.unlock() }; return _isRestarting }
         set { isRestartingLock.lock(); defer { isRestartingLock.unlock() }; _isRestarting = newValue }
     }
+    
+    private let stopLock = NSLock()
             
     /// Tunnel device file descriptor.
     public var tunnelFileDescriptor: Int32? {
@@ -143,14 +145,23 @@ public class NetBirdAdapter {
     }
     
     public func stop(completionHandler: (() -> Void)? = nil) {
+        stopLock.lock()
+        
         // Call any pending handler before setting a new one
         if let existingHandler = self.stopCompletionHandler {
             self.stopCompletionHandler = nil
+            stopLock.unlock()
             existingHandler()
+        } else {
+            stopLock.unlock()
         }
 
+        stopLock.lock()
         self.stopCompletionHandler = completionHandler
+        stopLock.unlock()
+        
         self.client.stop()
+        
 
         // Fallback timeout (15 seconds) in case onDisconnected doesn't fire
         if completionHandler != nil {
@@ -161,8 +172,15 @@ public class NetBirdAdapter {
     }
     
     func notifyStopCompleted() {
-        guard let handler = self.stopCompletionHandler else { return }
+        stopLock.lock()
+        
+        guard let handler = self.stopCompletionHandler else {
+            stopLock.unlock()
+            return
+        }
+        
         self.stopCompletionHandler = nil
+        stopLock.unlock()
         handler()
     }
 }
