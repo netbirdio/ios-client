@@ -202,10 +202,10 @@ struct AdvancedView: View {
             
             // Export Go SDK logs
             if let goLogURL = AppLogger.getGoLogFileURL() {
+                let goLogPath = tempDir.appendingPathComponent("netbird-engine.log")
+                
                 do {
-                    let goLogData = try String(contentsOf: goLogURL, encoding: .utf8)
-                    let goLogPath = tempDir.appendingPathComponent("netbird-engine.log")
-                    try goLogData.write(to: goLogPath, atomically: true, encoding: .utf8)
+                    try fileManager.copyItem(at: goLogURL, to: goLogPath)
                     filesToShare.append(goLogPath)
                 } catch {
                     AppLogger.shared.log("Failed to export Go log: \(error)")
@@ -214,10 +214,10 @@ struct AdvancedView: View {
             
             // Export Swift logs
             if let swiftLogURL = AppLogger.getLogFileURL() {
+                let swiftLogPath = tempDir.appendingPathComponent("netbird-app.log")
+                
                 do {
-                    let swiftLogData = try String(contentsOf: swiftLogURL, encoding: .utf8)
-                    let swiftLogPath = tempDir.appendingPathComponent("netbird-app.log")
-                    try swiftLogData.write(to: swiftLogPath, atomically: true, encoding: .utf8)
+                    try fileManager.copyItem(at: swiftLogURL, to: swiftLogPath)
                     filesToShare.append(swiftLogPath)
                 } catch {
                     AppLogger.shared.log("Failed to export Swift log: \(error)")
@@ -260,6 +260,9 @@ struct AdvancedView: View {
                         popover.permittedArrowDirections = []
                     }
                     rootViewController.present(activityViewController, animated: true, completion: nil)
+                } else {
+                    AppLogger.shared.log("Unable to present share sheet (no rootViewController)")
+                    try? FileManager.default.removeItem(at: tempDir)
                 }
             }
         }
