@@ -190,9 +190,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         AppLogger.shared.log("restartClient: starting restart sequence")
         isRestartInProgress = true
         adapter.isRestarting = true
+        
+        // Timeout after 30 seconds to reset flags if restart hangs
+        let timeoutWorkItem = DispatchWorkItem { [weak self] in
+            guard let self = self, self.isRestartInProgress else { return }
+            AppLogger.shared.log("restartClient: timeout - resetting flags")
+            self.adapter.isRestarting = false
+            self.isRestartInProgress = false
+        }
+        monitorQueue.asyncAfter(deadline: .now() + 30, execute: timeoutWorkItem)
+        
         adapter.stop { [weak self] in
             AppLogger.shared.log("restartClient: stop completed, starting client")
             self?.adapter.start { error in
+                // Cancel timeout whether start succeeds or not
+                timeoutWorkItem.cancel()
+                
                 self?.adapter.isRestarting = false
                 self?.isRestartInProgress = false
                 if let error = error {
