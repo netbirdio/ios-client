@@ -59,10 +59,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        networkChangeWorkItem?.cancel()
-        networkChangeWorkItem = nil
-        
         monitorQueue.async { [weak self] in
+            self?.networkChangeWorkItem?.cancel()
+            self?.networkChangeWorkItem = nil
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
