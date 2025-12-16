@@ -63,6 +63,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         networkChangeWorkItem = nil
         
         monitorQueue.async { [weak self] in
+            self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
         }
