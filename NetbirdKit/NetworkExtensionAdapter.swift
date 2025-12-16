@@ -24,7 +24,12 @@ public class NetworkExtensionAdapter: ObservableObject {
     @Published var showBrowser = false
     @Published var loginURL : String?
 
-    private var isFetchingStatus = false
+    private let fetchLock = NSLock()
+    private var _isFetchingStatus = false
+    private var isFetchingStatus: Bool {
+        get { fetchLock.lock(); defer { fetchLock.unlock() }; return _isFetchingStatus }
+        set { fetchLock.lock(); defer { fetchLock.unlock() }; _isFetchingStatus = newValue }
+    }
     
     init() {
         self.timer = Timer()
@@ -241,38 +246,65 @@ public class NetworkExtensionAdapter: ObservableObject {
             return
         }
 
+        let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
+        
         guard let session = self.session else {
-            let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
             completion(defaultStatus)
             return
         }
 
         isFetchingStatus = true
+        var hasCompleted = false
+        let completionLock = NSLock()
+        
+        // This is to make sure completion is called only once
+        let safeCompletion: (StatusDetails) -> Void = { [weak self] status in
+            completionLock.lock()
+            defer { completionLock.unlock() }
+            
+            guard !hasCompleted else { return }
+            hasCompleted = true
+            
+            self?.isFetchingStatus = false
+            completion(status)
+        }
+        
+        // Timeout after 10 seconds to reset fetching status to false
+        let timeoutWorkItem = DispatchWorkItem {
+            AppLogger.shared.log("fetchData timed out")
+            safeCompletion(defaultStatus)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: timeoutWorkItem)
+    
         let messageString = "Status"
+        
         if let messageData = messageString.data(using: .utf8) {
             do {
                 try session.sendProviderMessage(messageData) { [weak self] response in
-                    defer { self?.isFetchingStatus = false }
-                    let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
+                    timeoutWorkItem.cancel()
+                    
                     guard let response = response else {
-                        completion(defaultStatus)
+                        safeCompletion(defaultStatus)
                         return
                     }
+                    
                     do {
                         let decodedStatus = try self?.decoder.decode(StatusDetails.self, from: response)
-                        completion(decodedStatus ?? defaultStatus)
+                        safeCompletion(decodedStatus ?? defaultStatus)
                     } catch {
                         AppLogger.shared.log("Failed to decode status details: \(error)")
-                        completion(defaultStatus)
+                        safeCompletion(defaultStatus)
                     }
                 }
             } catch {
-                isFetchingStatus = false
+                timeoutWorkItem.cancel()
                 AppLogger.shared.log("Failed to send Provider message")
+                safeCompletion(defaultStatus)
             }
         } else {
-            isFetchingStatus = false
+            timeoutWorkItem.cancel()
             AppLogger.shared.log("Error converting message to Data")
+            safeCompletion(defaultStatus)
         }
     }
     

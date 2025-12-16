@@ -28,6 +28,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var currentNetworkType: NWInterface.InterfaceType?
     private var wasStoppedDueToNoNetwork = false
     private var isRestartInProgress = false
+    
+    private var networkChangeWorkItem: DispatchWorkItem?
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
@@ -38,8 +40,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
+            self?.startMonitoringNetworkChanges()
         }
-        startMonitoringNetworkChanges()
 
         if adapter.needsLogin() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -58,12 +60,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         monitorQueue.async { [weak self] in
+            self?.networkChangeWorkItem?.cancel()
+            self?.networkChangeWorkItem = nil
+            self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
         }
         adapter.stop()
         guard let pathMonitor = self.pathMonitor else {
-            print("pathMonitor is nil; nothing to cancel.")
+            AppLogger.shared.log("pathMonitor is nil; nothing to cancel.")
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 completionHandler()
             }
@@ -96,7 +101,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let id = String(s.dropFirst("Deselect-".count))
             deselectRoute(id: id)
         default:
-            print("Unknown message: \(string)")
+            AppLogger.shared.log("Unknown message: \(string)")
         }
     }
 
@@ -113,6 +118,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     func handleNetworkChange(path: Network.NWPath) {
         if path.status != .satisfied {
             AppLogger.shared.log("No network connection detected")
+            
+            // Cancel any pending restart
+            networkChangeWorkItem?.cancel()
+            networkChangeWorkItem = nil
 
             // Signal UI to show disconnecting animation via shared flag
             // We don't call adapter.stop() to avoid race conditions with Go SDK callbacks
@@ -153,9 +162,21 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         if currentNetworkType != networkType {
             AppLogger.shared.log("Network type changed: \(String(describing: currentNetworkType)) -> \(networkType)")
+            
+            // Cancel any pending restart from previous rapid change
+            networkChangeWorkItem?.cancel()
+            networkChangeWorkItem = nil
+            
             if currentNetworkType != nil {
-                restartClient()
+                // Debounce: schedule restart after 1 second
+                let workItem = DispatchWorkItem { [weak self] in
+                    self?.restartClient()
+                }
+                
+                networkChangeWorkItem = workItem
+                monitorQueue.asyncAfter(deadline: .now() + 1.0, execute: workItem)
             }
+            
             currentNetworkType = networkType
         }
     }
@@ -168,9 +189,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         AppLogger.shared.log("restartClient: starting restart sequence")
         isRestartInProgress = true
         adapter.isRestarting = true
+        
+        // Timeout after 30 seconds to reset flags if restart hangs
+        let timeoutWorkItem = DispatchWorkItem { [weak self] in
+            guard let self = self, self.isRestartInProgress else { return }
+            AppLogger.shared.log("restartClient: timeout - resetting flags")
+            self.adapter.isRestarting = false
+            self.isRestartInProgress = false
+        }
+        monitorQueue.asyncAfter(deadline: .now() + 30, execute: timeoutWorkItem)
+        
         adapter.stop { [weak self] in
             AppLogger.shared.log("restartClient: stop completed, starting client")
             self?.adapter.start { error in
+                // Cancel timeout whether start succeeds or not
+                timeoutWorkItem.cancel()
+                
                 self?.adapter.isRestarting = false
                 self?.isRestartInProgress = false
                 if let error = error {
@@ -239,7 +273,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     func getStatus(completionHandler: (Data?) -> Void) {
         guard let statusDetailsMessage = adapter.client.getStatusDetails() else {
-            print("Did not receive status details.")
+            AppLogger.shared.log("Did not receive status details.")
             completionHandler(nil)
             return
         }
@@ -289,13 +323,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let data = try PropertyListEncoder().encode(statusDetails)
             completionHandler(data)
         } catch {
-            print("Failed to encode status details: \(error.localizedDescription)")
+            AppLogger.shared.log("Failed to encode status details: \(error.localizedDescription)")
             do {
                 let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: adapter.clientState, peerInfo: [])
                 let data = try PropertyListEncoder().encode(defaultStatus)
                 completionHandler(data)
             } catch {
-                print("Failed to encode default status: \(error.localizedDescription)")
+                AppLogger.shared.log("Failed to encode default status: \(error.localizedDescription)")
                 completionHandler(nil)
             }
         }
@@ -330,13 +364,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let data = try PropertyListEncoder().encode(routeSelectionDetails)
             completionHandler(data)
         } catch {
-            print("Error retrieving or encoding route selection details: \(error.localizedDescription)")
+            AppLogger.shared.log("Error retrieving or encoding route selection details: \(error.localizedDescription)")
             let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
             do {
                 let data = try PropertyListEncoder().encode(defaultStatus)
                 completionHandler(data)
             } catch {
-                print("Failed to encode default route selection details: \(error.localizedDescription)")
+                AppLogger.shared.log("Failed to encode default route selection details: \(error.localizedDescription)")
                 completionHandler(nil)
             }
         }
@@ -346,7 +380,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         do {
             try adapter.client.selectRoute(id)
         } catch {
-            print("Failed to select route: \(error.localizedDescription)")
+            AppLogger.shared.log("Failed to select route: \(error.localizedDescription)")
         }
     }
 
@@ -354,7 +388,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         do {
             try adapter.client.deselectRoute(id)
         } catch {
-            print("Failed to deselect route: \(error.localizedDescription)")
+            AppLogger.shared.log("Failed to deselect route: \(error.localizedDescription)")
         }
     }
 
@@ -368,10 +402,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     func setTunnelSettings(tunnelNetworkSettings: NEPacketTunnelNetworkSettings) {
         setTunnelNetworkSettings(tunnelNetworkSettings) { error in
             if let error = error {
-                print("Error assigning routes: \(error.localizedDescription)")
+                AppLogger.shared.log("Error assigning routes: \(error.localizedDescription)")
                 return
             }
-            print("Routes set successfully.")
+            AppLogger.shared.log("Routes set successfully.")
         }
     }
 }
@@ -388,7 +422,7 @@ func initializeLogging(loglevel: String) {
     let logMessage = "Starting new log file from extension" + "\n"
         
     guard let logURLValid = logURL else {
-            print("Failed to get the log file URL.")
+            AppLogger.shared.log("Failed to get the log file URL.")
             return
         }
     
@@ -397,20 +431,20 @@ func initializeLogging(loglevel: String) {
             do {
                 try "".write(to: logURLValid, atomically: true, encoding: .utf8)
             } catch {
-                print("Error handling the log file: \(error)")
+                AppLogger.shared.log("Error handling the log file: \(error)")
             }
             if let data = logMessage.data(using: .utf8) {
                 fileHandle.write(data)
             }
             fileHandle.closeFile()
         } else {
-            print("Failed to open the log file for writing.")
+            AppLogger.shared.log("Failed to open the log file for writing.")
         }
     } else {
         do {
             try logMessage.write(to: logURLValid, atomically: true, encoding: .utf8)
         } catch {
-            print("Failed to write to the log file: \(error.localizedDescription)")
+            AppLogger.shared.log("Failed to write to the log file: \(error.localizedDescription)")
         }
     }
     
@@ -418,6 +452,6 @@ func initializeLogging(loglevel: String) {
         success = NetBirdSDKInitializeLog(loglevel, logPath, &error)
     }
     if !success, let actualError = error {
-       print("Failed to initialize log: \(actualError.localizedDescription)")
+       AppLogger.shared.log("Failed to initialize log: \(actualError.localizedDescription)")
    }
 }

@@ -23,12 +23,26 @@ public class NetBirdAdapter {
     
     public var isExecutingLogin = false
 
-    var clientState : ClientState = .disconnected
+    private let stateLock = NSLock()
+    private var _clientState: ClientState = .disconnected
+    
+    var clientState: ClientState {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _clientState }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _clientState = newValue }
+    }
 
+    private let isRestartingLock = NSLock()
+    private var _isRestarting: Bool = false
+    
     /// Flag indicating the client is restarting (e.g., due to network type change).
     /// When true, intermediate state changes (connecting/disconnecting) are suppressed
     /// to prevent UI animation state machine from getting confused.
-    var isRestarting = false
+    var isRestarting: Bool {
+        get { isRestartingLock.lock(); defer { isRestartingLock.unlock() }; return _isRestarting }
+        set { isRestartingLock.lock(); defer { isRestartingLock.unlock() }; _isRestarting = newValue }
+    }
+    
+    private let stopLock = NSLock()
             
     /// Tunnel device file descriptor.
     public var tunnelFileDescriptor: Int32? {
@@ -131,14 +145,23 @@ public class NetBirdAdapter {
     }
     
     public func stop(completionHandler: (() -> Void)? = nil) {
+        stopLock.lock()
+        
         // Call any pending handler before setting a new one
         if let existingHandler = self.stopCompletionHandler {
             self.stopCompletionHandler = nil
+            stopLock.unlock()
             existingHandler()
+        } else {
+            stopLock.unlock()
         }
 
+        stopLock.lock()
         self.stopCompletionHandler = completionHandler
+        stopLock.unlock()
+        
         self.client.stop()
+        
 
         // Fallback timeout (15 seconds) in case onDisconnected doesn't fire
         if completionHandler != nil {
@@ -149,8 +172,15 @@ public class NetBirdAdapter {
     }
     
     func notifyStopCompleted() {
-        guard let handler = self.stopCompletionHandler else { return }
+        stopLock.lock()
+        
+        guard let handler = self.stopCompletionHandler else {
+            stopLock.unlock()
+            return
+        }
+        
         self.stopCompletionHandler = nil
+        stopLock.unlock()
         handler()
     }
 }

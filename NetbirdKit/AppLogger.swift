@@ -114,11 +114,17 @@ public class AppLogger {
             if let fileSize = attributes[.size] as? UInt64, fileSize > maxLogSize {
                 fileHandle?.closeFile()
                 try FileManager.default.removeItem(at: url)
-                FileManager.default.createFile(atPath: url.path, contents: nil)
+                guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+                    print("AppLogger: Failed to create rotated log file")
+                    isReady = false
+                    return
+                }
                 fileHandle = try FileHandle(forWritingTo: url)
             }
         } catch {
             print("AppLogger: Failed to rotate log: \(error)")
+            isReady = false
+            fileHandle = nil
         }
     }
 
@@ -128,10 +134,16 @@ public class AppLogger {
             do {
                 self?.fileHandle?.closeFile()
                 try FileManager.default.removeItem(at: url)
-                FileManager.default.createFile(atPath: url.path, contents: nil)
+                guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+                    print("AppLogger: Failed to create cleared log file")
+                    self?.isReady = false
+                    return
+                }
                 self?.fileHandle = try FileHandle(forWritingTo: url)
             } catch {
                 print("AppLogger: Failed to clear logs: \(error)")
+                self?.isReady = false
+                self?.fileHandle = nil
             }
         }
     }

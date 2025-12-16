@@ -436,7 +436,7 @@ struct ChangeServerAlert: View {
                 .multilineTextAlignment(.center)
             SolidButton(text: "Confirm") {
                 viewModel.handleServerChanged()
-                isPresented.toggle()
+                isPresented = false
                 viewModel.navigateToServerView = true
             }
             .padding(.top, 20)
