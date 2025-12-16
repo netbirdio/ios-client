@@ -139,7 +139,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         if wasStoppedDueToNoNetwork {
             AppLogger.shared.log("Network restored after unavailability - signaling UI")
             wasStoppedDueToNoNetwork = false
-            currentNetworkType = nil
             setNetworkUnavailableFlag(false)
             // Don't need to restart - Go SDK handles reconnection automatically
             return
