@@ -23,12 +23,24 @@ public class NetBirdAdapter {
     
     public var isExecutingLogin = false
 
-    var clientState : ClientState = .disconnected
+    private let stateLock = NSLock()
+    private var _clientState: ClientState = .disconnected
+    
+    var clientState: ClientState {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _clientState }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _clientState = newValue }
+    }
 
+    private let isRestartingLock = NSLock()
+    private var _isRestarting: Bool = false
+    
     /// Flag indicating the client is restarting (e.g., due to network type change).
     /// When true, intermediate state changes (connecting/disconnecting) are suppressed
     /// to prevent UI animation state machine from getting confused.
-    var isRestarting = false
+    var isRestarting: Bool {
+        get { isRestartingLock.lock(); defer { isRestartingLock.unlock() }; return _isRestarting }
+        set { isRestartingLock.lock(); defer { isRestartingLock.unlock() }; _isRestarting = newValue }
+    }
             
     /// Tunnel device file descriptor.
     public var tunnelFileDescriptor: Int32? {
