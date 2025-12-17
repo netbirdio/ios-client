@@ -116,6 +116,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func handleNetworkChange(path: Network.NWPath) {
+        AppLogger.shared.log("""
+                  Path update:
+                  - status: \(path.status)
+                  - isExpensive: \(path.isExpensive)
+                  - usesWifi: \(path.usesInterfaceType(.wifi))
+                  - usesCellular: \(path.usesInterfaceType(.cellular))
+                  - interfaces: \(path.availableInterfaces.map { $0.type })
+                  """)
+
         if path.status != .satisfied {
             AppLogger.shared.log("No network connection detected")
             
