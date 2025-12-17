@@ -457,10 +457,16 @@ public class NetBirdAdapter {
         #endif
 
         // Get Auth object and call login
+        #if os(tvOS)
+        // On tvOS, config is stored in UserDefaults (not files) due to sandbox restrictions.
+        // Pass empty path - the SDK will use setConfigFromJSON() instead.
+        let configPath = ""
+        #else
         guard let configPath = Preferences.configFile() else {
             handleError(NSError(domain: "io.netbird", code: 1003, userInfo: [NSLocalizedDescriptionKey: "App group container unavailable"]))
             return
         }
+        #endif
         if let auth = NetBirdSDKNewAuth(configPath, managementURL, nil) {
             authRef = auth
 
@@ -497,8 +503,16 @@ public class NetBirdAdapter {
 
     /// Update the device name in a config JSON string
     static func updateDeviceNameInConfig(_ configJSON: String, newName: String) -> String {
+        // Escape special characters for JSON string
+        let escapedName = newName
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\t", with: "\\t")
+
         let pattern = "\"DeviceName\"\\s*:\\s*\"[^\"]*\""
-        let replacement = "\"DeviceName\":\"\(newName)\""
+        let replacement = "\"DeviceName\":\"\(escapedName)\""
 
         if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
             let range = NSRange(configJSON.startIndex..., in: configJSON)
