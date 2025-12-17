@@ -144,6 +144,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         // Network is available again
+        let shouldRestartDueToRecovery = wasStoppedDueToNoNetwork
         if wasStoppedDueToNoNetwork {
             AppLogger.shared.log("Network restored after unavailability - signaling UI")
             wasStoppedDueToNoNetwork = false
@@ -166,25 +167,29 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        if currentNetworkType != networkType {
+        let networkTypeChanged = currentNetworkType != nil && currentNetworkType != networkType
+
+        if networkTypeChanged {
             AppLogger.shared.log("Network type changed: \(String(describing: currentNetworkType)) -> \(networkType)")
-            
+        }
+
+        // Restart if network type changed OR recovering from network unavailability
+        // (even if returning to the same interface type, the connection may be stale)
+        if networkTypeChanged || shouldRestartDueToRecovery {
             // Cancel any pending restart from previous rapid change
             networkChangeWorkItem?.cancel()
             networkChangeWorkItem = nil
-            
-            if currentNetworkType != nil {
-                // Debounce: schedule restart after 1 second
-                let workItem = DispatchWorkItem { [weak self] in
-                    self?.restartClient()
-                }
-                
-                networkChangeWorkItem = workItem
-                monitorQueue.asyncAfter(deadline: .now() + 1.0, execute: workItem)
+
+            // Debounce: schedule restart after 1 second
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.restartClient()
             }
-            
-            currentNetworkType = networkType
+
+            networkChangeWorkItem = workItem
+            monitorQueue.asyncAfter(deadline: .now() + 1.0, execute: workItem)
         }
+
+        currentNetworkType = networkType
     }
 
     func restartClient() {
