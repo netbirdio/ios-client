@@ -77,7 +77,6 @@ class ViewModel: ObservableObject {
     
     @Published var rosenpassEnabled = false
     @Published var rosenpassPermissive = false
-    @Published var managementURL = ""
     @Published var presharedKey = ""
     @Published var server: String = ""
     @Published var setupKey: String = ""
@@ -261,39 +260,6 @@ class ViewModel: ObservableObject {
         }
     }
     
-    func updateManagementURL(url: String, completion: @escaping (Bool?) -> Void) {
-        let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let configPath = Preferences.configFile() else {
-            print("updateManagementURL: App group container unavailable")
-            completion(nil)
-            return
-        }
-        let newAuth = NetBirdSDKNewAuth(configPath, trimmedURL, nil)
-        self.managementURL = trimmedURL
-
-        let listener = SSOCheckListener()
-        listener.onResult = { ssoSupported, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    print("Failed to check SSO support: \(error.localizedDescription)")
-                    completion(nil)
-                } else if let supported = ssoSupported {
-                    if supported {
-                        print("SSO is supported")
-                        completion(true)
-                    } else {
-                        print("SSO is not supported. Fallback to setup key")
-                        completion(false)
-                    }
-                } else {
-                    completion(nil)
-                }
-            }
-        }
-
-        newAuth?.saveConfigIfSSOSupported(listener)
-    }
-    
     func clearDetails() {
         self.ip = ""
         self.fqdn = ""
@@ -307,30 +273,6 @@ class ViewModel: ObservableObject {
         // Also clear extension-local config to prevent stale credentials
         networkExtensionAdapter.clearExtensionConfig()
         #endif
-    }
-    
-    func setSetupKey(key: String, completion: @escaping (Error?) -> Void) {
-        guard let configPath = Preferences.configFile() else {
-            print("setSetupKey: App group container unavailable")
-            completion(NSError(domain: "io.netbird", code: 1003, userInfo: [NSLocalizedDescriptionKey: "App group container unavailable"]))
-            return
-        }
-        let newAuth = NetBirdSDKNewAuth(configPath, self.managementURL, nil)
-
-        let listener = SetupKeyErrListener()
-        listener.onResult = { error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    print("Setup key login failed: \(error.localizedDescription)")
-                    completion(error)
-                } else {
-                    self.managementURL = ""
-                    completion(nil)
-                }
-            }
-        }
-
-        newAuth?.login(withSetupKeyAndSaveConfig: listener, setupKey: key, deviceName: Device.getName())
     }
     
     func updatePreSharedKey() {

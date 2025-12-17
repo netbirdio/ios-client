@@ -56,7 +56,11 @@ The code is divided into 4 parts:
 
 - iOS 14.0+ / tvOS 17.0+
 - Xcode 15.0+
-- gomobile (with tvOS support - see build instructions)
+- gomobile (netbird forked version with tvOS support - see below) 
+
+## gomobile-fork
+
+Since gomobile doesn't natively support tvOS targets, NetBird has created a fork that does. Please see the repo for more information: https://github.com/netbirdio/gomobile-tvos-fork
 
 ## Run locally
 

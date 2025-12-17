@@ -125,12 +125,7 @@ struct PlatformCapabilities {
     }
     
     static var supportsKeyboard: Bool {
-        #if os(tvOS)
-        // tvOS has on-screen keyboard but it's clunky
-        return true
-        #else
-        return true
-        #endif
+        true
     }
 }
 
