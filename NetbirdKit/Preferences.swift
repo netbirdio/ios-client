@@ -47,29 +47,37 @@ class Preferences {
     #endif
 
     static func newPreferences() -> NetBirdSDKPreferences? {
+        guard let configPath = configFile(), let statePath = stateFile() else {
+            print("ERROR: Cannot create preferences - app group container unavailable")
+            return nil
+        }
         #if os(tvOS)
         // On tvOS, creating SDK Preferences may fail if the app doesn't have write access
         // to the App Group container. Try anyway - if it fails, settings will be managed
         // via the extension instead.
         // Note: The SDK now uses DirectWriteOutConfig which may work better on tvOS.
-        return NetBirdSDKNewPreferences(configFile(), stateFile())
+        return NetBirdSDKNewPreferences(configPath, statePath)
         #else
-        return NetBirdSDKNewPreferences(configFile(), stateFile())
+        return NetBirdSDKNewPreferences(configPath, statePath)
         #endif
     }
 
-    static func configFile() -> String {
+    static func configFile() -> String? {
         let fileManager = FileManager.default
-        let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)
-        let logURL = groupURL?.appendingPathComponent("netbird.cfg")
-        return logURL!.relativePath
+        guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
+            print("ERROR: App group '\(appGroupIdentifier)' not available. Check entitlements.")
+            return nil
+        }
+        return groupURL.appendingPathComponent("netbird.cfg").path
     }
 
-    static func stateFile() -> String {
+    static func stateFile() -> String? {
         let fileManager = FileManager.default
-        let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)
-        let logURL = groupURL?.appendingPathComponent("state.json")
-        return logURL!.relativePath
+        guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
+            print("ERROR: App group '\(appGroupIdentifier)' not available. Check entitlements.")
+            return nil
+        }
+        return groupURL.appendingPathComponent("state.json").path
     }
 
     // UserDefaults-based config storage for tvOS
@@ -124,7 +132,10 @@ class Preferences {
             return false
         }
 
-        let path = configFile()
+        guard let path = configFile() else {
+            print("ERROR: Cannot restore config - app group container unavailable")
+            return false
+        }
         do {
             try configJSON.write(toFile: path, atomically: false, encoding: .utf8)
             return true

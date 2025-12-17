@@ -23,7 +23,7 @@ struct TVServerView: View {
     @Binding var isPresented: Bool
 
     @StateObject private var serverViewModel = ServerViewModel(
-        configurationFilePath: Preferences.configFile(),
+        configurationFilePath: Preferences.configFile() ?? "",
         deviceName: Device.getName()
     )
 

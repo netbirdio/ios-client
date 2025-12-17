@@ -219,7 +219,8 @@ public class NetBirdAdapter {
     /// Designated initializer.
     /// - Parameter packetTunnelProvider: an instance of `NEPacketTunnelProvider`. Internally stored
     ///   as a weak reference.
-    init(with tunnelManager: PacketTunnelProviderSettingsManager) {
+    /// - Returns: nil if the NetBird SDK client could not be initialized.
+    init?(with tunnelManager: PacketTunnelProviderSettingsManager) {
         self.tunnelManager = tunnelManager
         self.networkChangeListener = NetworkChangeListener(with: tunnelManager)
         self.dnsManager = DNSManager(with: tunnelManager)
@@ -231,7 +232,11 @@ public class NetBirdAdapter {
         #if os(tvOS)
         // On tvOS, the filesystem is blocked for the App Group container.
         // Create the client with empty paths and load config from local storage instead.
-        self.client = NetBirdSDKNewClient("", "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager)!
+        guard let client = NetBirdSDKNewClient("", "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
+            adapterLogger.error("init: tvOS - Failed to create NetBird SDK client")
+            return nil
+        }
+        self.client = client
 
         // Load config from extension-local storage (set via IPC from main app)
         // Note: Shared App Group UserDefaults does NOT work on tvOS between app and extension
@@ -250,7 +255,15 @@ public class NetBirdAdapter {
             adapterLogger.info("init: tvOS - no config found, client initialized without config")
         }
         #else
-        self.client = NetBirdSDKNewClient(Preferences.configFile(), Preferences.stateFile(), deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager)!
+        guard let configPath = Preferences.configFile(), let statePath = Preferences.stateFile() else {
+            adapterLogger.error("init: App group container unavailable - check entitlements")
+            return nil
+        }
+        guard let client = NetBirdSDKNewClient(configPath, statePath, deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
+            adapterLogger.error("init: Failed to create NetBird SDK client with configPath=\(configPath), statePath=\(statePath)")
+            return nil
+        }
+        self.client = client
         #endif
     }
     
@@ -283,7 +296,15 @@ public class NetBirdAdapter {
     public func start(completionHandler: @escaping (Error?) -> Void) {
         DispatchQueue.global().async {
             do {
-                let fd = self.tunnelFileDescriptor ?? 0
+                guard let fd = self.tunnelFileDescriptor, fd > 0 else {
+                    adapterLogger.error("start: Invalid tunnel file descriptor (nil or 0) - cannot start VPN")
+                    completionHandler(NSError(
+                        domain: "io.netbird.NetbirdNetworkExtension",
+                        code: 1004,
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid tunnel file descriptor. The VPN tunnel may not be properly configured."]
+                    ))
+                    return
+                }
                 let ifName = self.interfaceName ?? "unknown"
 
                 let connectionListener = ConnectionListener(adapter: self, completionHandler: completionHandler)
@@ -436,7 +457,11 @@ public class NetBirdAdapter {
         #endif
 
         // Get Auth object and call login
-        if let auth = NetBirdSDKNewAuth(Preferences.configFile(), managementURL, nil) {
+        guard let configPath = Preferences.configFile() else {
+            handleError(NSError(domain: "io.netbird", code: 1003, userInfo: [NSLocalizedDescriptionKey: "App group container unavailable"]))
+            return
+        }
+        if let auth = NetBirdSDKNewAuth(configPath, managementURL, nil) {
             authRef = auth
 
             #if os(tvOS)

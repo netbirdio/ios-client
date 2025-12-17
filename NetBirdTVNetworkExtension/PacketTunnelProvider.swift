@@ -32,7 +32,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         return PacketTunnelProviderSettingsManager(with: self)
     }()
 
-    private lazy var adapter: NetBirdAdapter = {
+    private lazy var adapter: NetBirdAdapter? = {
         return NetBirdAdapter(with: self.tunnelManager)
     }()
 
@@ -70,6 +70,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         currentNetworkType = nil
         startMonitoringNetworkChanges()
 
+        guard let adapter = adapter else {
+            let error = NSError(
+                domain: "io.netbird.NetBirdTVNetworkExtension",
+                code: 1003,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to initialize NetBird adapter."]
+            )
+            completionHandler(error)
+            return
+        }
+
         let needsLogin = adapter.needsLogin()
 
         if needsLogin {
@@ -95,7 +105,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        adapter.stop()
+        adapter?.stop()
         if let pathMonitor = self.pathMonitor {
             pathMonitor.cancel()
             self.pathMonitor = nil
@@ -136,9 +146,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case let s where s.hasPrefix("Select-"):
             let id = String(s.dropFirst("Select-".count))
             selectRoute(id: id)
+            completionHandler("true".data(using: .utf8))
         case let s where s.hasPrefix("Deselect-"):
             let id = String(s.dropFirst("Deselect-".count))
             deselectRoute(id: id)
+            completionHandler("true".data(using: .utf8))
         case let s where s.hasPrefix("SetConfig:"):
             // On tvOS, receive config JSON from main app via IPC
             // This bypasses the broken shared UserDefaults
@@ -149,6 +161,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             clearLocalConfig(completionHandler: completionHandler)
         default:
             logger.warning("handleAppMessage: Unknown message: \(string)")
+            completionHandler(nil)
         }
     }
 
@@ -196,8 +209,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     func restartClient() {
         logger.info("restartClient: Restarting client due to network change")
-        adapter.stop()
-        adapter.start { error in
+        adapter?.stop()
+        adapter?.start { error in
             if let error = error {
                 logger.error("restartClient: Error restarting client: \(error.localizedDescription)")
             } else {
@@ -207,6 +220,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func login(completionHandler: (Data?) -> Void) {
+        guard let adapter = adapter else {
+            completionHandler(nil)
+            return
+        }
         logger.info("login: Starting PKCE login flow")
         let urlString = adapter.login()
         let data = urlString.data(using: .utf8)
@@ -224,13 +241,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         UserDefaults.standard.synchronize()
 
         // Also try to load into the adapter's client if it exists
-        do {
-            let deviceName = Device.getName()
-            let updatedConfig = NetBirdAdapter.updateDeviceNameInConfig(configJSON, newName: deviceName)
-            try adapter.client.setConfigFromJSON(updatedConfig)
-            logger.info("setConfigFromMainApp: Loaded config into SDK client successfully")
-        } catch {
-            logger.error("setConfigFromMainApp: Failed to load config into SDK client: \(error.localizedDescription)")
+        if let adapter = adapter {
+            do {
+                let deviceName = Device.getName()
+                let updatedConfig = NetBirdAdapter.updateDeviceNameInConfig(configJSON, newName: deviceName)
+                try adapter.client.setConfigFromJSON(updatedConfig)
+                logger.info("setConfigFromMainApp: Loaded config into SDK client successfully")
+            } catch {
+                logger.error("setConfigFromMainApp: Failed to load config into SDK client: \(error.localizedDescription)")
+            }
+        } else {
+            logger.warning("setConfigFromMainApp: Adapter not initialized, config saved to UserDefaults only")
         }
 
         let data = "true".data(using: .utf8)
@@ -259,7 +280,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Initialize config with management URL for tvOS
     /// This must be done in the extension because it has permission to write to the App Group container
     func initializeConfig(completionHandler: @escaping (Data?) -> Void) {
-        let configPath = Preferences.configFile()
+        guard let configPath = Preferences.configFile() else {
+            logger.error("initializeConfig: App group container unavailable")
+            let data = "false".data(using: .utf8)
+            completionHandler(data)
+            return
+        }
         let fileManager = FileManager.default
 
         // Check if config already exists
@@ -325,7 +351,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // Nothing to do here.
         logger.info("initializeConfigIfNeeded: tvOS - config loading handled by adapter init")
         #else
-        let configPath = Preferences.configFile()
+        guard let configPath = Preferences.configFile() else {
+            logger.error("initializeConfigIfNeeded: App group container unavailable")
+            return
+        }
         let fileManager = FileManager.default
 
         // Check if config already exists as a file
@@ -354,6 +383,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Check if login has completed (for tvOS polling during device auth flow)
     /// Returns diagnostic info: "result|isExecuting|loginRequired|configExists|stateExists|lastResult|lastError"
     func checkLoginComplete(completionHandler: (Data?) -> Void) {
+        guard let adapter = adapter else {
+            logger.error("checkLoginComplete: Adapter not initialized")
+            let data = "false|false|true|false|false|error|adapter_not_initialized".data(using: .utf8)
+            completionHandler(data)
+            return
+        }
+
         // Check if login is still in progress
         let isExecutingLogin = adapter.isExecutingLogin
 
@@ -365,11 +401,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let loginRequired = adapter.needsLogin()
 
         // Also check if config file exists now (written after successful auth)
-        let configPath = Preferences.configFile()
-        let statePath = Preferences.stateFile()
+        let configPath = Preferences.configFile() ?? ""
+        let statePath = Preferences.stateFile() ?? ""
         let fileManager = FileManager.default
-        let configExists = fileManager.fileExists(atPath: configPath)
-        let stateExists = fileManager.fileExists(atPath: statePath)
+        let configExists = !configPath.isEmpty && fileManager.fileExists(atPath: configPath)
+        let stateExists = !statePath.isEmpty && fileManager.fileExists(atPath: statePath)
 
         // Get the last login result and error
         let lastResult = adapter.lastLoginResult
@@ -410,6 +446,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         var urlSentToApp = false
         let urlSentLock = NSLock()
 
+        guard let adapter = adapter else {
+            logger.error("loginTV: Adapter not initialized")
+            completionHandler(nil)
+            return
+        }
+
         logger.info("loginTV: Calling adapter.loginAsync with forceDeviceAuth=true")
 
         adapter.loginAsync(
@@ -435,11 +477,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 logger.info("loginTV: Config should now be saved to App Group container")
 
                 // Debug: Verify config file was written
-                let configPath = Preferences.configFile()
-                let statePath = Preferences.stateFile()
+                let configPath = Preferences.configFile() ?? ""
+                let statePath = Preferences.stateFile() ?? ""
                 let fileManager = FileManager.default
-                logger.info("loginTV: configFile exists = \(fileManager.fileExists(atPath: configPath))")
-                logger.info("loginTV: stateFile exists = \(fileManager.fileExists(atPath: statePath))")
+                logger.info("loginTV: configFile exists = \(!configPath.isEmpty && fileManager.fileExists(atPath: configPath))")
+                logger.info("loginTV: stateFile exists = \(!statePath.isEmpty && fileManager.fileExists(atPath: statePath))")
             },
             onError: { error in
                 // Log with privacy: .public to avoid iOS privacy redaction
@@ -470,6 +512,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func getStatus(completionHandler: (Data?) -> Void) {
+        guard let adapter = adapter else {
+            completionHandler(nil)
+            return
+        }
         guard let statusDetailsMessage = adapter.client.getStatusDetails() else {
             logger.warning("getStatus: Did not receive status details.")
             completionHandler(nil)
@@ -510,10 +556,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             peerInfoArray.append(peerInfo)
         }
 
+        let clientState = adapter.clientState
         let statusDetails = StatusDetails(
             ip: statusDetailsMessage.getIP(),
             fqdn: statusDetailsMessage.getFQDN(),
-            managementStatus: adapter.clientState,
+            managementStatus: clientState,
             peerInfo: peerInfoArray
         )
 
@@ -523,7 +570,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         } catch {
             logger.error("getStatus: Failed to encode status details: \(error.localizedDescription)")
             do {
-                let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: adapter.clientState, peerInfo: [])
+                let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: clientState, peerInfo: [])
                 let data = try PropertyListEncoder().encode(defaultStatus)
                 completionHandler(data)
             } catch {
@@ -534,6 +581,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func getSelectRoutes(completionHandler: (Data?) -> Void) {
+        guard let adapter = adapter else {
+            completionHandler(nil)
+            return
+        }
         do {
             let routeSelectionDetailsMessage = try adapter.client.getRoutesSelectionDetails()
 
@@ -575,6 +626,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func selectRoute(id: String) {
+        guard let adapter = adapter else { return }
         do {
             try adapter.client.selectRoute(id)
             logger.info("selectRoute: Selected route \(id)")
@@ -584,6 +636,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func deselectRoute(id: String) {
+        guard let adapter = adapter else { return }
         do {
             try adapter.client.deselectRoute(id)
             logger.info("deselectRoute: Deselected route \(id)")

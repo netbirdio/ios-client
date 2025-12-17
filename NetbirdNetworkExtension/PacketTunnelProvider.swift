@@ -20,7 +20,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         return PacketTunnelProviderSettingsManager(with: self)
     }()
 
-    private lazy var adapter: NetBirdAdapter = {
+    private lazy var adapter: NetBirdAdapter? = {
         return NetBirdAdapter(with: self.tunnelManager)
     }()
 
@@ -49,6 +49,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         currentNetworkType = nil
         startMonitoringNetworkChanges()
 
+        guard let adapter = adapter else {
+            let error = NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1003,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to initialize NetBird adapter."]
+            )
+            completionHandler(error)
+            return
+        }
+
         if adapter.needsLogin() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 let error = NSError(
@@ -65,7 +75,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        adapter.stop()
+        adapter?.stop()
         guard let pathMonitor = self.pathMonitor else {
             print("pathMonitor is nil; nothing to cancel.")
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -96,11 +106,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case let s where s.hasPrefix("Select-"):
             let id = String(s.dropFirst("Select-".count))
             selectRoute(id: id)
+            completionHandler("true".data(using: .utf8))
         case let s where s.hasPrefix("Deselect-"):
             let id = String(s.dropFirst("Deselect-".count))
             deselectRoute(id: id)
+            completionHandler("true".data(using: .utf8))
         default:
             print("Unknown message: \(string)")
+            completionHandler(nil)
         }
     }
 
@@ -147,8 +160,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func restartClient() {
-        adapter.stop()
-        adapter.start { error in
+        adapter?.stop()
+        adapter?.start { error in
             if let error = error {
                 print("Error restarting client: \(error.localizedDescription)")
             }
@@ -156,12 +169,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func login(completionHandler: (Data?) -> Void) {
+        guard let adapter = adapter else {
+            completionHandler(nil)
+            return
+        }
         let urlString = adapter.login()
         let data = urlString.data(using: .utf8)
         completionHandler(data)
     }
 
     func getStatus(completionHandler: (Data?) -> Void) {
+        guard let adapter = adapter else {
+            completionHandler(nil)
+            return
+        }
         guard let statusDetailsMessage = adapter.client.getStatusDetails() else {
             print("Did not receive status details.")
             completionHandler(nil)
@@ -202,10 +223,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             peerInfoArray.append(peerInfo)
         }
 
+        let clientState = adapter.clientState
         let statusDetails = StatusDetails(
             ip: statusDetailsMessage.getIP(),
             fqdn: statusDetailsMessage.getFQDN(),
-            managementStatus: adapter.clientState,
+            managementStatus: clientState,
             peerInfo: peerInfoArray
         )
 
@@ -215,7 +237,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         } catch {
             print("Failed to encode status details: \(error.localizedDescription)")
             do {
-                let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: adapter.clientState, peerInfo: [])
+                let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: clientState, peerInfo: [])
                 let data = try PropertyListEncoder().encode(defaultStatus)
                 completionHandler(data)
             } catch {
@@ -226,6 +248,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func getSelectRoutes(completionHandler: (Data?) -> Void) {
+        guard let adapter = adapter else {
+            completionHandler(nil)
+            return
+        }
         do {
             let routeSelectionDetailsMessage = try adapter.client.getRoutesSelectionDetails()
 
@@ -267,6 +293,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func selectRoute(id: String) {
+        guard let adapter = adapter else { return }
         do {
             try adapter.client.selectRoute(id)
         } catch {
@@ -275,6 +302,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func deselectRoute(id: String) {
+        guard let adapter = adapter else { return }
         do {
             try adapter.client.deselectRoute(id)
         } catch {

@@ -155,7 +155,10 @@ public class NetworkExtensionAdapter: ObservableObject {
             return
         }
 
-        let configPath = Preferences.configFile()
+        guard let configPath = Preferences.configFile() else {
+            logger.error("initializeConfigFromApp: App group container unavailable")
+            return
+        }
         let fileManager = FileManager.default
 
         // Check if config already exists as a file (unlikely on tvOS but check anyway)
@@ -216,8 +219,10 @@ public class NetworkExtensionAdapter: ObservableObject {
     #endif
     
     public func isLoginRequired() -> Bool {
-        let configPath = Preferences.configFile()
-        let statePath = Preferences.stateFile()
+        guard let configPath = Preferences.configFile(), let statePath = Preferences.stateFile() else {
+            logger.error("isLoginRequired: App group container unavailable - assuming login required")
+            return true
+        }
         logger.info("isLoginRequired: checking config at \(configPath), state at \(statePath)")
 
         // Debug: Check if files exist and their sizes

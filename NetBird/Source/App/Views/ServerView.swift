@@ -10,7 +10,7 @@ import SwiftUI
 struct ServerView: View {
     
     @EnvironmentObject var viewModel: ViewModel
-    @StateObject private var serverViewModel = ServerViewModel(configurationFilePath: Preferences.configFile(), deviceName: Device.getName())
+    @StateObject private var serverViewModel = ServerViewModel(configurationFilePath: Preferences.configFile() ?? "", deviceName: Device.getName())
     
     private let defaultManagementServerUrl = "https://api.netbird.io"
     private let addSymbol = "add-symbol"

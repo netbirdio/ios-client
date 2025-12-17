@@ -263,7 +263,12 @@ class ViewModel: ObservableObject {
     
     func updateManagementURL(url: String, completion: @escaping (Bool?) -> Void) {
         let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        let newAuth = NetBirdSDKNewAuth(Preferences.configFile(), trimmedURL, nil)
+        guard let configPath = Preferences.configFile() else {
+            print("updateManagementURL: App group container unavailable")
+            completion(nil)
+            return
+        }
+        let newAuth = NetBirdSDKNewAuth(configPath, trimmedURL, nil)
         self.managementURL = trimmedURL
 
         let listener = SSOCheckListener()
@@ -305,7 +310,12 @@ class ViewModel: ObservableObject {
     }
     
     func setSetupKey(key: String, completion: @escaping (Error?) -> Void) {
-        let newAuth = NetBirdSDKNewAuth(Preferences.configFile(), self.managementURL, nil)
+        guard let configPath = Preferences.configFile() else {
+            print("setSetupKey: App group container unavailable")
+            completion(NSError(domain: "io.netbird", code: 1003, userInfo: [NSLocalizedDescriptionKey: "App group container unavailable"]))
+            return
+        }
+        let newAuth = NetBirdSDKNewAuth(configPath, self.managementURL, nil)
 
         let listener = SetupKeyErrListener()
         listener.onResult = { error in
