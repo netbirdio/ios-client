@@ -138,7 +138,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             if !wasStoppedDueToNoNetwork {
                 AppLogger.shared.log("Network unavailable - signaling UI for disconnecting animation, clientState=\(adapter.clientState)")
                 wasStoppedDueToNoNetwork = true
-                currentNetworkType = nil
                 setNetworkUnavailableFlag(true)
             }
             return
