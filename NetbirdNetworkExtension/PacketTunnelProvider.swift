@@ -149,8 +149,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             AppLogger.shared.log("Network restored after unavailability - signaling UI")
             wasStoppedDueToNoNetwork = false
             setNetworkUnavailableFlag(false)
-            // Don't need to restart - Go SDK handles reconnection automatically
-            return
         }
 
         // Handle wifi <-> cellular transitions
