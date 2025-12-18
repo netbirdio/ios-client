@@ -116,6 +116,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func handleNetworkChange(path: Network.NWPath) {
+        AppLogger.shared.log("""
+                  Path update:
+                  - status: \(path.status)
+                  - isExpensive: \(path.isExpensive)
+                  - usesWifi: \(path.usesInterfaceType(.wifi))
+                  - usesCellular: \(path.usesInterfaceType(.cellular))
+                  - interfaces: \(path.availableInterfaces.map { $0.type })
+                  """)
+
         if path.status != .satisfied {
             AppLogger.shared.log("No network connection detected")
             
@@ -129,19 +138,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             if !wasStoppedDueToNoNetwork {
                 AppLogger.shared.log("Network unavailable - signaling UI for disconnecting animation, clientState=\(adapter.clientState)")
                 wasStoppedDueToNoNetwork = true
-                currentNetworkType = nil
                 setNetworkUnavailableFlag(true)
             }
             return
         }
 
         // Network is available again
+        let shouldRestartDueToRecovery = wasStoppedDueToNoNetwork
         if wasStoppedDueToNoNetwork {
             AppLogger.shared.log("Network restored after unavailability - signaling UI")
             wasStoppedDueToNoNetwork = false
             setNetworkUnavailableFlag(false)
-            // Don't need to restart - Go SDK handles reconnection automatically
-            return
         }
 
         // Handle wifi <-> cellular transitions
@@ -160,25 +167,29 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        if currentNetworkType != networkType {
+        let networkTypeChanged = currentNetworkType != nil && currentNetworkType != networkType
+
+        if networkTypeChanged {
             AppLogger.shared.log("Network type changed: \(String(describing: currentNetworkType)) -> \(networkType)")
-            
+        }
+
+        // Restart if network type changed OR recovering from network unavailability
+        // (even if returning to the same interface type, the connection may be stale)
+        if networkTypeChanged || shouldRestartDueToRecovery {
             // Cancel any pending restart from previous rapid change
             networkChangeWorkItem?.cancel()
             networkChangeWorkItem = nil
-            
-            if currentNetworkType != nil {
-                // Debounce: schedule restart after 1 second
-                let workItem = DispatchWorkItem { [weak self] in
-                    self?.restartClient()
-                }
-                
-                networkChangeWorkItem = workItem
-                monitorQueue.asyncAfter(deadline: .now() + 1.0, execute: workItem)
+
+            // Debounce: schedule restart after 1 second
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.restartClient()
             }
-            
-            currentNetworkType = networkType
+
+            networkChangeWorkItem = workItem
+            monitorQueue.asyncAfter(deadline: .now() + 1.0, execute: workItem)
         }
+
+        currentNetworkType = networkType
     }
 
     func restartClient() {
