@@ -1,0 +1,64 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Build and Test
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout ios-client
+        uses: actions/checkout@v4
+        with:
+          path: ios-client
+
+      - name: Checkout netbird
+        uses: actions/checkout@v4
+        with:
+          repository: netbirdio/netbird
+          path: netbird
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: netbird/go.sum
+
+      - name: Install gomobile
+        run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
+
+      - name: Build NetBirdSDK xcframework
+        working-directory: ios-client
+        run: ./build-go-lib.sh ../netbird
+
+      - name: Install xcpretty
+        working-directory: ios-client
+        run: gem install xcpretty
+
+      - name: Resolve Swift packages
+        working-directory: ios-client
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project NetBird.xcodeproj \
+            -scheme NetBird
+
+      - name: Run Tests
+        working-directory: ios-client
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project NetBird.xcodeproj \
+            -scheme NetBird \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty --color --test

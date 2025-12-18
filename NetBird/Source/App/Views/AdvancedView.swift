@@ -187,76 +187,87 @@ struct AdvancedView: View {
     }
 
     func shareButtonTapped() {
-        let fileManager = FileManager.default
-        guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") else {
-            print("Failed to retrieve the group URL")
-            return
-        }
-
-        let logURL = groupURL.appendingPathComponent("logfile.log")
-
-        do {
-            let logData = try String(contentsOf: logURL, encoding: .utf8)
-            let fileName = "netbird-log.txt"
-            guard let filePath = getDocumentsDirectory()?.appendingPathComponent(fileName) else {
-                print("Failed to get file path")
+        Task.detached(priority: .utility) {
+            let fileManager = FileManager.default
+            let tempDir = fileManager.temporaryDirectory.appendingPathComponent("netbird-logs-\(UUID().uuidString)")
+            
+            do {
+                try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            } catch {
+                AppLogger.shared.log("Failed to create temp directory: \(error)")
                 return
             }
             
-            do {
-                try logData.write(to: filePath, atomically: true, encoding: .utf8)
+            var filesToShare: [URL] = []
+            
+            // Export Go SDK logs
+            if let goLogURL = AppLogger.getGoLogFileURL() {
+                let goLogPath = tempDir.appendingPathComponent("netbird-engine.log")
                 
-                let activityViewController = UIActivityViewController(activityItems: [filePath], applicationActivities: nil)
+                do {
+                    try fileManager.copyItem(at: goLogURL, to: goLogPath)
+                    filesToShare.append(goLogPath)
+                } catch {
+                    AppLogger.shared.log("Failed to export Go log: \(error)")
+                }
+            }
+            
+            // Export Swift logs
+            if let swiftLogURL = AppLogger.getLogFileURL() {
+                let swiftLogPath = tempDir.appendingPathComponent("netbird-app.log")
+                
+                do {
+                    try fileManager.copyItem(at: swiftLogURL, to: swiftLogPath)
+                    filesToShare.append(swiftLogPath)
+                } catch {
+                    AppLogger.shared.log("Failed to export Swift log: \(error)")
+                }
+            }
+            
+            guard !filesToShare.isEmpty else {
+                AppLogger.shared.log("No log files to share")
+                try? FileManager.default.removeItem(at: tempDir)
+                return
+            }
+            
+            let readOnlyFilesToShare = filesToShare
+            
+            await MainActor.run {
+                let activityViewController = UIActivityViewController(activityItems: readOnlyFilesToShare, applicationActivities: nil)
                 
                 activityViewController.excludedActivityTypes = [
                     .assignToContact,
                     .saveToCameraRoll
                 ]
                 
+                // Clean up temp files after share completes (success or cancel)
+                activityViewController.completionWithItemsHandler = { _, _, _, _ in
+                    do {
+                        try FileManager.default.removeItem(at: tempDir)
+                    } catch {
+                        AppLogger.shared.log("Failed to cleanup temp log files: \(error)")
+                    }
+                }
+                
                 if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                    let rootViewController = windowScene.windows.first?.rootViewController {
+                    // Configure popover for iPad to prevent crash
+                    if let popover = activityViewController.popoverPresentationController {
+                        popover.sourceView = rootViewController.view
+                        popover.sourceRect = CGRect(x: rootViewController.view.bounds.midX,
+                                                    y: rootViewController.view.bounds.midY,
+                                                    width: 0, height: 0)
+                        popover.permittedArrowDirections = []
+                    }
                     rootViewController.present(activityViewController, animated: true, completion: nil)
+                } else {
+                    AppLogger.shared.log("Unable to present share sheet (no rootViewController)")
+                    try? FileManager.default.removeItem(at: tempDir)
                 }
-            } catch {
-                print("Failed to write to file: \(error.localizedDescription)")
             }
-        } catch {
-            print("Failed to read log data: \(error)")
-            return
         }
     }
-        
-    func getDocumentsDirectory() -> URL? {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        return paths.first
-    }
-    
-    func saveLogFile(at url: URL?) {
-        guard let url = url else { return }
 
-        let fileManager = FileManager.default
-        guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") else {
-                print("Failed to retrieve the group URL")
-                return
-            }
-
-            let logURL = groupURL.appendingPathComponent("logfile.log")
-
-            do {
-                let logData = try String(contentsOf: logURL, encoding: .utf8)
-                let fileURL = url.appendingPathComponent("netbird.log")
-                do {
-                    try logData.write(to: fileURL, atomically: true, encoding: .utf8)
-                    print("Log file saved successfully.")
-                } catch {
-                    print("Failed to save log file: \(error)")
-                }
-            } catch {
-                print("Failed to read log data: \(error)")
-                return
-            }
-    }
-    
     func checkForValidPresharedKey(text: String) {
         if isValidBase64EncodedString(text) {
             viewModel.showInvalidPresharedKeyAlert = false

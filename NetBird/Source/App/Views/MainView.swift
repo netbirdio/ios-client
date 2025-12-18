@@ -99,7 +99,7 @@ struct MainView: View {
                                     }
                                 }
                             }) {
-                                CustomLottieView(extensionStatus: $viewModel.extensionState, engineStatus: $viewModel.managementStatus, connectPressed: $viewModel.connectPressed, disconnectPressed: $viewModel.disconnectPressed, viewModel: viewModel)
+                                CustomLottieView(extensionStatus: $viewModel.extensionState, engineStatus: $viewModel.managementStatus, connectPressed: $viewModel.connectPressed, disconnectPressed: $viewModel.disconnectPressed, networkUnavailable: $viewModel.networkUnavailable, viewModel: viewModel)
                                     .id(animationKey)
                                     .frame(width: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79), height: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79))
                                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
@@ -122,6 +122,11 @@ struct MainView: View {
                         SideDrawer(viewModel: viewModel, isShowing: $viewModel.presentSideDrawer)
                         NavigationLink("", destination: ServerView(), isActive: $viewModel.navigateToServerView)
                             .hidden()
+                            .onChange(of: viewModel.navigateToServerView) { newValue in
+                                  if !newValue {
+                                      viewModel.startPollingDetails()
+                                  }
+                            }
                         if viewModel.networkExtensionAdapter.showBrowser,
                            let loginURLString = viewModel.networkExtensionAdapter.loginURL,
                            let loginURL = URL(string: loginURLString)
@@ -430,9 +435,8 @@ struct ChangeServerAlert: View {
                 .foregroundColor(Color("TextAlert"))
                 .multilineTextAlignment(.center)
             SolidButton(text: "Confirm") {
-                viewModel.close()
-                viewModel.clearDetails()
-                isPresented.toggle()
+                viewModel.handleServerChanged()
+                isPresented = false
                 viewModel.navigateToServerView = true
             }
             .padding(.top, 20)

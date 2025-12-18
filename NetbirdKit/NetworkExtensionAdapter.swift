@@ -10,19 +10,26 @@ import NetworkExtension
 import SwiftUI
 
 public class NetworkExtensionAdapter: ObservableObject {
-        
+
     var session : NETunnelProviderSession?
     var vpnManager: NETunnelProviderManager?
-    
+
     var extensionID = "io.netbird.app.NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
-    
-    let decoder = PropertyListDecoder()    
-    
+
+    let decoder = PropertyListDecoder()
+
     @Published var timer : Timer
-    
+
     @Published var showBrowser = false
     @Published var loginURL : String?
+
+    private let fetchLock = NSLock()
+    private var _isFetchingStatus = false
+    private var isFetchingStatus: Bool {
+        get { fetchLock.lock(); defer { fetchLock.unlock() }; return _isFetchingStatus }
+        set { fetchLock.lock(); defer { fetchLock.unlock() }; _isFetchingStatus = newValue }
+    }
     
     init() {
         self.timer = Timer()
@@ -235,35 +242,69 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     
     func fetchData(completion: @escaping (StatusDetails) -> Void) {
+        guard !isFetchingStatus else {
+            return
+        }
+
+        let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
+        
         guard let session = self.session else {
-            let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
             completion(defaultStatus)
             return
         }
+
+        isFetchingStatus = true
+        var hasCompleted = false
+        let completionLock = NSLock()
         
+        // This is to make sure completion is called only once
+        let safeCompletion: (StatusDetails) -> Void = { [weak self] status in
+            completionLock.lock()
+            defer { completionLock.unlock() }
+            
+            guard !hasCompleted else { return }
+            hasCompleted = true
+            
+            self?.isFetchingStatus = false
+            completion(status)
+        }
+        
+        // Timeout after 10 seconds to reset fetching status to false
+        let timeoutWorkItem = DispatchWorkItem {
+            AppLogger.shared.log("fetchData timed out")
+            safeCompletion(defaultStatus)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: timeoutWorkItem)
+    
         let messageString = "Status"
+        
         if let messageData = messageString.data(using: .utf8) {
             do {
-                try session.sendProviderMessage(messageData) { response in
-                    if let response = response {
-                        do {
-                            let decodedStatus = try self.decoder.decode(StatusDetails.self, from: response)
-                            completion(decodedStatus)
-                            return
-                        } catch {
-                            print("Failed to decode status details.")
-                        }
-                    } else {
-                        let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
-                        completion(defaultStatus)
+                try session.sendProviderMessage(messageData) { [weak self] response in
+                    timeoutWorkItem.cancel()
+                    
+                    guard let response = response else {
+                        safeCompletion(defaultStatus)
                         return
+                    }
+                    
+                    do {
+                        let decodedStatus = try self?.decoder.decode(StatusDetails.self, from: response)
+                        safeCompletion(decodedStatus ?? defaultStatus)
+                    } catch {
+                        AppLogger.shared.log("Failed to decode status details: \(error)")
+                        safeCompletion(defaultStatus)
                     }
                 }
             } catch {
-                print("Failed to send Provider message")
+                timeoutWorkItem.cancel()
+                AppLogger.shared.log("Failed to send Provider message")
+                safeCompletion(defaultStatus)
             }
         } else {
-            print("Error converting message to Data")
+            timeoutWorkItem.cancel()
+            AppLogger.shared.log("Error converting message to Data")
+            safeCompletion(defaultStatus)
         }
     }
     

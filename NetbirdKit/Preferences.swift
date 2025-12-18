@@ -10,21 +10,31 @@ import NetBirdSDK
 
 class Preferences {
     static func newPreferences() -> NetBirdSDKPreferences {
-        return NetBirdSDKNewPreferences(configFile(), stateFile())!
+        guard let prefs = NetBirdSDKNewPreferences(configFile(), stateFile()) else {
+            preconditionFailure("Failed to create NetBirdSDKPreferences")
+        }
+        return prefs
     }
 
-    static func configFile() -> String {
+    static func getFilePath(fileName: String) -> String {
         let fileManager = FileManager.default
-        let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
-        let logURL = groupURL?.appendingPathComponent("netbird.cfg")
-        return logURL!.relativePath
+        if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
+            return groupURL.appendingPathComponent(fileName).relativePath
+        }
+        
+        // Fallback for testing or when app group is not available
+        // (prefer non-user-visible dir)
+        let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
+        return (baseURL ?? fileManager.temporaryDirectory).appendingPathComponent(fileName).path
+    }
+    
+    static func configFile() -> String {
+        return getFilePath(fileName: GlobalConstants.configFileName)
     }
     
     static func stateFile() -> String {
-        let fileManager = FileManager.default
-        let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
-        let logURL = groupURL?.appendingPathComponent("state.json")
-        return logURL!.relativePath
+        return getFilePath(fileName: GlobalConstants.stateFileName)
     }
     
 }

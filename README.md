@@ -5,11 +5,17 @@
  </p>
    <p>
       <a href="https://github.com/netbirdio/netbird/blob/main/LICENSE">
-        <img height="20" src="https://www.gnu.org/graphics/gplv3-88x31.png" />
+        <img height="20" src="https://www.gnu.org/graphics/gplv3-88x31.png" alt="License: GPL-3.0" />
       </a>
      <a href="https://join.slack.com/t/netbirdio/shared_invite/zt-vrahf41g-ik1v7fV8du6t0RwxSrJ96A">
-         <img src="https://img.shields.io/badge/slack-@netbird-red.svg?logo=slack"/>
-      </a>    
+         <img src="https://img.shields.io/badge/slack-@netbird-red.svg?logo=slack" alt="Slack"/>
+      </a>
+      <a href="https://github.com/netbirdio/ios-client/actions/workflows/build.yml">
+         <img src="https://github.com/netbirdio/ios-client/actions/workflows/build.yml/badge.svg" alt="Build Status"/>
+      </a>
+      <a href="https://github.com/netbirdio/ios-client/actions/workflows/test.yml">
+         <img src="https://github.com/netbirdio/ios-client/actions/workflows/test.yml/badge.svg" alt="Test Status"/>
+      </a>
    </p>
  </div>
 
@@ -55,27 +61,37 @@ The code is divided into 4 parts:
 ## Requirements
 
 - iOS 14.0+
-- Xcode 12.0+
+- Xcode 16.1+
+- Go 1.24+
 - gomobile
 
 ## Run locally
 
 To build the app, this repository and the main netbird repository are needed.
 
-```
+```bash
 git clone https://github.com/netbirdio/netbird.git
 git clone https://github.com/netbirdio/ios-client.git
+cd ios-client
 ```
 
-Building the xcframework from the main netbird repo. This needs to be stored in the root directory of the app
+Install gomobile if you haven't already:
+```bash
+go install golang.org/x/mobile/cmd/gomobile@latest
 ```
-cd netbird
-gomobile bind -target=ios -bundleid=io.netbird.framework -o ../ios-client/NetBirdSDK.xcframework ./client/ios/NetBirdSDK
+
+Build the xcframework from the main netbird repo using the build script:
+```bash
+./build-go-lib.sh ../netbird
 ```
 
 Open the Xcode project, and we are ready to go.
 
-> **Note:** The app can not be run in the iOS simulator. To test the app, a physical device needs to be connected to Xcode via cable and set as the run destination.
+> **Note:** The app cannot be run in the iOS simulator. To test the app, a physical device needs to be connected to Xcode via cable and set as the run destination.
+
+### Firebase Configuration (Optional)
+
+The app supports Firebase for analytics and crash reporting. To enable it, add your `GoogleService-Info.plist` file to the project root. The app will work without Firebase configuration.
 
 ## Other project repositories
 

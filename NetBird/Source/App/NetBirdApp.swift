@@ -12,8 +12,10 @@ import FirebasePerformance
 class AppDelegate: NSObject, UIApplicationDelegate {
   func application(_ application: UIApplication,
                    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-      let options = FirebaseOptions(contentsOfFile: Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist")!)
-      FirebaseApp.configure(options: options!)
+      if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+         let options = FirebaseOptions(contentsOfFile: path) {
+          FirebaseApp.configure(options: options)
+      }
     return true
   }
 }
@@ -33,6 +35,7 @@ struct NetBirdApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) {_ in
                     print("App is active!")
                     viewModel.checkExtensionState()
+                    viewModel.checkLoginRequiredFlag()
                     viewModel.startPollingDetails()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) {_ in
