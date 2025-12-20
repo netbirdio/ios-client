@@ -216,8 +216,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 // Cancel timeout whether start succeeds or not
                 timeoutWorkItem.cancel()
                 
-                self?.adapter.isRestarting = false
-                self?.isRestartInProgress = false
+                self?.monitorQueue.async {
+                    self?.adapter.isRestarting = false
+                    self?.isRestartInProgress = false
+                }
+                
                 if let error = error {
                     AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
                 } else {

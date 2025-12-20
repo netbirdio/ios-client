@@ -242,9 +242,9 @@ struct MainView: View {
                         }
                     }
                 }
+                .navigationBarTitleDisplayMode(.inline)
+                .navigationBarHidden(true)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarHidden(true)
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }
