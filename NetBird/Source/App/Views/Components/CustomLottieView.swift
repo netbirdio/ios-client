@@ -9,8 +9,9 @@ struct CustomLottieView: UIViewRepresentable {
     @Binding var engineStatus: ClientState
     @Binding var connectPressed: Bool
     @Binding var disconnectPressed: Bool
+    @Binding var networkUnavailable: Bool
     @StateObject var viewModel: ViewModel
-    
+
     func makeUIView(context: Context) -> LottieAnimationView {
         let animationView = LottieAnimationView()
         animationView.animation = LottieAnimation.named(colorScheme == .dark ? "button-full2-dark" :  "button-full2")
@@ -20,6 +21,19 @@ struct CustomLottieView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: LottieAnimationView, context: Context) {
+        // Check for network unavailable state change (airplane mode)
+        if context.coordinator.networkUnavailable != networkUnavailable {
+            context.coordinator.networkUnavailable = networkUnavailable
+
+            if networkUnavailable && !context.coordinator.isPlaying {
+                // Network just became unavailable - trigger disconnecting animation
+                DispatchQueue.main.async {
+                    context.coordinator.playDisconnectingFadeIn(uiView: uiView, viewModel: viewModel)
+                }
+                return
+            }
+        }
+
         // Status change check
         if context.coordinator.extensionStatus != extensionStatus || context.coordinator.engineStatus != engineStatus
             || context.coordinator.connectPressed != connectPressed || context.coordinator.disconnectPressed != disconnectPressed {
@@ -28,15 +42,27 @@ struct CustomLottieView: UIViewRepresentable {
             context.coordinator.engineStatus = engineStatus
             context.coordinator.connectPressed = connectPressed
             context.coordinator.disconnectPressed = disconnectPressed
-            
+
+            // Force reset to disconnected state when all flags indicate disconnected
+            // This handles cases like server change where we need to immediately reset
+            let shouldForceReset = extensionStatus == .disconnected
+                && !connectPressed
+                && !disconnectPressed
+                && engineStatus == .disconnected
+
+            if shouldForceReset {
+                context.coordinator.isPlaying = false
+                uiView.stop()
+                uiView.currentFrame = context.coordinator.disconnectedFrame
+                return
+            }
+
             if context.coordinator.isPlaying {
-                print("Is still playing")
                 return
             }
             // Act based on the new status
             switch extensionStatus {
             case .connected:
-                print("Management status chnaged to \(engineStatus)")
                 if disconnectPressed {
                     DispatchQueue.main.async {
                         context.coordinator.playDisconnectingFadeIn(uiView: uiView, viewModel: viewModel)
@@ -50,11 +76,19 @@ struct CustomLottieView: UIViewRepresentable {
                     }
                     uiView.currentFrame = context.coordinator.connectedFrame
                 case .connecting:
+                    // Play connecting animation - the loop has proper exit conditions
+                    // for both user-initiated and automatic reconnections
                     context.coordinator.playConnectingLoop(uiView: uiView, viewModel: viewModel)
                 case .disconnected:
-                    break
+                    // Engine disconnected but tunnel still up - show disconnected state
+                    DispatchQueue.main.async {
+                        viewModel.extensionStateText = "Disconnected"
+                    }
+                    uiView.currentFrame = context.coordinator.disconnectedFrame
                 case .disconnecting:
-                    break
+                    DispatchQueue.main.async {
+                        context.coordinator.playDisconnectingFadeIn(uiView: uiView, viewModel: viewModel)
+                    }
                 }
             case .disconnected:
                 if connectPressed {
@@ -90,6 +124,7 @@ struct CustomLottieView: UIViewRepresentable {
         var engineStatus: ClientState?
         var connectPressed: Bool?
         var disconnectPressed: Bool?
+        var networkUnavailable: Bool = false
         var colorScheme: ColorScheme?
         
         let connectedFrame: CGFloat = 142
@@ -128,7 +163,10 @@ struct CustomLottieView: UIViewRepresentable {
                 if self.engineStatus == .connected {
                     self.playFadeOut(uiView: uiView, startFrame: self.connectingFadeOut.startFrame, endFrame: self.connectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Connected")
                 } else if (self.engineStatus == .disconnecting || self.extensionStatus == .disconnecting || self.engineStatus == .disconnected || self.extensionStatus == .disconnected) && !(self.connectPressed ?? false) {
-                    print("Connected pressed = \(String(describing: self.connectPressed?.description))")
+                    self.playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
+                } else if !(self.connectPressed ?? false) && self.engineStatus == .connecting {
+                    // Automatic reconnection (not user-initiated) stuck in connecting state
+                    // Exit to disconnected state after one loop to avoid infinite animation
                     self.playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
                 } else {
                     playConnectingLoop(uiView: uiView, viewModel: viewModel)
@@ -163,6 +201,28 @@ struct CustomLottieView: UIViewRepresentable {
                 guard let self = self else { return }
                 if self.extensionStatus == .disconnected {
                     self.playFadeOut(uiView: uiView, startFrame: self.disconnectingFadeOut.startFrame, endFrame: self.disconnectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Disconnected")
+                } else if self.engineStatus == .connected && self.extensionStatus == .connected && !self.networkUnavailable {
+                    // Engine recovered to connected during internal restart (e.g., network switch)
+                    // Extension never disconnected, so skip fade out and go directly to connected state
+                    // Only if network is available (not airplane mode)
+                    DispatchQueue.main.async {
+                        self.isPlaying = false
+                        uiView.currentFrame = self.connectedFrame
+                        viewModel.extensionStateText = "Connected"
+                        viewModel.connectPressed = false
+                        viewModel.disconnectPressed = false
+                        viewModel.routeViewModel.getRoutes()
+                    }
+                } else if self.networkUnavailable || ((self.engineStatus == .disconnected || self.engineStatus == .connecting) && self.extensionStatus == .connected) {
+                    // Network unavailable (airplane mode) or engine disconnected/stuck connecting
+                    // Show disconnected state immediately
+                    DispatchQueue.main.async {
+                        self.isPlaying = false
+                        uiView.currentFrame = self.disconnectedFrame
+                        viewModel.extensionStateText = "Disconnected"
+                        viewModel.connectPressed = false
+                        viewModel.disconnectPressed = false
+                    }
                 } else {
                     playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
                 }

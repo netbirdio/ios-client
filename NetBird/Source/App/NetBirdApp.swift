@@ -23,7 +23,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        // Configure Firebase with the plist file
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
            let options = FirebaseOptions(contentsOfFile: path) {
             FirebaseApp.configure(options: options)
@@ -60,6 +59,7 @@ struct NetBirdApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     print("App is active!")
                     viewModel.checkExtensionState()
+                    viewModel.checkLoginRequiredFlag()
                     viewModel.startPollingDetails()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in

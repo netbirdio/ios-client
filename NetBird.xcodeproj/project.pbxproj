@@ -8,6 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		36F90EF57603411B9916FDD6 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
+		978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
+		978FC4712EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
+		978FC4722EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
+		978FC4732EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
 		3A9A981B20EF47C1907CC877 /* TVServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8BCB110545747678AA5A9C2 /* TVServerView.swift */; };
 		441C5AFE2EDF0DD20055EEFC /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50245A532A80431B0034792B /* NetworkExtension.framework */; };
 		441C5B062EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 441C5AFD2EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -211,6 +215,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		978FC46F2EEDF167002D0EB8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		441C5AEE2EDF0DAE0055EEFC /* NetBird TV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "NetBird TV.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		441C5AFD2EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NetBirdTVNetworkExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		443782BD2EDF284A00F9FA94 /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
@@ -474,6 +479,7 @@
 		50C727EA2A82479B006E898D /* NetbirdKit */ = {
 			isa = PBXGroup;
 			children = (
+				978FC46F2EEDF167002D0EB8 /* AppLogger.swift */,
 				F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */,
 				F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */,
 				50245A292A7BDB590034792B /* Preferences.swift */,
@@ -836,6 +842,7 @@
 				443782C72EDF288A00F9FA94 /* TVNetworksView.swift in Sources */,
 				44F3E39B2EE2F9FA00C87FEC /* TVAuthView.swift in Sources */,
 				443782C82EDF288A00F9FA94 /* TVMainView.swift in Sources */,
+				978FC4732EEDF167002D0EB8 /* AppLogger.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -856,6 +863,7 @@
 				44F3E3932EE2151100C87FEC /* NetworkExtensionAdapter.swift in Sources */,
 				44F3E3942EE2151100C87FEC /* ConnectionListener.swift in Sources */,
 				44F3E38C2EE214E300C87FEC /* NetBirdAdapter.swift in Sources */,
+				978FC4722EEDF167002D0EB8 /* AppLogger.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -879,6 +887,7 @@
 				50C78AD12A82BBFD006E898D /* Device.swift in Sources */,
 				505118CF2AD96ECA003027D3 /* x25519.c in Sources */,
 				F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */,
+				978FC4712EEDF167002D0EB8 /* AppLogger.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -925,6 +934,7 @@
 				F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */,
 				50E608132A7958B100BAF09B /* MainViewModel.swift in Sources */,
 				F1B2920A2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */,
+				978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

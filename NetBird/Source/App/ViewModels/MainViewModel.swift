@@ -13,6 +13,7 @@ import NetworkExtension
 import os
 import Combine
 import NetBirdSDK
+import UserNotifications
 
 /// Used by updateManagementURL to check if SSO is supported
 class SSOCheckListener: NSObject, NetBirdSDKSSOListenerProtocol {
@@ -99,6 +100,7 @@ class ViewModel: ObservableObject {
     }
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
+    @Published var networkUnavailable = false
 
     /// Preferences are loaded lazily on first access to avoid blocking app startup.
     /// On tvOS, SDK initialization is expensive (generates WireGuard/SSH keys) and
@@ -106,12 +108,19 @@ class ViewModel: ObservableObject {
     private var _preferences: NetBirdSDKPreferences?
     private var _preferencesLoaded = false
     var preferences: NetBirdSDKPreferences? {
-        if !_preferencesLoaded {
-            _preferencesLoaded = true
-            _preferences = Preferences.newPreferences()
+        get {
+            if !_preferencesLoaded {
+                _preferencesLoaded = true
+                _preferences = Preferences.newPreferences()
+            }
+            return _preferences
         }
-        return _preferences
+        set {
+            _preferencesLoaded = true
+            _preferences = newValue
+        }
     }
+
     var buttonLock = false
     let defaults = UserDefaults.standard
     
@@ -178,13 +187,15 @@ class ViewModel: ObservableObject {
     
     func startPollingDetails() {
         networkExtensionAdapter.startTimer { details in
-            
+
             self.checkExtensionState()
+            self.checkNetworkUnavailableFlag()
+
             if self.extensionState == .disconnected && self.extensionStateText == "Connected" {
                 self.showAuthenticationRequired = true
                 self.extensionStateText = "Disconnected"
             }
-            
+
             if details.ip != self.ip || details.fqdn != self.fqdn || details.managementStatus != self.managementStatus
             {
                 if !details.fqdn.isEmpty && details.fqdn != self.fqdn {
@@ -196,16 +207,14 @@ class ViewModel: ObservableObject {
                     self.defaults.set(details.ip, forKey: "ip")
                     self.ip = details.ip
                 }
-                print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - LoginRequired: \(self.networkExtensionAdapter.isLoginRequired())")
+                print("Status: \(details.managementStatus) - Extension: \(self.extensionState)")
                 
                 if details.managementStatus != self.managementStatus {
                     self.managementStatus = details.managementStatus
                 }
                 
-                if details.managementStatus == .disconnected && self.extensionState == .connected && self.networkExtensionAdapter.isLoginRequired() {
-                    self.networkExtensionAdapter.stop()
-                    self.showAuthenticationRequired = true
-                }
+                // Login required detection is handled by the network extension via signalLoginRequired()
+                // The app checks for this flag in checkLoginRequiredFlag() when becoming active
             }
             
             self.statusDetailsValid = true
@@ -410,5 +419,96 @@ class ViewModel: ObservableObject {
         } catch {
             print("Failed to read the log file: \(error.localizedDescription)")
         }
+    }
+
+    /// Handles server change completion by stopping the engine and resetting all connection state.
+    func handleServerChanged() {
+        AppLogger.shared.log("Server changed - stopping engine and resetting state")
+
+        // Stop polling to prevent transitional states from updating UI
+        stopPollingDetails()
+        
+        // Reset connection flags first to update UI immediately
+        connectPressed = false
+        disconnectPressed = false
+        buttonLock = false
+
+        // Reset connection state
+        extensionState = .disconnected
+        extensionStateText = "Disconnected"
+        managementStatus = .disconnected
+
+        // Clear peer info
+        peerViewModel.peerInfo = []
+
+        // Clear connection details
+        clearDetails()
+ 
+        // Stop the network extension in background (non-blocking)
+        Task { @MainActor in
+            self.networkExtensionAdapter.stop()
+        }
+
+        // Reload preferences for new server
+        preferences = Preferences.newPreferences()
+    }
+
+    /// Checks shared app-group container for network unavailable flag set by the network extension.
+    /// Updates the networkUnavailable property to trigger UI animation changes.
+    func checkNetworkUnavailableFlag() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        let isUnavailable = userDefaults?.bool(forKey: GlobalConstants.keyNetworkUnavailable) ?? false
+
+        if isUnavailable != networkUnavailable {
+            AppLogger.shared.log("Network unavailable flag changed: \(isUnavailable)")
+            networkUnavailable = isUnavailable
+        }
+    }
+
+    /// Checks shared app-group container for login required flag set by the network extension.
+    /// If set, schedules a local notification (if authorized) and shows the authentication UI.
+    func checkLoginRequiredFlag() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        guard userDefaults?.bool(forKey: GlobalConstants.keyLoginRequired) == true else {
+            return
+        }
+
+        // Clear the flag immediately
+        userDefaults?.set(false, forKey: GlobalConstants.keyLoginRequired)
+        userDefaults?.synchronize()
+
+        AppLogger.shared.log("Login required flag detected from extension")
+
+        // Show authentication required UI
+        self.showAuthenticationRequired = true
+
+        // Schedule local notification if authorized (iOS only - tvOS doesn't support these notification properties)
+        #if os(iOS)
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else {
+                AppLogger.shared.log("Notifications not authorized, skipping notification")
+                return
+            }
+
+            let content = UNMutableNotificationContent()
+            content.title = "NetBird"
+            content.body = "Login required. Please open the app to reconnect."
+            content.sound = .default
+
+            let request = UNNotificationRequest(
+                identifier: "netbird.login.required",
+                content: content,
+                trigger: nil
+            )
+
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    AppLogger.shared.log("Failed to schedule login notification: \(error.localizedDescription)")
+                } else {
+                    AppLogger.shared.log("Login required notification scheduled from main app")
+                }
+            }
+        }
+        #endif
     }
 }

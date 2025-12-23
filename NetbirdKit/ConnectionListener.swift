@@ -24,23 +24,40 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
     }
     
     func onConnected() {
+        let wasRestarting = adapter.isRestarting
+        adapter.isRestarting = false
         adapter.clientState = .connected
-        
+        AppLogger.shared.log("onConnected: state=connected, wasRestarting=\(wasRestarting)")
+
         DispatchQueue.main.async {
             self.completionHandler(nil)
         }
     }
-    
+
     func onConnecting() {
-        adapter.clientState = .connecting
+        if adapter.isRestarting {
+            AppLogger.shared.log("onConnecting: suppressed (isRestarting=true)")
+        } else {
+            adapter.clientState = .connecting
+            AppLogger.shared.log("onConnecting: state=connecting")
+        }
     }
-    
+
     func onDisconnected() {
+        let wasRestarting = adapter.isRestarting
+        adapter.isRestarting = false
         adapter.clientState = .disconnected
+        AppLogger.shared.log("onDisconnected: state=disconnected, wasRestarting=\(wasRestarting)")
+        adapter.notifyStopCompleted()
     }
-    
+
     func onDisconnecting() {
-        adapter.clientState = .disconnecting
+        if adapter.isRestarting {
+            AppLogger.shared.log("onDisconnecting: suppressed (isRestarting=true)")
+        } else {
+            adapter.clientState = .disconnecting
+            AppLogger.shared.log("onDisconnecting: state=disconnecting")
+        }
     }
     
     func onPeersListChanged(_ p0: Int) {

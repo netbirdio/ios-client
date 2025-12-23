@@ -40,11 +40,6 @@ import NetBirdSDK
 /// On iOS, file-based config storage works normally via the App Group container.
 /// The UserDefaults methods here are primarily for tvOS compatibility.
 class Preferences {
-    #if os(tvOS)
-    static let appGroupIdentifier = "group.io.netbird.app.tv"
-    #else
-    static let appGroupIdentifier = "group.io.netbird.app"
-    #endif
 
     static func newPreferences() -> NetBirdSDKPreferences? {
         guard let configPath = configFile(), let statePath = stateFile() else {
@@ -62,32 +57,40 @@ class Preferences {
         #endif
     }
 
-    static func configFile() -> String? {
+    static func getFilePath(fileName: String) -> String? {
         let fileManager = FileManager.default
-        guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
-            print("ERROR: App group '\(appGroupIdentifier)' not available. Check entitlements.")
-            return nil
+        if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
+            return groupURL.appendingPathComponent(fileName).path
         }
-        return groupURL.appendingPathComponent("netbird.cfg").path
+
+        #if DEBUG
+        // Fallback for testing or when app group is not available
+        // (prefer non-user-visible dir)
+        let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
+        return (baseURL ?? fileManager.temporaryDirectory).appendingPathComponent(fileName).path
+        #else
+        print("ERROR: App group '\(GlobalConstants.userPreferencesSuiteName)' not available. Check entitlements.")
+        return nil
+        #endif
+    }
+
+    static func configFile() -> String? {
+        return getFilePath(fileName: GlobalConstants.configFileName)
     }
 
     static func stateFile() -> String? {
-        let fileManager = FileManager.default
-        guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
-            print("ERROR: App group '\(appGroupIdentifier)' not available. Check entitlements.")
-            return nil
-        }
-        return groupURL.appendingPathComponent("state.json").path
+        return getFilePath(fileName: GlobalConstants.stateFileName)
     }
 
-    // UserDefaults-based config storage for tvOS
+    // MARK: - UserDefaults-based config storage for tvOS
     // tvOS sandbox prevents file writes to App Group containers, so we use UserDefaults instead
 
     private static let configJSONKey = "netbird_config_json"
 
     /// Get the shared UserDefaults for the App Group
     static func sharedUserDefaults() -> UserDefaults? {
-        return UserDefaults(suiteName: appGroupIdentifier)
+        return UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
     }
 
     /// Save config JSON to UserDefaults (works on tvOS where file writes fail)
@@ -144,4 +147,3 @@ class Preferences {
         }
     }
 }
-

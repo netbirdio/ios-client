@@ -17,6 +17,7 @@ class EnvVarPackager {
         #if os(iOS)
         let defaultForceRelay = true
         #else
+        // Forced relay battery optimization not needed on Apple TV
         let defaultForceRelay = false
         #endif
 

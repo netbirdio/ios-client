@@ -29,7 +29,7 @@ class Device {
     /// The name is persisted so it remains consistent across app launches
     private static func generateTVDeviceName() -> String {
         let key = "netbird_device_name"
-        let appGroup = Preferences.appGroupIdentifier
+        let appGroup = GlobalConstants.userPreferencesSuiteName
 
         // Return cached name if it exists
         if let defaults = UserDefaults(suiteName: appGroup),
