@@ -13,9 +13,12 @@ permissions:
 jobs:
   build:
     name: Build iOS App
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer
+
       - name: Checkout ios-client
         uses: actions/checkout@v4
         with:
