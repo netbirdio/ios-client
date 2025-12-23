@@ -103,23 +103,28 @@ class ViewModel: ObservableObject {
     @Published var networkUnavailable = false
 
     /// Preferences are loaded lazily on first access to avoid blocking app startup.
-    /// On tvOS, SDK initialization is expensive (generates WireGuard/SSH keys) and
-    /// should only happen when actually needed.
+    /// - iOS: Returns non-optional NetBirdSDKPreferences (crashes if misconfigured)
+    /// - tvOS: Returns nil (tvOS uses IPC-based config, not SDK preferences)
+    #if os(iOS)
     private var _preferences: NetBirdSDKPreferences?
     private var _preferencesLoaded = false
-    var preferences: NetBirdSDKPreferences? {
+    var preferences: NetBirdSDKPreferences {
         get {
             if !_preferencesLoaded {
                 _preferencesLoaded = true
                 _preferences = Preferences.newPreferences()
             }
-            return _preferences
+            return _preferences!
         }
         set {
             _preferencesLoaded = true
             _preferences = newValue
         }
     }
+    #else
+    // tvOS: SDK preferences not available - config managed via IPC
+    var preferences: NetBirdSDKPreferences? { nil }
+    #endif
 
     var buttonLock = false
     let defaults = UserDefaults.standard
@@ -284,11 +289,11 @@ class ViewModel: ObservableObject {
         #endif
     }
     
+    // MARK: - SDK Preferences Methods (iOS only)
+    // tvOS doesn't use SDK preferences - config is managed via IPC
+
+    #if os(iOS)
     func updatePreSharedKey() {
-        guard let preferences = preferences else {
-            print("updatePreSharedKey: Preferences not available")
-            return
-        }
         preferences.setPreSharedKey(presharedKey)
         do {
             try preferences.commit()
@@ -302,10 +307,6 @@ class ViewModel: ObservableObject {
     }
 
     func removePreSharedKey() {
-        guard let preferences = preferences else {
-            print("removePreSharedKey: Preferences not available")
-            return
-        }
         presharedKey = ""
         preferences.setPreSharedKey(presharedKey)
         do {
@@ -318,19 +319,11 @@ class ViewModel: ObservableObject {
     }
 
     func loadPreSharedKey() {
-        guard let preferences = preferences else {
-            print("loadPreSharedKey: Preferences not available")
-            return
-        }
         self.presharedKey = preferences.getPreSharedKey(nil)
         self.presharedKeySecure = self.presharedKey != ""
     }
 
     func setRosenpassEnabled(enabled: Bool) {
-        guard let preferences = preferences else {
-            print("setRosenpassEnabled: Preferences not available")
-            return
-        }
         preferences.setRosenpassEnabled(enabled)
         do {
             try preferences.commit()
@@ -340,40 +333,26 @@ class ViewModel: ObservableObject {
     }
 
     func getRosenpassEnabled() -> Bool {
-        guard let preferences = preferences else {
-            print("getRosenpassEnabled: Preferences not available")
-            return false
-        }
         var result = ObjCBool(false)
         do {
             try preferences.getRosenpassEnabled(&result)
         } catch {
             print("Failed to read rosenpass settings")
         }
-
         return result.boolValue
     }
 
     func getRosenpassPermissive() -> Bool {
-        guard let preferences = preferences else {
-            print("getRosenpassPermissive: Preferences not available")
-            return false
-        }
         var result = ObjCBool(false)
         do {
             try preferences.getRosenpassPermissive(&result)
         } catch {
             print("Failed to read rosenpass permissive settings")
         }
-
         return result.boolValue
     }
 
     func setRosenpassPermissive(permissive: Bool) {
-        guard let preferences = preferences else {
-            print("setRosenpassPermissive: Preferences not available")
-            return
-        }
         preferences.setRosenpassPermissive(permissive)
         do {
             try preferences.commit()
@@ -381,6 +360,16 @@ class ViewModel: ObservableObject {
             print("Failed to update rosenpass permissive settings")
         }
     }
+    #else
+    // tvOS stubs - these settings are managed differently on tvOS
+    func updatePreSharedKey() {}
+    func removePreSharedKey() {}
+    func loadPreSharedKey() {}
+    func setRosenpassEnabled(enabled: Bool) {}
+    func getRosenpassEnabled() -> Bool { false }
+    func getRosenpassPermissive() -> Bool { false }
+    func setRosenpassPermissive(permissive: Bool) {}
+    #endif
     
     func setForcedRelayConnection(isEnabled: Bool) {
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
@@ -449,13 +438,17 @@ class ViewModel: ObservableObject {
             self.networkExtensionAdapter.stop()
         }
 
-        // Reload preferences for new server
+        // Reload preferences for new server (iOS only - tvOS uses IPC)
+        #if os(iOS)
         preferences = Preferences.newPreferences()
+        #endif
     }
 
     /// Checks shared app-group container for network unavailable flag set by the network extension.
     /// Updates the networkUnavailable property to trigger UI animation changes.
+    /// iOS only - tvOS cannot share UserDefaults between app and extension.
     func checkNetworkUnavailableFlag() {
+        #if os(iOS)
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         let isUnavailable = userDefaults?.bool(forKey: GlobalConstants.keyNetworkUnavailable) ?? false
 
@@ -463,11 +456,16 @@ class ViewModel: ObservableObject {
             AppLogger.shared.log("Network unavailable flag changed: \(isUnavailable)")
             networkUnavailable = isUnavailable
         }
+        #endif
+        // tvOS: Network status is determined by extension state, not a shared flag
     }
 
     /// Checks shared app-group container for login required flag set by the network extension.
     /// If set, schedules a local notification (if authorized) and shows the authentication UI.
+    /// iOS only - tvOS cannot share UserDefaults between app and extension, and uses IPC
+    /// via `checkLoginError` instead.
     func checkLoginRequiredFlag() {
+        #if os(iOS)
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         guard userDefaults?.bool(forKey: GlobalConstants.keyLoginRequired) == true else {
             return
@@ -482,8 +480,7 @@ class ViewModel: ObservableObject {
         // Show authentication required UI
         self.showAuthenticationRequired = true
 
-        // Schedule local notification if authorized (iOS only - tvOS doesn't support these notification properties)
-        #if os(iOS)
+        // Schedule local notification if authorized
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             guard settings.authorizationStatus == .authorized else {
                 AppLogger.shared.log("Notifications not authorized, skipping notification")
@@ -510,5 +507,6 @@ class ViewModel: ObservableObject {
             }
         }
         #endif
+        // tvOS: Login errors are detected via IPC (checkLoginError in TVAuthView)
     }
 }

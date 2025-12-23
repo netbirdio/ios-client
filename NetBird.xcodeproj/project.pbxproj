@@ -16,6 +16,7 @@
 		441C5AFE2EDF0DD20055EEFC /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50245A532A80431B0034792B /* NetworkExtension.framework */; };
 		441C5B062EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 441C5AFD2EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		443782BF2EDF284A00F9FA94 /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782BD2EDF284A00F9FA94 /* Platform.swift */; };
+		978FC4742EEDF168002D0EB8 /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782BD2EDF284A00F9FA94 /* Platform.swift */; };
 		443782C52EDF288A00F9FA94 /* TVSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C32EDF288A00F9FA94 /* TVSettingsView.swift */; };
 		443782C62EDF288A00F9FA94 /* TVPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C22EDF288A00F9FA94 /* TVPeersView.swift */; };
 		443782C72EDF288A00F9FA94 /* TVNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C12EDF288A00F9FA94 /* TVNetworksView.swift */; };
@@ -935,6 +936,7 @@
 				50E608132A7958B100BAF09B /* MainViewModel.swift in Sources */,
 				F1B2920A2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */,
 				978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */,
+				978FC4742EEDF168002D0EB8 /* Platform.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

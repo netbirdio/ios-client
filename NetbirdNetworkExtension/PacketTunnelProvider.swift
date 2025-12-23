@@ -149,7 +149,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // We don't call adapter.stop() to avoid race conditions with Go SDK callbacks
             // The Go SDK will handle network loss internally and reconnect when available
             if !wasStoppedDueToNoNetwork {
-                AppLogger.shared.log("Network unavailable - signaling UI for disconnecting animation, clientState=\(adapter.clientState)")
+                let stateDesc = adapter?.clientState.description ?? "unknown"
+                AppLogger.shared.log("Network unavailable - signaling UI for disconnecting animation, clientState=\(stateDesc)")
                 wasStoppedDueToNoNetwork = true
                 setNetworkUnavailableFlag(true)
             }

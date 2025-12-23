@@ -8,55 +8,52 @@
 import Foundation
 import NetBirdSDK
 
-/// Preferences manages configuration file paths and UserDefaults-based config storage.
+/// Preferences manages configuration file paths and SDK preferences.
 ///
-/// ## tvOS Config Storage Architecture
+/// ## Platform Differences
 ///
-/// On tvOS, the standard App Group shared container does NOT work for IPC between the main app
-/// and the Network Extension due to sandbox restrictions. The error you'll see is:
-/// `Using kCFPreferencesAnyUser with a container is only allowed for System Containers`
+/// ### iOS
+/// Uses file-based storage via App Group shared container. The main app and extension
+/// can both read/write files to this shared location.
 ///
-/// To work around this, tvOS uses a different architecture:
+/// ### tvOS
+/// The App Group shared container does NOT work for IPC between the main app and
+/// Network Extension due to sandbox restrictions. Config is transferred via IPC
+/// (`sendProviderMessage`/`handleAppMessage`) instead. The SDK preferences are not
+/// used on tvOS - settings are managed directly in the extension.
 ///
-/// ### Config Flow on tvOS:
-/// 1. **Main App** → User enters server URL in TVServerView
-/// 2. **Main App** → ServerViewModel saves config to shared UserDefaults (`saveConfigToUserDefaults`)
-///    - This step is for the main app's own reference only
-/// 3. **Main App** → NetworkExtensionAdapter sends config via IPC (`sendConfigToExtension`)
-///    - Uses `sendProviderMessage` with "SetConfig:{json}" format
-/// 4. **Extension** → PacketTunnelProvider receives config via `handleAppMessage`
-/// 5. **Extension** → Saves to extension-local UserDefaults (`UserDefaults.standard`)
-///    - Key: "netbird_config_json_local"
-///    - This is the authoritative source for the extension
-/// 6. **Extension** → NetBirdAdapter.init() loads from extension-local UserDefaults
-///
-/// ### Key Points:
-/// - Shared App Group UserDefaults does NOT work between app and extension on tvOS
-/// - Extension-local `UserDefaults.standard` is the authoritative config source for the extension
-/// - Config must be transferred via IPC using `sendProviderMessage`/`handleAppMessage`
-/// - The main app's shared UserDefaults is only for the app's own use (e.g., displaying current URL)
-///
-/// ### iOS Behavior:
-/// On iOS, file-based config storage works normally via the App Group container.
-/// The UserDefaults methods here are primarily for tvOS compatibility.
+/// See NetworkExtensionAdapter and PacketTunnelProvider for tvOS config flow details.
 class Preferences {
 
-    static func newPreferences() -> NetBirdSDKPreferences? {
-        guard let configPath = configFile(), let statePath = stateFile() else {
-            print("ERROR: Cannot create preferences - app group container unavailable")
-            return nil
-        }
-        #if os(tvOS)
-        // On tvOS, creating SDK Preferences may fail if the app doesn't have write access
-        // to the App Group container. Try anyway - if it fails, settings will be managed
-        // via the extension instead.
-        // Note: The SDK now uses DirectWriteOutConfig which may work better on tvOS.
-        return NetBirdSDKNewPreferences(configPath, statePath)
-        #else
-        return NetBirdSDKNewPreferences(configPath, statePath)
-        #endif
-    }
+    // MARK: - SDK Preferences
 
+    #if os(iOS)
+    /// Creates SDK preferences using App Group shared container paths.
+    /// iOS only - file-based storage works reliably.
+    static func newPreferences() -> NetBirdSDKPreferences {
+        guard let configPath = configFile(), let statePath = stateFile() else {
+            preconditionFailure("App group container unavailable - check entitlements for '\(GlobalConstants.userPreferencesSuiteName)'")
+        }
+        guard let preferences = NetBirdSDKNewPreferences(configPath, statePath) else {
+            preconditionFailure("Failed to create NetBirdSDKPreferences")
+        }
+        return preferences
+    }
+    #else
+    /// tvOS does not use SDK preferences - config is transferred via IPC.
+    /// Returns nil by design; callers must handle this case.
+    static func newPreferences() -> NetBirdSDKPreferences? {
+        // tvOS uses IPC-based config transfer, not file-based SDK preferences.
+        // The extension manages its own config via UserDefaults.standard after
+        // receiving it through handleAppMessage.
+        return nil
+    }
+    #endif
+
+    // MARK: - File Paths
+
+    /// Returns the file path for a given filename in the App Group container.
+    /// Returns nil if the container is unavailable.
     static func getFilePath(fileName: String) -> String? {
         let fileManager = FileManager.default
         if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
@@ -64,8 +61,7 @@ class Preferences {
         }
 
         #if DEBUG
-        // Fallback for testing or when app group is not available
-        // (prefer non-user-visible dir)
+        // Fallback for testing when app group is not available
         let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
         return (baseURL ?? fileManager.temporaryDirectory).appendingPathComponent(fileName).path
@@ -83,17 +79,21 @@ class Preferences {
         return getFilePath(fileName: GlobalConstants.stateFileName)
     }
 
-    // MARK: - UserDefaults-based config storage for tvOS
-    // tvOS sandbox prevents file writes to App Group containers, so we use UserDefaults instead
+    // MARK: - App-Local UserDefaults Storage
+    //
+    // These methods store config in the App Group UserDefaults for the MAIN APP's
+    // own use (e.g., displaying current server URL). On tvOS, this data is NOT
+    // shared with the extension - it's app-local only.
 
     private static let configJSONKey = "netbird_config_json"
 
-    /// Get the shared UserDefaults for the App Group
+    /// Get the App Group UserDefaults.
+    /// Note: On tvOS, this is app-local only - NOT shared with extension.
     static func sharedUserDefaults() -> UserDefaults? {
         return UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
     }
 
-    /// Save config JSON to UserDefaults (works on tvOS where file writes fail)
+    /// Save config JSON to UserDefaults (app-local storage).
     static func saveConfigToUserDefaults(_ configJSON: String) -> Bool {
         guard let defaults = sharedUserDefaults() else {
             return false
@@ -103,23 +103,17 @@ class Preferences {
         return true
     }
 
-    /// Load config JSON from UserDefaults
+    /// Load config JSON from UserDefaults (app-local storage).
     static func loadConfigFromUserDefaults() -> String? {
-        guard let defaults = sharedUserDefaults() else {
-            return nil
-        }
-        return defaults.string(forKey: configJSONKey)
+        return sharedUserDefaults()?.string(forKey: configJSONKey)
     }
 
-    /// Check if config exists in UserDefaults
+    /// Check if config exists in UserDefaults.
     static func hasConfigInUserDefaults() -> Bool {
-        guard let defaults = sharedUserDefaults() else {
-            return false
-        }
-        return defaults.string(forKey: configJSONKey) != nil
+        return sharedUserDefaults()?.string(forKey: configJSONKey) != nil
     }
 
-    /// Remove config from UserDefaults (for logout)
+    /// Remove config from UserDefaults (for logout).
     static func removeConfigFromUserDefaults() {
         guard let defaults = sharedUserDefaults() else {
             return
@@ -128,15 +122,12 @@ class Preferences {
         defaults.synchronize()
     }
 
-    /// Restore config from UserDefaults to the config file path
-    /// This is needed because the Go SDK reads from the file path
+    /// Restore config from UserDefaults to the config file path.
+    /// iOS only - needed because the Go SDK reads from the file path.
+    #if os(iOS)
     static func restoreConfigFromUserDefaults() -> Bool {
-        guard let configJSON = loadConfigFromUserDefaults() else {
-            return false
-        }
-
-        guard let path = configFile() else {
-            print("ERROR: Cannot restore config - app group container unavailable")
+        guard let configJSON = loadConfigFromUserDefaults(),
+              let path = configFile() else {
             return false
         }
         do {
@@ -146,4 +137,5 @@ class Preferences {
             return false
         }
     }
+    #endif
 }
