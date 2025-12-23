@@ -16,7 +16,8 @@ import UIKit
 /// Settings screen for tvOS, replacing the iOS side drawer.
 struct TVSettingsView: View {
     @EnvironmentObject var viewModel: ViewModel
-    
+    @State private var showPreSharedKeyAlert = false
+
     var body: some View {
         ZStack {
             TVColors.bgMenu
@@ -80,6 +81,15 @@ struct TVSettingsView: View {
                                 )
                             }
 
+                            TVSettingsSection(title: "Security") {
+                                TVSettingsRow(
+                                    icon: "key.fill",
+                                    title: "Pre-Shared Key",
+                                    subtitle: viewModel.presharedKeySecure ? "Configured" : "Not configured",
+                                    action: { showPreSharedKeyAlert = true }
+                                )
+                            }
+
                             TVSettingsSection(title: "Info") {
                                 TVSettingsInfoRow(
                                     icon: "book.fill",
@@ -131,10 +141,19 @@ struct TVSettingsView: View {
             if viewModel.showRosenpassChangedAlert {
                 TVRosenpassChangedAlert(viewModel: viewModel)
             }
+
+            // Pre-shared key alert overlay
+            if showPreSharedKeyAlert {
+                TVPreSharedKeyAlert(
+                    viewModel: viewModel,
+                    isPresented: $showPreSharedKeyAlert
+                )
+            }
         }
         .onAppear {
-            // Load Rosenpass settings from storage to sync UI with actual values
+            // Load settings from storage to sync UI with actual values
             viewModel.loadRosenpassSettings()
+            viewModel.loadPreSharedKey()
         }
     }
     
@@ -296,6 +315,50 @@ struct TVSettingsInfoRow: View {
     }
 }
 
+/// Reusable button for TV alert dialogs with proper focus styling.
+/// Text turns dark when focused to remain readable against the light highlight.
+struct TVAlertButton: View {
+    enum Style {
+        case outlined
+        case filled(Color)
+    }
+
+    let title: String
+    let style: Style
+    let isFocused: Bool
+    let action: () -> Void
+    var isSemibold: Bool = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 24, weight: isSemibold || isFilled ? .semibold : .regular))
+                .foregroundColor(isFocused ? .black : .white)
+                .padding(.horizontal, isFilled ? 50 : 40)
+                .padding(.vertical, 16)
+                .background(backgroundView)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var isFilled: Bool {
+        if case .filled = style { return true }
+        return false
+    }
+
+    @ViewBuilder
+    private var backgroundView: some View {
+        switch style {
+        case .outlined:
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.5), lineWidth: 2)
+        case .filled(let color):
+            RoundedRectangle(cornerRadius: 12)
+                .fill(color)
+        }
+    }
+}
+
 struct TVChangeServerAlert: View {
     @ObservedObject var viewModel: ViewModel
 
@@ -330,40 +393,26 @@ struct TVChangeServerAlert: View {
 
                 HStack(spacing: 40) {
                     // Cancel button
-                    Button(action: {
-                        viewModel.showChangeServerAlert = false
-                    }) {
-                        Text("Cancel")
-                            .font(.system(size: 24))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 50)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.white.opacity(0.5), lineWidth: 2)
-                            )
-                    }
-                    .buttonStyle(.plain)
+                    TVAlertButton(
+                        title: "Cancel",
+                        style: .outlined,
+                        isFocused: focusedButton == .cancel,
+                        action: { viewModel.showChangeServerAlert = false }
+                    )
                     .focused($focusedButton, equals: .cancel)
 
                     // Confirm button
-                    Button(action: {
-                        viewModel.close()
-                        viewModel.clearDetails()
-                        viewModel.showChangeServerAlert = false
-                        viewModel.navigateToServerView = true
-                    }) {
-                        Text("Confirm")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 50)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.red)
-                            )
-                    }
-                    .buttonStyle(.plain)
+                    TVAlertButton(
+                        title: "Confirm",
+                        style: .filled(Color.red),
+                        isFocused: focusedButton == .confirm,
+                        action: {
+                            viewModel.close()
+                            viewModel.clearDetails()
+                            viewModel.showChangeServerAlert = false
+                            viewModel.navigateToServerView = true
+                        }
+                    )
                     .focused($focusedButton, equals: .confirm)
                 }
                 .focusSection()
@@ -423,42 +472,28 @@ struct TVRosenpassChangedAlert: View {
 
                 HStack(spacing: 40) {
                     // Later button
-                    Button(action: {
-                        viewModel.showRosenpassChangedAlert = false
-                    }) {
-                        Text("Later")
-                            .font(.system(size: 24))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 50)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.white.opacity(0.5), lineWidth: 2)
-                            )
-                    }
-                    .buttonStyle(.plain)
+                    TVAlertButton(
+                        title: "Later",
+                        style: .outlined,
+                        isFocused: focusedButton == .later,
+                        action: { viewModel.showRosenpassChangedAlert = false }
+                    )
                     .focused($focusedButton, equals: .later)
 
                     // Reconnect button
-                    Button(action: {
-                        viewModel.showRosenpassChangedAlert = false
-                        viewModel.close()
-                        // Small delay before reconnecting to allow disconnect to complete
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            viewModel.connect()
+                    TVAlertButton(
+                        title: "Reconnect",
+                        style: .filled(Color.blue),
+                        isFocused: focusedButton == .reconnect,
+                        action: {
+                            viewModel.showRosenpassChangedAlert = false
+                            viewModel.close()
+                            // Small delay before reconnecting to allow disconnect to complete
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                viewModel.connect()
+                            }
                         }
-                    }) {
-                        Text("Reconnect")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 50)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.blue)
-                            )
-                    }
-                    .buttonStyle(.plain)
+                    )
                     .focused($focusedButton, equals: .reconnect)
                 }
                 .focusSection()
@@ -481,6 +516,138 @@ struct TVRosenpassChangedAlert: View {
                 focusedButton = lastFocusedButton
             }
         }
+    }
+}
+
+struct TVPreSharedKeyAlert: View {
+    @ObservedObject var viewModel: ViewModel
+    @Binding var isPresented: Bool
+    @State private var keyText: String = ""
+    @State private var isInvalid: Bool = false
+    @State private var lastFocusedField: FocusedField = .textField
+
+    private enum FocusedField {
+        case textField, remove, save, cancel
+    }
+
+    @FocusState private var focusedField: FocusedField?
+
+    var body: some View {
+        ZStack {
+            // Dimmed background
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+
+            // Alert box
+            VStack(spacing: 30) {
+                Image(systemName: "key.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.orange)
+
+                Text("Pre-Shared Key")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(TVColors.textAlert)
+
+                Text("Enter a 32-byte base64-encoded key. You will only communicate with peers that use the same key.")
+                    .font(.system(size: 22))
+                    .foregroundColor(TVColors.textAlert)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 600)
+
+                // Text field for key input
+                TextField("Pre-shared key", text: $keyText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 24))
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.white.opacity(0.1))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isInvalid ? Color.red : Color.white.opacity(0.3), lineWidth: 2)
+                    )
+                    .frame(maxWidth: 600)
+                    .focused($focusedField, equals: .textField)
+                    .onChange(of: keyText) { _, newValue in
+                        isInvalid = !isValidBase64Key(newValue)
+                    }
+
+                if isInvalid && !keyText.isEmpty {
+                    Text("Invalid key - must be 32-byte base64 encoded")
+                        .font(.system(size: 18))
+                        .foregroundColor(.red)
+                }
+
+                HStack(spacing: 30) {
+                    // Cancel button
+                    TVAlertButton(
+                        title: "Cancel",
+                        style: .outlined,
+                        isFocused: focusedField == .cancel,
+                        action: { isPresented = false }
+                    )
+                    .focused($focusedField, equals: .cancel)
+
+                    // Remove button (only if key is configured)
+                    if viewModel.presharedKeySecure {
+                        TVAlertButton(
+                            title: "Remove",
+                            style: .filled(Color.red),
+                            isFocused: focusedField == .remove,
+                            action: {
+                                viewModel.removePreSharedKey()
+                                isPresented = false
+                            }
+                        )
+                        .focused($focusedField, equals: .remove)
+                    }
+
+                    // Save button
+                    TVAlertButton(
+                        title: "Save",
+                        style: .filled((isInvalid || keyText.isEmpty) ? Color.gray : Color.green),
+                        isFocused: focusedField == .save,
+                        action: {
+                            if !isInvalid && !keyText.isEmpty {
+                                viewModel.presharedKey = keyText
+                                viewModel.updatePreSharedKey()
+                                isPresented = false
+                            }
+                        }
+                    )
+                    .focused($focusedField, equals: .save)
+                }
+                .focusSection()
+            }
+            .padding(60)
+            .background(
+                RoundedRectangle(cornerRadius: 30)
+                    .fill(TVColors.bgSideDrawer)
+            )
+        }
+        .onAppear {
+            // Pre-fill with current key if editing
+            if viewModel.presharedKeySecure {
+                keyText = viewModel.presharedKey
+            }
+            focusedField = .textField
+        }
+        .onChange(of: focusedField) { oldValue, newValue in
+            _ = oldValue  // Suppress unused warning
+            if let newValue = newValue {
+                lastFocusedField = newValue
+            } else {
+                // Focus escaped - pull it back
+                focusedField = lastFocusedField
+            }
+        }
+    }
+
+    private func isValidBase64Key(_ input: String) -> Bool {
+        if input.isEmpty { return true }
+        guard let data = Data(base64Encoded: input) else { return false }
+        return data.count == 32
     }
 }
 
