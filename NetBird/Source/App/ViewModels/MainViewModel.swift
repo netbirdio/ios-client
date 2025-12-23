@@ -102,29 +102,9 @@ class ViewModel: ObservableObject {
     @Published var showForceRelayAlert = false
     @Published var networkUnavailable = false
 
-    /// Preferences are loaded lazily on first access to avoid blocking app startup.
-    /// - iOS: Returns non-optional NetBirdSDKPreferences (crashes if misconfigured)
-    /// - tvOS: Returns nil (tvOS uses IPC-based config, not SDK preferences)
-    #if os(iOS)
-    private var _preferences: NetBirdSDKPreferences?
-    private var _preferencesLoaded = false
-    var preferences: NetBirdSDKPreferences {
-        get {
-            if !_preferencesLoaded {
-                _preferencesLoaded = true
-                _preferences = Preferences.newPreferences()
-            }
-            return _preferences!
-        }
-        set {
-            _preferencesLoaded = true
-            _preferences = newValue
-        }
-    }
-    #else
-    // tvOS: SDK preferences not available - config managed via IPC
-    var preferences: NetBirdSDKPreferences? { nil }
-    #endif
+    /// Platform-agnostic configuration provider.
+    /// Abstracts iOS SDK preferences vs tvOS UserDefaults + IPC.
+    private lazy var configProvider: ConfigurationProvider = ConfigurationProviderFactory.create()
 
     var buttonLock = false
     let defaults = UserDefaults.standard
@@ -289,87 +269,63 @@ class ViewModel: ObservableObject {
         #endif
     }
     
-    // MARK: - SDK Preferences Methods (iOS only)
-    // tvOS doesn't use SDK preferences - config is managed via IPC
+    // MARK: - Configuration Methods (via ConfigurationProvider)
 
-    #if os(iOS)
     func updatePreSharedKey() {
-        preferences.setPreSharedKey(presharedKey)
-        do {
-            try preferences.commit()
+        configProvider.preSharedKey = presharedKey
+        if configProvider.commit() {
             self.close()
             self.presharedKeySecure = true
             self.presentSideDrawer = false
             self.showPreSharedKeyChangedInfo = true
-        } catch {
+        } else {
             print("Failed to update preshared key")
         }
     }
 
     func removePreSharedKey() {
         presharedKey = ""
-        preferences.setPreSharedKey(presharedKey)
-        do {
-            try preferences.commit()
+        configProvider.preSharedKey = ""
+        if configProvider.commit() {
             self.close()
             self.presharedKeySecure = false
-        } catch {
+        } else {
             print("Failed to remove preshared key")
         }
     }
 
     func loadPreSharedKey() {
-        self.presharedKey = preferences.getPreSharedKey(nil)
-        self.presharedKeySecure = self.presharedKey != ""
+        self.presharedKey = configProvider.preSharedKey
+        self.presharedKeySecure = configProvider.hasPreSharedKey
     }
 
     func setRosenpassEnabled(enabled: Bool) {
-        preferences.setRosenpassEnabled(enabled)
-        do {
-            try preferences.commit()
-        } catch {
+        configProvider.rosenpassEnabled = enabled
+        if !configProvider.commit() {
             print("Failed to update rosenpass settings")
         }
     }
 
     func getRosenpassEnabled() -> Bool {
-        var result = ObjCBool(false)
-        do {
-            try preferences.getRosenpassEnabled(&result)
-        } catch {
-            print("Failed to read rosenpass settings")
-        }
-        return result.boolValue
+        return configProvider.rosenpassEnabled
     }
 
     func getRosenpassPermissive() -> Bool {
-        var result = ObjCBool(false)
-        do {
-            try preferences.getRosenpassPermissive(&result)
-        } catch {
-            print("Failed to read rosenpass permissive settings")
-        }
-        return result.boolValue
+        return configProvider.rosenpassPermissive
     }
 
     func setRosenpassPermissive(permissive: Bool) {
-        preferences.setRosenpassPermissive(permissive)
-        do {
-            try preferences.commit()
-        } catch {
+        configProvider.rosenpassPermissive = permissive
+        if !configProvider.commit() {
             print("Failed to update rosenpass permissive settings")
         }
     }
-    #else
-    // tvOS stubs - these settings are managed differently on tvOS
-    func updatePreSharedKey() {}
-    func removePreSharedKey() {}
-    func loadPreSharedKey() {}
-    func setRosenpassEnabled(enabled: Bool) {}
-    func getRosenpassEnabled() -> Bool { false }
-    func getRosenpassPermissive() -> Bool { false }
-    func setRosenpassPermissive(permissive: Bool) {}
-    #endif
+
+    /// Reloads configuration from persistent storage.
+    /// Call this after server changes or when returning to settings view.
+    func reloadConfiguration() {
+        configProvider.reload()
+    }
     
     func setForcedRelayConnection(isEnabled: Bool) {
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
@@ -438,10 +394,8 @@ class ViewModel: ObservableObject {
             self.networkExtensionAdapter.stop()
         }
 
-        // Reload preferences for new server (iOS only - tvOS uses IPC)
-        #if os(iOS)
-        preferences = Preferences.newPreferences()
-        #endif
+        // Reload configuration for new server
+        reloadConfiguration()
     }
 
     /// Checks shared app-group container for network unavailable flag set by the network extension.

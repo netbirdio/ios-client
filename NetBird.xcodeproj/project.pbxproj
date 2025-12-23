@@ -28,6 +28,8 @@
 		443782CE2EDF298B00F9FA94 /* RoutesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */; };
 		443782D02EDF29A800F9FA94 /* Device.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608022A7950CB00BAF09B /* Device.swift */; };
 		443782D12EDF29A800F9FA94 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50245A292A7BDB590034792B /* Preferences.swift */; };
+		A1B2C3D52EEDF501001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
+		A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		443782D42EDF29A800F9FA94 /* RoutesSelectionDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C5D30E2BDD96CF003159BE /* RoutesSelectionDetails.swift */; };
 		443782D52EDF29A800F9FA94 /* StatusDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81A62AD5504B00CF830B /* StatusDetails.swift */; };
 		443782D62EDF29A800F9FA94 /* ClientState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50003BCB2AFD3B0C00E5EB6B /* ClientState.swift */; };
@@ -244,6 +246,7 @@
 		50245A192A7BCE830034792B /* libresolv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libresolv.tbd; path = usr/lib/libresolv.tbd; sourceTree = SDKROOT; };
 		50245A1B2A7BCF120034792B /* NetBird.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NetBird.entitlements; sourceTree = "<group>"; };
 		50245A292A7BDB590034792B /* Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
+		A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationProvider.swift; sourceTree = "<group>"; };
 		50245A2D2A7BDC470034792B /* NetworkChangeListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkChangeListener.swift; sourceTree = "<group>"; };
 		50245A3B2A7FD1CD0034792B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		50245A522A80431B0034792B /* NetbirdNetworkExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NetbirdNetworkExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -484,6 +487,7 @@
 				F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */,
 				F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */,
 				50245A292A7BDB590034792B /* Preferences.swift */,
+				A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */,
 				50245A2D2A7BDC470034792B /* NetworkChangeListener.swift */,
 				50CD81612AD0595E00CF830B /* DNSManager.swift */,
 				50E608022A7950CB00BAF09B /* Device.swift */,
@@ -825,6 +829,7 @@
 				445B5F762EECAF02008932B8 /* EnvVarPackager.swift in Sources */,
 				443782D02EDF29A800F9FA94 /* Device.swift in Sources */,
 				443782D12EDF29A800F9FA94 /* Preferences.swift in Sources */,
+				A1B2C3D52EEDF501001A2B3C /* ConfigurationProvider.swift in Sources */,
 				443782D42EDF29A800F9FA94 /* RoutesSelectionDetails.swift in Sources */,
 				443782D52EDF29A800F9FA94 /* StatusDetails.swift in Sources */,
 				443782D62EDF29A800F9FA94 /* ClientState.swift in Sources */,
@@ -929,6 +934,7 @@
 				509CCD682BE8FFBF00B7C2D8 /* TabBarButton.swift in Sources */,
 				502455BD2A79B0480034792B /* CustomBackButton.swift in Sources */,
 				50216D892ACB18EE009574C9 /* Preferences.swift in Sources */,
+				A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */,
 				50CD81B02AD5B94D00CF830B /* PeerCard.swift in Sources */,
 				50003BCE2AFD405600E5EB6B /* ConnectionListener.swift in Sources */,
 				50003BC72AFBD7F200E5EB6B /* NetBirdAdapter.swift in Sources */,
