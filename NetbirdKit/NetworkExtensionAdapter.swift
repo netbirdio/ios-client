@@ -150,14 +150,16 @@ public class NetworkExtensionAdapter: ObservableObject {
 
     #if os(tvOS)
     /// Try to initialize the config file from the main app.
-    /// On tvOS, shared UserDefaults doesn't work, so we also send config via IPC.
+    /// On tvOS, shared UserDefaults doesn't work, so we send config via IPC.
+    /// Settings (Rosenpass, PreSharedKey) are already stored in the config JSON.
     private func initializeConfigFromApp() async {
         // Check if config exists in main app's UserDefaults
         // Note: Shared UserDefaults doesn't work on tvOS between app and extension,
         // but we can still use it to store config in the main app
         if let configJSON = Preferences.loadConfigFromUserDefaults(), !configJSON.isEmpty {
             logger.info("initializeConfigFromApp: Config exists in UserDefaults, sending to extension via IPC")
-            // Send config to extension via IPC since shared UserDefaults doesn't work
+
+            // Send config to extension via IPC (settings are already in the JSON)
             await sendConfigToExtensionAsync(configJSON)
             return
         }

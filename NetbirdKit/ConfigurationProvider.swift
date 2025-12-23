@@ -124,38 +124,30 @@ final class iOSConfigurationProvider: ConfigurationProvider {
 // MARK: - tvOS Implementation
 
 #if os(tvOS)
-/// tvOS implementation using UserDefaults + config JSON manipulation
-/// Settings are stored locally and injected into config JSON before IPC transfer
+/// tvOS implementation that reads/writes settings directly to the config JSON.
+/// This mirrors iOS behavior where all settings live in one config file.
+/// The config JSON is stored in UserDefaults and sent to the extension via IPC.
 final class tvOSConfigurationProvider: ConfigurationProvider {
-
-    private let defaults = UserDefaults.standard
-
-    // UserDefaults keys for tvOS-local settings
-    private enum Keys {
-        static let rosenpassEnabled = "netbird_rosenpass_enabled"
-        static let rosenpassPermissive = "netbird_rosenpass_permissive"
-        static let preSharedKey = "netbird_preshared_key"
-    }
 
     init() {}
 
     // MARK: - Rosenpass
 
     var rosenpassEnabled: Bool {
-        get { defaults.bool(forKey: Keys.rosenpassEnabled) }
-        set { defaults.set(newValue, forKey: Keys.rosenpassEnabled) }
+        get { extractJSONBool(field: "RosenpassEnabled") ?? false }
+        set { updateJSONField(field: "RosenpassEnabled", value: newValue) }
     }
 
     var rosenpassPermissive: Bool {
-        get { defaults.bool(forKey: Keys.rosenpassPermissive) }
-        set { defaults.set(newValue, forKey: Keys.rosenpassPermissive) }
+        get { extractJSONBool(field: "RosenpassPermissive") ?? false }
+        set { updateJSONField(field: "RosenpassPermissive", value: newValue) }
     }
 
     // MARK: - Pre-Shared Key
 
     var preSharedKey: String {
-        get { defaults.string(forKey: Keys.preSharedKey) ?? "" }
-        set { defaults.set(newValue, forKey: Keys.preSharedKey) }
+        get { extractJSONString(field: "PreSharedKey") ?? "" }
+        set { updateJSONStringField(field: "PreSharedKey", value: newValue) }
     }
 
     var hasPreSharedKey: Bool {
@@ -166,78 +158,26 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
 
     @discardableResult
     func commit() -> Bool {
-        defaults.synchronize()
-        // On tvOS, settings are applied when the config JSON is transferred via IPC
-        // The actual injection happens in applySettingsToConfig()
+        // Settings are written directly to config JSON, no separate commit needed
         return true
     }
 
     func reload() {
-        // UserDefaults are always fresh, no explicit reload needed
+        // Config JSON is always read fresh from UserDefaults
     }
 
-    // MARK: - Config JSON Integration
+    // MARK: - JSON Helpers (read/write to stored config)
 
-    /// Applies current settings to a config JSON string.
-    /// Called before transferring config to the extension via IPC.
-    func applySettingsToConfig(_ configJSON: String) -> String {
-        var result = configJSON
-        result = updateJSONField(result, field: "RosenpassEnabled", value: rosenpassEnabled)
-        result = updateJSONField(result, field: "RosenpassPermissive", value: rosenpassPermissive)
-        if hasPreSharedKey {
-            result = updateJSONStringField(result, field: "PreSharedKey", value: preSharedKey)
-        }
-        return result
+    private func getConfigJSON() -> String? {
+        return Preferences.loadConfigFromUserDefaults()
     }
 
-    /// Extracts settings from a config JSON string and stores them locally.
-    /// Called after receiving config from the extension.
-    func extractSettingsFromConfig(_ configJSON: String) {
-        if let enabled = extractJSONBool(configJSON, field: "RosenpassEnabled") {
-            rosenpassEnabled = enabled
-        }
-        if let permissive = extractJSONBool(configJSON, field: "RosenpassPermissive") {
-            rosenpassPermissive = permissive
-        }
-        if let key = extractJSONString(configJSON, field: "PreSharedKey"), !key.isEmpty {
-            preSharedKey = key
-        }
+    private func saveConfigJSON(_ json: String) {
+        _ = Preferences.saveConfigToUserDefaults(json)
     }
 
-    // MARK: - JSON Helpers
-
-    private func updateJSONField(_ json: String, field: String, value: Bool) -> String {
-        let pattern = "\"\(field)\"\\s*:\\s*(true|false)"
-        let replacement = "\"\(field)\":\(value)"
-
-        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-            let range = NSRange(json.startIndex..., in: json)
-            if regex.firstMatch(in: json, options: [], range: range) != nil {
-                return regex.stringByReplacingMatches(in: json, options: [], range: range, withTemplate: replacement)
-            }
-        }
-
-        // Field doesn't exist - insert before closing brace
-        // This is a simple approach; a proper JSON parser would be more robust
-        return json
-    }
-
-    private func updateJSONStringField(_ json: String, field: String, value: String) -> String {
-        let escapedValue = value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-
-        let pattern = "\"\(field)\"\\s*:\\s*\"[^\"]*\""
-        let replacement = "\"\(field)\":\"\(escapedValue)\""
-
-        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-            let range = NSRange(json.startIndex..., in: json)
-            return regex.stringByReplacingMatches(in: json, options: [], range: range, withTemplate: replacement)
-        }
-        return json
-    }
-
-    private func extractJSONBool(_ json: String, field: String) -> Bool? {
+    private func extractJSONBool(field: String) -> Bool? {
+        guard let json = getConfigJSON() else { return nil }
         let pattern = "\"\(field)\"\\s*:\\s*(true|false)"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
               let match = regex.firstMatch(in: json, options: [], range: NSRange(json.startIndex..., in: json)),
@@ -247,7 +187,8 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
         return String(json[valueRange]) == "true"
     }
 
-    private func extractJSONString(_ json: String, field: String) -> String? {
+    private func extractJSONString(field: String) -> String? {
+        guard let json = getConfigJSON() else { return nil }
         let pattern = "\"\(field)\"\\s*:\\s*\"([^\"]*)\""
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
               let match = regex.firstMatch(in: json, options: [], range: NSRange(json.startIndex..., in: json)),
@@ -255,6 +196,38 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
             return nil
         }
         return String(json[valueRange])
+    }
+
+    private func updateJSONField(field: String, value: Bool) {
+        guard var json = getConfigJSON() else { return }
+
+        let pattern = "\"\(field)\"\\s*:\\s*(true|false)"
+        let replacement = "\"\(field)\":\(value)"
+
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+            let range = NSRange(json.startIndex..., in: json)
+            if regex.firstMatch(in: json, options: [], range: range) != nil {
+                json = regex.stringByReplacingMatches(in: json, options: [], range: range, withTemplate: replacement)
+                saveConfigJSON(json)
+            }
+        }
+    }
+
+    private func updateJSONStringField(field: String, value: String) {
+        guard var json = getConfigJSON() else { return }
+
+        let escapedValue = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+
+        let pattern = "\"\(field)\"\\s*:\\s*\"[^\"]*\""
+        let replacement = "\"\(field)\":\"\(escapedValue)\""
+
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+            let range = NSRange(json.startIndex..., in: json)
+            json = regex.stringByReplacingMatches(in: json, options: [], range: range, withTemplate: replacement)
+            saveConfigJSON(json)
+        }
     }
 }
 #endif

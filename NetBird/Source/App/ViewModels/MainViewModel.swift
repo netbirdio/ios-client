@@ -100,6 +100,7 @@ class ViewModel: ObservableObject {
     }
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
+    @Published var showRosenpassChangedAlert = false
     @Published var networkUnavailable = false
 
     /// Platform-agnostic configuration provider.
@@ -260,8 +261,14 @@ class ViewModel: ObservableObject {
         defaults.removeObject(forKey: "ip")
         defaults.removeObject(forKey: "fqdn")
 
-        // Clear config from UserDefaults (used on tvOS)
+        // Clear config JSON (contains server credentials and all settings)
         Preferences.removeConfigFromUserDefaults()
+
+        // Reset @Published properties to reflect cleared state in UI
+        self.rosenpassEnabled = false
+        self.rosenpassPermissive = false
+        self.presharedKey = ""
+        self.presharedKeySecure = false
 
         #if os(tvOS)
         // Also clear extension-local config to prevent stale credentials
@@ -300,10 +307,21 @@ class ViewModel: ObservableObject {
     }
 
     func setRosenpassEnabled(enabled: Bool) {
+        // Update @Published property for immediate UI feedback
+        self.rosenpassEnabled = enabled
+
+        // Persist to storage (on tvOS this writes directly to config JSON)
         configProvider.rosenpassEnabled = enabled
         if !configProvider.commit() {
             print("Failed to update rosenpass settings")
         }
+
+        #if os(tvOS)
+        // Show reconnect alert if currently connected
+        if extensionState == .connected {
+            showRosenpassChangedAlert = true
+        }
+        #endif
     }
 
     func getRosenpassEnabled() -> Bool {
@@ -314,7 +332,20 @@ class ViewModel: ObservableObject {
         return configProvider.rosenpassPermissive
     }
 
+    /// Loads Rosenpass settings from the configuration provider into the @Published properties.
+    /// Call this when opening settings views to sync UI with stored values.
+    /// On iOS, this triggers SDK initialization, so it's deferred until needed.
+    /// On tvOS, this reads from UserDefaults which is fast.
+    func loadRosenpassSettings() {
+        self.rosenpassEnabled = configProvider.rosenpassEnabled
+        self.rosenpassPermissive = configProvider.rosenpassPermissive
+    }
+
     func setRosenpassPermissive(permissive: Bool) {
+        // Update @Published property for immediate UI feedback
+        self.rosenpassPermissive = permissive
+
+        // Persist to storage (on tvOS this writes directly to config JSON)
         configProvider.rosenpassPermissive = permissive
         if !configProvider.commit() {
             print("Failed to update rosenpass permissive settings")
@@ -325,6 +356,8 @@ class ViewModel: ObservableObject {
     /// Call this after server changes or when returning to settings view.
     func reloadConfiguration() {
         configProvider.reload()
+        // Sync @Published properties with reloaded config values
+        loadRosenpassSettings()
     }
     
     func setForcedRelayConnection(isEnabled: Bool) {

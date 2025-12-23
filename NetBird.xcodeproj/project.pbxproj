@@ -30,6 +30,7 @@
 		443782D12EDF29A800F9FA94 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50245A292A7BDB590034792B /* Preferences.swift */; };
 		A1B2C3D52EEDF501001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
+		A1B2C3D72EEDF503001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		443782D42EDF29A800F9FA94 /* RoutesSelectionDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C5D30E2BDD96CF003159BE /* RoutesSelectionDetails.swift */; };
 		443782D52EDF29A800F9FA94 /* StatusDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81A62AD5504B00CF830B /* StatusDetails.swift */; };
 		443782D62EDF29A800F9FA94 /* ClientState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50003BCB2AFD3B0C00E5EB6B /* ClientState.swift */; };
@@ -866,6 +867,7 @@
 				44F3E3902EE2151100C87FEC /* StatusDetails.swift in Sources */,
 				44F3E3912EE2151100C87FEC /* ClientState.swift in Sources */,
 				44F3E3922EE2151100C87FEC /* Preferences.swift in Sources */,
+				A1B2C3D72EEDF503001A2B3C /* ConfigurationProvider.swift in Sources */,
 				44F3E3932EE2151100C87FEC /* NetworkExtensionAdapter.swift in Sources */,
 				44F3E3942EE2151100C87FEC /* ConnectionListener.swift in Sources */,
 				44F3E38C2EE214E300C87FEC /* NetBirdAdapter.swift in Sources */,

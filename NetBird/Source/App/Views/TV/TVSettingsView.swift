@@ -56,8 +56,27 @@ struct TVSettingsView: View {
                                     subtitle: "Post-quantum secure encryption",
                                     isOn: Binding(
                                         get: { viewModel.rosenpassEnabled },
-                                        set: { viewModel.setRosenpassEnabled(enabled: $0) }
+                                        set: { newValue in
+                                            // When disabling Rosenpass, also disable permissive mode
+                                            if !newValue {
+                                                viewModel.setRosenpassPermissive(permissive: false)
+                                            }
+                                            viewModel.setRosenpassEnabled(enabled: newValue)
+                                        }
                                     )
+                                )
+
+                                TVSettingsToggleRow(
+                                    icon: "shield.checkerboard",
+                                    title: "Rosenpass Permissive",
+                                    subtitle: "Allow connections with non-Rosenpass peers",
+                                    isOn: Binding(
+                                        get: { viewModel.rosenpassPermissive },
+                                        set: { newValue in
+                                            viewModel.setRosenpassPermissive(permissive: newValue)
+                                        }
+                                    ),
+                                    isDisabled: !viewModel.rosenpassEnabled
                                 )
                             }
 
@@ -107,6 +126,15 @@ struct TVSettingsView: View {
             if viewModel.showChangeServerAlert {
                 TVChangeServerAlert(viewModel: viewModel)
             }
+
+            // Rosenpass changed alert overlay
+            if viewModel.showRosenpassChangedAlert {
+                TVRosenpassChangedAlert(viewModel: viewModel)
+            }
+        }
+        .onAppear {
+            // Load Rosenpass settings from storage to sync UI with actual values
+            viewModel.loadRosenpassSettings()
         }
     }
     
@@ -189,25 +217,28 @@ struct TVSettingsToggleRow: View {
     let title: String
     let subtitle: String
     @Binding var isOn: Bool
+    var isDisabled: Bool = false
 
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        Button(action: { isOn.toggle() }) {
+        // Note: We don't use .disabled() because that breaks focus navigation on tvOS.
+        // Instead, we check isDisabled in the action and show visual disabled state.
+        Button(action: { if !isDisabled { isOn.toggle() } }) {
             HStack(spacing: 20) {
                 Image(systemName: icon)
                     .font(.system(size: 28))
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(isDisabled ? TVColors.textSecondary.opacity(0.5) : .accentColor)
                     .frame(width: 40)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(isFocused ? .white : TVColors.textPrimary)
+                        .foregroundColor(isDisabled ? TVColors.textSecondary.opacity(0.5) : (isFocused ? .white : TVColors.textPrimary))
 
                     Text(subtitle)
                         .font(.system(size: 18))
-                        .foregroundColor(isFocused ? .white.opacity(0.8) : TVColors.textSecondary)
+                        .foregroundColor(isDisabled ? TVColors.textSecondary.opacity(0.4) : (isFocused ? .white.opacity(0.8) : TVColors.textSecondary))
                 }
 
                 Spacer()
@@ -215,11 +246,11 @@ struct TVSettingsToggleRow: View {
                 // Custom toggle for better TV visibility
                 ZStack {
                     Capsule()
-                        .fill(isOn ? Color.green : Color.gray.opacity(0.3))
+                        .fill(isDisabled ? Color.gray.opacity(0.2) : (isOn ? Color.green : Color.gray.opacity(0.3)))
                         .frame(width: 70, height: 40)
 
                     Circle()
-                        .fill(Color.white)
+                        .fill(isDisabled ? Color.gray.opacity(0.5) : Color.white)
                         .frame(width: 32, height: 32)
                         .offset(x: isOn ? 15 : -15)
                         .animation(.easeInOut(duration: 0.2), value: isOn)
@@ -228,7 +259,7 @@ struct TVSettingsToggleRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isFocused ? Color.accentColor.opacity(0.2) : Color.clear)
+                    .fill(isFocused && !isDisabled ? Color.accentColor.opacity(0.2) : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -345,6 +376,101 @@ struct TVChangeServerAlert: View {
         }
         .onAppear {
             focusedButton = .cancel
+        }
+        .onChange(of: focusedButton) { oldValue, newValue in
+            _ = oldValue  // Suppress unused warning
+            if let newValue = newValue {
+                lastFocusedButton = newValue
+            } else {
+                // Focus escaped - pull it back
+                focusedButton = lastFocusedButton
+            }
+        }
+    }
+}
+
+struct TVRosenpassChangedAlert: View {
+    @ObservedObject var viewModel: ViewModel
+
+    private enum FocusedButton {
+        case later, reconnect
+    }
+
+    @FocusState private var focusedButton: FocusedButton?
+    @State private var lastFocusedButton: FocusedButton = .later
+
+    var body: some View {
+        ZStack {
+            // Dimmed background
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+
+            // Alert box
+            VStack(spacing: 40) {
+                Image(systemName: "shield.lefthalf.filled")
+                    .font(.system(size: 60))
+                    .foregroundColor(.blue)
+
+                Text("Reconnect Required")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(TVColors.textAlert)
+
+                Text("Rosenpass settings have changed. Reconnect to apply the new security settings.")
+                    .font(.system(size: 24))
+                    .foregroundColor(TVColors.textAlert)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 500)
+
+                HStack(spacing: 40) {
+                    // Later button
+                    Button(action: {
+                        viewModel.showRosenpassChangedAlert = false
+                    }) {
+                        Text("Later")
+                            .font(.system(size: 24))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 50)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.white.opacity(0.5), lineWidth: 2)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .focused($focusedButton, equals: .later)
+
+                    // Reconnect button
+                    Button(action: {
+                        viewModel.showRosenpassChangedAlert = false
+                        viewModel.close()
+                        // Small delay before reconnecting to allow disconnect to complete
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            viewModel.connect()
+                        }
+                    }) {
+                        Text("Reconnect")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 50)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.blue)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .focused($focusedButton, equals: .reconnect)
+                }
+                .focusSection()
+            }
+            .padding(60)
+            .background(
+                RoundedRectangle(cornerRadius: 30)
+                    .fill(TVColors.bgSideDrawer)
+            )
+        }
+        .onAppear {
+            focusedButton = .reconnect
         }
         .onChange(of: focusedButton) { oldValue, newValue in
             _ = oldValue  // Suppress unused warning
