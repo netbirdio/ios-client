@@ -5,22 +5,31 @@
 	<!-- Bundle Display Name -->
 	<key>CFBundleDisplayName</key>
 	<string>NetBird</string>
-	
+
 	<!-- App Category -->
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
-	
+
 	<!-- Minimum tvOS Version (17.0 required for VPN support) -->
 	<key>MinimumOSVersion</key>
 	<string>17.0</string>
-	
+
 	<!-- Launch Screen -->
 	<key>UILaunchScreen</key>
 	<dict/>
-	
+
 	<!-- User Interface Style -->
 	<key>UIUserInterfaceStyle</key>
 	<string>Automatic</string>
+
+	<!-- Top Shelf Image -->
+	<key>TVTopShelfImage</key>
+	<dict>
+		<key>TVTopShelfPrimaryImage</key>
+		<string>App Icon &amp; Top Shelf Image</string>
+		<key>TVTopShelfPrimaryImageWide</key>
+		<string>App Icon &amp; Top Shelf Image</string>
+	</dict>
 </dict>
 </plist>
 

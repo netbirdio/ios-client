@@ -225,8 +225,11 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
 
         if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
             let range = NSRange(json.startIndex..., in: json)
-            json = regex.stringByReplacingMatches(in: json, options: [], range: range, withTemplate: replacement)
-            saveConfigJSON(json)
+            // Only save if the field exists in the JSON
+            if regex.firstMatch(in: json, options: [], range: range) != nil {
+                json = regex.stringByReplacingMatches(in: json, options: [], range: range, withTemplate: replacement)
+                saveConfigJSON(json)
+            }
         }
     }
 }

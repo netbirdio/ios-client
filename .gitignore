@@ -1,6 +1,8 @@
 NetBirdSDK.xcframework/
 Netbird.xcframework/
 GoogleService-Info*.plist
+NetBirdTV/Info.plist
+NetBirdTVNetworkExtension/Info.plist
 .DS_Store
 xcuserdata/
 
