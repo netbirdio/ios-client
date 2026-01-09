@@ -199,7 +199,10 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     }
 
     private func updateJSONField(field: String, value: Bool) {
-        guard var json = getConfigJSON() else { return }
+        guard var json = getConfigJSON() else {
+            AppLogger.shared.log("ConfigurationProvider: No config JSON available for updating '\(field)'")
+            return
+        }
 
         let pattern = "\"\(field)\"\\s*:\\s*(true|false)"
         let replacement = "\"\(field)\":\(value)"
@@ -209,12 +212,17 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
             if regex.firstMatch(in: json, options: [], range: range) != nil {
                 json = regex.stringByReplacingMatches(in: json, options: [], range: range, withTemplate: replacement)
                 saveConfigJSON(json)
+            } else {
+                AppLogger.shared.log("ConfigurationProvider: Field '\(field)' not found in config JSON")
             }
         }
     }
 
     private func updateJSONStringField(field: String, value: String) {
-        guard var json = getConfigJSON() else { return }
+        guard var json = getConfigJSON() else {
+            AppLogger.shared.log("ConfigurationProvider: No config JSON available for updating '\(field)'")
+            return
+        }
 
         let escapedValue = value
             .replacingOccurrences(of: "\\", with: "\\\\")
@@ -225,10 +233,11 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
 
         if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
             let range = NSRange(json.startIndex..., in: json)
-            // Only save if the field exists in the JSON
             if regex.firstMatch(in: json, options: [], range: range) != nil {
                 json = regex.stringByReplacingMatches(in: json, options: [], range: range, withTemplate: replacement)
                 saveConfigJSON(json)
+            } else {
+                AppLogger.shared.log("ConfigurationProvider: Field '\(field)' not found in config JSON")
             }
         }
     }
