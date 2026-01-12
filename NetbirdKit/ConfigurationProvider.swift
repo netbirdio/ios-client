@@ -176,70 +176,65 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
         _ = Preferences.saveConfigToUserDefaults(json)
     }
 
-    private func extractJSONBool(field: String) -> Bool? {
-        guard let json = getConfigJSON() else { return nil }
-        let pattern = "\"\(field)\"\\s*:\\s*(true|false)"
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
-              let match = regex.firstMatch(in: json, options: [], range: NSRange(json.startIndex..., in: json)),
-              let valueRange = Range(match.range(at: 1), in: json) else {
+    private func parseConfigDict() -> [String: Any]? {
+        guard let json = getConfigJSON(),
+              let data = json.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }
-        return String(json[valueRange]) == "true"
+        return dict
+    }
+
+    private func extractJSONBool(field: String) -> Bool? {
+        return parseConfigDict()?[field] as? Bool
     }
 
     private func extractJSONString(field: String) -> String? {
-        guard let json = getConfigJSON() else { return nil }
-        let pattern = "\"\(field)\"\\s*:\\s*\"([^\"]*)\""
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
-              let match = regex.firstMatch(in: json, options: [], range: NSRange(json.startIndex..., in: json)),
-              let valueRange = Range(match.range(at: 1), in: json) else {
-            return nil
-        }
-        return String(json[valueRange])
+        return parseConfigDict()?[field] as? String
     }
 
     private func updateJSONField(field: String, value: Bool) {
-        guard var json = getConfigJSON() else {
+        guard var dict = parseConfigDict() else {
             AppLogger.shared.log("ConfigurationProvider: No config JSON available for updating '\(field)'")
             return
         }
 
-        let pattern = "\"\(field)\"\\s*:\\s*(true|false)"
-        let replacement = "\"\(field)\":\(value)"
-
-        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-            let range = NSRange(json.startIndex..., in: json)
-            if regex.firstMatch(in: json, options: [], range: range) != nil {
-                json = regex.stringByReplacingMatches(in: json, options: [], range: range, withTemplate: replacement)
-                saveConfigJSON(json)
-            } else {
-                AppLogger.shared.log("ConfigurationProvider: Field '\(field)' not found in config JSON")
-            }
+        guard dict[field] != nil else {
+            AppLogger.shared.log("ConfigurationProvider: Field '\(field)' not found in config JSON")
+            return
         }
+
+        dict[field] = value
+
+        guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
+              let json = String(data: data, encoding: .utf8) else {
+            AppLogger.shared.log("ConfigurationProvider: Failed to serialize config JSON")
+            return
+        }
+
+        saveConfigJSON(json)
     }
 
     private func updateJSONStringField(field: String, value: String) {
-        guard var json = getConfigJSON() else {
+        guard var dict = parseConfigDict() else {
             AppLogger.shared.log("ConfigurationProvider: No config JSON available for updating '\(field)'")
             return
         }
 
-        let escapedValue = value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-
-        let pattern = "\"\(field)\"\\s*:\\s*\"[^\"]*\""
-        let replacement = "\"\(field)\":\"\(escapedValue)\""
-
-        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-            let range = NSRange(json.startIndex..., in: json)
-            if regex.firstMatch(in: json, options: [], range: range) != nil {
-                json = regex.stringByReplacingMatches(in: json, options: [], range: range, withTemplate: replacement)
-                saveConfigJSON(json)
-            } else {
-                AppLogger.shared.log("ConfigurationProvider: Field '\(field)' not found in config JSON")
-            }
+        guard dict[field] != nil else {
+            AppLogger.shared.log("ConfigurationProvider: Field '\(field)' not found in config JSON")
+            return
         }
+
+        dict[field] = value
+
+        guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
+              let json = String(data: data, encoding: .utf8) else {
+            AppLogger.shared.log("ConfigurationProvider: Failed to serialize config JSON")
+            return
+        }
+
+        saveConfigJSON(json)
     }
 }
 #endif
