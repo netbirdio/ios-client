@@ -286,6 +286,7 @@ struct TVAuthView: View {
                             #if DEBUG
                             print("TVAuthView: Login error detected: \(errorMsg)")
                             #endif
+                            self.errorMessage = errorMsg
                             timer.invalidate()
                             onErrorHandler?(errorMsg)
                         } else {
