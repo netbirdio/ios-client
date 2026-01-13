@@ -49,15 +49,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let optionsDesc = options?.description ?? "nil"
         logger.info("startTunnel: options = \(optionsDesc, privacy: .public)")
 
-        // Skip file-based logging on tvOS - it will fail due to sandbox
-        #if !os(tvOS)
-        if let options = options, let logLevel = options["logLevel"] as? String {
-            logger.info("startTunnel: initializing logging with level \(logLevel, privacy: .public)")
-            initializeLogging(loglevel: logLevel)
-        }
-        #else
-        logger.info("startTunnel: skipping file-based logging on tvOS (sandbox blocks writes)")
-
         // On tvOS, config is loaded from UserDefaults directly in NetBirdAdapter.init()
         // No need to restore to file - the adapter handles this internally.
         if Preferences.hasConfigInUserDefaults() {
@@ -65,7 +56,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         } else {
             logger.info("startTunnel: tvOS - no config in UserDefaults, login will be required")
         }
-        #endif
 
         currentNetworkType = nil
         startMonitoringNetworkChanges()
@@ -345,39 +335,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// On tvOS, config is loaded from UserDefaults directly in NetBirdAdapter.init()
     /// This function is kept for compatibility but is mostly a no-op on tvOS.
     private func initializeConfigIfNeeded() {
-        #if os(tvOS)
         // On tvOS, config loading is handled by NetBirdAdapter.init()
         // which reads from UserDefaults and calls setConfigFromJSON()
         // Nothing to do here.
         logger.info("initializeConfigIfNeeded: tvOS - config loading handled by adapter init")
-        #else
-        guard let configPath = Preferences.configFile() else {
-            logger.error("initializeConfigIfNeeded: App group container unavailable")
-            return
-        }
-        let fileManager = FileManager.default
-
-        // Check if config already exists as a file
-        if fileManager.fileExists(atPath: configPath) {
-            return
-        }
-
-        // On iOS, try to create config via file writes
-        guard let auth = NetBirdSDKNewAuth(configPath, NetBirdAdapter.defaultManagementURL, nil) else {
-            return
-        }
-
-        let semaphore = DispatchSemaphore(value: 0)
-
-        let listener = ConfigInitSSOListener()
-        listener.onResult = { _, _ in
-            semaphore.signal()
-        }
-
-        auth.saveConfigIfSSOSupported(listener)
-
-        _ = semaphore.wait(timeout: .now() + 10)
-        #endif
     }
 
     /// Check if login has completed (for tvOS polling during device auth flow)

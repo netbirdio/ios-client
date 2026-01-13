@@ -66,7 +66,7 @@ class Preferences {
             ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
         return (baseURL ?? fileManager.temporaryDirectory).appendingPathComponent(fileName).path
         #else
-        print("ERROR: App group '\(GlobalConstants.userPreferencesSuiteName)' not available. Check entitlements.")
+        AppLogger.shared.log("ERROR: App group '\(GlobalConstants.userPreferencesSuiteName)' not available. Check entitlements.")
         return nil
         #endif
     }

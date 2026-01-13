@@ -433,7 +433,9 @@ class ViewModel: ObservableObject {
 
     /// Checks shared app-group container for network unavailable flag set by the network extension.
     /// Updates the networkUnavailable property to trigger UI animation changes.
-    /// iOS only - tvOS cannot share UserDefaults between app and extension.
+    /// iOS only - tvOS has a platform limitation where `UserDefaults(suiteName:)` does not
+    /// reliably synchronize between the main app and network extension processes, even with
+    /// a correctly configured App Group. On tvOS, we use IPC messaging instead.
     func checkNetworkUnavailableFlag() {
         #if os(iOS)
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
