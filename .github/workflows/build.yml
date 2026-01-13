@@ -19,6 +19,9 @@ jobs:
       - name: Select Xcode 16.2
         run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
 
+      - name: Download iOS Simulator Runtime
+        run: xcodebuild -downloadPlatform iOS -buildVersion 18.2
+
       - name: Checkout ios-client
         uses: actions/checkout@v4
         with:
@@ -83,7 +86,7 @@ jobs:
           xcodebuild build \
             -project NetBird.xcodeproj \
             -scheme NetBird \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination 'generic/platform=iOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -97,7 +100,7 @@ jobs:
           xcodebuild build \
             -project NetBird.xcodeproj \
             -scheme NetbirdNetworkExtension \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination 'generic/platform=iOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
