@@ -278,7 +278,7 @@ struct TVAuthView: View {
             print("TVAuthView: Poll tick - checking login status via extension IPC...")
             #endif
 
-            // First check for errors
+            // First check for errors (if error checker provided)
             if let checkError = checkError {
                 checkError { errorMsg in
                     DispatchQueue.main.async {
@@ -288,34 +288,25 @@ struct TVAuthView: View {
                             #endif
                             timer.invalidate()
                             onErrorHandler?(errorMsg)
-                            // Don't auto-dismiss - let user see the error and cancel
-                            return
+                        } else {
+                            // No error - check for completion
+                            self.checkCompletionStatus(
+                                timer: timer,
+                                checkComplete: checkComplete,
+                                onCompleteHandler: onCompleteHandler
+                            )
                         }
                     }
                 }
-            }
-
-            guard let checkComplete = checkComplete else {
-                #if DEBUG
-                print("TVAuthView: No checkLoginComplete closure provided")
-                #endif
                 return
             }
 
-            checkComplete { isComplete in
-                DispatchQueue.main.async {
-                    #if DEBUG
-                    print("TVAuthView: Login complete = \(isComplete)")
-                    #endif
-                    if isComplete {
-                        #if DEBUG
-                        print("TVAuthView: Login detected as complete, dismissing auth view")
-                        #endif
-                        timer.invalidate()
-                        onCompleteHandler?()
-                    }
-                }
-            }
+            // Fallback if no error checker provided - just check completion
+            self.checkCompletionStatus(
+                timer: timer,
+                checkComplete: checkComplete,
+                onCompleteHandler: onCompleteHandler
+            )
         }
         RunLoop.main.add(timer, forMode: .common)
         pollTimer = timer
@@ -339,6 +330,35 @@ struct TVAuthView: View {
                     #if DEBUG
                     print("TVAuthView: Login already complete, dismissing auth view")
                     #endif
+                    onCompleteHandler?()
+                }
+            }
+        }
+    }
+
+    /// Helper to check completion status - ensures mutual exclusivity with error checking
+    private func checkCompletionStatus(
+        timer: Timer,
+        checkComplete: (((@escaping (Bool) -> Void) -> Void))?,
+        onCompleteHandler: (() -> Void)?
+    ) {
+        guard let checkComplete = checkComplete else {
+            #if DEBUG
+            print("TVAuthView: No checkLoginComplete closure provided")
+            #endif
+            return
+        }
+
+        checkComplete { isComplete in
+            DispatchQueue.main.async {
+                #if DEBUG
+                print("TVAuthView: Login complete = \(isComplete)")
+                #endif
+                if isComplete {
+                    #if DEBUG
+                    print("TVAuthView: Login detected as complete, dismissing auth view")
+                    #endif
+                    timer.invalidate()
                     onCompleteHandler?()
                 }
             }
