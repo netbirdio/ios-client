@@ -39,9 +39,7 @@ struct TVPeerListContent: View {
     
     /// Currently selected peer for detail view
     @State private var selectedPeer: PeerInfo?
-    
-    @State private var searchText = ""
-    
+        
     var body: some View {
         HStack(spacing: 0) {
             // Left Side - Peer List

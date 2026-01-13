@@ -147,7 +147,7 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
 
     var preSharedKey: String {
         get { extractJSONString(field: "PreSharedKey") ?? "" }
-        set { updateJSONStringField(field: "PreSharedKey", value: newValue) }
+        set { updateJSONField(field: "PreSharedKey", value: newValue) }
     }
 
     var hasPreSharedKey: Bool {
@@ -193,29 +193,7 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
         return parseConfigDict()?[field] as? String
     }
 
-    private func updateJSONField(field: String, value: Bool) {
-        guard var dict = parseConfigDict() else {
-            AppLogger.shared.log("ConfigurationProvider: No config JSON available for updating '\(field)'")
-            return
-        }
-
-        guard dict[field] != nil else {
-            AppLogger.shared.log("ConfigurationProvider: Field '\(field)' not found in config JSON")
-            return
-        }
-
-        dict[field] = value
-
-        guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
-              let json = String(data: data, encoding: .utf8) else {
-            AppLogger.shared.log("ConfigurationProvider: Failed to serialize config JSON")
-            return
-        }
-
-        saveConfigJSON(json)
-    }
-
-    private func updateJSONStringField(field: String, value: String) {
+    private func updateJSONField<T>(field: String, value: T) {
         guard var dict = parseConfigDict() else {
             AppLogger.shared.log("ConfigurationProvider: No config JSON available for updating '\(field)'")
             return
