@@ -445,7 +445,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         adapter.loginAsync(
             forceDeviceAuth: true,
             onURL: { url, userCode in
-                // Return URL and user code in pipe-separated format
                 logger.info("loginTV: onURL callback triggered!")
                 logger.info("loginTV: Received URL and userCode, sending to app")
                 logger.info("loginTV: URL=\(url, privacy: .public), userCode=\(userCode, privacy: .public)")
@@ -454,9 +453,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 urlSentToApp = true
                 urlSentLock.unlock()
 
-                let response = "\(url)|\(userCode)"
-                let data = response.data(using: .utf8)
-                completionHandler(data)
+                let authResponse = DeviceAuthResponse(url: url, userCode: userCode)
+                do {
+                    let data = try PropertyListEncoder().encode(authResponse)
+                    completionHandler(data)
+                } catch {
+                    logger.error("loginTV: Failed to encode DeviceAuthResponse - \(error)")
+                    completionHandler(nil)
+                }
             },
             onSuccess: {
                 // Login completed - the app will detect this via polling

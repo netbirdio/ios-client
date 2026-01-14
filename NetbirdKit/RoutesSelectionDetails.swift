@@ -16,6 +16,11 @@ struct LoginDiagnostics: Codable {
     var lastError: String
 }
 
+struct DeviceAuthResponse: Codable {
+    var url: String
+    var userCode: String
+}
+
 struct RoutesSelectionDetails: Codable {
     var all: Bool
     var append: Bool

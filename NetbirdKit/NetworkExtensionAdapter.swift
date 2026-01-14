@@ -329,23 +329,27 @@ public class NetworkExtensionAdapter: ObservableObject {
                 // Send the message to the network extension
                 try self.session!.sendProviderMessage(messageData) { response in
                     if let response = response {
-                        if let string = String(data: response, encoding: .utf8) {
-                            #if os(tvOS)
-                            // For tvOS, response format is "url|userCode"
-                            let parts = string.components(separatedBy: "|")
-                            if parts.count >= 2 {
-                                DispatchQueue.main.async {
-                                    self.userCode = parts[1]
-                                }
-                                completion(parts[0])
-                            } else {
+                        #if os(tvOS)
+                        // For tvOS, decode DeviceAuthResponse struct
+                        do {
+                            let authResponse = try self.decoder.decode(DeviceAuthResponse.self, from: response)
+                            DispatchQueue.main.async {
+                                self.userCode = authResponse.userCode
+                            }
+                            completion(authResponse.url)
+                        } catch {
+                            print("login: Failed to decode DeviceAuthResponse - \(error)")
+                            // Fallback to plain string for backwards compatibility
+                            if let string = String(data: response, encoding: .utf8) {
                                 completion(string)
                             }
-                            #else
-                            completion(string)
-                            #endif
-                            return
                         }
+                        #else
+                        if let string = String(data: response, encoding: .utf8) {
+                            completion(string)
+                        }
+                        #endif
+                        return
                     }
                 }
             } else {
