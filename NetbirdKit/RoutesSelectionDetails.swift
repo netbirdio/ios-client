@@ -6,6 +6,16 @@
 import Foundation
 import Combine
 
+struct LoginDiagnostics: Codable {
+    var isComplete: Bool
+    var isExecuting: Bool
+    var loginRequired: Bool
+    var configExists: Bool
+    var stateExists: Bool
+    var lastResult: String
+    var lastError: String
+}
+
 struct RoutesSelectionDetails: Codable {
     var all: Bool
     var append: Bool

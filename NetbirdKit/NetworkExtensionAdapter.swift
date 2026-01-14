@@ -189,43 +189,6 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
     #endif
-
-    #if os(tvOS)
-    /// Ask the Network Extension to initialize config with default management URL
-    /// This is required because the app doesn't have permission to write to the App Group container,
-    /// but the extension does.
-    private func initializeConfigViaExtension() async -> Bool {
-        guard let session = self.session else {
-            print("initializeConfigViaExtension: No session available")
-            return false
-        }
-
-        let messageString = "InitializeConfig"
-        guard let messageData = messageString.data(using: .utf8) else {
-            print("initializeConfigViaExtension: Failed to encode message")
-            return false
-        }
-
-        return await withCheckedContinuation { continuation in
-            do {
-                try session.sendProviderMessage(messageData) { response in
-                    if let response = response,
-                       let responseString = String(data: response, encoding: .utf8) {
-                        let success = responseString == "true"
-                        print("initializeConfigViaExtension: Extension returned '\(responseString)', success=\(success)")
-                        continuation.resume(returning: success)
-                    } else {
-                        print("initializeConfigViaExtension: No response from extension")
-                        continuation.resume(returning: false)
-                    }
-                }
-            } catch {
-                print("initializeConfigViaExtension: Failed to send message - \(error)")
-                continuation.resume(returning: false)
-            }
-        }
-    }
-    #endif
     
     public func isLoginRequired() -> Bool {
         guard let configPath = Preferences.configFile(), let statePath = Preferences.stateFile() else {
@@ -285,19 +248,19 @@ public class NetworkExtensionAdapter: ObservableObject {
         if configExists {
             if let attrs = try? fileManager.attributesOfItem(atPath: configPath),
                let size = attrs[.size] as? Int64 {
-                print("isLoginRequired: configFile size = \(size) bytes")
+                logger.debug("isLoginRequired: configFile size = \(size) bytes")
             }
         }
 
         if stateExists {
             if let attrs = try? fileManager.attributesOfItem(atPath: statePath),
                let size = attrs[.size] as? Int64 {
-                print("isLoginRequired: stateFile size = \(size) bytes")
+                logger.debug("isLoginRequired: stateFile size = \(size) bytes")
             }
         }
 
         guard let client = NetBirdSDKNewClient(configPath, statePath, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
-            print("isLoginRequired: Failed to initialize client")
+            logger.debug("isLoginRequired: Failed to initialize client")
             return true
         }
 
@@ -412,23 +375,14 @@ public class NetworkExtensionAdapter: ObservableObject {
 
         do {
             try session.sendProviderMessage(messageData) { response in
-                if let response = response,
-                   let responseString = String(data: response, encoding: .utf8) {
-                    // Parse diagnostic format: "result|isExecuting|loginRequired|configExists|stateExists|lastResult|lastError"
-                    let parts = responseString.components(separatedBy: "|")
-                    if parts.count >= 7 {
-                        let isComplete = parts[0] == "true"
-                        print("checkLoginComplete: result=\(parts[0]), isExecuting=\(parts[1]), loginRequired=\(parts[2]), configExists=\(parts[3]), stateExists=\(parts[4]), lastResult=\(parts[5]), lastError=\(parts[6])")
-                        completion(isComplete)
-                    } else if parts.count >= 5 {
-                        let isComplete = parts[0] == "true"
-                        print("checkLoginComplete: result=\(parts[0]), isExecuting=\(parts[1]), loginRequired=\(parts[2]), configExists=\(parts[3]), stateExists=\(parts[4])")
-                        completion(isComplete)
-                    } else {
-                        // Fallback for old format
-                        let isComplete = responseString == "true"
-                        print("checkLoginComplete: Extension returned '\(responseString)', isComplete=\(isComplete)")
-                        completion(isComplete)
+                if let response = response {
+                    do {
+                        let diagnostic = try self.decoder.decode(LoginDiagnostics.self, from: response)
+                        print("checkLoginComplete: result=\(diagnostic.isComplete), isExecuting=\(diagnostic.isExecuting), loginRequired=\(diagnostic.loginRequired), configExists=\(diagnostic.configExists), stateExists=\(diagnostic.stateExists), lastResult=\(diagnostic.lastResult), lastError=\(diagnostic.lastError)")
+                        completion(diagnostic.isComplete)
+                    } catch {
+                        print("checkLoginComplete: Failed to decode LoginDiagnostics - \(error)")
+                        completion(false)
                     }
                 } else {
                     print("checkLoginComplete: No response from extension")
@@ -457,29 +411,28 @@ public class NetworkExtensionAdapter: ObservableObject {
 
         do {
             try session.sendProviderMessage(messageData) { response in
-                if let response = response,
-                   let responseString = String(data: response, encoding: .utf8) {
-                    // Parse diagnostic format: "result|isExecuting|loginRequired|configExists|stateExists|lastResult|lastError"
-                    let parts = responseString.components(separatedBy: "|")
-                    if parts.count >= 7 {
-                        let lastResult = parts[5]
-                        let lastError = parts[6]
+                if let response = response {
+                    do {
+                        let diagnostic = try self.decoder.decode(LoginDiagnostics.self, from: response)
                         // Only report error if lastResult is "error" and there's an actual error message
-                        if lastResult == "error" && !lastError.isEmpty {
+                        if diagnostic.lastResult == "error" && !diagnostic.lastError.isEmpty {
                             // Make the error message more user-friendly
-                            var friendlyError = lastError
-                            if lastError.contains("no peer auth method provided") {
+                            var friendlyError = diagnostic.lastError
+                            if diagnostic.lastError.contains("no peer auth method provided") {
                                 friendlyError = "This server doesn't support device code authentication. Please use a setup key instead."
-                            } else if lastError.contains("expired") || lastError.contains("token") {
+                            } else if diagnostic.lastError.contains("expired") || diagnostic.lastError.contains("token") {
                                 friendlyError = "The device code has expired. Please try again."
-                            } else if lastError.contains("denied") || lastError.contains("rejected") {
+                            } else if diagnostic.lastError.contains("denied") || diagnostic.lastError.contains("rejected") {
                                 friendlyError = "Authentication was denied. Please try again."
                             }
                             completion(friendlyError)
                             return
                         }
+                        completion(nil)
+                    } catch {
+                        print("checkLoginError: Failed to decode LoginDiagnostics - \(error)")
+                        completion(nil)
                     }
-                    completion(nil)
                 } else {
                     completion(nil)
                 }

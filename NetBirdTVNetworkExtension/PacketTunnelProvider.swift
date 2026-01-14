@@ -346,8 +346,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     func checkLoginComplete(completionHandler: (Data?) -> Void) {
         guard let adapter = adapter else {
             logger.error("checkLoginComplete: Adapter not initialized")
-            let data = "false|false|true|false|false|error|adapter_not_initialized".data(using: .utf8)
-            completionHandler(data)
+            let diagnostic = LoginDiagnostics(
+                isComplete: false,
+                isExecuting: false,
+                loginRequired: true,
+                configExists: false,
+                stateExists: false,
+                lastResult: "error",
+                lastError: "adapter_not_initialized"
+            )
+            do {
+                let data = try PropertyListEncoder().encode(diagnostic)
+                completionHandler(data)
+            } catch {
+                logger.error("checkLoginComplete: Failed to encode error diagnostic - \(error)")
+                completionHandler(nil)
+            }
             return
         }
 
@@ -379,11 +393,24 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // Instead, use lastLoginResult which IS set by loginAsync() when auth succeeds.
         let isComplete = (lastResult == "success")
 
-        // Return diagnostic info in format: "result|isExecuting|loginRequired|configExists|stateExists|lastResult|lastError"
-        let response = "\(isComplete)|\(isExecutingLogin)|\(loginRequired)|\(configExists)|\(stateExists)|\(lastResult)|\(lastError)"
-        logger.info("checkLoginComplete: returning \(response)")
-        let data = response.data(using: .utf8)
-        completionHandler(data)
+        let diagnostic = LoginDiagnostics(
+            isComplete: isComplete,
+            isExecuting: isExecutingLogin,
+            loginRequired: loginRequired,
+            configExists: configExists,
+            stateExists: stateExists,
+            lastResult: lastResult,
+            lastError: lastError
+        )
+
+        do {
+            let data = try PropertyListEncoder().encode(diagnostic)
+            logger.info("checkLoginComplete: returning diagnostic with isComplete=\(isComplete)")
+            completionHandler(data)
+        } catch {
+            logger.error("checkLoginComplete: Failed to encode diagnostic - \(error)")
+            completionHandler(nil)
+        }
     }
 
     /// Login with device code flow for tvOS
