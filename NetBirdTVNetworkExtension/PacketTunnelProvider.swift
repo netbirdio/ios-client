@@ -232,9 +232,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         // Also try to load into the adapter's client if it exists
         if let adapter = adapter {
+            let deviceName = Device.getName()
+            let updatedConfig = NetBirdAdapter.updateDeviceNameInConfig(configJSON, newName: deviceName)
             do {
-                let deviceName = Device.getName()
-                let updatedConfig = NetBirdAdapter.updateDeviceNameInConfig(configJSON, newName: deviceName)
                 try adapter.client.setConfigFromJSON(updatedConfig)
                 logger.info("setConfigFromMainApp: Loaded config into SDK client successfully")
             } catch {
