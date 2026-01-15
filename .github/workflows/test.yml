@@ -104,4 +104,25 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 16' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
-            | xcpretty --color --test
+            2>&1 | tee test-output.log | xcpretty --color --test
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: ios-client/test-output.log
+
+      - name: Find and upload crash logs
+        if: failure()
+        run: |
+          echo "=== Searching for crash logs ==="
+          find ~/Library/Logs/DiagnosticReports -name "*.crash" -mmin -10 -exec echo "Found: {}" \; -exec cat {} \; || echo "No crash logs found"
+
+      - name: Upload crash reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-reports
+          path: ~/Library/Logs/DiagnosticReports/*.crash
+          if-no-files-found: ignore
