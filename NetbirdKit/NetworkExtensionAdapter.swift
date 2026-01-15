@@ -63,13 +63,9 @@ public class NetworkExtensionAdapter: ObservableObject {
     init() {
         self.timer = Timer()
         self.timer.invalidate()
-        Task {
-            do {
-                try await self.configureManager()
-            } catch {
-                print("Failed to configure manager")
-            }
-        }
+        // Don't configure manager during init - it's a slow system call that blocks app startup.
+        // Instead, configureManager is called lazily when needed (start(), stop(), etc.)
+        // This allows the UI to appear immediately on first launch.
     }
     
     deinit {
@@ -277,7 +273,6 @@ public class NetworkExtensionAdapter: ObservableObject {
     private func performLogin() async {
         let loginURLString = await withCheckedContinuation { continuation in
             self.login { urlString in
-                print("urlstring: \(urlString)")
                 continuation.resume(returning: urlString)
             }
         }
@@ -478,12 +473,12 @@ public class NetworkExtensionAdapter: ObservableObject {
             print("Error converting message to Data")
         }
     }
-    
+
     func selectRoutes(id: String, completion: @escaping (RoutesSelectionDetails) -> Void) {
         guard let session = self.session else {
             return
         }
-        
+
         let messageString = "Select-\(id)"
         if let messageData = messageString.data(using: .utf8) {
             do {
@@ -498,12 +493,12 @@ public class NetworkExtensionAdapter: ObservableObject {
             print("Error converting message to Data")
         }
     }
-    
+
     func deselectRoutes(id: String, completion: @escaping (RoutesSelectionDetails) -> Void) {
         guard let session = self.session else {
             return
         }
-        
+
         let messageString = "Deselect-\(id)"
         if let messageData = messageString.data(using: .utf8) {
             do {
