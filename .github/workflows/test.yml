@@ -40,11 +40,15 @@ jobs:
         run: go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@latest
 
       - name: Initialize gomobile-netbird
-        run: gomobile-netbird init
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gomobile-netbird init
 
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
-        run: ./build-go-lib.sh ../netbird
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          ./build-go-lib.sh ../netbird
 
       - name: Install xcpretty
         working-directory: ios-client
