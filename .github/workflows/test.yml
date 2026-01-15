@@ -36,19 +36,12 @@ jobs:
           go-version: '1.24'
           cache-dependency-path: netbird/go.sum
 
-      - name: Install gomobile-netbird
-        run: go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@latest
-
-      - name: Initialize gomobile-netbird
-        run: |
-          export PATH=$PATH:$(go env GOPATH)/bin
-          gomobile-netbird init
+      - name: Install gomobile
+        run: go install golang.org/x/mobile/cmd/gomobile@latest
 
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
-        run: |
-          export PATH=$PATH:$(go env GOPATH)/bin
-          ./build-go-lib.sh ../netbird
+        run: ./build-go-lib.sh ../netbird
 
       - name: Install xcpretty
         working-directory: ios-client
