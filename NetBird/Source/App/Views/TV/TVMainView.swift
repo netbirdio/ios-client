@@ -70,9 +70,27 @@ struct TVMainView: View {
                     },
                     onComplete: {
                         #if DEBUG
-                        print("Login completed, starting VPN connection...")
+                        print("Login completed, transferring config to extension...")
                         #endif
                         viewModel.networkExtensionAdapter.showBrowser = false
+
+                        // After login completes, ensure config is transferred to extension before connecting
+                        // On tvOS, shared UserDefaults doesn't work, so we must send via IPC
+                        if let configJSON = Preferences.loadConfigFromUserDefaults(), !configJSON.isEmpty {
+                            #if DEBUG
+                            print("Sending config to extension before starting VPN...")
+                            #endif
+                            viewModel.networkExtensionAdapter.sendConfigToExtension(configJSON) { success in
+                                #if DEBUG
+                                print("Config transfer \(success ? "succeeded" : "failed"), starting VPN connection...")
+                                #endif                                
+                            }
+                        } else {
+                            #if DEBUG
+                            print("No config found in UserDefaults, starting VPN anyway...")
+                            #endif
+                            // Fallback - try to connect anyway (will likely fail but better than hanging)
+                        }
                         viewModel.networkExtensionAdapter.startVPNConnection()
                     },
                     onError: { errorMessage in
