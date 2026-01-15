@@ -39,6 +39,9 @@ jobs:
       - name: Install gomobile-netbird
         run: go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@latest
 
+      - name: Initialize gomobile-netbird
+        run: gomobile-netbird init
+
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
         run: ./build-go-lib.sh ../netbird
