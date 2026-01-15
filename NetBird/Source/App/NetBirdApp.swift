@@ -24,13 +24,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        // Defer Firebase initialization to avoid blocking app startup
-        // Firebase is used for analytics/crashlytics - not critical for initial UI display
-        DispatchQueue.global(qos: .utility).async {
-            if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-               let options = FirebaseOptions(contentsOfFile: path) {
-                FirebaseApp.configure(options: options)
-            }
+        // Configure Firebase on main thread as required by Firebase
+        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let options = FirebaseOptions(contentsOfFile: path) {
+            FirebaseApp.configure(options: options)
         }
         return true
     }
@@ -48,14 +45,11 @@ struct NetBirdApp: App {
     #endif
 
     init() {
-        // Defer Firebase initialization to avoid blocking app startup
-        // Firebase is used for analytics/crashlytics - not critical for initial UI display
+        // Configure Firebase on main thread as required by Firebase
         #if os(tvOS)
-        DispatchQueue.global(qos: .utility).async {
-            if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-               let options = FirebaseOptions(contentsOfFile: path) {
-                FirebaseApp.configure(options: options)
-            }
+        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let options = FirebaseOptions(contentsOfFile: path) {
+            FirebaseApp.configure(options: options)
         }
         #endif
     }

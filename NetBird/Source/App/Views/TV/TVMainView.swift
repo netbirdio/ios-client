@@ -83,15 +83,17 @@ struct TVMainView: View {
                             viewModel.networkExtensionAdapter.sendConfigToExtension(configJSON) { success in
                                 #if DEBUG
                                 print("Config transfer \(success ? "succeeded" : "failed"), starting VPN connection...")
-                                #endif                                
+                                #endif
+                                // Start VPN only after config transfer completes
+                                viewModel.networkExtensionAdapter.startVPNConnection()
                             }
                         } else {
                             #if DEBUG
                             print("No config found in UserDefaults, starting VPN anyway...")
                             #endif
                             // Fallback - try to connect anyway (will likely fail but better than hanging)
+                            viewModel.networkExtensionAdapter.startVPNConnection()
                         }
-                        viewModel.networkExtensionAdapter.startVPNConnection()
                     },
                     onError: { errorMessage in
                         #if DEBUG
