@@ -1431,11 +1431,6 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/WireGuardKitGo/out",
-					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/cmd/objdump/testdata",
-					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gcimporter/testdata/versions",
-					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gccgoimporter/testdata",
-					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge",
 				);
 				MARKETING_VERSION = 0.0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
@@ -1484,11 +1479,6 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/WireGuardKitGo/out",
-					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/cmd/objdump/testdata",
-					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gcimporter/testdata/versions",
-					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge/goroot/src/go/internal/gccgoimporter/testdata",
-					"$(PROJECT_DIR)/WireGuardKitGo/.tmp/wireguard-go-bridge",
 				);
 				MARKETING_VERSION = 0.0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
