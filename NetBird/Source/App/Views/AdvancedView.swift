@@ -151,6 +151,7 @@ struct AdvancedView: View {
             }
         }
         .onAppear {
+            viewModel.loadRosenpassSettings()
             viewModel.loadPreSharedKey()
         }
         .navigationViewStyle(StackNavigationViewStyle())
