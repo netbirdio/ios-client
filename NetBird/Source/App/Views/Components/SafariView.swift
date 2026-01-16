@@ -1,4 +1,14 @@
+//
+//  SafariView.swift
+//  NetBird
+//
+//  iOS-only: Wraps SFSafariViewController for in-app web authentication.
+//
+
 import SwiftUI
+
+// Safari is only available on iOS
+#if os(iOS)
 import SafariServices
 
 struct SafariView: UIViewControllerRepresentable {
@@ -48,3 +58,4 @@ struct SafariView: UIViewControllerRepresentable {
         }
     }
 }
+#endif

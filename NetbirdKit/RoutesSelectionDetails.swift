@@ -1,3 +1,26 @@
+//
+//  RoutesSelectionDetails.swift
+//  NetBird
+//
+
+import Foundation
+import Combine
+
+struct LoginDiagnostics: Codable {
+    var isComplete: Bool
+    var isExecuting: Bool
+    var loginRequired: Bool
+    var configExists: Bool
+    var stateExists: Bool
+    var lastResult: String
+    var lastError: String
+}
+
+struct DeviceAuthResponse: Codable {
+    var url: String
+    var userCode: String
+}
+
 struct RoutesSelectionDetails: Codable {
     var all: Bool
     var append: Bool

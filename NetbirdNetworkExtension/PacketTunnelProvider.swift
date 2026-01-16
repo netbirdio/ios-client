@@ -17,7 +17,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         return PacketTunnelProviderSettingsManager(with: self)
     }()
 
-    private lazy var adapter: NetBirdAdapter = {
+    private lazy var adapter: NetBirdAdapter? = {
         return NetBirdAdapter(with: self.tunnelManager)
     }()
 
@@ -43,6 +43,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.startMonitoringNetworkChanges()
         }
 
+        guard let adapter = adapter else {
+            let error = NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1003,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to initialize NetBird adapter."]
+            )
+            completionHandler(error)
+            return
+        }
+
         if adapter.needsLogin() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 let error = NSError(
@@ -66,7 +76,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
         }
-        adapter.stop()
+        adapter?.stop()
         guard let pathMonitor = self.pathMonitor else {
             AppLogger.shared.log("pathMonitor is nil; nothing to cancel.")
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -97,11 +107,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case let s where s.hasPrefix("Select-"):
             let id = String(s.dropFirst("Select-".count))
             selectRoute(id: id)
+            completionHandler("true".data(using: .utf8))
         case let s where s.hasPrefix("Deselect-"):
             let id = String(s.dropFirst("Deselect-".count))
             deselectRoute(id: id)
+            completionHandler("true".data(using: .utf8))
         default:
             AppLogger.shared.log("Unknown message: \(string)")
+            completionHandler(nil)
         }
     }
 
@@ -136,7 +149,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // We don't call adapter.stop() to avoid race conditions with Go SDK callbacks
             // The Go SDK will handle network loss internally and reconnect when available
             if !wasStoppedDueToNoNetwork {
-                AppLogger.shared.log("Network unavailable - signaling UI for disconnecting animation, clientState=\(adapter.clientState)")
+                let stateDesc = adapter?.clientState.description ?? "unknown"
+                AppLogger.shared.log("Network unavailable - signaling UI for disconnecting animation, clientState=\(stateDesc)")
                 wasStoppedDueToNoNetwork = true
                 setNetworkUnavailableFlag(true)
             }
@@ -193,6 +207,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func restartClient() {
+        guard let adapter = adapter else {
+            AppLogger.shared.log("restartClient: adapter is nil")
+            return
+        }
+
         if isRestartInProgress {
             AppLogger.shared.log("restartClient: skipping - restart already in progress")
             return
@@ -200,27 +219,27 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         AppLogger.shared.log("restartClient: starting restart sequence")
         isRestartInProgress = true
         adapter.isRestarting = true
-        
+
         // Timeout after 30 seconds to reset flags if restart hangs
         let timeoutWorkItem = DispatchWorkItem { [weak self] in
             guard let self = self, self.isRestartInProgress else { return }
             AppLogger.shared.log("restartClient: timeout - resetting flags")
-            self.adapter.isRestarting = false
+            self.adapter?.isRestarting = false
             self.isRestartInProgress = false
         }
         monitorQueue.asyncAfter(deadline: .now() + 30, execute: timeoutWorkItem)
-        
+
         adapter.stop { [weak self] in
             AppLogger.shared.log("restartClient: stop completed, starting client")
-            self?.adapter.start { error in
+            self?.adapter?.start { error in
                 // Cancel timeout whether start succeeds or not
                 timeoutWorkItem.cancel()
-                
+
                 self?.monitorQueue.async {
-                    self?.adapter.isRestarting = false
+                    self?.adapter?.isRestarting = false
                     self?.isRestartInProgress = false
                 }
-                
+
                 if let error = error {
                     AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
                 } else {
@@ -280,12 +299,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func login(completionHandler: (Data?) -> Void) {
+        guard let adapter = adapter else {
+            completionHandler(nil)
+            return
+        }
         let urlString = adapter.login()
         let data = urlString.data(using: .utf8)
         completionHandler(data)
     }
 
     func getStatus(completionHandler: (Data?) -> Void) {
+        guard let adapter = adapter else {
+            completionHandler(nil)
+            return
+        }
         guard let statusDetailsMessage = adapter.client.getStatusDetails() else {
             AppLogger.shared.log("Did not receive status details.")
             completionHandler(nil)
@@ -326,10 +353,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             peerInfoArray.append(peerInfo)
         }
 
+        let clientState = adapter.clientState
         let statusDetails = StatusDetails(
             ip: statusDetailsMessage.getIP(),
             fqdn: statusDetailsMessage.getFQDN(),
-            managementStatus: adapter.clientState,
+            managementStatus: clientState,
             peerInfo: peerInfoArray
         )
 
@@ -339,7 +367,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         } catch {
             AppLogger.shared.log("Failed to encode status details: \(error.localizedDescription)")
             do {
-                let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: adapter.clientState, peerInfo: [])
+                let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: clientState, peerInfo: [])
                 let data = try PropertyListEncoder().encode(defaultStatus)
                 completionHandler(data)
             } catch {
@@ -350,6 +378,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func getSelectRoutes(completionHandler: (Data?) -> Void) {
+        guard let adapter = adapter else {
+            completionHandler(nil)
+            return
+        }
         do {
             let routeSelectionDetailsMessage = try adapter.client.getRoutesSelectionDetails()
 
@@ -391,6 +423,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func selectRoute(id: String) {
+        guard let adapter = adapter else { return }
         do {
             try adapter.client.selectRoute(id)
         } catch {
@@ -399,6 +432,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func deselectRoute(id: String) {
+        guard let adapter = adapter else { return }
         do {
             try adapter.client.deselectRoute(id)
         } catch {

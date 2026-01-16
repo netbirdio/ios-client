@@ -4,16 +4,54 @@
 //
 //  Created by Pascal Fischer on 01.08.23.
 //
+//  This ViewModel is shared between iOS and tvOS.
+//  Platform-specific code is wrapped with #if os() directives.
+//
 
-import UIKit
+import SwiftUI
 import NetworkExtension
 import os
 import Combine
+import NetBirdSDK
 import UserNotifications
 
+/// Used by updateManagementURL to check if SSO is supported
+class SSOCheckListener: NSObject, NetBirdSDKSSOListenerProtocol {
+    var onResult: ((Bool?, Error?) -> Void)?
+
+    func onError(_ p0: Error?) {
+        onResult?(nil, p0)
+    }
+
+    func onSuccess(_ p0: Bool) {
+        onResult?(p0, nil)
+    }
+}
+
+// Error Listener for setup key login
+/// Used by setSetupKey to handle async login result
+class SetupKeyErrListener: NSObject, NetBirdSDKErrListenerProtocol {
+    var onResult: ((Error?) -> Void)?
+
+    func onError(_ p0: Error?) {
+        onResult?(p0)
+    }
+
+    func onSuccess() {
+        onResult?(nil)
+    }
+}
+
+/// For both iOS and tvOS (tvOS 17+ required for VPN support).
 @MainActor
 class ViewModel: ObservableObject {
+
+    private let logger = Logger(subsystem: "io.netbird.app", category: "ViewModel")
+
+    // VPN Adapter (shared)
     @Published var networkExtensionAdapter: NetworkExtensionAdapter
+    
+    // UI State (shared)
     @Published var showSetupKeyPopup = false
     @Published var showChangeServerAlert = false
     @Published var showInvalidServerAlert = false
@@ -29,22 +67,26 @@ class ViewModel: ObservableObject {
     @Published var showAuthenticationRequired = false
     @Published var isSheetExpanded = false
     @Published var presentSideDrawer = false
-    @Published var extensionState : NEVPNStatus = .disconnected
     @Published var navigateToServerView = false
-    @Published var rosenpassEnabled = false
-    @Published var rosenpassPermissive = false
-    @Published var managementURL = ""
-    @Published var presharedKey = ""
-    @Published var server: String = ""
-    @Published var setupKey: String = ""
-    @Published var presharedKeySecure = true
-    @Published var fqdn = UserDefaults.standard.string(forKey: "fqdn") ?? ""
-    @Published var ip = UserDefaults.standard.string(forKey: "ip") ?? ""
+    
+    @Published var extensionState: NEVPNStatus = .disconnected
     @Published var managementStatus: ClientState = .disconnected
     @Published var statusDetailsValid = false
     @Published var extensionStateText = "Disconnected"
     @Published var connectPressed = false
     @Published var disconnectPressed = false
+    
+    @Published var rosenpassEnabled = false
+    @Published var rosenpassPermissive = false
+    @Published var presharedKey = ""
+    @Published var server: String = ""
+    @Published var setupKey: String = ""
+    @Published var presharedKeySecure = true
+    
+    @Published var fqdn = UserDefaults.standard.string(forKey: "fqdn") ?? ""
+    @Published var ip = UserDefaults.standard.string(forKey: "ip") ?? ""
+    
+    // Debug
     @Published var traceLogsEnabled: Bool {
         didSet {
             self.showLogLevelChangedAlert = true
@@ -58,12 +100,15 @@ class ViewModel: ObservableObject {
     }
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
+    @Published var showRosenpassChangedAlert = false
     @Published var networkUnavailable = false
 
-    var preferences = Preferences.newPreferences()
+    /// Platform-agnostic configuration provider.
+    /// Abstracts iOS SDK preferences vs tvOS UserDefaults + IPC.
+    private lazy var configProvider: ConfigurationProvider = ConfigurationProviderFactory.create()
+
     var buttonLock = false
     let defaults = UserDefaults.standard
-    let isIpad = UIDevice.current.userInterfaceIdiom == .pad
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -77,10 +122,15 @@ class ViewModel: ObservableObject {
         self.traceLogsEnabled = logLevel == "TRACE"
         self.peerViewModel = PeerViewModel()
         self.routeViewModel = RoutesViewModel(networkExtensionAdapter: networkExtensionAdapter)
-        self.rosenpassEnabled = self.getRosenpassEnabled()
-        self.rosenpassPermissive = self.getRosenpassPermissive()
+
+        // Don't load rosenpass settings during init - they trigger expensive SDK initialization.
+        // These will be loaded lazily when the settings view is accessed.
+        // self.rosenpassEnabled = self.getRosenpassEnabled()
+        // self.rosenpassPermissive = self.getRosenpassPermissive()
+
+        // forceRelayConnection uses UserDefaults (not SDK), so it's safe to load during init
         self.forceRelayConnection = self.getForcedRelayConnectionEnabled()
-        
+
         $setupKey
             .removeDuplicates()
             .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
@@ -91,18 +141,21 @@ class ViewModel: ObservableObject {
     }
     
     func connect()  {
+        logger.info("connect: ENTRY POINT - function called")
         self.connectPressed = true
-        print("Connected pressed set to true")
-        DispatchQueue.main.async {
-            print("starting extension")
-            self.buttonLock = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                self.buttonLock = false
-            }
-            Task {
-                await self.networkExtensionAdapter.start()
-                print("Connected pressed set to false")
-            }
+        self.buttonLock = true
+        logger.info("connect: connectPressed=true, buttonLock=true, starting adapter...")
+
+        // Reset buttonLock after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            self.buttonLock = false
+        }
+
+        // Start the VPN connection
+        Task {
+            self.logger.info("connect: Task started, calling networkExtensionAdapter.start()")
+            await self.networkExtensionAdapter.start()
+            self.logger.info("connect: networkExtensionAdapter.start() completed")
         }
     }
     
@@ -174,31 +227,32 @@ class ViewModel: ObservableObject {
             let statuses : [NEVPNStatus] = [.connected, .disconnected, .connecting, .disconnecting]
             DispatchQueue.main.async {
                 if statuses.contains(status) && self.extensionState != status {
-                    print("Changing extension status")
+                    print("Changing extension status to \(status.rawValue)")
                     self.extensionState = status
+
+                    // On tvOS, update extensionStateText directly since we don't have CustomLottieView
+                    #if os(tvOS)
+                    switch status {
+                    case .connected:
+                        self.extensionStateText = "Connected"
+                        self.connectPressed = false
+                        // Fetch routes when connected so the Networks counter is accurate on the home screen
+                        self.routeViewModel.getRoutes()
+                    case .disconnected:
+                        self.extensionStateText = "Disconnected"
+                        self.disconnectPressed = false
+                    case .connecting:
+                        self.extensionStateText = "Connecting"
+                    case .disconnecting:
+                        self.extensionStateText = "Disconnecting"
+                    default:
+                        break
+                    }
+                    self.logger.info("checkExtensionState: tvOS - extensionStateText = \(self.extensionStateText)")
+                    #endif
                 }
             }
         }
-    }
-    
-    func updateManagementURL(url: String) -> Bool? {
-        let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        let newAuth = NetBirdSDKNewAuth(Preferences.configFile(), trimmedURL, nil)
-        self.managementURL = trimmedURL
-        var ssoSupported: ObjCBool = false
-        do {
-            try newAuth?.saveConfigIfSSOSupported(&ssoSupported)
-            if ssoSupported.boolValue {
-                print("SSO is supported")
-                return true
-            } else {
-                print("SSO is not supported. Fallback to setup key")
-                return false
-            }
-        } catch {
-            print("Failed to check SSO support")
-        }
-        return nil
     }
     
     func clearDetails() {
@@ -206,82 +260,104 @@ class ViewModel: ObservableObject {
         self.fqdn = ""
         defaults.removeObject(forKey: "ip")
         defaults.removeObject(forKey: "fqdn")
+
+        // Clear config JSON (contains server credentials and all settings)
+        Preferences.removeConfigFromUserDefaults()
+
+        // Reset @Published properties to reflect cleared state in UI
+        self.rosenpassEnabled = false
+        self.rosenpassPermissive = false
+        self.presharedKey = ""
+        self.presharedKeySecure = false
+
+        #if os(tvOS)
+        // Also clear extension-local config to prevent stale credentials
+        networkExtensionAdapter.clearExtensionConfig()
+        #endif
     }
     
-    func setSetupKey(key: String) throws {
-        let newAuth = NetBirdSDKNewAuth(Preferences.configFile(), self.managementURL, nil)
-        try newAuth?.login(withSetupKeyAndSaveConfig: key, deviceName: Device.getName())
-        self.managementURL = ""
-    }
-    
+    // MARK: - Configuration Methods (via ConfigurationProvider)
+
     func updatePreSharedKey() {
-        preferences.setPreSharedKey(presharedKey)
-        do {
-            try preferences.commit()
+        configProvider.preSharedKey = presharedKey
+        if configProvider.commit() {
             self.close()
             self.presharedKeySecure = true
             self.presentSideDrawer = false
             self.showPreSharedKeyChangedInfo = true
-        } catch {
+        } else {
             print("Failed to update preshared key")
         }
     }
-    
+
     func removePreSharedKey() {
         presharedKey = ""
-        preferences.setPreSharedKey(presharedKey)
-        do {
-            try preferences.commit()
+        configProvider.preSharedKey = ""
+        if configProvider.commit() {
             self.close()
             self.presharedKeySecure = false
-        } catch {
+        } else {
             print("Failed to remove preshared key")
         }
     }
-    
+
     func loadPreSharedKey() {
-        self.presharedKey = preferences.getPreSharedKey(nil)
-        self.presharedKeySecure = self.presharedKey != ""
+        self.presharedKey = configProvider.preSharedKey
+        self.presharedKeySecure = configProvider.hasPreSharedKey
     }
-    
+
     func setRosenpassEnabled(enabled: Bool) {
-        preferences.setRosenpassEnabled(enabled)
-        do {
-            try preferences.commit()
-        } catch {
+        // Update @Published property for immediate UI feedback
+        self.rosenpassEnabled = enabled
+
+        // Persist to storage (on tvOS this writes directly to config JSON)
+        configProvider.rosenpassEnabled = enabled
+        if !configProvider.commit() {
             print("Failed to update rosenpass settings")
         }
+
+        #if os(tvOS)
+        // Show reconnect alert if currently connected
+        if extensionState == .connected {
+            showRosenpassChangedAlert = true
+        }
+        #endif
     }
-    
+
     func getRosenpassEnabled() -> Bool {
-        var result = ObjCBool(false)
-        do {
-            try preferences.getRosenpassEnabled(&result)
-        } catch {
-            print("Failed to read rosenpass settings")
-        }
-        
-        return result.boolValue
+        return configProvider.rosenpassEnabled
     }
-    
+
     func getRosenpassPermissive() -> Bool {
-        var result = ObjCBool(false)
-        do {
-            try preferences.getRosenpassPermissive(&result)
-        } catch {
-            print("Failed to read rosenpass permissive settings")
-        }
-        
-        return result.boolValue
+        return configProvider.rosenpassPermissive
     }
-    
+
+    /// Loads Rosenpass settings from the configuration provider into the @Published properties.
+    /// Call this when opening settings views to sync UI with stored values.
+    /// On iOS, this triggers SDK initialization, so it's deferred until needed.
+    /// On tvOS, this reads from UserDefaults which is fast.
+    func loadRosenpassSettings() {
+        self.rosenpassEnabled = configProvider.rosenpassEnabled
+        self.rosenpassPermissive = configProvider.rosenpassPermissive
+    }
+
     func setRosenpassPermissive(permissive: Bool) {
-        preferences.setRosenpassPermissive(permissive)
-        do {
-            try preferences.commit()
-        } catch {
+        // Update @Published property for immediate UI feedback
+        self.rosenpassPermissive = permissive
+
+        // Persist to storage (on tvOS this writes directly to config JSON)
+        configProvider.rosenpassPermissive = permissive
+        if !configProvider.commit() {
             print("Failed to update rosenpass permissive settings")
         }
+    }
+
+    /// Reloads configuration from persistent storage.
+    /// Call this after server changes or when returning to settings view.
+    func reloadConfiguration() {
+        configProvider.reload()
+        // Sync @Published properties with reloaded config values
+        loadRosenpassSettings()
     }
     
     func setForcedRelayConnection(isEnabled: Bool) {
@@ -293,8 +369,14 @@ class ViewModel: ObservableObject {
     
     func getForcedRelayConnectionEnabled() -> Bool {
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        #if os(iOS)
         userDefaults?.register(defaults: [GlobalConstants.keyForceRelayConnection: true])
         return userDefaults?.bool(forKey: GlobalConstants.keyForceRelayConnection) ?? true
+        #else
+        // forced relay battery optimization not need on Apple Tv
+        userDefaults?.register(defaults: [GlobalConstants.keyForceRelayConnection: false])
+        return userDefaults?.bool(forKey: GlobalConstants.keyForceRelayConnection) ?? false
+        #endif
     }
     
     func getDefaultStatus() -> StatusDetails {
@@ -341,18 +423,21 @@ class ViewModel: ObservableObject {
         clearDetails()
  
         // Stop the network extension in background (non-blocking)
-        let adapter = self.networkExtensionAdapter
-        Task.detached {
-            adapter.stop()
+        Task { @MainActor in
+            self.networkExtensionAdapter.stop()
         }
 
-        // Reload preferences for new server
-        preferences = Preferences.newPreferences()
+        // Reload configuration for new server
+        reloadConfiguration()
     }
 
     /// Checks shared app-group container for network unavailable flag set by the network extension.
     /// Updates the networkUnavailable property to trigger UI animation changes.
+    /// iOS only - tvOS has a platform limitation where `UserDefaults(suiteName:)` does not
+    /// reliably synchronize between the main app and network extension processes, even with
+    /// a correctly configured App Group. On tvOS, we use IPC messaging instead.
     func checkNetworkUnavailableFlag() {
+        #if os(iOS)
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         let isUnavailable = userDefaults?.bool(forKey: GlobalConstants.keyNetworkUnavailable) ?? false
 
@@ -360,11 +445,16 @@ class ViewModel: ObservableObject {
             AppLogger.shared.log("Network unavailable flag changed: \(isUnavailable)")
             networkUnavailable = isUnavailable
         }
+        #endif
+        // tvOS: Network status is determined by extension state, not a shared flag
     }
 
     /// Checks shared app-group container for login required flag set by the network extension.
     /// If set, schedules a local notification (if authorized) and shows the authentication UI.
+    /// iOS only - tvOS cannot share UserDefaults between app and extension, and uses IPC
+    /// via `checkLoginError` instead.
     func checkLoginRequiredFlag() {
+        #if os(iOS)
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         guard userDefaults?.bool(forKey: GlobalConstants.keyLoginRequired) == true else {
             return
@@ -405,5 +495,7 @@ class ViewModel: ObservableObject {
                 }
             }
         }
+        #endif
+        // tvOS: Login errors are detected via IPC (checkLoginError in TVAuthView)
     }
 }

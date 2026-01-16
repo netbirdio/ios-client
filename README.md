@@ -34,9 +34,9 @@
 
  <br>
 
-# NetBird iOS Client
+# NetBird iOS & tvOS Client
 
-The NetBird iOS client allows connections from mobile devices running iOS 14.0+ to private resources in the NetBird network.
+The NetBird iOS/tvOS client allows connections from mobile devices running iOS 14.0+ and Apple TV running tvOS 17.0+ to private resources in the NetBird network.
 
 ## Install
 You can download and install the app from the App Store:
@@ -60,10 +60,21 @@ The code is divided into 4 parts:
 
 ## Requirements
 
-- iOS 14.0+
+- iOS 14.0+ / tvOS 17.0+
 - Xcode 16.1+
 - Go 1.24+
-- gomobile
+- gomobile-netbird (NetBird's fork with tvOS support)
+
+### gomobile-netbird
+
+This project requires `gomobile-netbird`, NetBird's fork of gomobile that adds tvOS support. See: https://github.com/netbirdio/gomobile-tvos-fork
+
+To install:
+
+```bash
+go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@latest
+gomobile-netbird init
+```
 
 ## Run locally
 
@@ -75,19 +86,28 @@ git clone https://github.com/netbirdio/ios-client.git
 cd ios-client
 ```
 
-Install gomobile if you haven't already:
-```bash
-go install golang.org/x/mobile/cmd/gomobile@latest
-```
-
-Build the xcframework from the main netbird repo using the build script:
+Build the XCFramework from the main netbird repo using the build script:
 ```bash
 ./build-go-lib.sh ../netbird
 ```
 
+Or manually with gomobile-netbird:
+```bash
+cd netbird
+gomobile-netbird bind -target=ios,iossimulator,tvos,tvossimulator -bundleid=io.netbird.framework -o ../ios-client/NetBirdSDK.xcframework ./client/ios/NetBirdSDK
+```
+
+This builds a single universal XCFramework that supports iOS, iOS Simulator, tvOS, and tvOS Simulator.
+
 Open the Xcode project, and we are ready to go.
 
-> **Note:** The app cannot be run in the iOS simulator. To test the app, a physical device needs to be connected to Xcode via cable and set as the run destination.
+### Running on iOS Device
+
+> **Note:** The app cannot run in the iOS simulator. To test the app, a physical device needs to be connected to Xcode via cable and set as the run destination.
+
+### Running on Apple TV
+
+> **Note:** The app cannot run in the tvOS simulator. To test the app, a physical device running tvOS 17.0 or later needs to be [paired with Xcode](https://support.apple.com/en-us/101262).
 
 ### Firebase Configuration (Optional)
 
@@ -100,3 +120,4 @@ NetBird project is composed of multiple repositories:
 - Dashboard: https://github.com/netbirdio/dashboard, contains the Administration UI for the management service
 - Documentations: https://github.com/netbirdio/docs, contains the documentation from https://netbird.io/docs
 - Android Client: https://github.com/netbirdio/android-client
+- iOS/tvOS Client: https://github.com/netbirdio/ios-client (this repository)

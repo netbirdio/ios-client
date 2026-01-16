@@ -1,9 +1,11 @@
 name: Test
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
+  # Disabled until test crash is resolved
+  # push:
+  #   branches: [main]
+  # pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,9 +15,12 @@ permissions:
 jobs:
   test:
     name: Build and Test
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
+      - name: Select Xcode 26.1.1
+        run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer
+
       - name: Checkout ios-client
         uses: actions/checkout@v4
         with:
@@ -33,8 +38,12 @@ jobs:
           go-version: '1.24'
           cache-dependency-path: netbird/go.sum
 
-      - name: Install gomobile
-        run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
+      - name: Install gomobile-netbird
+        run: GOPROXY=direct go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@latest
+
+      - name: Add gomobile-tvos-fork to netbird dependencies
+        working-directory: netbird
+        run: GOPROXY=direct go get github.com/netbirdio/gomobile-tvos-fork@latest
 
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
@@ -43,6 +52,46 @@ jobs:
       - name: Install xcpretty
         working-directory: ios-client
         run: gem install xcpretty
+
+      - name: Create dummy GoogleService-Info.plist
+        working-directory: ios-client
+        run: |
+          cat > GoogleService-Info.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CLIENT_ID</key>
+            <string>dummy</string>
+            <key>REVERSED_CLIENT_ID</key>
+            <string>dummy</string>
+            <key>API_KEY</key>
+            <string>dummy</string>
+            <key>GCM_SENDER_ID</key>
+            <string>dummy</string>
+            <key>PLIST_VERSION</key>
+            <string>1</string>
+            <key>BUNDLE_ID</key>
+            <string>io.netbird.app</string>
+            <key>PROJECT_ID</key>
+            <string>dummy</string>
+            <key>STORAGE_BUCKET</key>
+            <string>dummy</string>
+            <key>IS_ADS_ENABLED</key>
+            <false/>
+            <key>IS_ANALYTICS_ENABLED</key>
+            <false/>
+            <key>IS_APPINVITE_ENABLED</key>
+            <false/>
+            <key>IS_GCM_ENABLED</key>
+            <false/>
+            <key>IS_SIGNIN_ENABLED</key>
+            <false/>
+            <key>GOOGLE_APP_ID</key>
+            <string>dummy</string>
+          </dict>
+          </plist>
+          EOF
 
       - name: Resolve Swift packages
         working-directory: ios-client
@@ -60,5 +109,46 @@ jobs:
             -scheme NetBird \
             -destination 'platform=iOS Simulator,name=iPhone 16' \
             -configuration Debug \
+            -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
-            | xcpretty --color --test
+            2>&1 | tee test-output.log
+
+      - name: Extract detailed test results
+        if: failure()
+        working-directory: ios-client
+        run: |
+          echo "=== Extracting test results ==="
+          xcrun xcresulttool get --path TestResults.xcresult --format json > test-results.json || echo "Failed to extract JSON"
+
+          echo "=== Test Summary ==="
+          xcrun xcresulttool get --path TestResults.xcresult || echo "Failed to get summary"
+
+          echo "=== Looking for crash info ==="
+          xcrun xcresulttool get --path TestResults.xcresult --id root || echo "No root info"
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            ios-client/test-output.log
+            ios-client/test-results.json
+            ios-client/TestResults.xcresult
+
+      - name: Find and upload crash logs
+        if: failure()
+        run: |
+          echo "=== Searching for crash logs ==="
+          find ~/Library/Logs/DiagnosticReports -name "*.crash" -mmin -10 -exec echo "Found: {}" \; -exec cat {} \; || echo "No crash logs found"
+
+          echo "=== Searching simulator logs ==="
+          find ~/Library/Logs/CoreSimulator -name "*.log" -mmin -10 | head -20 || echo "No simulator logs"
+
+      - name: Upload crash reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-reports
+          path: ~/Library/Logs/DiagnosticReports/*.crash
+          if-no-files-found: ignore

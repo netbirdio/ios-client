@@ -5,6 +5,7 @@
 //  Created by Pascal Fischer on 25.04.24.
 //
 
+import Foundation
 import Combine
 
 class PeerViewModel: ObservableObject {
@@ -41,9 +42,6 @@ class PeerViewModel: ObservableObject {
             return displayedPeersBackup
         } else {
             displayedPeersBackup = filteredPeers
-            let conn = filteredPeers.filter{ peer in
-                peer.connStatus == "Connected"
-            }
             return filteredPeers
         }
     }

@@ -10,7 +10,24 @@ import Lottie
 import NetworkExtension
 import Combine
 
+// MARK: - Main Entry Point
+/// The root view that switches between iOS and tvOS layouts.
 struct MainView: View {
+    @EnvironmentObject var viewModel: ViewModel
+    
+    var body: some View {
+        #if os(tvOS)
+        // tvOS uses a completely different navigation structure
+        TVMainView()
+        #else
+        // iOS uses the original MainView implementation
+        iOSMainView()
+        #endif
+    }
+}
+
+#if os(iOS)
+struct iOSMainView: View {
     @EnvironmentObject var viewModel: ViewModel
     @State private var isSheetshown = true
     @State private var animationKey: UUID = UUID()
@@ -23,10 +40,6 @@ struct MainView: View {
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = UIColor(named: "BgNavigationBar")
-
-        // Customize the title text color
-//        appearance.titleTextAttributes = [.foregroundColor: UIColor(named: "TextAlert")]
-//        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor(named: "TextAlert")]
 
         // Set the appearance for when the navigation bar is displayed regularly
         UINavigationBar.appearance().standardAppearance = appearance
@@ -58,8 +71,8 @@ struct MainView: View {
                             Image(imageName)
                                 .resizable(resizingMode: .stretch)
                                 .aspectRatio(contentMode: .fit)
-                            //                                .padding(.top, UIScreen.main.bounds.height * (viewModel.isIpad ? 0.34 : 0.13))
-                                .padding(.top, UIScreen.main.bounds.height * (viewModel.isIpad ? (isLandscape ? -0.15 : 0.36) : 0.19))
+                            //                                .padding(.top, Screen.height * (DeviceType.isPad ? 0.34 : 0.13))
+                                .padding(.top, Screen.height * (DeviceType.isPad ? (isLandscape ? -0.15 : 0.36) : 0.19))
                                 .padding(.leading, UIScreen.main.bounds.height * (isLandscape ? 0.04 : 0))
                                 .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
                                 .edgesIgnoringSafeArea(.bottom)
@@ -69,7 +82,7 @@ struct MainView: View {
                             Text(viewModel.fqdn)
                                 .foregroundColor(Color("TextSecondary"))
                                 .font(.system(size: 20, weight: .regular))
-                                .padding(.top, UIScreen.main.bounds.height * (viewModel.isIpad ? 0.09 : 0.13))
+                                .padding(.top, Screen.height * (DeviceType.isPad ? 0.09 : 0.13))
                                 .padding(.bottom, 5)
                             Text(viewModel.ip)
                                 .foregroundColor(Color("TextSecondary"))
@@ -553,3 +566,5 @@ struct MainView_Previews: PreviewProvider {
         MainView()
     }
 }
+
+#endif  // os(iOS)

@@ -1,0 +1,18 @@
+{
+  "images" : [
+    {
+      "filename" : "netbird-tvos-icon.png",
+      "idiom" : "tv",
+      "scale" : "1x"
+    },
+    {
+      "filename" : "netbird-tvos-icon@2x.png",
+      "idiom" : "tv",
+      "scale" : "2x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

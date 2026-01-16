@@ -13,9 +13,12 @@ permissions:
 jobs:
   build:
     name: Build iOS App
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
+      - name: Select Xcode 26.1.1
+        run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer
+
       - name: Checkout ios-client
         uses: actions/checkout@v4
         with:
@@ -33,8 +36,12 @@ jobs:
           go-version: '1.24'
           cache-dependency-path: netbird/go.sum
 
-      - name: Install gomobile
-        run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
+      - name: Install gomobile-netbird
+        run: GOPROXY=direct go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@latest
+
+      - name: Add gomobile-tvos-fork to netbird dependencies
+        working-directory: netbird
+        run: GOPROXY=direct go get github.com/netbirdio/gomobile-tvos-fork@latest
 
       - name: Debug - List files before xcframework build
         working-directory: ios-client
@@ -65,6 +72,46 @@ jobs:
           ls -la NetBird/Source/App/Views/ || echo "Views dir not found"
           ls -la NetBird/Source/App/Views/Components/ || echo "Components dir not found"
           ls -la NetBird/Source/App/ViewModels/ || echo "ViewModels dir not found"
+
+      - name: Create dummy GoogleService-Info.plist
+        working-directory: ios-client
+        run: |
+          cat > GoogleService-Info.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CLIENT_ID</key>
+            <string>dummy</string>
+            <key>REVERSED_CLIENT_ID</key>
+            <string>dummy</string>
+            <key>API_KEY</key>
+            <string>dummy</string>
+            <key>GCM_SENDER_ID</key>
+            <string>dummy</string>
+            <key>PLIST_VERSION</key>
+            <string>1</string>
+            <key>BUNDLE_ID</key>
+            <string>io.netbird.app</string>
+            <key>PROJECT_ID</key>
+            <string>dummy</string>
+            <key>STORAGE_BUCKET</key>
+            <string>dummy</string>
+            <key>IS_ADS_ENABLED</key>
+            <false/>
+            <key>IS_ANALYTICS_ENABLED</key>
+            <false/>
+            <key>IS_APPINVITE_ENABLED</key>
+            <false/>
+            <key>IS_GCM_ENABLED</key>
+            <false/>
+            <key>IS_SIGNIN_ENABLED</key>
+            <false/>
+            <key>GOOGLE_APP_ID</key>
+            <string>dummy</string>
+          </dict>
+          </plist>
+          EOF
 
       - name: Resolve Swift packages
         working-directory: ios-client
