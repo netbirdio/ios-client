@@ -36,8 +36,11 @@ jobs:
           go-version: '1.24'
           cache-dependency-path: netbird/go.sum
 
-      - name: Install gomobile
-        run: go install golang.org/x/mobile/cmd/gomobile@latest
+      - name: Install gomobile-netbird
+        run: go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@latest
+      
+      - name: Install gobind-netbird
+        run: go install github.com/netbirdio/gomobile-tvos-fork/cmd/gobind-netbird@latest
 
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
@@ -103,21 +106,41 @@ jobs:
             -scheme NetBird \
             -destination 'platform=iOS Simulator,name=iPhone 16' \
             -configuration Debug \
+            -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee test-output.log | xcpretty --color --test
+            2>&1 | tee test-output.log
+
+      - name: Extract detailed test results
+        if: failure()
+        working-directory: ios-client
+        run: |
+          echo "=== Extracting test results ==="
+          xcrun xcresulttool get --path TestResults.xcresult --format json > test-results.json || echo "Failed to extract JSON"
+
+          echo "=== Test Summary ==="
+          xcrun xcresulttool get --path TestResults.xcresult || echo "Failed to get summary"
+
+          echo "=== Looking for crash info ==="
+          xcrun xcresulttool get --path TestResults.xcresult --id root || echo "No root info"
 
       - name: Upload test logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: test-logs
-          path: ios-client/test-output.log
+          path: |
+            ios-client/test-output.log
+            ios-client/test-results.json
+            ios-client/TestResults.xcresult
 
       - name: Find and upload crash logs
         if: failure()
         run: |
           echo "=== Searching for crash logs ==="
           find ~/Library/Logs/DiagnosticReports -name "*.crash" -mmin -10 -exec echo "Found: {}" \; -exec cat {} \; || echo "No crash logs found"
+
+          echo "=== Searching simulator logs ==="
+          find ~/Library/Logs/CoreSimulator -name "*.log" -mmin -10 | head -20 || echo "No simulator logs"
 
       - name: Upload crash reports
         if: failure()
