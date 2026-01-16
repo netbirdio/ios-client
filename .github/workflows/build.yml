@@ -42,8 +42,11 @@ jobs:
       - name: Install gobind-netbird
         run: GOPROXY=direct go install github.com/netbirdio/gomobile-tvos-fork/cmd/gobind-netbird@latest
 
-      - name: Download gomobile-tvos-fork module (needed for gobind support files)
-        run: GOPROXY=direct go mod download github.com/netbirdio/gomobile-tvos-fork@latest
+      - name: Checkout gomobile-tvos-fork
+        uses: actions/checkout@v4
+        with:
+          repository: netbirdio/gomobile-tvos-fork
+          path: gomobile-tvos-fork
 
       - name: Debug - List files before xcframework build
         working-directory: ios-client
