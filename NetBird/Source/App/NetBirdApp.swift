@@ -11,51 +11,25 @@
 import SwiftUI
 import FirebaseCore
 
-// Firebase Performance is only available on iOS
-#if os(iOS)
-import FirebasePerformance
-#endif
-
-// App Delegate is iOS only
-#if os(iOS)
-class AppDelegate: NSObject, UIApplicationDelegate {
-    func application(
-        _ application: UIApplication,
-        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
-    ) -> Bool {
-        // Configure Firebase on main thread as required by Firebase
-        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-           let options = FirebaseOptions(contentsOfFile: path) {
-            FirebaseApp.configure(options: options)
-        }
-        return true
-    }
-}
-#endif
-
 @main
 struct NetBirdApp: App {
     @StateObject var viewModel = ViewModel()
     @Environment(\.scenePhase) var scenePhase
 
-    #if os(iOS)
-    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    #endif
-
-    init() {
-        // Configure Firebase on main thread as required by Firebase
-        #if os(tvOS)
-        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-           let options = FirebaseOptions(contentsOfFile: path) {
-            FirebaseApp.configure(options: options)
-        }
-        #endif
-    }
-
     var body: some Scene {
         WindowGroup {
             MainView()
                 .environmentObject(viewModel)
+                .onAppear {
+                    // Initialize Firebase after UI is displayed to avoid blocking app launch
+                    // Firebase analytics/crashlytics are not critical for initial UI
+                    DispatchQueue.main.async {
+                        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+                           let options = FirebaseOptions(contentsOfFile: path) {
+                            FirebaseApp.configure(options: options)
+                        }
+                    }
+                }
                 #if os(iOS)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     print("App is active!")
