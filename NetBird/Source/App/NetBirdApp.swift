@@ -39,6 +39,7 @@ struct NetBirdApp: App {
     // Create ViewModel on background thread to avoid blocking app launch with Go runtime init
     @StateObject private var viewModelLoader = ViewModelLoader()
     @Environment(\.scenePhase) var scenePhase
+    @State private var activationTask: Task<Void, Never>?
 
     #if os(iOS)
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
@@ -62,12 +63,26 @@ struct NetBirdApp: App {
                         #if os(iOS)
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                         print("App is active!")
-                        viewModel.checkExtensionState()
-                        viewModel.checkLoginRequiredFlag()
-                        viewModel.startPollingDetails()
+                        activationTask?.cancel()
+                        activationTask = Task { @MainActor in
+                            guard UIApplication.shared.applicationState == .active else { return }
+                            // Load existing VPN manager first to establish session for status polling.
+                            // This must complete before polling starts to avoid returning default disconnected status
+                            // when the VPN is actually connected.
+                            if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
+                                // Set the initial extension state immediately so the UI shows the correct status
+                                viewModel.extensionState = initialStatus
+                            }
+                            guard UIApplication.shared.applicationState == .active else { return }
+                            viewModel.checkExtensionState()
+                            viewModel.checkLoginRequiredFlag()
+                            viewModel.startPollingDetails()
+                        }
                     }
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                         print("App is inactive!")
+                        activationTask?.cancel()
+                        activationTask = nil
                         viewModel.stopPollingDetails()
                     }
                     #endif
@@ -77,10 +92,24 @@ struct NetBirdApp: App {
                         switch newPhase {
                         case .active:
                             print("App is active!")
-                            viewModel.checkExtensionState()
-                            viewModel.startPollingDetails()
+                            activationTask?.cancel()
+                            activationTask = Task { @MainActor in
+                                guard scenePhase == .active else { return }
+                                // Load existing VPN manager first to establish session for status polling.
+                                // This must complete before polling starts to avoid returning default disconnected status
+                                // when the VPN is actually connected.
+                                if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
+                                    // Set the initial extension state immediately so the UI shows the correct status
+                                    viewModel.extensionState = initialStatus
+                                }
+                                guard scenePhase == .active else { return }
+                                viewModel.checkExtensionState()
+                                viewModel.startPollingDetails()
+                            }
                         case .inactive, .background:
                             print("App is inactive!")
+                            activationTask?.cancel()
+                            activationTask = nil
                             viewModel.stopPollingDetails()
                         @unknown default:
                             break
