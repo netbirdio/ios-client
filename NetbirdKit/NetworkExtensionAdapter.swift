@@ -102,6 +102,30 @@ public class NetworkExtensionAdapter: ObservableObject {
         self.session = self.vpnManager?.connection as? NETunnelProviderSession
     }
 
+    /// Loads an existing VPN manager from preferences and returns the current connection state.
+    /// This is used on app startup to establish the session for status polling and get the
+    /// initial connection state, without triggering VPN configuration or starting a connection.
+    /// Returns the current VPN connection status if a manager was found, nil otherwise.
+    @MainActor
+    public func loadCurrentConnectionState() async -> NEVPNStatus? {
+        do {
+            let managers = try await NETunnelProviderManager.loadAllFromPreferences()
+            if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
+                self.vpnManager = manager
+                self.session = manager.connection as? NETunnelProviderSession
+                let status = manager.connection.status
+                logger.info("loadCurrentConnectionState: Found existing manager, session established, status: \(status.rawValue)")
+                return status
+            } else {
+                logger.info("loadCurrentConnectionState: No existing manager found")
+                return nil
+            }
+        } catch {
+            logger.error("loadCurrentConnectionState: Error loading managers: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     private func createNewManager() -> NETunnelProviderManager {
         let tunnelProviderProtocol = NETunnelProviderProtocol()
         tunnelProviderProtocol.providerBundleIdentifier = self.extensionID
