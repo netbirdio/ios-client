@@ -12,19 +12,16 @@ import SwiftUI
 import FirebaseCore
 import Combine
 
-// Firebase Performance is only available on iOS
 #if os(iOS)
 import FirebasePerformance
 #endif
 
-// App Delegate is iOS only
 #if os(iOS)
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        // Configure Firebase on main thread as required by Firebase
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
            let options = FirebaseOptions(contentsOfFile: path) {
             FirebaseApp.configure(options: options)
@@ -36,7 +33,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
 @main
 struct NetBirdApp: App {
-    // Create ViewModel on background thread to avoid blocking app launch with Go runtime init
     @StateObject private var viewModelLoader = ViewModelLoader()
     @Environment(\.scenePhase) var scenePhase
     @State private var activationTask: Task<Void, Never>?
@@ -60,7 +56,41 @@ struct NetBirdApp: App {
             if let viewModel = viewModelLoader.viewModel {
                 MainView()
                     .environmentObject(viewModel)
+                    .onAppear {
+                        // Start polling when MainView appears.
+                        // This handles the case where didBecomeActiveNotification fired
+                        // before the ViewModel was ready (during async initialization).
                         #if os(iOS)
+                        if UIApplication.shared.applicationState == .active {
+                            activationTask?.cancel()
+                            activationTask = Task { @MainActor in
+                                guard UIApplication.shared.applicationState == .active else { return }
+                                // Load existing VPN manager to establish session and get initial state
+                                if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
+                                    viewModel.extensionState = initialStatus
+                                }
+                                guard UIApplication.shared.applicationState == .active else { return }
+                                viewModel.checkExtensionState()
+                                viewModel.checkLoginRequiredFlag()
+                                viewModel.startPollingDetails()
+                            }
+                        }
+                        #else
+                        // tvOS: scenePhase may not be reliable in onAppear, start polling directly
+                        activationTask?.cancel()
+                        activationTask = Task { @MainActor in
+                            guard scenePhase == .active else { return }
+                            // Load existing VPN manager to establish session and get initial state
+                            if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
+                                viewModel.extensionState = initialStatus
+                            }
+                            guard scenePhase == .active else { return }
+                            viewModel.checkExtensionState()
+                            viewModel.startPollingDetails()
+                        }
+                        #endif
+                    }
+                    #if os(iOS)
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                         print("App is active!")
                         activationTask?.cancel()
@@ -87,7 +117,6 @@ struct NetBirdApp: App {
                     }
                     #endif
                     #if os(tvOS)
-                    // tvOS uses scenePhase changes
                     .onChange(of: scenePhase) { _, newPhase in
                         switch newPhase {
                         case .active:
@@ -117,34 +146,32 @@ struct NetBirdApp: App {
                     }
                     #endif
             } else {
-                // Show loading screen while ViewModel initializes
-                Color.black
-                    .ignoresSafeArea()
-                    .overlay(
-                        Image("netbird-logo-menu")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 300)
-                    )
+                // Show loading screen while ViewModel initializes asynchronously.
+                // This prevents a black screen during Go runtime initialization.
+                ZStack {
+                    Color("BgPrimary")
+                        .ignoresSafeArea()
+                    Image("netbird-logo-menu")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 200)
+                }
             }
         }
     }
 }
 
 /// Loads ViewModel asynchronously to avoid blocking app launch.
-/// The Go runtime initialization (from NetBirdSDK) can take 10+ seconds on first launch.
+/// The Go runtime initialization (from NetBirdSDK) can take several seconds on cold start.
+/// By creating the ViewModel in an async Task, the loading screen appears immediately
+/// instead of showing a black screen.
 @MainActor
 class ViewModelLoader: ObservableObject {
     @Published var viewModel: ViewModel?
 
     init() {
-        // Create ViewModel asynchronously on main thread
-        // The ViewModel itself must be created on MainActor since it's an ObservableObject
         Task { @MainActor in
-            let vm = ViewModel()
-            self.viewModel = vm
+            self.viewModel = ViewModel()
         }
     }
 }
-
-

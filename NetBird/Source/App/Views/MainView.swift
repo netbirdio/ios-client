@@ -246,12 +246,11 @@ struct iOSMainView: View {
                     } else {
                         ZStack {
                             Color("BgPrimary")
-                                .frame( width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
-                                .ignoresSafeArea(.all)
+                                .ignoresSafeArea()
                             Image("netbird-logo-menu")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: UIScreen.main.bounds.width * 0.8)
+                                .frame(width: 200)
                         }
                     }
                 }
