@@ -40,6 +40,16 @@ struct NetBirdApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     #endif
 
+    init() {
+        // Configure Firebase on main thread as required by Firebase
+        #if os(tvOS)
+        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let options = FirebaseOptions(contentsOfFile: path) {
+            FirebaseApp.configure(options: options)
+        }
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             if let viewModel = viewModelLoader.viewModel {
@@ -56,11 +66,6 @@ struct NetBirdApp: App {
                             viewModel.startPollingDetails()
                         }
                         #else
-                        // tvOS: Initialize Firebase here (no AppDelegate on tvOS)
-                        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-                           let options = FirebaseOptions(contentsOfFile: path) {
-                            FirebaseApp.configure(options: options)
-                        }
                         // tvOS: scenePhase may not be reliable in onAppear, start polling directly
                         viewModel.checkExtensionState()
                         viewModel.startPollingDetails()
