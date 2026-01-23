@@ -43,7 +43,7 @@ jobs:
 
       - name: Add gomobile-tvos-fork to netbird dependencies
         working-directory: netbird
-        run: GOPROXY=direct go get github.com/netbirdio/gomobile-tvos-fork@latest
+        run: go get github.com/netbirdio/gomobile-tvos-fork@latest
 
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
