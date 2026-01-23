@@ -62,14 +62,32 @@ struct NetBirdApp: App {
                         // before the ViewModel was ready (during async initialization).
                         #if os(iOS)
                         if UIApplication.shared.applicationState == .active {
-                            viewModel.checkExtensionState()
-                            viewModel.checkLoginRequiredFlag()
-                            viewModel.startPollingDetails()
+                            activationTask?.cancel()
+                            activationTask = Task { @MainActor in
+                                guard UIApplication.shared.applicationState == .active else { return }
+                                // Load existing VPN manager to establish session and get initial state
+                                if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
+                                    viewModel.extensionState = initialStatus
+                                }
+                                guard UIApplication.shared.applicationState == .active else { return }
+                                viewModel.checkExtensionState()
+                                viewModel.checkLoginRequiredFlag()
+                                viewModel.startPollingDetails()
+                            }
                         }
                         #else
                         // tvOS: scenePhase may not be reliable in onAppear, start polling directly
-                        viewModel.checkExtensionState()
-                        viewModel.startPollingDetails()
+                        activationTask?.cancel()
+                        activationTask = Task { @MainActor in
+                            guard scenePhase == .active else { return }
+                            // Load existing VPN manager to establish session and get initial state
+                            if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
+                                viewModel.extensionState = initialStatus
+                            }
+                            guard scenePhase == .active else { return }
+                            viewModel.checkExtensionState()
+                            viewModel.startPollingDetails()
+                        }
                         #endif
                     }
                     #if os(iOS)
