@@ -10,56 +10,96 @@
 
 import SwiftUI
 import FirebaseCore
+import Combine
 
 @main
 struct NetBirdApp: App {
-    @StateObject var viewModel = ViewModel()
+    @StateObject private var viewModelLoader = ViewModelLoader()
     @Environment(\.scenePhase) var scenePhase
 
     var body: some Scene {
         WindowGroup {
-            MainView()
-                .environmentObject(viewModel)
-                .onAppear {
-                    // Initialize Firebase after UI is displayed to avoid blocking app launch
-                    // Firebase analytics/crashlytics are not critical for initial UI
-                    DispatchQueue.main.async {
-                        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-                           let options = FirebaseOptions(contentsOfFile: path) {
-                            FirebaseApp.configure(options: options)
+            if let viewModel = viewModelLoader.viewModel {
+                MainView()
+                    .environmentObject(viewModel)
+                    .onAppear {
+                        // Initialize Firebase after UI is displayed to avoid blocking app launch
+                        DispatchQueue.main.async {
+                            if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+                               let options = FirebaseOptions(contentsOfFile: path) {
+                                FirebaseApp.configure(options: options)
+                            }
                         }
-                    }
-                }
-                #if os(iOS)
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                    print("App is active!")
-                    viewModel.checkExtensionState()
-                    viewModel.checkLoginRequiredFlag()
-                    viewModel.startPollingDetails()
-                }
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-                    print("App is inactive!")
-                    viewModel.stopPollingDetails()
-                }
-                #endif
-                #if os(tvOS)
-                // tvOS uses scenePhase changes
-                .onChange(of: scenePhase) { _, newPhase in
-                    switch newPhase {
-                    case .active:
-                        print("App is active!")
+
+                        // Start polling when MainView appears.
+                        // This handles the case where didBecomeActiveNotification fired
+                        // before the ViewModel was ready (during async initialization).
+                        #if os(iOS)
+                        if UIApplication.shared.applicationState == .active {
+                            viewModel.checkExtensionState()
+                            viewModel.checkLoginRequiredFlag()
+                            viewModel.startPollingDetails()
+                        }
+                        #else
+                        // tvOS: scenePhase may not be reliable in onAppear, start polling directly
                         viewModel.checkExtensionState()
                         viewModel.startPollingDetails()
-                    case .inactive, .background:
+                        #endif
+                    }
+                    #if os(iOS)
+                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                        print("App is active!")
+                        viewModel.checkExtensionState()
+                        viewModel.checkLoginRequiredFlag()
+                        viewModel.startPollingDetails()
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                         print("App is inactive!")
                         viewModel.stopPollingDetails()
-                    @unknown default:
-                        break
                     }
+                    #endif
+                    #if os(tvOS)
+                    .onChange(of: scenePhase) { _, newPhase in
+                        switch newPhase {
+                        case .active:
+                            print("App is active!")
+                            viewModel.checkExtensionState()
+                            viewModel.startPollingDetails()
+                        case .inactive, .background:
+                            print("App is inactive!")
+                            viewModel.stopPollingDetails()
+                        @unknown default:
+                            break
+                        }
+                    }
+                    #endif
+            } else {
+                // Show loading screen while ViewModel initializes asynchronously.
+                // This prevents a black screen during Go runtime initialization.
+                ZStack {
+                    Color("BgPrimary")
+                        .ignoresSafeArea()
+                    Image("netbird-logo-menu")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 200)
                 }
-                #endif
+            }
         }
     }
 }
 
+/// Loads ViewModel asynchronously to avoid blocking app launch.
+/// The Go runtime initialization (from NetBirdSDK) can take several seconds on cold start.
+/// By creating the ViewModel in an async Task, the loading screen appears immediately
+/// instead of showing a black screen.
+@MainActor
+class ViewModelLoader: ObservableObject {
+    @Published var viewModel: ViewModel?
 
+    init() {
+        Task { @MainActor in
+            self.viewModel = ViewModel()
+        }
+    }
+}
