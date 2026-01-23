@@ -12,10 +12,33 @@ import SwiftUI
 import FirebaseCore
 import Combine
 
+#if os(iOS)
+import FirebasePerformance
+#endif
+
+#if os(iOS)
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let options = FirebaseOptions(contentsOfFile: path) {
+            FirebaseApp.configure(options: options)
+        }
+        return true
+    }
+}
+#endif
+
 @main
 struct NetBirdApp: App {
     @StateObject private var viewModelLoader = ViewModelLoader()
     @Environment(\.scenePhase) var scenePhase
+
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    #endif
 
     var body: some Scene {
         WindowGroup {
@@ -23,14 +46,6 @@ struct NetBirdApp: App {
                 MainView()
                     .environmentObject(viewModel)
                     .onAppear {
-                        // Initialize Firebase after UI is displayed to avoid blocking app launch
-                        DispatchQueue.main.async {
-                            if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-                               let options = FirebaseOptions(contentsOfFile: path) {
-                                FirebaseApp.configure(options: options)
-                            }
-                        }
-
                         // Start polling when MainView appears.
                         // This handles the case where didBecomeActiveNotification fired
                         // before the ViewModel was ready (during async initialization).
@@ -41,6 +56,11 @@ struct NetBirdApp: App {
                             viewModel.startPollingDetails()
                         }
                         #else
+                        // tvOS: Initialize Firebase here (no AppDelegate on tvOS)
+                        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+                           let options = FirebaseOptions(contentsOfFile: path) {
+                            FirebaseApp.configure(options: options)
+                        }
                         // tvOS: scenePhase may not be reliable in onAppear, start polling directly
                         viewModel.checkExtensionState()
                         viewModel.startPollingDetails()
