@@ -62,9 +62,18 @@ struct NetBirdApp: App {
                         #if os(iOS)
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                         print("App is active!")
-                        viewModel.checkExtensionState()
-                        viewModel.checkLoginRequiredFlag()
-                        viewModel.startPollingDetails()
+                        Task { @MainActor in
+                            // Load existing VPN manager first to establish session for status polling.
+                            // This must complete before polling starts to avoid returning default disconnected status
+                            // when the VPN is actually connected.
+                            if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
+                                // Set the initial extension state immediately so the UI shows the correct status
+                                viewModel.extensionState = initialStatus
+                            }
+                            viewModel.checkExtensionState()
+                            viewModel.checkLoginRequiredFlag()
+                            viewModel.startPollingDetails()
+                        }
                     }
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                         print("App is inactive!")
@@ -77,8 +86,17 @@ struct NetBirdApp: App {
                         switch newPhase {
                         case .active:
                             print("App is active!")
-                            viewModel.checkExtensionState()
-                            viewModel.startPollingDetails()
+                            Task { @MainActor in
+                                // Load existing VPN manager first to establish session for status polling.
+                                // This must complete before polling starts to avoid returning default disconnected status
+                                // when the VPN is actually connected.
+                                if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
+                                    // Set the initial extension state immediately so the UI shows the correct status
+                                    viewModel.extensionState = initialStatus
+                                }
+                                viewModel.checkExtensionState()
+                                viewModel.startPollingDetails()
+                            }
                         case .inactive, .background:
                             print("App is inactive!")
                             viewModel.stopPollingDetails()
