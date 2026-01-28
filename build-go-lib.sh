@@ -1,5 +1,13 @@
 #!/bin/bash
-set -e
+# Script to build NetBird iOS/tvOS bindings using gomobile
+# Usage: ./build-go-lib.sh [version]
+# - If a version is provided, it will be used (with leading 'v' stripped if present).
+# - If no version is provided:
+#     * Uses the latest Git tag if available (with leading 'v' stripped if present).
+#     * Otherwise, defaults to "dev-<short-hash>".
+# - When running in GitHub Actions, uses "ci-<short-hash>" instead of "dev-<short-hash>".
+
+set -euo pipefail
 
 # Normalize semantic versions to drop a leading 'v' (e.g., v1.2.3 -> 1.2.3).
 # Only strips if the string starts with 'v' followed by a digit, so it won't affect
@@ -33,21 +41,52 @@ checkout_tag() {
   exit 1
 }
 
+# Get version string, optionally checking out a tag if provided
+get_version() {
+  local version_arg="${1:-}"
+  local repo_path="$2"
+
+  if [ -n "$version_arg" ]; then
+    # Version provided - validate and checkout the tag
+    checkout_tag "$version_arg" "$repo_path"
+    normalize_version "$version_arg"
+    return
+  fi
+
+  # No version provided - try to get the latest tag
+  local tag
+  tag=$(git -C "$repo_path" describe --tags --exact-match 2>/dev/null || true)
+
+  if [ -n "$tag" ]; then
+    normalize_version "$tag"
+    return
+  fi
+
+  # Fallback to dev/ci prefix with short hash
+  local short_hash
+  short_hash=$(git -C "$repo_path" rev-parse --short HEAD)
+
+  if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+    echo "ci-$short_hash"
+  else
+    echo "dev-$short_hash"
+  fi
+}
+
 rn_app_path=$(pwd)
 netbirdPath=$rn_app_path/libs/netbird
 
-if [ -n "$1" ]; then
-    checkout_tag "$1" "$netbirdPath"
-    version=$(normalize_version "$1")
-else
-    version=development
-fi
+version=$(get_version "${1:-}" "$netbirdPath")
 
 cd "$netbirdPath"
 
-echo "Building NetBirdSDK version: $version"
+echo "Using version: $version"
 
-gomobile-netbird init
-CGO_ENABLED=0 gomobile-netbird bind -target=ios,iossimulator,tvos,tvossimulator -bundleid=io.netbird.framework -ldflags="-X github.com/netbirdio/netbird/version.version=$version" -o $rn_app_path/NetBirdSDK.xcframework $netbirdPath/client/ios/NetBirdSDK
+~/go/bin_gomobile_tvos/gomobile init
+~/go/bin_gomobile_tvos/gomobile bind -target=ios,iossimulator,tvos,tvossimulator -bundleid=io.netbird.framework -ldflags="-X github.com/netbirdio/netbird/version.version=$version" -o $rn_app_path/NetBirdSDK.xcframework $netbirdPath/client/ios/NetBirdSDK
 
-cd -
+#gomobile-netbird init
+#gomobile-netbird bind -target=ios,iossimulator,tvos,tvossimulator -bundleid=io.netbird.framework -ldflags="-X github.com/netbirdio/netbird/version.version=$version" -o $rn_app_path/NetBirdSDK.xcframework $netbirdPath/client/ios/NetBirdSDK
+
+
+cd - > /dev/null
