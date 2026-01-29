@@ -54,7 +54,7 @@ struct AboutView: View {
                 .padding(.horizontal, UIScreen.main.bounds.width * 0.20)
                 .padding(.bottom, 50)
                 
-                Text("© 2023 NetBird all rights reserved")
+                Text("© 2026 NetBird all rights reserved")
                     .foregroundColor(.white)
                     .padding(.bottom, UIScreen.main.bounds.height * 0.01)
             }
