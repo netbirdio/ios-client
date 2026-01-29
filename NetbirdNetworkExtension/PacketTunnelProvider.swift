@@ -354,11 +354,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         let clientState = adapter.clientState
+        let isRestarting = adapter.isRestarting || isRestartInProgress
         let statusDetails = StatusDetails(
             ip: statusDetailsMessage.getIP(),
             fqdn: statusDetailsMessage.getFQDN(),
             managementStatus: clientState,
-            peerInfo: peerInfoArray
+            peerInfo: peerInfoArray,
+            isRestarting: isRestarting
         )
 
         do {
@@ -367,7 +369,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         } catch {
             AppLogger.shared.log("Failed to encode status details: \(error.localizedDescription)")
             do {
-                let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: clientState, peerInfo: [])
+                let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: clientState, peerInfo: [], isRestarting: isRestarting)
                 let data = try PropertyListEncoder().encode(defaultStatus)
                 completionHandler(data)
             } catch {

@@ -112,7 +112,7 @@ struct iOSMainView: View {
                                     }
                                 }
                             }) {
-                                CustomLottieView(extensionStatus: $viewModel.extensionState, engineStatus: $viewModel.managementStatus, connectPressed: $viewModel.connectPressed, disconnectPressed: $viewModel.disconnectPressed, networkUnavailable: $viewModel.networkUnavailable, viewModel: viewModel)
+                                CustomLottieView(extensionStatus: $viewModel.extensionState, engineStatus: $viewModel.managementStatus, connectPressed: $viewModel.connectPressed, disconnectPressed: $viewModel.disconnectPressed, networkUnavailable: $viewModel.networkUnavailable, isRestarting: $viewModel.isRestarting, viewModel: viewModel)
                                     .id(animationKey)
                                     .frame(width: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79), height: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79))
                                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in

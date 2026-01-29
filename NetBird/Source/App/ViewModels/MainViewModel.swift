@@ -75,6 +75,9 @@ class ViewModel: ObservableObject {
     @Published var extensionStateText = "Disconnected"
     @Published var connectPressed = false
     @Published var disconnectPressed = false
+    /// Indicates if the SDK client is currently restarting (e.g., due to network switch).
+    /// Used by the UI to show "Reconnecting..." instead of "Disconnected" during restart.
+    @Published var isRestarting = false
     
     @Published var rosenpassEnabled = false
     @Published var rosenpassPermissive = false
@@ -182,23 +185,28 @@ class ViewModel: ObservableObject {
                 self.extensionStateText = "Disconnected"
             }
 
+            // Update isRestarting flag from extension
+            if details.isRestarting != self.isRestarting {
+                self.isRestarting = details.isRestarting
+            }
+
             if details.ip != self.ip || details.fqdn != self.fqdn || details.managementStatus != self.managementStatus
             {
                 if !details.fqdn.isEmpty && details.fqdn != self.fqdn {
                     self.defaults.set(details.fqdn, forKey: "fqdn")
                     self.fqdn = details.fqdn
-                    
+
                 }
                 if !details.ip.isEmpty && details.ip != self.ip {
                     self.defaults.set(details.ip, forKey: "ip")
                     self.ip = details.ip
                 }
-                print("Status: \(details.managementStatus) - Extension: \(self.extensionState)")
-                
+                print("Status: \(details.managementStatus) - Extension: \(self.extensionState) - Restarting: \(details.isRestarting)")
+
                 if details.managementStatus != self.managementStatus {
                     self.managementStatus = details.managementStatus
                 }
-                
+
                 // Login required detection is handled by the network extension via signalLoginRequired()
                 // The app checks for this flag in checkLoginRequiredFlag() when becoming active
             }
@@ -380,7 +388,7 @@ class ViewModel: ObservableObject {
     }
     
     func getDefaultStatus() -> StatusDetails {
-        return StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
+        return StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [], isRestarting: false)
     }
     
     func isValidSetupKey(_ string: String) -> Bool {

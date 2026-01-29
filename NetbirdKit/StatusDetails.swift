@@ -13,6 +13,17 @@ struct StatusDetails: Codable {
     var fqdn: String
     var managementStatus: ClientState
     var peerInfo: [PeerInfo]
+    /// Indicates if the SDK client is currently restarting (e.g., due to network switch).
+    /// When true, intermediate disconnected states should be shown as "Reconnecting..." not "Disconnected".
+    var isRestarting: Bool
+
+    init(ip: String, fqdn: String, managementStatus: ClientState, peerInfo: [PeerInfo], isRestarting: Bool = false) {
+        self.ip = ip
+        self.fqdn = fqdn
+        self.managementStatus = managementStatus
+        self.peerInfo = peerInfo
+        self.isRestarting = isRestarting
+    }
 }
 
 extension StatusDetails: Equatable {
@@ -20,7 +31,8 @@ extension StatusDetails: Equatable {
         return lhs.ip == rhs.ip &&
                lhs.fqdn == rhs.fqdn &&
                lhs.managementStatus == rhs.managementStatus &&
-               lhs.peerInfo == rhs.peerInfo
+               lhs.peerInfo == rhs.peerInfo &&
+               lhs.isRestarting == rhs.isRestarting
     }
 }
 
