@@ -1,7 +1,7 @@
 #!/bin/bash
 # Script to build NetBird iOS/tvOS bindings using gomobile
 #
-# Usage: ./build-ios-lib.sh [platform] [version]
+# Usage: ./build-go-lib.sh [platform] [version]
 #
 # Parameters:
 #   1. platform (optional): Target platform(s) to build for
@@ -16,10 +16,10 @@
 #      - Leading 'v' is stripped from semver tags (v1.2.3 -> 1.2.3)
 #
 # Examples:
-#   ./build-ios-lib.sh              # Build both platforms using current commit
-#   ./build-ios-lib.sh ios          # Build iOS only using current commit
-#   ./build-ios-lib.sh tvos v0.64.1 # Build tvOS only using tag v0.64.1
-#   ./build-ios-lib.sh both v0.64.1 # Build both platforms using tag v0.64.1
+#   ./build-go-lib.sh              # Build both platforms using current commit
+#   ./build-go-lib.sh ios          # Build iOS only using current commit
+#   ./build-go-lib.sh tvos v0.64.1 # Build tvOS only using tag v0.64.1
+#   ./build-go-lib.sh both v0.64.1 # Build both platforms using tag v0.64.1
 #
 # Output:
 #   Creates NetBirdSDK.xcframework in the current directory
@@ -90,8 +90,8 @@ get_version() {
   fi
 }
 
-rn_app_path=$(pwd)
-netbirdPath=$rn_app_path/libs/netbird
+project_root=$(pwd)
+netbirdPath=$project_root/libs/netbird
 
 # Parse arguments
 platform="${1:-both}"
@@ -135,11 +135,11 @@ esac
 $gomobile_cmd init
 
 # Build
-CGO_ENABLED=0 $gomobile_cmd bind \
+$gomobile_cmd bind \
   -target="$targets" \
   -bundleid=io.netbird.framework \
   -ldflags="-X github.com/netbirdio/netbird/version.version=$version" \
-  -o "$rn_app_path/NetBirdSDK.xcframework" \
+  -o "$project_root/NetBirdSDK.xcframework" \
   "$netbirdPath/client/ios/NetBirdSDK"
 
 cd - > /dev/null
