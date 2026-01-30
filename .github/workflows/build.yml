@@ -23,12 +23,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: ios-client
+          submodules: true
 
-      - name: Checkout netbird
-        uses: actions/checkout@v4
-        with:
-          repository: netbirdio/netbird
-          path: ios-client/libs/netbird
+#      - name: Checkout netbird
+#        uses: actions/checkout@v4
+#        with:
+#          repository: netbirdio/netbird
+#          path: ios-client/libs/netbird
 
       - name: Setup Go
         uses: actions/setup-go@v5
