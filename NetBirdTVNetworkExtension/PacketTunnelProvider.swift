@@ -40,6 +40,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     let monitorQueue = DispatchQueue(label: "NetworkMonitor")
     var currentNetworkType: NWInterface.InterfaceType?
 
+    /// Stuck "Connecting" state detection - for auto-recovery when SDK fails to reconnect
+    private var connectingStartTime: Date?
+    private var stuckRestartAttempts: Int = 0
+    private var lastStuckRestartTime: Date?
+    private let stuckConnectingThreshold: TimeInterval = 90  // seconds before considering "stuck"
+    private let maxStuckRestartAttempts: Int = 3
+    private let minTimeBetweenStuckRestarts: TimeInterval = 60  // minimum backoff between attempts
+    private var isRestartInProgress: Bool = false
+
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         // CRITICAL: Log immediately to confirm startTunnel is being called
         // Use privacy: .public to avoid log redaction
@@ -58,6 +67,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         currentNetworkType = nil
+        connectingStartTime = nil
+        stuckRestartAttempts = 0
+        lastStuckRestartTime = nil
+        isRestartInProgress = false
         startMonitoringNetworkChanges()
 
         guard let adapter = adapter else {
@@ -198,14 +211,94 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func restartClient() {
+        guard !isRestartInProgress else {
+            logger.info("restartClient: skipping - restart already in progress")
+            return
+        }
+        isRestartInProgress = true
+        adapter?.isRestarting = true
+
         logger.info("restartClient: Restarting client due to network change")
         adapter?.stop()
-        adapter?.start { error in
+        adapter?.start { [weak self] error in
+            self?.isRestartInProgress = false
+            self?.adapter?.isRestarting = false
             if let error = error {
                 logger.error("restartClient: Error restarting client: \(error.localizedDescription)")
             } else {
                 logger.info("restartClient: Client restarted successfully")
             }
+        }
+    }
+
+    /// Detects when SDK is stuck in "Connecting" state for too long and attempts recovery by restarting.
+    /// This handles cases where the SDK loses connectivity to management/signal servers and can't recover.
+    private func checkAndRecoverFromStuckConnecting(clientState: ClientState, isRestarting: Bool) {
+        // If connected, reset all stuck tracking state
+        if clientState == .connected {
+            if connectingStartTime != nil {
+                logger.info("stuckRecovery: SDK recovered to Connected, resetting stuck tracking")
+            }
+            connectingStartTime = nil
+            stuckRestartAttempts = 0
+            return
+        }
+
+        // Only track "connecting" state (not disconnected/disconnecting)
+        guard clientState == .connecting else {
+            connectingStartTime = nil
+            return
+        }
+
+        // Don't attempt recovery if a restart is already in progress
+        if isRestarting || isRestartInProgress {
+            return
+        }
+
+        // Start tracking if this is the first time we see "connecting"
+        if connectingStartTime == nil {
+            connectingStartTime = Date()
+            logger.info("stuckRecovery: Started tracking Connecting state")
+            return
+        }
+
+        // Check how long we've been in "connecting" state
+        let connectingDuration = Date().timeIntervalSince(connectingStartTime!)
+
+        // Not stuck yet
+        guard connectingDuration >= stuckConnectingThreshold else {
+            return
+        }
+
+        // Check if we've exceeded max restart attempts
+        if stuckRestartAttempts >= maxStuckRestartAttempts {
+            logger.info("stuckRecovery: Max restart attempts (\(maxStuckRestartAttempts)) reached, giving up")
+            return
+        }
+
+        // Check backoff - don't restart too frequently
+        if let lastRestart = lastStuckRestartTime {
+            let timeSinceLastRestart = Date().timeIntervalSince(lastRestart)
+            if timeSinceLastRestart < minTimeBetweenStuckRestarts {
+                return
+            }
+        }
+
+        // Check if network is available before attempting restart
+        guard let path = pathMonitor?.currentPath, path.status == .satisfied else {
+            logger.info("stuckRecovery: Network not available, skipping restart")
+            return
+        }
+
+        // Trigger restart
+        stuckRestartAttempts += 1
+        lastStuckRestartTime = Date()
+        connectingStartTime = nil  // Reset so we can track the next attempt
+
+        logger.info("stuckRecovery: SDK stuck in Connecting for \(Int(connectingDuration))s, attempting restart (attempt \(stuckRestartAttempts)/\(maxStuckRestartAttempts))")
+
+        monitorQueue.async { [weak self] in
+            self?.restartClient()
         }
     }
 
@@ -549,7 +642,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         let clientState = adapter.clientState
-        let isRestarting = adapter.isRestarting
+        let adapterRestarting = adapter.isRestarting
+        let isRestarting = adapterRestarting || isRestartInProgress
+
+        // Detect and recover from stuck "Connecting" state
+        checkAndRecoverFromStuckConnecting(clientState: clientState, isRestarting: isRestarting)
+
         let statusDetails = StatusDetails(
             ip: statusDetailsMessage.getIP(),
             fqdn: statusDetailsMessage.getFQDN(),
