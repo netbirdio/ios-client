@@ -24,6 +24,7 @@ struct CustomLottieView: UIViewRepresentable {
     func updateUIView(_ uiView: LottieAnimationView, context: Context) {
         // Check for network unavailable state change (airplane mode)
         if context.coordinator.networkUnavailable != networkUnavailable {
+            let wasUnavailable = context.coordinator.networkUnavailable
             context.coordinator.networkUnavailable = networkUnavailable
 
             if networkUnavailable && !context.coordinator.isPlaying {
@@ -31,6 +32,14 @@ struct CustomLottieView: UIViewRepresentable {
                 DispatchQueue.main.async {
                     context.coordinator.playDisconnectingFadeIn(uiView: uiView, viewModel: viewModel)
                 }
+                return
+            } else if wasUnavailable && !networkUnavailable && extensionStatus == .connected {
+                // Network just became available again and tunnel is still up - show reconnecting
+                // Stop any current animation and immediately show reconnecting text
+                uiView.stop()
+                context.coordinator.isPlaying = false
+                viewModel.extensionStateText = "Reconnecting..."
+                context.coordinator.playConnectingLoop(uiView: uiView, viewModel: viewModel)
                 return
             }
         }
