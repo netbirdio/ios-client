@@ -25,7 +25,8 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
     
     func onConnected() {
         let wasRestarting = adapter.isRestarting
-        adapter.isRestarting = false
+        // Don't reset isRestarting here - let the restart completion handler manage it
+        // to avoid race conditions with subsequent SDK callbacks
         adapter.clientState = .connected
         AppLogger.shared.log("onConnected: state=connected, wasRestarting=\(wasRestarting)")
 
