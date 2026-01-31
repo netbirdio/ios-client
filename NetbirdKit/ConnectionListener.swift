@@ -46,11 +46,15 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
 
     func onDisconnected() {
         let wasRestarting = adapter.isRestarting
-        // Don't reset isRestarting here - it will be reset in onConnected() after successful reconnection.
-        // Resetting here causes the UI to show "Disconnected" during network switch restarts
-        // when the tunnel is still up but SDK is reconnecting.
-        adapter.clientState = .disconnected
-        AppLogger.shared.log("onDisconnected: state=disconnected, wasRestarting=\(wasRestarting)")
+        // Only update clientState if NOT restarting to prevent UI showing wrong state
+        // during network switch restarts when the tunnel is still up.
+        if wasRestarting {
+            AppLogger.shared.log("onDisconnected: suppressed (isRestarting=true)")
+        } else {
+            adapter.clientState = .disconnected
+            AppLogger.shared.log("onDisconnected: state=disconnected")
+        }
+        // Always notify stop completion so the restart sequence can proceed
         adapter.notifyStopCompleted()
     }
 
