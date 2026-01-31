@@ -321,9 +321,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        // Check if we've exceeded max restart attempts
+        // Check if we've exceeded max restart attempts - force disconnect
         if stuckRestartAttempts >= maxStuckRestartAttempts {
-            AppLogger.shared.log("stuckRecovery: Max restart attempts (\(maxStuckRestartAttempts)) reached, giving up")
+            AppLogger.shared.log("stuckRecovery: Max restart attempts (\(maxStuckRestartAttempts)) reached, forcing tunnel disconnect")
+            stuckStateStartTime = nil
+            let error = NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1004,
+                userInfo: [NSLocalizedDescriptionKey: "Connection failed after \(maxStuckRestartAttempts) recovery attempts. Please reconnect manually."]
+            )
+            cancelTunnelWithError(error)
             return
         }
 
