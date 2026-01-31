@@ -57,6 +57,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         isTunnelStopping = false
+        setNetworkUnavailableFlag(false)  // Clear any stale flag from previous session
         monitorQueue.async { [weak self] in
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
