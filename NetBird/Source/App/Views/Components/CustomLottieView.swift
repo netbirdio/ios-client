@@ -10,6 +10,7 @@ struct CustomLottieView: UIViewRepresentable {
     @Binding var connectPressed: Bool
     @Binding var disconnectPressed: Bool
     @Binding var networkUnavailable: Bool
+    @Binding var isRestarting: Bool
     @StateObject var viewModel: ViewModel
 
     func makeUIView(context: Context) -> LottieAnimationView {
@@ -23,6 +24,7 @@ struct CustomLottieView: UIViewRepresentable {
     func updateUIView(_ uiView: LottieAnimationView, context: Context) {
         // Check for network unavailable state change (airplane mode)
         if context.coordinator.networkUnavailable != networkUnavailable {
+            let wasUnavailable = context.coordinator.networkUnavailable
             context.coordinator.networkUnavailable = networkUnavailable
 
             if networkUnavailable && !context.coordinator.isPlaying {
@@ -31,17 +33,27 @@ struct CustomLottieView: UIViewRepresentable {
                     context.coordinator.playDisconnectingFadeIn(uiView: uiView, viewModel: viewModel)
                 }
                 return
+            } else if wasUnavailable && !networkUnavailable && extensionStatus == .connected {
+                // Network just became available again and tunnel is still up - show reconnecting
+                // Stop any current animation and immediately show reconnecting text
+                uiView.stop()
+                context.coordinator.isPlaying = false
+                viewModel.extensionStateText = "Reconnecting..."
+                context.coordinator.playConnectingLoop(uiView: uiView, viewModel: viewModel)
+                return
             }
         }
 
         // Status change check
         if context.coordinator.extensionStatus != extensionStatus || context.coordinator.engineStatus != engineStatus
-            || context.coordinator.connectPressed != connectPressed || context.coordinator.disconnectPressed != disconnectPressed {
+            || context.coordinator.connectPressed != connectPressed || context.coordinator.disconnectPressed != disconnectPressed
+            || context.coordinator.isRestarting != isRestarting {
             // Update the coordinator's state
             context.coordinator.extensionStatus = extensionStatus
             context.coordinator.engineStatus = engineStatus
             context.coordinator.connectPressed = connectPressed
             context.coordinator.disconnectPressed = disconnectPressed
+            context.coordinator.isRestarting = isRestarting
 
             // Force reset to disconnected state when all flags indicate disconnected
             // This handles cases like server change where we need to immediately reset
@@ -80,11 +92,20 @@ struct CustomLottieView: UIViewRepresentable {
                     // for both user-initiated and automatic reconnections
                     context.coordinator.playConnectingLoop(uiView: uiView, viewModel: viewModel)
                 case .disconnected:
-                    // Engine disconnected but tunnel still up - show disconnected state
-                    DispatchQueue.main.async {
-                        viewModel.extensionStateText = "Disconnected"
+                    // Engine disconnected but tunnel still up
+                    if networkUnavailable {
+                        // Network unavailable (airplane mode) - show disconnected
+                        DispatchQueue.main.async {
+                            viewModel.extensionStateText = "Disconnected"
+                        }
+                        uiView.currentFrame = context.coordinator.disconnectedFrame
+                    } else {
+                        // Network available - show reconnecting since tunnel is still functional
+                        DispatchQueue.main.async {
+                            viewModel.extensionStateText = "Reconnecting..."
+                        }
+                        context.coordinator.playConnectingLoop(uiView: uiView, viewModel: viewModel)
                     }
-                    uiView.currentFrame = context.coordinator.disconnectedFrame
                 case .disconnecting:
                     DispatchQueue.main.async {
                         context.coordinator.playDisconnectingFadeIn(uiView: uiView, viewModel: viewModel)
@@ -125,6 +146,7 @@ struct CustomLottieView: UIViewRepresentable {
         var connectPressed: Bool?
         var disconnectPressed: Bool?
         var networkUnavailable: Bool = false
+        var isRestarting: Bool = false
         var colorScheme: ColorScheme?
         
         let connectedFrame: CGFloat = 142
@@ -138,8 +160,23 @@ struct CustomLottieView: UIViewRepresentable {
 
         
         func playConnectingFadeIn(uiView: LottieAnimationView, viewModel: ViewModel) {
+            // If network is unavailable (airplane mode), go directly to disconnected state
+            if self.networkUnavailable {
+                DispatchQueue.main.async {
+                    self.isPlaying = false
+                    uiView.currentFrame = self.disconnectedFrame
+                    viewModel.extensionStateText = "Disconnected"
+                }
+                return
+            }
+
             DispatchQueue.main.async {
-                viewModel.extensionStateText = "Connecting..."
+                // Show "Reconnecting..." when tunnel is up but SDK is not connected
+                if self.extensionStatus == .connected && self.engineStatus != .connected {
+                    viewModel.extensionStateText = "Reconnecting..."
+                } else {
+                    viewModel.extensionStateText = "Connecting..."
+                }
             }
             self.isPlaying = true
             uiView.play(fromFrame: connectingFadeIn.startFrame, toFrame: connectingFadeIn.endFrame, loopMode: .playOnce) { [weak self] finished in
@@ -154,19 +191,46 @@ struct CustomLottieView: UIViewRepresentable {
         }
         
         func playConnectingLoop(uiView: LottieAnimationView, viewModel: ViewModel) {
+            // Check for exit conditions at the START of each loop iteration
+            // This catches state changes that happened during the previous animation
+            if self.engineStatus == .connected {
+                self.playFadeOut(uiView: uiView, startFrame: self.connectingFadeOut.startFrame, endFrame: self.connectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Connected")
+                return
+            }
+
+            // If network is unavailable (airplane mode), go directly to disconnected state
+            if self.networkUnavailable {
+                DispatchQueue.main.async {
+                    self.isPlaying = false
+                    uiView.currentFrame = self.disconnectedFrame
+                    viewModel.extensionStateText = "Disconnected"
+                }
+                return
+            }
+
             self.isPlaying = true
             DispatchQueue.main.async {
-                viewModel.extensionStateText = "Connecting..."
+                // Show "Reconnecting..." when tunnel is up but SDK is not connected
+                // This indicates the VPN data plane is working but control plane is reconnecting
+                if self.extensionStatus == .connected && self.engineStatus != .connected {
+                    viewModel.extensionStateText = "Reconnecting..."
+                } else {
+                    viewModel.extensionStateText = "Connecting..."
+                }
             }
             uiView.play(fromFrame: self.connectingLoopRange.startFrame, toFrame: self.connectingLoopRange.endFrame, loopMode: .playOnce) {[weak self] finished in
                 guard let self = self else { return }
                 if self.engineStatus == .connected {
                     self.playFadeOut(uiView: uiView, startFrame: self.connectingFadeOut.startFrame, endFrame: self.connectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Connected")
+                } else if self.extensionStatus == .connected && !self.networkUnavailable {
+                    // Tunnel is still up and network available but SDK is not connected - show reconnecting
+                    // This covers both iOS-initiated restarts (isRestarting=true) and SDK-initiated
+                    // reconnections (e.g., gRPC keepalive timeout). The VPN data plane is still working.
+                    DispatchQueue.main.async {
+                        viewModel.extensionStateText = "Reconnecting..."
+                    }
+                    playConnectingLoop(uiView: uiView, viewModel: viewModel)
                 } else if (self.engineStatus == .disconnecting || self.extensionStatus == .disconnecting || self.engineStatus == .disconnected || self.extensionStatus == .disconnected) && !(self.connectPressed ?? false) {
-                    self.playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
-                } else if !(self.connectPressed ?? false) && self.engineStatus == .connecting {
-                    // Automatic reconnection (not user-initiated) stuck in connecting state
-                    // Exit to disconnected state after one loop to avoid infinite animation
                     self.playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
                 } else {
                     playConnectingLoop(uiView: uiView, viewModel: viewModel)
@@ -213,9 +277,8 @@ struct CustomLottieView: UIViewRepresentable {
                         viewModel.disconnectPressed = false
                         viewModel.routeViewModel.getRoutes()
                     }
-                } else if self.networkUnavailable || ((self.engineStatus == .disconnected || self.engineStatus == .connecting) && self.extensionStatus == .connected) {
-                    // Network unavailable (airplane mode) or engine disconnected/stuck connecting
-                    // Show disconnected state immediately
+                } else if self.networkUnavailable {
+                    // Network unavailable (airplane mode) - show disconnected state
                     DispatchQueue.main.async {
                         self.isPlaying = false
                         uiView.currentFrame = self.disconnectedFrame
@@ -223,6 +286,14 @@ struct CustomLottieView: UIViewRepresentable {
                         viewModel.connectPressed = false
                         viewModel.disconnectPressed = false
                     }
+                } else if (self.engineStatus == .disconnected || self.engineStatus == .connecting) && self.extensionStatus == .connected {
+                    // Engine disconnected/connecting but tunnel still up - always show reconnecting
+                    // The VPN data plane is still functional, SDK is just reconnecting to
+                    // management/signal servers (could be iOS-initiated or SDK-initiated)
+                    DispatchQueue.main.async {
+                        viewModel.extensionStateText = "Reconnecting..."
+                    }
+                    self.playConnectingLoop(uiView: uiView, viewModel: viewModel)
                 } else {
                     playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
                 }

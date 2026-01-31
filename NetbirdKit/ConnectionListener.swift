@@ -25,7 +25,8 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
     
     func onConnected() {
         let wasRestarting = adapter.isRestarting
-        adapter.isRestarting = false
+        // Don't reset isRestarting here - let the restart completion handler manage it
+        // to avoid race conditions with subsequent SDK callbacks
         adapter.clientState = .connected
         AppLogger.shared.log("onConnected: state=connected, wasRestarting=\(wasRestarting)")
 
@@ -45,9 +46,15 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
 
     func onDisconnected() {
         let wasRestarting = adapter.isRestarting
-        adapter.isRestarting = false
-        adapter.clientState = .disconnected
-        AppLogger.shared.log("onDisconnected: state=disconnected, wasRestarting=\(wasRestarting)")
+        // Only update clientState if NOT restarting to prevent UI showing wrong state
+        // during network switch restarts when the tunnel is still up.
+        if wasRestarting {
+            AppLogger.shared.log("onDisconnected: suppressed (isRestarting=true)")
+        } else {
+            adapter.clientState = .disconnected
+            AppLogger.shared.log("onDisconnected: state=disconnected")
+        }
+        // Always notify stop completion so the restart sequence can proceed
         adapter.notifyStopCompleted()
     }
 

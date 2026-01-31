@@ -543,7 +543,7 @@ public class NetworkExtensionAdapter: ObservableObject {
             return
         }
 
-        let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
+        let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [], isRestarting: false)
         
         guard let session = self.session else {
             completion(defaultStatus)

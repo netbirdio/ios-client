@@ -27,7 +27,27 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Network state variables - accessed only on monitorQueue for thread safety
     private var currentNetworkType: NWInterface.InterfaceType?
     private var wasStoppedDueToNoNetwork = false
-    private var isRestartInProgress = false
+
+    /// Stuck state detection - for auto-recovery when SDK fails to reconnect
+    /// Tracks both "Connecting" and "Disconnected" states when tunnel is up
+    private var stuckStateStartTime: Date?
+    private var stuckRestartAttempts: Int = 0
+    private var lastStuckRestartTime: Date?
+    private let stuckStateThreshold: TimeInterval = 60  // seconds before considering "stuck"
+    private let maxStuckRestartAttempts: Int = 3
+    private let minTimeBetweenStuckRestarts: TimeInterval = 60  // minimum backoff between attempts
+
+    /// Thread-safe restart progress flag
+    private let restartLock = NSLock()
+    private var _isRestartInProgress = false
+    private var isRestartInProgress: Bool {
+        get { restartLock.lock(); defer { restartLock.unlock() }; return _isRestartInProgress }
+        set { restartLock.lock(); defer { restartLock.unlock() }; _isRestartInProgress = newValue }
+    }
+
+    /// Flag to indicate tunnel is being intentionally stopped (user disconnect)
+    /// Prevents stuck recovery from triggering during shutdown
+    private var isTunnelStopping = false
     
     private var networkChangeWorkItem: DispatchWorkItem?
 
@@ -36,10 +56,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             initializeLogging(loglevel: logLevel)
         }
 
+        isTunnelStopping = false
+        setNetworkUnavailableFlag(false)  // Clear any stale flag from previous session
         monitorQueue.async { [weak self] in
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
+            self?.stuckStateStartTime = nil
+            self?.stuckRestartAttempts = 0
+            self?.lastStuckRestartTime = nil
             self?.startMonitoringNetworkChanges()
         }
 
@@ -69,6 +94,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        isTunnelStopping = true
         monitorQueue.async { [weak self] in
             self?.networkChangeWorkItem?.cancel()
             self?.networkChangeWorkItem = nil
@@ -249,6 +275,92 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// Detects when SDK is stuck in "Connecting" or "Disconnected" state for too long and attempts recovery.
+    /// This handles cases where the SDK loses connectivity to management/signal servers and can't recover.
+    private func checkAndRecoverFromStuckState(clientState: ClientState, isRestarting: Bool) {
+        // If connected, reset all stuck tracking state
+        if clientState == .connected {
+            if stuckStateStartTime != nil {
+                AppLogger.shared.log("stuckRecovery: SDK recovered to Connected, resetting stuck tracking")
+            }
+            stuckStateStartTime = nil
+            stuckRestartAttempts = 0
+            return
+        }
+
+        // Track both "connecting" and "disconnected" states (when tunnel is presumably still up)
+        // Skip "disconnecting" as that's a transient state
+        guard clientState == .connecting || clientState == .disconnected else {
+            stuckStateStartTime = nil
+            return
+        }
+
+        // Don't attempt recovery if a restart is already in progress
+        if isRestarting || isRestartInProgress {
+            stuckStateStartTime = nil
+            return
+        }
+
+        // Don't attempt recovery if tunnel is being intentionally stopped
+        if isTunnelStopping {
+            stuckStateStartTime = nil
+            return
+        }
+
+        // Start tracking if this is the first time we see a stuck-eligible state
+        if stuckStateStartTime == nil {
+            stuckStateStartTime = Date()
+            AppLogger.shared.log("stuckRecovery: Started tracking \(clientState) state")
+            return
+        }
+
+        // Check how long we've been in this state
+        let stuckDuration = Date().timeIntervalSince(stuckStateStartTime!)
+
+        // Not stuck yet
+        guard stuckDuration >= stuckStateThreshold else {
+            return
+        }
+
+        // Check if we've exceeded max restart attempts - force disconnect
+        if stuckRestartAttempts >= maxStuckRestartAttempts {
+            AppLogger.shared.log("stuckRecovery: Max restart attempts (\(maxStuckRestartAttempts)) reached, forcing tunnel disconnect")
+            stuckStateStartTime = nil
+            let error = NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1004,
+                userInfo: [NSLocalizedDescriptionKey: "Connection failed after \(maxStuckRestartAttempts) recovery attempts. Please reconnect manually."]
+            )
+            cancelTunnelWithError(error)
+            return
+        }
+
+        // Check backoff - don't restart too frequently
+        if let lastRestart = lastStuckRestartTime {
+            let timeSinceLastRestart = Date().timeIntervalSince(lastRestart)
+            if timeSinceLastRestart < minTimeBetweenStuckRestarts {
+                return
+            }
+        }
+
+        // Check if network is available before attempting restart
+        guard let path = pathMonitor?.currentPath, path.status == .satisfied else {
+            AppLogger.shared.log("stuckRecovery: Network not available, skipping restart")
+            return
+        }
+
+        // Trigger restart
+        stuckRestartAttempts += 1
+        lastStuckRestartTime = Date()
+        stuckStateStartTime = nil  // Reset so we can track the next attempt
+
+        AppLogger.shared.log("stuckRecovery: SDK stuck in \(clientState) for \(Int(stuckDuration))s, attempting restart (attempt \(stuckRestartAttempts)/\(maxStuckRestartAttempts))")
+
+        monitorQueue.async { [weak self] in
+            self?.restartClient()
+        }
+    }
+
     /// Signals login required by persisting a flag to the shared app-group container.
     /// The main app reads this flag when it becomes active and handles notification scheduling.
     /// Direct notification from extension is best-effort only since NEPacketTunnelProvider
@@ -354,11 +466,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         let clientState = adapter.clientState
+        let adapterRestarting = adapter.isRestarting
+        let providerRestarting = isRestartInProgress
+        let isRestarting = adapterRestarting || providerRestarting
+        AppLogger.shared.log("getStatus: clientState=\(clientState), adapterRestarting=\(adapterRestarting), providerRestarting=\(providerRestarting), isRestarting=\(isRestarting)")
+
+        // Detect and recover from stuck state
+        checkAndRecoverFromStuckState(clientState: clientState, isRestarting: isRestarting)
+
         let statusDetails = StatusDetails(
             ip: statusDetailsMessage.getIP(),
             fqdn: statusDetailsMessage.getFQDN(),
             managementStatus: clientState,
-            peerInfo: peerInfoArray
+            peerInfo: peerInfoArray,
+            isRestarting: isRestarting
         )
 
         do {
@@ -367,7 +488,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         } catch {
             AppLogger.shared.log("Failed to encode status details: \(error.localizedDescription)")
             do {
-                let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: clientState, peerInfo: [])
+                let defaultStatus = StatusDetails(ip: "", fqdn: "", managementStatus: clientState, peerInfo: [], isRestarting: isRestarting)
                 let data = try PropertyListEncoder().encode(defaultStatus)
                 completionHandler(data)
             } catch {
