@@ -449,9 +449,13 @@ class ViewModel: ObservableObject {
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         let isUnavailable = userDefaults?.bool(forKey: GlobalConstants.keyNetworkUnavailable) ?? false
 
-        if isUnavailable != networkUnavailable {
-            AppLogger.shared.log("Network unavailable flag changed: \(isUnavailable)")
-            networkUnavailable = isUnavailable
+        // Only consider network unavailable if tunnel is actually connected
+        // This prevents stale flags from previous sessions triggering wrong UI state
+        let effectiveUnavailable = isUnavailable && extensionState == .connected
+
+        if effectiveUnavailable != networkUnavailable {
+            AppLogger.shared.log("Network unavailable flag changed: \(effectiveUnavailable)")
+            networkUnavailable = effectiveUnavailable
         }
         #endif
         // tvOS: Network status is determined by extension state, not a shared flag
