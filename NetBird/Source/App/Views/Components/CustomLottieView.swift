@@ -17,6 +17,14 @@ struct CustomLottieView: UIViewRepresentable {
         animationView.animation = LottieAnimation.named(colorScheme == .dark ? "button-full2-dark" :  "button-full2")
         context.coordinator.colorScheme = colorScheme
         animationView.contentMode = .scaleAspectFit
+
+        // Set initial frame based on current state (important for view recreation after background)
+        if extensionStatus == .connected && engineStatus == .connected {
+            animationView.currentFrame = context.coordinator.connectedFrame
+        } else {
+            animationView.currentFrame = context.coordinator.disconnectedFrame
+        }
+
         return animationView
     }
 
@@ -26,40 +34,44 @@ struct CustomLottieView: UIViewRepresentable {
             context.coordinator.networkUnavailable = networkUnavailable
 
             if networkUnavailable && !context.coordinator.isPlaying {
-                // Network just became unavailable - trigger disconnecting animation
+                // Network just became unavailable - close VPN to sync state with UI
+                // This ensures extensionState becomes .disconnected
                 DispatchQueue.main.async {
+                    self.viewModel.close()
                     context.coordinator.playDisconnectingFadeIn(uiView: uiView, viewModel: viewModel)
                 }
                 return
             }
         }
 
-        // Status change check
-        if context.coordinator.extensionStatus != extensionStatus || context.coordinator.engineStatus != engineStatus
-            || context.coordinator.connectPressed != connectPressed || context.coordinator.disconnectPressed != disconnectPressed {
-            // Update the coordinator's state
-            context.coordinator.extensionStatus = extensionStatus
-            context.coordinator.engineStatus = engineStatus
-            context.coordinator.connectPressed = connectPressed
-            context.coordinator.disconnectPressed = disconnectPressed
+        // Always update coordinator state (important for animation loops that check these values)
+        let stateChanged = context.coordinator.extensionStatus != extensionStatus
+            || context.coordinator.engineStatus != engineStatus
+            || context.coordinator.connectPressed != connectPressed
+            || context.coordinator.disconnectPressed != disconnectPressed
 
-            // Force reset to disconnected state when all flags indicate disconnected
-            // This handles cases like server change where we need to immediately reset
-            let shouldForceReset = extensionStatus == .disconnected
-                && !connectPressed
-                && !disconnectPressed
-                && engineStatus == .disconnected
+        context.coordinator.extensionStatus = extensionStatus
+        context.coordinator.engineStatus = engineStatus
+        context.coordinator.connectPressed = connectPressed
+        context.coordinator.disconnectPressed = disconnectPressed
 
-            if shouldForceReset {
-                context.coordinator.isPlaying = false
-                uiView.stop()
-                uiView.currentFrame = context.coordinator.disconnectedFrame
-                return
-            }
+        // Force reset to disconnected state when all flags indicate disconnected
+        // This handles cases like server change where we need to immediately reset
+        let shouldForceReset = extensionStatus == .disconnected
+            && !connectPressed
+            && !disconnectPressed
+            && engineStatus == .disconnected
 
-            if context.coordinator.isPlaying {
-                return
-            }
+        if shouldForceReset {
+            context.coordinator.isPlaying = false
+            uiView.stop()
+            uiView.currentFrame = context.coordinator.disconnectedFrame
+            return
+        }
+
+        if context.coordinator.isPlaying || !stateChanged {
+            return
+        }
             // Act based on the new status
             switch extensionStatus {
             case .connected:
@@ -111,11 +123,16 @@ struct CustomLottieView: UIViewRepresentable {
             default:
                 break
             }
-        }
     }
     
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(
+            extensionStatus: extensionStatus,
+            engineStatus: engineStatus,
+            connectPressed: connectPressed,
+            disconnectPressed: disconnectPressed,
+            networkUnavailable: networkUnavailable
+        )
     }
 
     class Coordinator: NSObject {
@@ -126,6 +143,22 @@ struct CustomLottieView: UIViewRepresentable {
         var disconnectPressed: Bool?
         var networkUnavailable: Bool = false
         var colorScheme: ColorScheme?
+        var isFirstUpdate = true
+
+        init(
+            extensionStatus: NEVPNStatus,
+            engineStatus: ClientState,
+            connectPressed: Bool,
+            disconnectPressed: Bool,
+            networkUnavailable: Bool
+        ) {
+            self.extensionStatus = extensionStatus
+            self.engineStatus = engineStatus
+            self.connectPressed = connectPressed
+            self.disconnectPressed = disconnectPressed
+            self.networkUnavailable = networkUnavailable
+            super.init()
+        }
         
         let connectedFrame: CGFloat = 142
         let disconnectedFrame: CGFloat = 339
@@ -144,7 +177,8 @@ struct CustomLottieView: UIViewRepresentable {
             self.isPlaying = true
             uiView.play(fromFrame: connectingFadeIn.startFrame, toFrame: connectingFadeIn.endFrame, loopMode: .playOnce) { [weak self] finished in
                 guard let self = self else { return }
-                if self.engineStatus == .connected {
+                // Check both engineStatus and extensionStatus for connected state
+                if self.engineStatus == .connected || self.extensionStatus == .connected {
                     self.playFadeOut(uiView: uiView, startFrame: self.connectingFadeOut.startFrame, endFrame: self.connectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Connected")
                 } else {
                     // Loop the connecting animation only if the status is still connecting
@@ -160,7 +194,8 @@ struct CustomLottieView: UIViewRepresentable {
             }
             uiView.play(fromFrame: self.connectingLoopRange.startFrame, toFrame: self.connectingLoopRange.endFrame, loopMode: .playOnce) {[weak self] finished in
                 guard let self = self else { return }
-                if self.engineStatus == .connected {
+                // Check both engineStatus and extensionStatus for connected state
+                if self.engineStatus == .connected || self.extensionStatus == .connected {
                     self.playFadeOut(uiView: uiView, startFrame: self.connectingFadeOut.startFrame, endFrame: self.connectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Connected")
                 } else if (self.engineStatus == .disconnecting || self.extensionStatus == .disconnecting || self.engineStatus == .disconnected || self.extensionStatus == .disconnected) && !(self.connectPressed ?? false) {
                     self.playDisconnectingLoop(uiView: uiView, viewModel: viewModel)

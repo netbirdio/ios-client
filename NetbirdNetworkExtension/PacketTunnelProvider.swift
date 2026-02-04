@@ -76,6 +76,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
         }
+        // Reset network unavailable flag when tunnel stops
+        setNetworkUnavailableFlag(false)
         adapter?.stop()
         guard let pathMonitor = self.pathMonitor else {
             AppLogger.shared.log("pathMonitor is nil; nothing to cancel.")
@@ -461,7 +463,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 func initializeLogging(loglevel: String) {
     let fileManager = FileManager.default
 
-    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
+    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.helicon.app")
     let logURL = groupURL?.appendingPathComponent("logfile.log")
 
     var error: NSError?

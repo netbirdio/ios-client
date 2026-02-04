@@ -107,7 +107,7 @@ struct iOSMainView: View {
                                     if viewModel.extensionState == .disconnected {
                                         viewModel.connect()
                                     } else if viewModel.extensionState == .connecting || viewModel.managementStatus == .connecting || viewModel.extensionState == .connected {
-                                        print("Trying to stop extenison")
+                                        print("Trying to stop extension")
                                         viewModel.close()
                                     }
                                 }
