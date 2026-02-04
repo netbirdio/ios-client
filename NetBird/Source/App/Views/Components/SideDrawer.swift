@@ -43,11 +43,31 @@ struct SideMenu: View {
 
     private let isIpad = UIDevice.current.userInterfaceIdiom == .pad
 
+    private var menuWidth: CGFloat {
+        UIScreen.main.bounds.width * (isIpad ? 0.4 : 0.7)
+    }
+
+    private var topSafeArea: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }?
+            .safeAreaInsets.top ?? 0
+    }
+
+    private var bottomSafeArea: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }?
+            .safeAreaInsets.bottom ?? 0
+    }
+
     var body: some View {
         ZStack(alignment: .leading) {
             Rectangle()
                 .fill(Color("BgSideDrawer"))
-                .frame(width: UIScreen.main.bounds.width * (isIpad ? 0.4 : 0.7), height: UIScreen.main.bounds.height)
+                .frame(width: menuWidth)
                 .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 3)
 
             VStack(alignment: .leading, spacing: UIScreen.main.bounds.width * 0.05) {
@@ -56,8 +76,8 @@ struct SideMenu: View {
                     Image("netbird-logo-menu")
                     Spacer()
                 }
-                .padding(.top, UIScreen.main.bounds.height * 0.05)
-                .padding(.bottom, UIScreen.main.bounds.height * 0.11)
+                .padding(.top, topSafeArea + 20)
+                .padding(.bottom, UIScreen.main.bounds.height * 0.08)
 
                 Group {
                     menuNavigationLink(
@@ -91,11 +111,11 @@ struct SideMenu: View {
                         .foregroundColor(Color("TextPrimary"))
                     Spacer()
                 }
-                .padding(.bottom, UIScreen.main.bounds.height * 0.06)
+                .padding(.bottom, bottomSafeArea + 20)
             }
-            .padding(.top, 10)
-            .frame(width: UIScreen.main.bounds.width * (isIpad ? 0.4 : 0.7), height: UIScreen.main.bounds.height)
+            .frame(width: menuWidth)
         }
+        .frame(width: menuWidth)
     }
 
     private func menuNavigationLink<Destination: View>(imageName: String, label: String, destination: Destination) -> some View {
