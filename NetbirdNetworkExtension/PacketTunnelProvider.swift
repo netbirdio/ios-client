@@ -474,7 +474,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 func initializeLogging(loglevel: String) {
     let fileManager = FileManager.default
 
-    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.helicon.app")
+    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
     let logURL = groupURL?.appendingPathComponent("logfile.log")
 
     var error: NSError?

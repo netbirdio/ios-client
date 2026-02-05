@@ -1221,9 +1221,9 @@
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = NetbirdNetworkExtension/NetbirdNetworkExtension.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 3;
-				DEVELOPMENT_TEAM = D6N35G7JTM;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NetbirdNetworkExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NetbirdNetworkExtension;
@@ -1235,8 +1235,9 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 0.0.16;
-				PRODUCT_BUNDLE_IDENTIFIER = "io.netbird-helicon.app.NetbirdNetworkExtension";
+				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.NetbirdNetworkExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "NetBird-Bridging-Header.h";
@@ -1251,9 +1252,9 @@
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = NetbirdNetworkExtension/NetbirdNetworkExtension.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 3;
-				DEVELOPMENT_TEAM = D6N35G7JTM;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NetbirdNetworkExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NetbirdNetworkExtension;
@@ -1265,8 +1266,9 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 0.0.16;
-				PRODUCT_BUNDLE_IDENTIFIER = "io.netbird-helicon.app.NetbirdNetworkExtension";
+				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.NetbirdNetworkExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "NetBird-Bridging-Header.h";
@@ -1402,9 +1404,9 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = D6N35G7JTM;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/**";
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1425,7 +1427,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MARKETING_VERSION = 0.0.16;
-				PRODUCT_BUNDLE_IDENTIFIER = "io.netbird-helicon.app";
+				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -1448,9 +1450,9 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = D6N35G7JTM;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/**";
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1471,7 +1473,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MARKETING_VERSION = 0.0.16;
-				PRODUCT_BUNDLE_IDENTIFIER = "io.netbird-helicon.app";
+				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

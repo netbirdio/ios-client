@@ -17,6 +17,6 @@ final class GlobalConstantsTests: XCTestCase {
     }
 
     func testUserPreferencesSuiteName() {
-        XCTAssertEqual(GlobalConstants.userPreferencesSuiteName, "group.io.netbird.helicon.app")
+        XCTAssertEqual(GlobalConstants.userPreferencesSuiteName, "group.io.netbird.app")
     }
 }
