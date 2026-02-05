@@ -74,6 +74,30 @@ struct CustomLottieView: UIViewRepresentable {
             return
         }
 
+        // If VPN tunnel is connected and not disconnecting, show connected state immediately
+        // This handles app foreground/background where we don't want to replay animations
+        // We check extensionStatus (iOS VPN state) as the source of truth
+        if extensionStatus == .connected && !disconnectPressed {
+            if context.coordinator.isPlaying || uiView.currentFrame != context.coordinator.connectedFrame {
+                uiView.stop()
+                context.coordinator.isPlaying = false
+                uiView.currentFrame = context.coordinator.connectedFrame
+                viewModel.extensionStateText = "Connected"
+            }
+            return
+        }
+
+        // If VPN tunnel is disconnected and not connecting, show disconnected state immediately
+        if extensionStatus == .disconnected && !connectPressed {
+            if context.coordinator.isPlaying || uiView.currentFrame != context.coordinator.disconnectedFrame {
+                uiView.stop()
+                context.coordinator.isPlaying = false
+                uiView.currentFrame = context.coordinator.disconnectedFrame
+                viewModel.extensionStateText = "Disconnected"
+            }
+            return
+        }
+
         // Force reset to disconnected state when all flags indicate disconnected
         // This handles cases like server change where we need to immediately reset
         let shouldForceReset = extensionStatus == .disconnected
