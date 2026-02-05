@@ -101,6 +101,17 @@ public class NetBirdAdapter {
         set { isRestartingLock.lock(); defer { isRestartingLock.unlock() }; _isRestarting = newValue }
     }
 
+    private let networkUnavailableLock = NSLock()
+    private var _isNetworkUnavailable: Bool = false
+
+    /// Flag indicating network is currently unavailable.
+    /// When true, onDisconnected() callbacks are suppressed to keep the tunnel alive
+    /// and ready to reconnect when network returns.
+    var isNetworkUnavailable: Bool {
+        get { networkUnavailableLock.lock(); defer { networkUnavailableLock.unlock() }; return _isNetworkUnavailable }
+        set { networkUnavailableLock.lock(); defer { networkUnavailableLock.unlock() }; _isNetworkUnavailable = newValue }
+    }
+
     private let stopLock = NSLock()
 
     /// Tunnel device file descriptor.
