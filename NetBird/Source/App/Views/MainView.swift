@@ -146,9 +146,7 @@ struct iOSMainView: View {
                                     .id(animationKey)
                                     .frame(width: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79), height: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79))
                                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                                        withAnimation {
-                                            self.animationKey = UUID()
-                                        }
+                                        self.animationKey = UUID()
                                     }
                             }
                             .padding(.top, -UIScreen.main.bounds.height / 27)
