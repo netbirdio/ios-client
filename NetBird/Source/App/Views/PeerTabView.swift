@@ -22,7 +22,7 @@ struct PeerTabView: View {
             Color("BgMenu")
             VStack {
                 Spacer(minLength: 0)
-                if viewModel.extensionStateText == "Connected" && viewModel.peerViewModel.peerInfo.count > 0 {
+                if viewModel.vpnDisplayState == .connected && viewModel.peerViewModel.peerInfo.count > 0 {
                     VStack {
                         PeerListHeader(peerViewModel: self.viewModel.peerViewModel)
                         PeerListView(peerViewModel: self.viewModel.peerViewModel, viewModel: self.viewModel)

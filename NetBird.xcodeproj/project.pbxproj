@@ -137,6 +137,7 @@
 		50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E6081F2A7979D600BAF09B /* SideDrawer.swift */; };
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
+		55B5E81B2F39158200852AA7 /* InternetStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B5E81A2F39158200852AA7 /* InternetStatusView.swift */; };
 		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
 		978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
 		978FC4712EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
@@ -299,6 +300,7 @@
 		50E608232A79966600BAF09B /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
 		53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedUserDefaultsTests.swift; sourceTree = "<group>"; };
+		55B5E81A2F39158200852AA7 /* InternetStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InternetStatusView.swift; sourceTree = "<group>"; };
 		8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppLoggerTests.swift; sourceTree = "<group>"; };
 		91FA1F06D3375864C74EAB3B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		978FC46F2EEDF167002D0EB8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
@@ -529,6 +531,7 @@
 			children = (
 				50E608092A79557A00BAF09B /* Components */,
 				50A8911C2A792A15007C48FC /* MainView.swift */,
+				55B5E81A2F39158200852AA7 /* InternetStatusView.swift */,
 				50E608232A79966600BAF09B /* AboutView.swift */,
 				50E608252A79968500BAF09B /* AdvancedView.swift */,
 				50CD84352AD82F9400CF830B /* ServerView.swift */,
@@ -973,6 +976,7 @@
 				505344B92C3EFE4C00223065 /* TransparentGradientButton.swift in Sources */,
 				50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */,
 				50216D932ACB2488009574C9 /* NetworkExtensionAdapter.swift in Sources */,
+				55B5E81B2F39158200852AA7 /* InternetStatusView.swift in Sources */,
 				509CCD6C2BE90D0E00B7C2D8 /* PeerTabView.swift in Sources */,
 				506331FB2AF52AB900BC8F0E /* CustomLottieView.swift in Sources */,
 				50003BCC2AFD3B0C00E5EB6B /* ClientState.swift in Sources */,

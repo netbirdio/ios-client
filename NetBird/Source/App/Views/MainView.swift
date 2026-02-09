@@ -117,6 +117,8 @@ struct iOSMainView: View {
                                         }
                                     }
                                 }
+                            
+                            InternetStatusView()
                             Spacer()
                         }
                         VStack() {
@@ -134,15 +136,17 @@ struct iOSMainView: View {
                             Spacer()
                             Button(action: {
                                 if !viewModel.buttonLock {
-                                    if viewModel.extensionState == .disconnected {
+                                    switch viewModel.vpnDisplayState {
+                                    case .disconnected:
                                         viewModel.connect()
-                                    } else if viewModel.extensionState == .connecting || viewModel.managementStatus == .connecting || viewModel.extensionState == .connected {
-                                        print("Trying to stop extension")
+                                    case .connecting, .connected:
                                         viewModel.close()
+                                    case .disconnecting:
+                                        break
                                     }
                                 }
                             }) {
-                                CustomLottieView(extensionStatus: $viewModel.extensionState, engineStatus: $viewModel.managementStatus, connectPressed: $viewModel.connectPressed, disconnectPressed: $viewModel.disconnectPressed, networkUnavailable: $viewModel.networkUnavailable, viewModel: viewModel)
+                                CustomLottieView(vpnState: $viewModel.vpnDisplayState, viewModel: viewModel)
                                     .id(animationKey)
                                     .frame(width: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79), height: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79))
                                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
@@ -334,18 +338,18 @@ struct SheetView: View {
                     
                     HStack {
                         if selectedTab == 1 {
-                            Text((viewModel.extensionStateText != "Connected" ? "0" : viewModel.peerViewModel.peerInfo.filter { $0.connStatus == "Connected" }.count.description)
+                            Text((viewModel.vpnDisplayState != .connected ? "0" : viewModel.peerViewModel.peerInfo.filter { $0.connStatus == "Connected" }.count.description)
                                 + " of "
-                                + (viewModel.extensionStateText != "Connected" ? "0" : viewModel.peerViewModel.peerInfo.count.description))
+                                + (viewModel.vpnDisplayState != .connected ? "0" : viewModel.peerViewModel.peerInfo.count.description))
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(Color("TextSecondary"))
                             Text("Peers connected")
                                 .font(.system(size: 18, weight: .regular))
                                 .foregroundColor(Color("TextSecondary"))
                         } else {
-                            Text((viewModel.extensionStateText != "Connected" ? "0" : viewModel.routeViewModel.routeInfo.filter { $0.selected }.count.description)
+                            Text((viewModel.vpnDisplayState != .connected ? "0" : viewModel.routeViewModel.routeInfo.filter { $0.selected }.count.description)
                                 + " of "
-                                + (viewModel.extensionStateText != "Connected" ? "0" : viewModel.routeViewModel.routeInfo.count.description))
+                                + (viewModel.vpnDisplayState != .connected ? "0" : viewModel.routeViewModel.routeInfo.count.description))
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(Color("TextSecondary"))
                             Text("Resources connected")
