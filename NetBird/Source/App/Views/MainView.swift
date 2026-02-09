@@ -89,6 +89,7 @@ struct iOSMainView: View {
                                 .padding(.top, Screen.height * (DeviceType.isPad ? 0.09 : 0.13))
                                 .padding(.bottom, 5)
                                 .onTapGesture {
+                                    guard !viewModel.fqdn.isEmpty else { return }
                                     UIPasteboard.general.string = viewModel.fqdn
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     withAnimation(.smooth) {
@@ -106,13 +107,14 @@ struct iOSMainView: View {
                                 .opacity(ipCopied ? 0.7 : 1.0)
                                 .animation(.easeInOut(duration: 0.2), value: ipCopied)
                                 .onTapGesture {
+                                    guard !viewModel.ip.isEmpty else { return }
                                     UIPasteboard.general.string = viewModel.ip
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                    withAnimation {
+                                    withAnimation(.smooth) {
                                         ipCopied = true
                                     }
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                        withAnimation {
+                                        withAnimation(.smooth) {
                                             ipCopied = false
                                         }
                                     }

@@ -98,20 +98,6 @@ struct CustomLottieView: UIViewRepresentable {
             return
         }
 
-        // Force reset to disconnected state when all flags indicate disconnected
-        // This handles cases like server change where we need to immediately reset
-        let shouldForceReset = extensionStatus == .disconnected
-            && !connectPressed
-            && !disconnectPressed
-            && engineStatus == .disconnected
-
-        if shouldForceReset {
-            context.coordinator.isPlaying = false
-            uiView.stop()
-            uiView.currentFrame = context.coordinator.disconnectedFrame
-            return
-        }
-
         if context.coordinator.isPlaying || !stateChanged {
             return
         }
