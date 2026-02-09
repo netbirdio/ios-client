@@ -144,6 +144,13 @@ class ViewModel: ObservableObject {
         logger.info("connect: ENTRY POINT - function called")
         self.connectPressed = true
         self.buttonLock = true
+        // Reset networkUnavailable flag when user initiates connection
+        self.networkUnavailable = false
+        #if os(iOS)
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(false, forKey: GlobalConstants.keyNetworkUnavailable)
+        userDefaults?.synchronize()
+        #endif
         logger.info("connect: connectPressed=true, buttonLock=true, starting adapter...")
 
         // Reset buttonLock after 3 seconds

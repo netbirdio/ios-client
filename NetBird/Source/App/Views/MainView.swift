@@ -35,6 +35,8 @@ struct iOSMainView: View {
     @State private var isPressed = false
     @State private var showRouteSelection = false
     @State private var allSelected = false
+    @State private var fqdnCopied = false
+    @State private var ipCopied = false
     
     init() {
         let appearance = UINavigationBarAppearance()
@@ -79,14 +81,44 @@ struct iOSMainView: View {
                             
                         }
                         VStack {
-                            Text(viewModel.fqdn)
+                            Text(fqdnCopied ? "Copied" : viewModel.fqdn)
                                 .foregroundColor(Color("TextSecondary"))
                                 .font(.system(size: 20, weight: .regular))
+                                .opacity(fqdnCopied ? 0.7 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: fqdnCopied)
                                 .padding(.top, Screen.height * (DeviceType.isPad ? 0.09 : 0.13))
                                 .padding(.bottom, 5)
-                            Text(viewModel.ip)
+                                .onTapGesture {
+                                    guard !viewModel.fqdn.isEmpty else { return }
+                                    UIPasteboard.general.string = viewModel.fqdn
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    withAnimation(.smooth) {
+                                        fqdnCopied = true
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                                        withAnimation(.smooth) {
+                                            fqdnCopied = false
+                                        }
+                                    }
+                                }
+                            Text(ipCopied ? "Copied" : viewModel.ip)
                                 .foregroundColor(Color("TextSecondary"))
                                 .font(.system(size: 20, weight: .regular))
+                                .opacity(ipCopied ? 0.7 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: ipCopied)
+                                .onTapGesture {
+                                    guard !viewModel.ip.isEmpty else { return }
+                                    UIPasteboard.general.string = viewModel.ip
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    withAnimation(.smooth) {
+                                        ipCopied = true
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                                        withAnimation(.smooth) {
+                                            ipCopied = false
+                                        }
+                                    }
+                                }
                             Spacer()
                         }
                         VStack() {
@@ -107,7 +139,7 @@ struct iOSMainView: View {
                                     if viewModel.extensionState == .disconnected {
                                         viewModel.connect()
                                     } else if viewModel.extensionState == .connecting || viewModel.managementStatus == .connecting || viewModel.extensionState == .connected {
-                                        print("Trying to stop extenison")
+                                        print("Trying to stop extension")
                                         viewModel.close()
                                     }
                                 }
