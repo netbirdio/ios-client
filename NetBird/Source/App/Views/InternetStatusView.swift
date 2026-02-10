@@ -14,7 +14,7 @@ struct InternetStatusView: View {
                 .fill(isInternetConnected ? Color.green : Color.red)
                 .frame(width: 10, height: 10)
 
-            Text(isInternetConnected ? "Connected" : "Disconnected")
+            Text(isInternetConnected ? "Online" : "Offline")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(Color("TextSecondary"))
         }

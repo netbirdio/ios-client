@@ -73,8 +73,6 @@ class ViewModel: ObservableObject {
     @Published var showFqdnCopiedAlert = false
     @Published var showIpCopiedAlert = false
     @Published var showAuthenticationRequired = false
-    @Published var isSheetExpanded = false
-    @Published var presentSideDrawer = false
     @Published var navigateToServerView = false
     
     @Published var extensionState: NEVPNStatus = .disconnected
@@ -337,7 +335,6 @@ class ViewModel: ObservableObject {
         if configProvider.commit() {
             self.close()
             self.presharedKeySecure = true
-            self.presentSideDrawer = false
             self.showPreSharedKeyChangedInfo = true
         } else {
             print("Failed to update preshared key")
