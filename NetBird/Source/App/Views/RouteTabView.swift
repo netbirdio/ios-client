@@ -18,7 +18,7 @@ struct RouteTabView: View {
             Color("BgMenu")
             VStack {
                 Spacer(minLength: 0)
-                if viewModel.extensionStateText == "Connected" && viewModel.routeViewModel.routeInfo.count > 0 {
+                if viewModel.vpnDisplayState == .connected && viewModel.routeViewModel.routeInfo.count > 0 {
                     VStack {
                         RouteSelectionHeader(routeViewModel: viewModel.routeViewModel)
                         RouteListView(viewModel: viewModel, routeViewModel: viewModel.routeViewModel, peerViewModel: viewModel.peerViewModel)
