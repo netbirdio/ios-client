@@ -21,10 +21,10 @@ struct iOSPeersView: View {
                 HStack {
                     Text(connectedCount + " of " + totalCount)
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(Color("TextSecondary"))
+                        .foregroundColor(Color("TextPrimary"))
                     Text("Peers connected")
                         .font(.system(size: 18, weight: .regular))
-                        .foregroundColor(Color("TextSecondary"))
+                        .foregroundColor(Color("TextPrimary"))
                     Spacer()
                 }
                 .padding(.horizontal)

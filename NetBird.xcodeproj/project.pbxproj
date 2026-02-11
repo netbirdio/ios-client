@@ -150,6 +150,8 @@
 		A1B2C3D52EEDF501001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		A1B2C3D72EEDF503001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
+		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
+		B1A2C3D52F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
 		F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 		F1258DEA2ED7B7D600C0D205 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE92ED7B7D200C0D205 /* Extensions.swift */; };
 		F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292042EDE5608001D91B8 /* JustifiedText.swift */; };
@@ -308,6 +310,7 @@
 		91FA1F06D3375864C74EAB3B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		978FC46F2EEDF167002D0EB8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationProvider.swift; sourceTree = "<group>"; };
+		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
 		C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSNetworksView.swift; sourceTree = "<group>"; };
 		F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerViewModel.swift; sourceTree = "<group>"; };
 		F1258DE92ED7B7D200C0D205 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
@@ -573,6 +576,7 @@
 				502455BC2A79B0480034792B /* CustomBackButton.swift */,
 				502455BE2A79B4500034792B /* SolidButton.swift */,
 				50CD81AF2AD5B94D00CF830B /* PeerCard.swift */,
+				B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */,
 				508BD8442AF04A990055E415 /* SafariView.swift */,
 				506331FA2AF52AB900BC8F0E /* CustomLottieView.swift */,
 				506332012AF9415500BC8F0E /* CustomTextField.swift */,
@@ -967,6 +971,7 @@
 				50CD81502AD0355000CF830B /* PacketTunnelProviderSettingsManager.swift in Sources */,
 				50003BCD2AFD3B2B00E5EB6B /* ClientState.swift in Sources */,
 				50CD81B12AD5B94D00CF830B /* PeerCard.swift in Sources */,
+				B1A2C3D52F3A000100000001 /* PeerDetailSheet.swift in Sources */,
 				50C78AD12A82BBFD006E898D /* Device.swift in Sources */,
 				505118CF2AD96ECA003027D3 /* x25519.c in Sources */,
 				F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */,
@@ -1012,6 +1017,7 @@
 				50216D892ACB18EE009574C9 /* Preferences.swift in Sources */,
 				A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */,
 				50CD81B02AD5B94D00CF830B /* PeerCard.swift in Sources */,
+				B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */,
 				50003BCE2AFD405600E5EB6B /* ConnectionListener.swift in Sources */,
 				50003BC72AFBD7F200E5EB6B /* NetBirdAdapter.swift in Sources */,
 				F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */,
@@ -1423,7 +1429,7 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 15;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = D6N35G7JTM;
 				ENABLE_PREVIEWS = YES;
@@ -1469,7 +1475,7 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 15;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = D6N35G7JTM;
 				ENABLE_PREVIEWS = YES;

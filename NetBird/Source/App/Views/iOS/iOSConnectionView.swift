@@ -48,10 +48,13 @@ struct iOSConnectionView: View {
                     // FQDN + IP + internet status
                     VStack {
                         Text(fqdnCopied ? "Copied" : viewModel.fqdn)
-                            .foregroundColor(Color("TextSecondary"))
+                            .foregroundColor(Color("TextPrimary"))
                             .font(.system(size: 20, weight: .regular))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
                             .opacity(fqdnCopied ? 0.7 : 1.0)
                             .animation(.easeInOut(duration: 0.2), value: fqdnCopied)
+                            .padding(.horizontal, 16)
                             .padding(.top, Screen.height * (DeviceType.isPad ? 0.09 : 0.13))
                             .padding(.bottom, 5)
                             .onTapGesture {
@@ -69,8 +72,10 @@ struct iOSConnectionView: View {
                             }
 
                         Text(ipCopied ? "Copied" : viewModel.ip)
-                            .foregroundColor(Color("TextSecondary"))
+                            .foregroundColor(Color("TextPrimary"))
                             .font(.system(size: 20, weight: .regular))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
                             .opacity(ipCopied ? 0.7 : 1.0)
                             .animation(.easeInOut(duration: 0.2), value: ipCopied)
                             .onTapGesture {
@@ -145,10 +150,12 @@ struct iOSConnectionView: View {
                         })
                     }
                     // Internet status – top-left corner
-                    InternetStatusView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .padding(.top, 16)
-                        .padding(.leading, 16)
+                    if !viewModel.networkExtensionAdapter.showBrowser {
+                        InternetStatusView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .padding(.top, 16)
+                            .padding(.leading, 16)
+                    }
 
                 } else {
                     // Loading placeholder
