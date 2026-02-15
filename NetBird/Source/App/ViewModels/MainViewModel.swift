@@ -144,6 +144,7 @@ class ViewModel: ObservableObject {
         networkMonitor.pathUpdateHandler = { [weak self] path in
             DispatchQueue.main.async {
                 self?.isInternetConnected = path.status == .satisfied
+                self?.updateVPNDisplayState()
             }
         }
         networkMonitor.start(queue: monitorQueue)
@@ -223,7 +224,7 @@ class ViewModel: ObservableObject {
 
         switch newState {
         case .connected:
-            extensionStateText = "Connected"
+            extensionStateText = isInternetConnected ? "Connected" : "Offline"
         case .connecting:
             extensionStateText = "Connecting..."
         case .disconnecting:

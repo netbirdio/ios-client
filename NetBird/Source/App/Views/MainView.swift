@@ -26,9 +26,21 @@ struct MainView: View {
 }
 
 #if os(iOS)
+
+enum MainAlertType: String, Identifiable {
+    case changeServer
+    case serverChanged
+    case preSharedKeyChanged
+    case authenticationRequired
+
+    var id: String { rawValue }
+}
+
 struct iOSMainView: View {
     @EnvironmentObject var viewModel: ViewModel
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var selectedTab = 0
+    @State private var activeAlert: MainAlertType?
 
     init() {
         let navAppearance = UINavigationBarAppearance()
@@ -50,6 +62,55 @@ struct iOSMainView: View {
     }
 
     var body: some View {
+        ZStack {
+            if !hasCompletedOnboarding {
+                FirstLaunchView(
+                    hasCompletedOnboarding: $hasCompletedOnboarding,
+                    onChangeServer: {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            activeAlert = .changeServer
+                        }
+                    }
+                )
+            } else {
+                mainContent
+            }
+        }
+        .alert(item: $activeAlert) { alertType in
+            switch alertType {
+            case .changeServer:
+                return Alert(
+                    title: Text("Change server"),
+                    message: Text("Changing server will erase the local config and disconnect this device from the current NetBird account."),
+                    primaryButton: .destructive(Text("Confirm")) {
+                        viewModel.handleServerChanged()
+                        viewModel.navigateToServerView = true
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .serverChanged:
+                return Alert(
+                    title: Text("Server was changed"),
+                    message: Text("Click on the connect button to continue."),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .preSharedKeyChanged:
+                return Alert(
+                    title: Text("Preshared key was set"),
+                    message: Text("Click on the connect button to continue."),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .authenticationRequired:
+                return Alert(
+                    title: Text("Authentication required"),
+                    message: Text("The server requires a new authentication."),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
+        }
+    }
+
+    private var mainContent: some View {
         ZStack {
             TabView(selection: $selectedTab) {
                 NavigationView {
@@ -75,7 +136,7 @@ struct iOSMainView: View {
                 }
                 .navigationViewStyle(StackNavigationViewStyle())
                 .tabItem {
-                    Label("Networks", systemImage: "globe")
+                    Label("Resources", systemImage: "globe")
                 }
                 .tag(2)
 
@@ -93,50 +154,17 @@ struct iOSMainView: View {
                     selectedTab = 0
                 }
             }
-
-            // Alert overlays (rendered above all tabs)
-            if viewModel.showChangeServerAlert {
-                Color.black.opacity(0.4)
-                    .edgesIgnoringSafeArea(.all)
-                    .onTapGesture {
-                        viewModel.showChangeServerAlert = false
-                    }
-                ChangeServerAlert(viewModel: viewModel, isPresented: $viewModel.showChangeServerAlert)
-                    .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+            .onChange(of: viewModel.showChangeServerAlert) { show in
+                if show { activeAlert = .changeServer; viewModel.showChangeServerAlert = false }
             }
-
-            if viewModel.showServerChangedInfo {
-                Color.black.opacity(0.4)
-                    .edgesIgnoringSafeArea(.all)
-                    .onTapGesture {
-                        viewModel.showServerChangedInfo = false
-                    }
-                ChangeServerInfoAlert(viewModel: viewModel, isPresented: $viewModel.showServerChangedInfo)
-                    .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+            .onChange(of: viewModel.showServerChangedInfo) { show in
+                if show { activeAlert = .serverChanged; viewModel.showServerChangedInfo = false }
             }
-
-            if viewModel.showPreSharedKeyChangedInfo {
-                Color.black.opacity(0.4)
-                    .edgesIgnoringSafeArea(.all)
-                    .onTapGesture {
-                        viewModel.showPreSharedKeyChangedInfo = false
-                    }
-                ChangePreSharedKeyAlert(viewModel: viewModel, isPresented: $viewModel.showPreSharedKeyChangedInfo)
-                    .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+            .onChange(of: viewModel.showPreSharedKeyChangedInfo) { show in
+                if show { activeAlert = .preSharedKeyChanged; viewModel.showPreSharedKeyChangedInfo = false }
             }
-
-            if viewModel.showAuthenticationRequired && false {
-                Color.black.opacity(0.4)
-                    .edgesIgnoringSafeArea(.all)
-                    .onTapGesture {
-                        viewModel.buttonLock = true
-                        viewModel.showAuthenticationRequired = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            viewModel.buttonLock = false
-                        }
-                    }
-                AuthenticationAlert(viewModel: viewModel, isPresented: $viewModel.showAuthenticationRequired)
-                    .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+            .onChange(of: viewModel.showAuthenticationRequired) { show in
+                if show { activeAlert = .authenticationRequired; viewModel.showAuthenticationRequired = false }
             }
 
             // Toast alerts
@@ -179,136 +207,6 @@ struct iOSMainView: View {
                 Spacer().frame(height: 80)
             }
         }
-    }
-}
-
-// MARK: - Alert Views
-
-struct ChangeServerAlert: View {
-    @StateObject var viewModel: ViewModel
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image("exclamation-circle")
-                .padding(.top, 20)
-            Text("Change server")
-                .font(.title)
-                .foregroundColor(Color("TextAlert"))
-            Text("Changing server will erase the local config and disconnect this device from the current NetBird account.")
-                .foregroundColor(Color("TextAlert"))
-                .multilineTextAlignment(.center)
-            SolidButton(text: "Confirm") {
-                viewModel.handleServerChanged()
-                isPresented = false
-                viewModel.navigateToServerView = true
-            }
-            .padding(.top, 20)
-
-            Button {
-                isPresented.toggle()
-            } label: {
-                Text("Cancel")
-                    .font(.headline)
-                    .foregroundColor(Color.accentColor)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color(red: 0, green: 0, blue: 0, opacity: 0))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 3)
-                                    .stroke(Color.accentColor, lineWidth: 1)
-                            )
-                    )
-            }
-        }
-        .padding()
-        .background(Color("BgSideDrawer"))
-        .cornerRadius(15)
-        .shadow(radius: 10)
-    }
-}
-
-struct ChangeServerInfoAlert: View {
-    @StateObject var viewModel: ViewModel
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image("check-circle")
-                .padding(.top, 20)
-            Text("Server was changed")
-                .font(.title)
-                .foregroundColor(Color("TextAlert"))
-            Text("Click on the connect button to continue.")
-                .multilineTextAlignment(.center)
-                .foregroundColor(Color("TextAlert"))
-            SolidButton(text: "Ok") {
-                viewModel.showServerChangedInfo = false
-            }
-            .padding(.top, 20)
-        }
-        .padding()
-        .background(Color("BgSideDrawer"))
-        .cornerRadius(15)
-        .shadow(radius: 10)
-    }
-}
-
-struct ChangePreSharedKeyAlert: View {
-    @StateObject var viewModel: ViewModel
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image("check-circle")
-                .padding(.top, 20)
-            Text("Preshared key was set")
-                .font(.title)
-                .foregroundColor(Color("TextAlert"))
-            Text("Click on the connect button to continue.")
-                .multilineTextAlignment(.center)
-                .foregroundColor(Color("TextAlert"))
-            SolidButton(text: "Ok") {
-                viewModel.showPreSharedKeyChangedInfo = false
-            }
-            .padding(.top, 20)
-        }
-        .padding()
-        .background(Color("BgSideDrawer"))
-        .cornerRadius(15)
-        .shadow(radius: 10)
-    }
-}
-
-struct AuthenticationAlert: View {
-    @StateObject var viewModel: ViewModel
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image("exclamation-circle")
-                .padding(.top, 20)
-            Text("Authentication required")
-                .foregroundColor(Color("TextAlert"))
-                .font(.title)
-            Text("The server requires a new authentication.")
-                .foregroundColor(Color("TextAlert"))
-                .multilineTextAlignment(.center)
-            SolidButton(text: "Ok") {
-                viewModel.buttonLock = true
-                viewModel.showAuthenticationRequired = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    viewModel.buttonLock = false
-                }
-            }
-            .padding(.top, 20)
-        }
-        .padding()
-        .background(Color("BgSideDrawer"))
-        .cornerRadius(15)
-        .shadow(radius: 10)
     }
 }
 
