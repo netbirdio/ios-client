@@ -18,12 +18,12 @@ import UIKit
 
 struct TVPeersView: View {
     @EnvironmentObject var viewModel: ViewModel
-    
+
     var body: some View {
         ZStack {
             TVColors.bgMenu
                 .ignoresSafeArea()
-            
+
             if viewModel.extensionStateText == "Connected" &&
                viewModel.peerViewModel.peerInfo.count > 0 {
                 TVPeerListContent()
@@ -36,10 +36,12 @@ struct TVPeersView: View {
 
 struct TVPeerListContent: View {
     @EnvironmentObject var viewModel: ViewModel
-    
+
     /// Currently selected peer for detail view
     @State private var selectedPeer: PeerInfo?
-        
+
+    @FocusState private var isSearchFocused: Bool
+
     var body: some View {
         HStack(spacing: 0) {
             // Left Side - Peer List
@@ -49,20 +51,61 @@ struct TVPeerListContent: View {
                     Text("Peers")
                         .font(.system(size: 48, weight: .bold))
                         .foregroundColor(TVColors.textPrimary)
-                    
+
                     Spacer()
-                    
+
                     Text("\(connectedCount) of \(totalCount) connected")
                         .font(.system(size: 30, weight: .medium))
                         .foregroundColor(TVColors.textSecondary)
                 }
                 .padding(.horizontal, 50)
                 .padding(.top, 40)
-                
-                TVFilterBar(
-                    options: ["All", "Connected", "Connecting", "Idle"],
-                    selected: $viewModel.peerViewModel.selectionFilter
-                )
+
+                // Search + Filter row
+                HStack(spacing: 20) {
+                    // Search field
+                    HStack(spacing: 12) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 24))
+                            .foregroundColor(TVColors.textSecondary)
+
+                        TextField("Search peers...", text: $viewModel.peerViewModel.peerFilter)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 28))
+                            .foregroundColor(TVColors.textPrimary)
+                            .autocorrectionDisabled()
+                            .onChange(of: viewModel.peerViewModel.peerFilter) { _ in
+                                selectedPeer = nil
+                            }
+
+                        if !viewModel.peerViewModel.peerFilter.isEmpty {
+                            Button {
+                                viewModel.peerViewModel.peerFilter = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(TVColors.textSecondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(TVColors.bgPrimary)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(isSearchFocused ? Color.accentColor : Color.clear, lineWidth: 3)
+                    )
+                    .focused($isSearchFocused)
+                    .frame(maxWidth: 500)
+
+                    TVFilterBar(
+                        options: ["All", "Connected", "Connecting", "Idle"],
+                        selected: $viewModel.peerViewModel.selectionFilter
+                    )
+                }
                 .padding(.horizontal, 50)
                 .padding(.bottom, 30)
 

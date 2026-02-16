@@ -124,19 +124,22 @@ struct TVConnectionView: View {
     @EnvironmentObject var viewModel: ViewModel
     
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             // Background
             TVColors.bgSecondary
                 .ignoresSafeArea()
-            
+
+            // Brand anchor — top-left corner
+            Image("netbird-logo-menu")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 150)
+                .opacity(0.6)
+                .padding(50)
+
             HStack(spacing: 100) {
                 // Left Side - Connection Control
                 VStack(spacing: 40) {
-                    Image("netbird-logo-menu")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 300)
-                    
                     // Device info
                     if !viewModel.fqdn.isEmpty {
                         Text(viewModel.fqdn)
@@ -229,34 +232,69 @@ struct TVConnectionView: View {
     }
 }
 
+/// Custom button style that adds a press-down scale animation for tactile feedback.
+struct TVConnectButtonStyle: ButtonStyle {
+    let isFocused: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : (isFocused ? 1.12 : 1.0))
+            .brightness(configuration.isPressed ? -0.1 : 0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+            .animation(.easeInOut(duration: 0.25), value: isFocused)
+    }
+}
+
 struct TVConnectionButton: View {
     @ObservedObject var viewModel: ViewModel
-    
+
     /// Track focus state for visual feedback
     @FocusState private var isFocused: Bool
-    
+
     var body: some View {
         Button(action: handleTap) {
             HStack(spacing: 20) {
                 Image(systemName: buttonIcon)
                     .font(.system(size: 40))
-                
+
                 Text(buttonText)
                     .font(.system(size: 32, weight: .semibold))
             }
-            .foregroundColor(.white)
+            .foregroundColor(isFocused ? .black : .white)
             .padding(.horizontal, 80)
             .padding(.vertical, 30)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(buttonColor)
+                    .fill(
+                        LinearGradient(
+                            colors: gradientColors,
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
             )
-            .scaleEffect(isFocused ? 1.1 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Color.white.opacity(isFocused ? 0.3 : 0), lineWidth: 2)
+            )
+            .shadow(
+                color: isFocused ? buttonColor.opacity(0.6) : .clear,
+                radius: isFocused ? 20 : 0,
+                y: isFocused ? 8 : 0
+            )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TVConnectButtonStyle(isFocused: isFocused))
         .focused($isFocused)
         .disabled(viewModel.buttonLock)
+    }
+
+    /// Gradient colors: focused state gets a top-to-bottom gradient for depth;
+    /// unfocused state is slightly dimmed so focused contrast is stronger.
+    private var gradientColors: [Color] {
+        if isFocused {
+            return [buttonColor, buttonColor.opacity(0.7)]
+        }
+        return [buttonColor.opacity(0.8), buttonColor.opacity(0.8)]
     }
     
     private var buttonText: String {

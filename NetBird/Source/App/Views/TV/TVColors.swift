@@ -95,8 +95,8 @@ struct TVLayout {
 
     // MARK: - Sizes
 
-    /// Logo width on main screens
-    static let logoWidth: CGFloat = 300
+    /// Logo width on main screens (brand anchor, top-left)
+    static let logoWidth: CGFloat = 150
 
     /// Logo width on secondary screens (dialogs, info panels)
     static let logoWidthSmall: CGFloat = 200
