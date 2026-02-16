@@ -44,12 +44,12 @@ struct FirstLaunchView: View {
     private var onboardingText: some View {
         if #available(iOS 15.0, *) {
             let attributed: AttributedString = {
-                let fullText = "By default you will connect to NetBird's cloud servers. You can change server menu to use another server."
+                let fullText = "By default you will connect to NetBird's cloud servers. Visit the Change server menu to use another server."
                 var result = AttributedString(fullText)
                 result.font = .system(size: 17)
                 result.foregroundColor = Color("TextPrimary")
 
-                if let range = result.range(of: "change server") {
+                if let range = result.range(of: "Change server") {
                     result[range].foregroundColor = .orange
                     result[range].font = .system(size: 17, weight: .semibold)
                     result[range].link = URL(string: "netbird://changeserver")
