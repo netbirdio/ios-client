@@ -16,7 +16,7 @@ struct EmptyTabPlaceholder: View {
             Image("icon-empty-box")
                 .resizable()
                 .scaledToFit()
-                .frame(height: Screen.height * 0.2)
+                .frame(height: 100)
                 .padding(.top, Screen.height * 0.05)
 
             Text(message)
@@ -27,20 +27,8 @@ struct EmptyTabPlaceholder: View {
                 .padding(.top, Screen.height * 0.04)
 
             if let url = learnMoreURL {
-                Link(destination: url) {
-                    Text("Learn why")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.accentColor)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.orange.opacity(0.8), lineWidth: 2)
-                                )
-                        )
+                AppButton("Learn why") {
+                    UIApplication.shared.open(url)
                 }
                 .padding(.top, Screen.height * 0.04)
                 .padding(.horizontal, Screen.width * 0.05)

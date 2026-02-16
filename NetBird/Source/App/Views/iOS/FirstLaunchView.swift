@@ -30,16 +30,8 @@ struct FirstLaunchView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
 
-                Button(action: {
+                AppButton("Continue") {
                     hasCompletedOnboarding = true
-                }) {
-                    Text("Continue")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.accentColor)
-                        .cornerRadius(12)
                 }
                 .padding(.horizontal, 32)
 
