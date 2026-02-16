@@ -12,6 +12,10 @@ final class GlobalConstantsTests: XCTestCase {
         XCTAssertEqual(GlobalConstants.keyForceRelayConnection, "isConnectionForceRelayed")
     }
 
+    func testEnableLazyConnectionKey() {
+        XCTAssertEqual(GlobalConstants.keyEnableLazyConnection, "isLazyConnectionEnabled")
+    }
+
     func testLoginRequiredKey() {
         XCTAssertEqual(GlobalConstants.keyLoginRequired, "netbird.loginRequired")
     }

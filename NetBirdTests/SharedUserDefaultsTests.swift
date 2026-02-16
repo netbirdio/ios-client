@@ -21,6 +21,7 @@ final class SharedUserDefaultsTests: XCTestCase {
     override func tearDown() {
         userDefaults?.removeObject(forKey: GlobalConstants.keyLoginRequired)
         userDefaults?.removeObject(forKey: GlobalConstants.keyForceRelayConnection)
+        userDefaults?.removeObject(forKey: GlobalConstants.keyEnableLazyConnection)
         super.tearDown()
     }
 
@@ -57,5 +58,13 @@ final class SharedUserDefaultsTests: XCTestCase {
         defaults.register(defaults: [GlobalConstants.keyForceRelayConnection: true])
         let value = defaults.bool(forKey: GlobalConstants.keyForceRelayConnection)
         XCTAssertTrue(value, "Force relay connection should default to true")
+    }
+
+    func testEnableLazyConnectionDefaultsToTrue() throws {
+        let defaults = try XCTUnwrap(userDefaults)
+        defaults.removeObject(forKey: GlobalConstants.keyEnableLazyConnection)
+        defaults.register(defaults: [GlobalConstants.keyEnableLazyConnection: true])
+        let value = defaults.bool(forKey: GlobalConstants.keyEnableLazyConnection)
+        XCTAssertTrue(value, "Enable lazy connection should default to true")
     }
 }
