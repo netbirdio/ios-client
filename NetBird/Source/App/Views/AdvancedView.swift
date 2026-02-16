@@ -131,6 +131,20 @@ struct AdvancedView: View {
                         viewModel.setForcedRelayConnection(isEnabled: value)
                     }
                     
+                    Toggle(isOn: $viewModel.enableLazyConnection) {
+                        Text("Enable lazy connection")
+                            .multilineTextAlignment(.leading)
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(Color("TextSecondary"))
+                            .padding(.top, 3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: .orange))
+                    .padding(.top, 10)
+                    .onChange(of: viewModel.enableLazyConnection) { value in
+                        viewModel.setEnableLazyConnection(isEnabled: value)
+                    }
+                    
                     Spacer()
                 }
                 .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.10)
@@ -144,10 +158,10 @@ struct AdvancedView: View {
                 LogLevelAlert()
             }
 
-            alertOverlay(isPresented: viewModel.showForceRelayAlert, onDismiss: {
-                viewModel.showForceRelayAlert = false
+            alertOverlay(isPresented: viewModel.showConfigChangeAlert, onDismiss: {
+                viewModel.showConfigChangeAlert = false
             }) {
-                ForceRelayAlert()
+                ConfigChangeAlert()
             }
         }
         .onAppear {
@@ -293,7 +307,7 @@ struct AdvancedView: View {
     }
 }
 
-struct ForceRelayAlert: View {
+struct ConfigChangeAlert: View {
     @EnvironmentObject var viewModel: ViewModel
 
     var body: some View {
@@ -308,7 +322,7 @@ struct ForceRelayAlert: View {
             HStack {
                 Spacer()
                 Button(action: {
-                    viewModel.showForceRelayAlert = false
+                    viewModel.showConfigChangeAlert = false
                 }) {
                     Text("OK")
                         .padding()
