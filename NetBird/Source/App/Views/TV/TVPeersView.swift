@@ -53,7 +53,7 @@ struct TVPeerListContent: View {
                     Spacer()
                     
                     Text("\(connectedCount) of \(totalCount) connected")
-                        .font(.system(size: 24))
+                        .font(.system(size: 30, weight: .medium))
                         .foregroundColor(TVColors.textSecondary)
                 }
                 .padding(.horizontal, 50)
@@ -127,12 +127,12 @@ struct TVPeerCard: View {
                 // Peer info
                 VStack(alignment: .leading, spacing: 8) {
                     Text(peer.fqdn)
-                        .font(.system(size: 24, weight: .semibold))
+                        .font(.system(size: 32, weight: .bold))
                         .foregroundColor(TVColors.textPrimary)
                         .lineLimit(1)
-                    
+
                     Text(peer.ip)
-                        .font(.system(size: 20, design: .monospaced))
+                        .font(.system(size: 28, weight: .medium, design: .monospaced))
                         .foregroundColor(TVColors.textSecondary)
                 }
                 
@@ -141,7 +141,7 @@ struct TVPeerCard: View {
                 // Connection type badge
                 if peer.connStatus == "Connected" {
                     Text(peer.relayed ? "Relayed" : "Direct")
-                        .font(.system(size: 18))
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
@@ -188,7 +188,7 @@ struct TVPeerDetailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 30) {
             Text("Peer Details")
-                .font(.system(size: 32, weight: .bold))
+                .font(.system(size: 36, weight: .bold))
                 .foregroundColor(TVColors.textPrimary)
             
             Divider()
@@ -203,12 +203,12 @@ struct TVPeerDetailView: View {
                 if !peer.routes.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Routes")
-                            .font(.system(size: 20))
+                            .font(.system(size: 26, weight: .medium))
                             .foregroundColor(TVColors.textSecondary)
-                        
+
                         ForEach(peer.routes, id: \.self) { route in
                             Text(route)
-                                .font(.system(size: 22, design: .monospaced))
+                                .font(.system(size: 28, design: .monospaced))
                                 .foregroundColor(TVColors.textPrimary)
                         }
                     }
@@ -229,11 +229,11 @@ struct TVDetailRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
-                .font(.system(size: 20))
+                .font(.system(size: 26, weight: .medium))
                 .foregroundColor(TVColors.textSecondary)
-            
+
             Text(value)
-                .font(.system(size: 26))
+                .font(.system(size: 32, weight: .semibold))
                 .foregroundColor(TVColors.textPrimary)
         }
     }
@@ -267,7 +267,7 @@ struct TVFilterButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 22, weight: isSelected || isFocused ? .semibold : .regular))
+                .font(.system(size: 28, weight: isSelected || isFocused ? .semibold : .regular))
                 .foregroundColor(isSelected || isFocused ? .white : TVColors.textSecondary)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 14)
@@ -292,11 +292,11 @@ struct TVNoPeersView: View {
                 .frame(height: 200)
             
             Text("No Peers Available")
-                .font(.system(size: 40, weight: .bold))
+                .font(.system(size: 44, weight: .bold))
                 .foregroundColor(TVColors.textPrimary)
-            
+
             Text("Connect to NetBird to see your peers,\nor add devices to your network.")
-                .font(.system(size: 26))
+                .font(.system(size: 32))
                 .foregroundColor(TVColors.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 600)

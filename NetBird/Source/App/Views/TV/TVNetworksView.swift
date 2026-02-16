@@ -53,7 +53,7 @@ struct TVNetworkListContent: View {
 
                 // Stats
                 Text("\(activeCount) of \(totalCount) enabled")
-                    .font(.system(size: 24))
+                    .font(.system(size: 30, weight: .medium))
                     .foregroundColor(TVColors.textSecondary)
             }
             .padding(.horizontal, 80)
@@ -152,12 +152,12 @@ struct TVNetworkCard: View {
                 // Route info
                 VStack(alignment: .leading, spacing: 10) {
                     Text(route.name)
-                        .font(.system(size: 26, weight: .semibold))
+                        .font(.system(size: 32, weight: .bold))
                         .foregroundColor(isFocused ? .white : TVColors.textPrimary)
                         .lineLimit(1)
 
                     Text(routeDisplayText)
-                        .font(.system(size: 20))
+                        .font(.system(size: 26))
                         .foregroundColor(isFocused ? .white.opacity(0.8) : TVColors.textSecondary)
                         .lineLimit(2)
                 }
@@ -165,7 +165,7 @@ struct TVNetworkCard: View {
                 Spacer()
 
                 Text(route.selected ? "Enabled" : "Disabled")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundColor(isFocused ? .white : (route.selected ? .green : .gray))
             }
             .padding(30)
@@ -215,18 +215,18 @@ struct TVNoNetworksView: View {
                 .frame(height: 200)
             
             Text("No Networks Available")
-                .font(.system(size: 40, weight: .bold))
+                .font(.system(size: 44, weight: .bold))
                 .foregroundColor(TVColors.textPrimary)
-            
+
             Text("Connect to NetBird to see available networks,\nor configure network routes in your NetBird admin.")
-                .font(.system(size: 26))
+                .font(.system(size: 32))
                 .foregroundColor(TVColors.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 700)
-            
+
             // Learn more link (opens on user's phone via QR or second screen)
             Text("Visit docs.netbird.io/how-to/networks for more info")
-                .font(.system(size: 22))
+                .font(.system(size: 28))
                 .foregroundColor(.accentColor)
                 .padding(.top, 20)
         }

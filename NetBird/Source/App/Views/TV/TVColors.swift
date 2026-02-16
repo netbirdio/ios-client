@@ -127,16 +127,16 @@ struct TVLayout {
     static let fontTitle: CGFloat = 48
 
     /// Section header
-    static let fontHeader: CGFloat = 32
+    static let fontHeader: CGFloat = 36
 
     /// Card title / primary text
-    static let fontBody: CGFloat = 26
+    static let fontBody: CGFloat = 32
 
     /// Secondary/subtitle text
-    static let fontSubtitle: CGFloat = 22
+    static let fontSubtitle: CGFloat = 28
 
     /// Small/caption text
-    static let fontCaption: CGFloat = 18
+    static let fontCaption: CGFloat = 24
 
     /// Device code display (auth view)
     static let fontDeviceCode: CGFloat = 64
@@ -150,7 +150,7 @@ struct TVLayout {
     static let buttonPaddingV: CGFloat = 18
 
     /// Button font size
-    static let buttonFontSize: CGFloat = 24
+    static let buttonFontSize: CGFloat = 30
 
     // MARK: - Focus Effects
 

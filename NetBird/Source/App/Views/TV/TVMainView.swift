@@ -140,13 +140,13 @@ struct TVConnectionView: View {
                     // Device info
                     if !viewModel.fqdn.isEmpty {
                         Text(viewModel.fqdn)
-                            .font(.system(size: 28))
+                            .font(.system(size: 36, weight: .semibold))
                             .foregroundColor(TVColors.textSecondary)
                     }
-                    
+
                     if !viewModel.ip.isEmpty {
                         Text(viewModel.ip)
-                            .font(.system(size: 24))
+                            .font(.system(size: 32, weight: .medium, design: .monospaced))
                             .foregroundColor(TVColors.textSecondary.opacity(0.8))
                     }
                     
@@ -154,7 +154,7 @@ struct TVConnectionView: View {
                     
                     // Status text
                     Text(viewModel.extensionStateText)
-                        .font(.system(size: 32, weight: .medium))
+                        .font(.system(size: 40, weight: .bold))
                         .foregroundColor(statusColor)
                 }
                 .frame(maxWidth: .infinity)
@@ -162,7 +162,7 @@ struct TVConnectionView: View {
                 // Right Side - Quick Stats
                 VStack(alignment: .leading, spacing: 30) {
                     Text("Network Status")
-                        .font(.system(size: 32, weight: .bold))
+                        .font(.system(size: 36, weight: .bold))
                         .foregroundColor(TVColors.textPrimary)
                     
                     TVStatCard(
@@ -317,21 +317,21 @@ struct TVStatCard: View {
             
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
-                    .font(.system(size: 20))
+                    .font(.system(size: 28, weight: .medium))
                     .foregroundColor(TVColors.textSecondary)
                 
                 if let total = total {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(value)
-                            .font(.system(size: 36, weight: .bold))
+                            .font(.system(size: 40, weight: .bold))
                             .foregroundColor(TVColors.textPrimary)
                         Text("/ \(total)")
-                            .font(.system(size: 24))
+                            .font(.system(size: 30))
                             .foregroundColor(TVColors.textSecondary)
                     }
                 } else {
                     Text(value)
-                        .font(.system(size: 28, weight: .semibold))
+                        .font(.system(size: 36, weight: .bold))
                         .foregroundColor(TVColors.textPrimary)
                 }
             }
