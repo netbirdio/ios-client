@@ -49,6 +49,18 @@ struct TVColors {
         colorOrFallback("BgSideDrawer", fallback: Color(white: 0.2))
     }
 
+    // MARK: - Gradient Colors
+
+    /// Top-leading color for the full-screen gradient background.
+    static var gradientTop: Color {
+        Color(red: 0.10, green: 0.10, blue: 0.20)
+    }
+
+    /// Bottom-trailing color for the full-screen gradient background.
+    static var gradientBottom: Color {
+        Color(red: 0.03, green: 0.03, blue: 0.06)
+    }
+
     // MARK: - Helper
 
     private static func colorOrFallback(_ name: String, fallback: Color) -> Color {

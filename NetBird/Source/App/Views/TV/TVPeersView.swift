@@ -21,8 +21,7 @@ struct TVPeersView: View {
 
     var body: some View {
         ZStack {
-            TVColors.bgMenu
-                .ignoresSafeArea()
+            TVGradientBackground()
 
             if viewModel.extensionStateText == "Connected" &&
                viewModel.peerViewModel.peerInfo.count > 0 {

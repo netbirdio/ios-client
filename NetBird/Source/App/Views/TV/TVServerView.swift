@@ -49,8 +49,7 @@ struct TVServerView: View {
     var body: some View {
         ZStack {
             // Background
-            TVColors.bgMenu
-                .ignoresSafeArea()
+            TVGradientBackground()
 
             HStack(spacing: 60) {
                 // Left Side - Form
@@ -279,7 +278,7 @@ struct TVServerView: View {
                 }
                 .padding(50)
                 .frame(width: 400)
-                .background(TVColors.bgPrimary.opacity(0.3))
+                .background(Color.white.opacity(0.03))
             }
         }
         .onAppear {

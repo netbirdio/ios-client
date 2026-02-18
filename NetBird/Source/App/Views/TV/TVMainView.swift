@@ -122,81 +122,92 @@ struct TVMainView: View {
 
 struct TVConnectionView: View {
     @EnvironmentObject var viewModel: ViewModel
-    
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Background
-            TVColors.bgSecondary
-                .ignoresSafeArea()
 
-            // Brand anchor — top-left corner
+    var body: some View {
+        ZStack {
+            // Gradient background — subtle glow when connected
+            TVGradientBackground(showAccentGlow: viewModel.extensionStateText == "Connected")
+
+            // Subtle brand watermark (top-leading)
             Image("netbird-logo-menu")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 150)
-                .opacity(0.6)
+                .frame(width: 120)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(50)
 
-            HStack(spacing: 100) {
-                // Left Side - Connection Control
-                VStack(spacing: 40) {
-                    // Device info
+            // Central content — fully centered on screen
+            VStack(spacing: 0) {
+                Spacer()
+
+                // Hero: device info + button + status
+                VStack(spacing: 28) {
                     if !viewModel.fqdn.isEmpty {
                         Text(viewModel.fqdn)
-                            .font(.system(size: 36, weight: .semibold))
+                            .font(.system(size: 34, weight: .semibold))
                             .foregroundColor(TVColors.textSecondary)
                     }
 
                     if !viewModel.ip.isEmpty {
                         Text(viewModel.ip)
-                            .font(.system(size: 32, weight: .medium, design: .monospaced))
-                            .foregroundColor(TVColors.textSecondary.opacity(0.8))
+                            .font(.system(size: 30, weight: .medium, design: .monospaced))
+                            .foregroundColor(TVColors.textSecondary.opacity(0.7))
                     }
-                    
+
                     TVConnectionButton(viewModel: viewModel)
-                    
-                    // Status text
+                        .padding(.vertical, 16)
+
                     Text(viewModel.extensionStateText)
-                        .font(.system(size: 40, weight: .bold))
+                        .font(.system(size: 42, weight: .bold))
                         .foregroundColor(statusColor)
                 }
-                .frame(maxWidth: .infinity)
-                
-                // Right Side - Quick Stats
-                VStack(alignment: .leading, spacing: 30) {
-                    Text("Network Status")
-                        .font(.system(size: 36, weight: .bold))
-                        .foregroundColor(TVColors.textPrimary)
-                    
-                    TVStatCard(
+
+                Spacer()
+
+                // Bottom stats bar — glanceable network overview
+                HStack(spacing: 50) {
+                    TVCompactStatCard(
                         icon: "person.3.fill",
-                        title: "Connected Peers",
+                        title: "Peers",
                         value: connectedPeersCount,
                         total: totalPeersCount
                     )
-                    
-                    TVStatCard(
+
+                    Divider()
+                        .frame(height: 44)
+                        .overlay(Color.white.opacity(0.12))
+
+                    TVCompactStatCard(
                         icon: "globe",
-                        title: "Active Networks",
+                        title: "Networks",
                         value: activeNetworksCount,
                         total: totalNetworksCount
                     )
-                    
-                    TVStatCard(
+
+                    Divider()
+                        .frame(height: 44)
+                        .overlay(Color.white.opacity(0.12))
+
+                    TVCompactStatCard(
                         icon: "clock.fill",
-                        title: "Connection Status",
+                        title: "Status",
                         value: viewModel.extensionStateText,
                         total: nil
                     )
                 }
-                .padding(50)
+                .padding(.horizontal, 60)
+                .padding(.vertical, 28)
                 .background(
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(TVColors.bgMenu)
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.white.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        )
                 )
-                .frame(width: 500)
+                .padding(.horizontal, 120)
+                .padding(.bottom, 50)
             }
-            .padding(80)
         }
     }
     
@@ -260,7 +271,7 @@ struct TVConnectionButton: View {
                 Text(buttonText)
                     .font(.system(size: 32, weight: .semibold))
             }
-            .foregroundColor(isFocused ? .black : .white)
+            .foregroundColor(isFocused && !isConnected ? .black : .white)
             .padding(.horizontal, 80)
             .padding(.vertical, 30)
             .background(
@@ -297,6 +308,10 @@ struct TVConnectionButton: View {
         return [buttonColor.opacity(0.8), buttonColor.opacity(0.8)]
     }
     
+    private var isConnected: Bool {
+        viewModel.extensionStateText == "Connected"
+    }
+
     private var buttonText: String {
         switch viewModel.extensionStateText {
         case "Connected": return "Disconnect"
@@ -340,43 +355,40 @@ struct TVConnectionButton: View {
     }
 }
 
-struct TVStatCard: View {
+/// Compact stat card designed for the horizontal bottom bar.
+struct TVCompactStatCard: View {
     let icon: String
     let title: String
     let value: String
     let total: String?
-    
+
     var body: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 14) {
             Image(systemName: icon)
-                .font(.system(size: 36))
+                .font(.system(size: 26))
                 .foregroundColor(.accentColor)
-                .frame(width: 50)
-            
-            VStack(alignment: .leading, spacing: 8) {
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 28, weight: .medium))
+                    .font(.system(size: 22, weight: .medium))
                     .foregroundColor(TVColors.textSecondary)
-                
+
                 if let total = total {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
                         Text(value)
-                            .font(.system(size: 40, weight: .bold))
+                            .font(.system(size: 30, weight: .bold))
                             .foregroundColor(TVColors.textPrimary)
                         Text("/ \(total)")
-                            .font(.system(size: 30))
+                            .font(.system(size: 22))
                             .foregroundColor(TVColors.textSecondary)
                     }
                 } else {
                     Text(value)
-                        .font(.system(size: 36, weight: .bold))
+                        .font(.system(size: 28, weight: .bold))
                         .foregroundColor(TVColors.textPrimary)
                 }
             }
-            
-            Spacer()
         }
-        .padding(.vertical, 15)
     }
 }
 

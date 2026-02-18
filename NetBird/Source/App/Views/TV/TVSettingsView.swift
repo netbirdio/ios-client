@@ -20,9 +20,8 @@ struct TVSettingsView: View {
 
     var body: some View {
         ZStack {
-            TVColors.bgMenu
-                .ignoresSafeArea()
-            
+            TVGradientBackground()
+
             HStack(spacing: 0) {
                 // Left Side - Settings List
                 VStack(alignment: .leading, spacing: 30) {
@@ -119,17 +118,16 @@ struct TVSettingsView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 300)
-                        .opacity(0.3)
                     
                     Text("Secure. Simple. Connected.")
                         .font(.system(size: 24))
-                        .foregroundColor(TVColors.textSecondary.opacity(0.5))
+                        .foregroundColor(TVColors.textSecondary)
                         .padding(.top, 20)
                     
                     Spacer()
                 }
                 .frame(width: 500)
-                .background(TVColors.bgPrimary.opacity(0.3))
+                .background(Color.white.opacity(0.03))
             }
             
             // Change server alert overlay

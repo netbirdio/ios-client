@@ -19,9 +19,8 @@ struct TVNetworksView: View {
     
     var body: some View {
         ZStack {
-        TVColors.bgMenu
-                .ignoresSafeArea()
-            
+            TVGradientBackground()
+
             if viewModel.extensionStateText == "Connected" &&
                viewModel.routeViewModel.routeInfo.count > 0 {
                 TVNetworkListContent()
