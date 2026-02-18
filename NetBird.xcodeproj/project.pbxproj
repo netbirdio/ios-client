@@ -127,7 +127,6 @@
 		50CD81A72AD5504B00CF830B /* StatusDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81A62AD5504B00CF830B /* StatusDetails.swift */; };
 		50CD81A82AD5504B00CF830B /* StatusDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81A62AD5504B00CF830B /* StatusDetails.swift */; };
 		50CD81B02AD5B94D00CF830B /* PeerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81AF2AD5B94D00CF830B /* PeerCard.swift */; };
-		50CD81B12AD5B94D00CF830B /* PeerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD81AF2AD5B94D00CF830B /* PeerCard.swift */; };
 		50CD84362AD82F9400CF830B /* ServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD84352AD82F9400CF830B /* ServerView.swift */; };
 		50D402972BD9B89300D4AC5B /* PeerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D402962BD9B89300D4AC5B /* PeerViewModel.swift */; };
 		50E608132A7958B100BAF09B /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608122A7958B100BAF09B /* MainViewModel.swift */; };
@@ -152,7 +151,6 @@
 		A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		A1B2C3D72EEDF503001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
-		B1A2C3D52F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
 		E1A0B0012F5E000100000001 /* EmptyTabPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */; };
 		E1B0C0012F60000100000001 /* NetworkWarningBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */; };
 		E1C0D0012F72000100000001 /* AppButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C0D0002F72000100000001 /* AppButton.swift */; };
@@ -977,8 +975,6 @@
 				50213A262A8D0A870031D993 /* NetworkChangeListener.swift in Sources */,
 				50CD81502AD0355000CF830B /* PacketTunnelProviderSettingsManager.swift in Sources */,
 				50003BCD2AFD3B2B00E5EB6B /* ClientState.swift in Sources */,
-				50CD81B12AD5B94D00CF830B /* PeerCard.swift in Sources */,
-				B1A2C3D52F3A000100000001 /* PeerDetailSheet.swift in Sources */,
 				50C78AD12A82BBFD006E898D /* Device.swift in Sources */,
 				505118CF2AD96ECA003027D3 /* x25519.c in Sources */,
 				F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */,
@@ -1262,7 +1258,7 @@
 				INFOPLIST_FILE = NetbirdNetworkExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NetbirdNetworkExtension;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1294,7 +1290,7 @@
 				INFOPLIST_FILE = NetbirdNetworkExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NetbirdNetworkExtension;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1455,7 +1451,7 @@
 				INFOPLIST_KEY_UIStatusBarStyle = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1501,7 +1497,7 @@
 				INFOPLIST_KEY_UIStatusBarStyle = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

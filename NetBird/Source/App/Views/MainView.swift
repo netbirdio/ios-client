@@ -56,9 +56,7 @@ struct iOSMainView: View {
         tabAppearance.configureWithOpaqueBackground()
         tabAppearance.backgroundColor = UIColor(named: "BgNavigationBar")
         UITabBar.appearance().standardAppearance = tabAppearance
-        if #available(iOS 15.0, *) {
-            UITabBar.appearance().scrollEdgeAppearance = tabAppearance
-        }
+        UITabBar.appearance().scrollEdgeAppearance = tabAppearance
     }
 
     var body: some View {

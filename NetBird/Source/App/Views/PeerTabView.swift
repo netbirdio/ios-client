@@ -96,21 +96,25 @@ struct PeerListView: View {
                     }
                     #if os(iOS)
                     .contextMenu {
-                        Button("Copy FQDN") {
-                            UIPasteboard.general.string = peer.fqdn
-                            viewModel.showFqdnCopiedAlert = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                withAnimation {
-                                    viewModel.showFqdnCopiedAlert = false
+                        if !peer.fqdn.isEmpty {
+                            Button("Copy FQDN") {
+                                UIPasteboard.general.string = peer.fqdn
+                                viewModel.showFqdnCopiedAlert = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    withAnimation {
+                                        viewModel.showFqdnCopiedAlert = false
+                                    }
                                 }
                             }
                         }
-                        Button("Copy IP") {
-                            UIPasteboard.general.string = peer.ip
-                            viewModel.showIpCopiedAlert = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                withAnimation {
-                                    viewModel.showIpCopiedAlert = false
+                        if !peer.ip.isEmpty {
+                            Button("Copy IP") {
+                                UIPasteboard.general.string = peer.ip
+                                viewModel.showIpCopiedAlert = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    withAnimation {
+                                        viewModel.showIpCopiedAlert = false
+                                    }
                                 }
                             }
                         }

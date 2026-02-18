@@ -30,25 +30,29 @@ struct AboutView: View {
             }
 
             Section {
-                Link(destination: URL(string: "https://netbird.io/terms")!) {
-                    HStack {
-                        Text("License agreement")
-                            .foregroundColor(Color("TextPrimary"))
-                        Spacer()
-                        Image(systemName: "arrow.up.right.square")
-                            .foregroundColor(Color("TextSecondary"))
-                            .font(.system(size: 14))
+                if let termsURL = URL(string: "https://netbird.io/terms") {
+                    Link(destination: termsURL) {
+                        HStack {
+                            Text("License agreement")
+                                .foregroundColor(Color("TextPrimary"))
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .foregroundColor(Color("TextSecondary"))
+                                .font(.system(size: 14))
+                        }
                     }
                 }
 
-                Link(destination: URL(string: "https://netbird.io/privacy")!) {
-                    HStack {
-                        Text("Privacy policy")
-                            .foregroundColor(Color("TextPrimary"))
-                        Spacer()
-                        Image(systemName: "arrow.up.right.square")
-                            .foregroundColor(Color("TextSecondary"))
-                            .font(.system(size: 14))
+                if let privacyURL = URL(string: "https://netbird.io/privacy") {
+                    Link(destination: privacyURL) {
+                        HStack {
+                            Text("Privacy policy")
+                                .foregroundColor(Color("TextPrimary"))
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .foregroundColor(Color("TextSecondary"))
+                                .font(.system(size: 14))
+                        }
                     }
                 }
             }

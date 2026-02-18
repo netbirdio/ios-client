@@ -110,7 +110,7 @@ struct iOSConnectionView: View {
                                 }
                             }
                         }) {
-                            CustomLottieView(vpnState: $viewModel.vpnDisplayState, viewModel: viewModel)
+                            CustomLottieView(vpnState: $viewModel.vpnDisplayState)
                                 .id(animationKey)
                                 .frame(width: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79), height: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79))
                                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
