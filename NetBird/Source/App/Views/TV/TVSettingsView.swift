@@ -22,113 +22,91 @@ struct TVSettingsView: View {
         ZStack {
             TVGradientBackground()
 
-            HStack(spacing: 0) {
-                // Left Side - Settings List
-                VStack(alignment: .leading, spacing: 30) {
-                    Text("Settings")
-                        .font(.system(size: 48, weight: .bold))
-                        .foregroundColor(TVColors.textPrimary)
-                        .padding(.bottom, 20)
-                    
-                    // Settings options
-                    ScrollView {
-                        VStack(spacing: 20) {
-                            TVSettingsSection(title: "Connection") {
-                                TVSettingsRow(
-                                    icon: "server.rack",
-                                    title: "Change Server",
-                                    subtitle: "Switch to a different NetBird server",
-                                    action: { viewModel.showChangeServerAlert = true }
-                                )
-                            }
+            VStack(alignment: .leading, spacing: 30) {
+                Text("Settings")
+                    .font(.system(size: 48, weight: .bold))
+                    .foregroundColor(TVColors.textPrimary)
+                    .padding(.bottom, 20)
 
-                            TVSettingsSection(title: "Advanced") {
-                                TVSettingsToggleRow(
-                                    icon: "ant.fill",
-                                    title: "Trace Logging",
-                                    subtitle: "Enable detailed logs for troubleshooting",
-                                    isOn: $viewModel.traceLogsEnabled
-                                )
-
-                                TVSettingsToggleRow(
-                                    icon: "shield.lefthalf.filled",
-                                    title: "Rosenpass",
-                                    subtitle: "Post-quantum secure encryption",
-                                    isOn: Binding(
-                                        get: { viewModel.rosenpassEnabled },
-                                        set: { newValue in
-                                            // When disabling Rosenpass, also disable permissive mode
-                                            if !newValue {
-                                                viewModel.setRosenpassPermissive(permissive: false)
-                                            }
-                                            viewModel.setRosenpassEnabled(enabled: newValue)
-                                        }
-                                    )
-                                )
-
-                                TVSettingsToggleRow(
-                                    icon: "shield.checkerboard",
-                                    title: "Rosenpass Permissive",
-                                    subtitle: "Allow connections with non-Rosenpass peers",
-                                    isOn: Binding(
-                                        get: { viewModel.rosenpassPermissive },
-                                        set: { newValue in
-                                            viewModel.setRosenpassPermissive(permissive: newValue)
-                                        }
-                                    ),
-                                    isDisabled: !viewModel.rosenpassEnabled
-                                )
-                            }
-
-                            TVSettingsSection(title: "Security") {
-                                TVSettingsRow(
-                                    icon: "key.fill",
-                                    title: "Pre-Shared Key",
-                                    subtitle: viewModel.presharedKeySecure ? "Configured" : "Not configured",
-                                    action: { showPreSharedKeyAlert = true }
-                                )
-                            }
-
-                            TVSettingsSection(title: "Info") {
-                                TVSettingsInfoRow(
-                                    icon: "book.fill",
-                                    title: "Documentation",
-                                    subtitle: "docs.netbird.io"
-                                )
-
-                                TVSettingsInfoRow(
-                                    icon: "info.circle.fill",
-                                    title: "Version",
-                                    subtitle: appVersion
-                                )
-                            }
+                // Settings options
+                ScrollView {
+                    VStack(spacing: 20) {
+                        TVSettingsSection(title: "Connection") {
+                            TVSettingsRow(
+                                icon: "server.rack",
+                                title: "Change Server",
+                                subtitle: "Switch to a different NetBird server",
+                                action: { viewModel.showChangeServerAlert = true }
+                            )
                         }
-                        .padding(.top, 15)
-                        .padding(.bottom, 50)
+
+                        TVSettingsSection(title: "Advanced") {
+                            TVSettingsToggleRow(
+                                icon: "ant.fill",
+                                title: "Trace Logging",
+                                subtitle: "Enable detailed logs for troubleshooting",
+                                isOn: $viewModel.traceLogsEnabled
+                            )
+
+                            TVSettingsToggleRow(
+                                icon: "shield.lefthalf.filled",
+                                title: "Rosenpass",
+                                subtitle: "Post-quantum secure encryption",
+                                isOn: Binding(
+                                    get: { viewModel.rosenpassEnabled },
+                                    set: { newValue in
+                                        // When disabling Rosenpass, also disable permissive mode
+                                        if !newValue {
+                                            viewModel.setRosenpassPermissive(permissive: false)
+                                        }
+                                        viewModel.setRosenpassEnabled(enabled: newValue)
+                                    }
+                                )
+                            )
+
+                            TVSettingsToggleRow(
+                                icon: "shield.checkerboard",
+                                title: "Rosenpass Permissive",
+                                subtitle: "Allow connections with non-Rosenpass peers",
+                                isOn: Binding(
+                                    get: { viewModel.rosenpassPermissive },
+                                    set: { newValue in
+                                        viewModel.setRosenpassPermissive(permissive: newValue)
+                                    }
+                                ),
+                                isDisabled: !viewModel.rosenpassEnabled
+                            )
+                        }
+
+                        TVSettingsSection(title: "Security") {
+                            TVSettingsRow(
+                                icon: "key.fill",
+                                title: "Pre-Shared Key",
+                                subtitle: viewModel.presharedKeySecure ? "Configured" : "Not configured",
+                                action: { showPreSharedKeyAlert = true }
+                            )
+                        }
+
+                        TVSettingsSection(title: "Info") {
+                            TVSettingsInfoRow(
+                                icon: "book.fill",
+                                title: "Documentation",
+                                subtitle: "docs.netbird.io"
+                            )
+
+                            TVSettingsInfoRow(
+                                icon: "info.circle.fill",
+                                title: "Version",
+                                subtitle: appVersion
+                            )
+                        }
                     }
+                    .padding(.top, 15)
+                    .padding(.bottom, 50)
                 }
-                .padding(80)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // Right Side - NetBird Branding
-                VStack {
-                    Spacer()
-                    
-                    Image("netbird-logo-menu")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 300)
-                    
-                    Text("Secure. Simple. Connected.")
-                        .font(.system(size: 24))
-                        .foregroundColor(TVColors.textSecondary)
-                        .padding(.top, 20)
-                    
-                    Spacer()
-                }
-                .frame(width: 500)
-                .background(Color.white.opacity(0.03))
             }
+            .padding(80)
+            .frame(maxWidth: .infinity, alignment: .leading)
             
             // Change server alert overlay
             if viewModel.showChangeServerAlert {

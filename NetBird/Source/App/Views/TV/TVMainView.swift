@@ -52,6 +52,13 @@ struct TVMainView: View {
                 }
                 .tag(3)
         }
+        .overlay(alignment: .topLeading) {
+            Image("netbird-logo-menu")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 160)
+                .allowsHitTesting(false)
+        }
         .environmentObject(viewModel)
         // Server configuration sheet (change server)
         .fullScreenCover(isPresented: $viewModel.navigateToServerView) {
@@ -127,14 +134,6 @@ struct TVConnectionView: View {
         ZStack {
             // Gradient background — subtle glow when connected
             TVGradientBackground(showAccentGlow: viewModel.extensionStateText == "Connected")
-
-            // Subtle brand watermark (top-leading)
-            Image("netbird-logo-menu")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 120)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(50)
 
             // Central content — fully centered on screen
             VStack(spacing: 0) {
