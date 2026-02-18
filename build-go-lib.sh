@@ -16,7 +16,7 @@ fi
 
 cd $netbirdPath
 
-gomobile-netbird init
+gomobile init
 CGO_ENABLED=0 gomobile bind -target=ios,iossimulator -bundleid=io.netbird.framework -ldflags="-X github.com/netbirdio/netbird/version.version=$version" -o $rn_app_path/NetBirdSDK.xcframework $netbirdPath/client/ios/NetBirdSDK
 
 cd -
