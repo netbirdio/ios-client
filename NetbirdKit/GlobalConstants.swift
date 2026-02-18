@@ -13,6 +13,8 @@ struct GlobalConstants {
     #endif
 
     static let keyForceRelayConnection = "isConnectionForceRelayed"
+    static let keyEnableLazyConnection = "isLazyConnectionEnabled"
+
     static let keyLoginRequired = "netbird.loginRequired"
     static let keyNetworkUnavailable = "netbird.networkUnavailable"
 

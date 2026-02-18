@@ -24,8 +24,14 @@ class EnvVarPackager {
         defaults.register(defaults: [GlobalConstants.keyForceRelayConnection: defaultForceRelay])
         let forceRelayConnection = defaults.bool(forKey: GlobalConstants.keyForceRelayConnection)
 
+        let defaultLazyConnection = true
+        defaults.register(defaults: [GlobalConstants.keyEnableLazyConnection: defaultLazyConnection])
+        let isLazyConnectionEnabled = defaults.bool(forKey: GlobalConstants.keyEnableLazyConnection)
+        
         envList.put(NetBirdSDKGetEnvKeyNBForceRelay(), value: String(forceRelayConnection))
-
+        envList.put(NetBirdSDKGetEnvKeyNBLazyConn(), value: String(isLazyConnectionEnabled))
+        envList.put(NetBirdSDKGetEnvKeyNBInactivityThreshold(), value: String(5))
+        
         return envList
     }
 }

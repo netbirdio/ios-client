@@ -99,7 +99,8 @@ class ViewModel: ObservableObject {
         }
     }
     @Published var forceRelayConnection = true
-    @Published var showForceRelayAlert = false
+    @Published var enableLazyConnection = true
+    @Published var showConfigChangeAlert = false
     @Published var showRosenpassChangedAlert = false
     @Published var networkUnavailable = false
 
@@ -130,6 +131,7 @@ class ViewModel: ObservableObject {
 
         // forceRelayConnection uses UserDefaults (not SDK), so it's safe to load during init
         self.forceRelayConnection = self.getForcedRelayConnectionEnabled()
+        self.enableLazyConnection = self.getLazyConnectionEnabled()
 
         $setupKey
             .removeDuplicates()
@@ -371,7 +373,7 @@ class ViewModel: ObservableObject {
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         userDefaults?.set(isEnabled, forKey: GlobalConstants.keyForceRelayConnection)
         self.forceRelayConnection = isEnabled
-        self.showForceRelayAlert = true
+        self.showConfigChangeAlert = true
     }
     
     func getForcedRelayConnectionEnabled() -> Bool {
@@ -384,6 +386,19 @@ class ViewModel: ObservableObject {
         userDefaults?.register(defaults: [GlobalConstants.keyForceRelayConnection: false])
         return userDefaults?.bool(forKey: GlobalConstants.keyForceRelayConnection) ?? false
         #endif
+    }
+    
+    func setEnableLazyConnection(isEnabled: Bool) {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(isEnabled, forKey: GlobalConstants.keyEnableLazyConnection)
+        self.enableLazyConnection = isEnabled
+        self.showConfigChangeAlert = true
+    }
+    
+    func getLazyConnectionEnabled() -> Bool {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.register(defaults: [GlobalConstants.keyEnableLazyConnection: true])
+        return userDefaults?.bool(forKey: GlobalConstants.keyEnableLazyConnection) ?? true
     }
     
     func getDefaultStatus() -> StatusDetails {
