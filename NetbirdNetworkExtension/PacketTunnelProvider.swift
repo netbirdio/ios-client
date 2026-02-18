@@ -40,6 +40,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
+            self?.adapter?.isNetworkUnavailable = false
             self?.startMonitoringNetworkChanges()
         }
 
@@ -77,6 +78,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.isRestartInProgress = false
         }
         // Reset network unavailable flag when tunnel stops
+        adapter?.isNetworkUnavailable = false
         setNetworkUnavailableFlag(false)
         adapter?.stop()
         guard let pathMonitor = self.pathMonitor else {
@@ -142,7 +144,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         if path.status != .satisfied {
             AppLogger.shared.log("No network connection detected")
-            
+
             // Cancel any pending restart
             networkChangeWorkItem?.cancel()
             networkChangeWorkItem = nil
@@ -154,6 +156,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 let stateDesc = adapter?.clientState.description ?? "unknown"
                 AppLogger.shared.log("Network unavailable - signaling UI for disconnecting animation, clientState=\(stateDesc)")
                 wasStoppedDueToNoNetwork = true
+                adapter?.isNetworkUnavailable = true
                 setNetworkUnavailableFlag(true)
             }
             return
@@ -164,6 +167,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         if wasStoppedDueToNoNetwork {
             AppLogger.shared.log("Network restored after unavailability - signaling UI")
             wasStoppedDueToNoNetwork = false
+            adapter?.isNetworkUnavailable = false
             setNetworkUnavailableFlag(false)
         }
 
@@ -178,20 +182,24 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             }
         }()
 
-        guard let networkType = newNetworkType else {
-            AppLogger.shared.log("Connected to an unsupported network type")
-            return
+        // Check if network type changed (only if both current and new types are known)
+        let networkTypeChanged: Bool
+        if let current = currentNetworkType, let newType = newNetworkType {
+            networkTypeChanged = current != newType
+        } else {
+            networkTypeChanged = false
         }
 
-        let networkTypeChanged = currentNetworkType != nil && currentNetworkType != networkType
-
         if networkTypeChanged {
-            AppLogger.shared.log("Network type changed: \(String(describing: currentNetworkType)) -> \(networkType)")
+            AppLogger.shared.log("Network type changed: \(String(describing: currentNetworkType)) -> \(String(describing: newNetworkType))")
         }
 
         // Restart if network type changed OR recovering from network unavailability
         // (even if returning to the same interface type, the connection may be stale)
+        // This must happen regardless of network type (wifi/cellular/other)
         if networkTypeChanged || shouldRestartDueToRecovery {
+            AppLogger.shared.log("Scheduling restart: networkTypeChanged=\(networkTypeChanged), shouldRestartDueToRecovery=\(shouldRestartDueToRecovery)")
+
             // Cancel any pending restart from previous rapid change
             networkChangeWorkItem?.cancel()
             networkChangeWorkItem = nil
@@ -205,7 +213,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             monitorQueue.asyncAfter(deadline: .now() + 1.0, execute: workItem)
         }
 
-        currentNetworkType = networkType
+        // Update current network type only if known
+        if let newType = newNetworkType {
+            currentNetworkType = newType
+        }
     }
 
     func restartClient() {
@@ -463,7 +474,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 func initializeLogging(loglevel: String) {
     let fileManager = FileManager.default
 
-    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.helicon.app")
+    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
     let logURL = groupURL?.appendingPathComponent("logfile.log")
 
     var error: NSError?

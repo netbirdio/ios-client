@@ -8,7 +8,7 @@
 	</array>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.io.netbird.helicon.app</string>
+		<string>group.io.netbird.app</string>
 	</array>
 </dict>
 </plist>

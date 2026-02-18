@@ -46,7 +46,7 @@ class SetupKeyErrListener: NSObject, NetBirdSDKErrListenerProtocol {
 @MainActor
 class ViewModel: ObservableObject {
 
-    private let logger = Logger(subsystem: "io.netbird-helicon.app", category: "ViewModel")
+    private let logger = Logger(subsystem: "io.netbird.app", category: "ViewModel")
 
     // VPN Adapter (shared)
     @Published var networkExtensionAdapter: NetworkExtensionAdapter

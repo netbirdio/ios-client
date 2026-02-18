@@ -28,7 +28,7 @@ class ConfigSSOListener: NSObject, NetBirdSDKSSOListenerProtocol {
 
 public class NetworkExtensionAdapter: ObservableObject {
 
-    private let logger = Logger(subsystem: "io.netbird-helicon.app", category: "NetworkExtensionAdapter")
+    private let logger = Logger(subsystem: "io.netbird.app", category: "NetworkExtensionAdapter")
 
     #if os(tvOS)
     static let defaultManagementURL = "https://api.netbird.io"
@@ -41,7 +41,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     var extensionID = "io.netbird.app.tv.extension"
     var extensionName = "NetBird"
     #else
-    var extensionID = "io.netbird-helicon.app.NetbirdNetworkExtension"
+    var extensionID = "io.netbird.app.NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
     #endif
 
