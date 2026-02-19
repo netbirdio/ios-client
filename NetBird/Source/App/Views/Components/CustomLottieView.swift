@@ -5,328 +5,168 @@ import NetworkExtension
 
 struct CustomLottieView: UIViewRepresentable {
     @Environment(\.colorScheme) var colorScheme
-    @Binding var extensionStatus: NEVPNStatus
-    @Binding var engineStatus: ClientState
-    @Binding var connectPressed: Bool
-    @Binding var disconnectPressed: Bool
-    @Binding var networkUnavailable: Bool
-    @StateObject var viewModel: ViewModel
+    @Binding var vpnState: VPNDisplayState
 
     func makeUIView(context: Context) -> LottieAnimationView {
         let animationView = LottieAnimationView()
-        animationView.animation = LottieAnimation.named(colorScheme == .dark ? "button-full2-dark" :  "button-full2")
-        context.coordinator.colorScheme = colorScheme
+        animationView.animation = LottieAnimation.named(colorScheme == .dark ? "button-full2-dark" : "button-full2")
         animationView.contentMode = .scaleAspectFit
 
-        // Set initial frame based on current state (important for view recreation after background)
-        if extensionStatus == .connected && engineStatus == .connected {
+        // Set initial frame based on current state
+        if vpnState == .connected {
             animationView.currentFrame = context.coordinator.connectedFrame
         } else {
             animationView.currentFrame = context.coordinator.disconnectedFrame
         }
 
+        context.coordinator.currentState = vpnState
         return animationView
     }
 
     func updateUIView(_ uiView: LottieAnimationView, context: Context) {
-        // Check for network unavailable state change (airplane mode)
-        if context.coordinator.networkUnavailable != networkUnavailable {
-            context.coordinator.networkUnavailable = networkUnavailable
+        let previousState = context.coordinator.currentState
+        let newState = vpnState
 
-            if networkUnavailable {
-                // Network just became unavailable - immediately show disconnected (grey)
-                // Stop any animation and show disconnected frame instantly
-                // DON'T close VPN - keep tunnel alive for auto-reconnect when network returns
-                uiView.stop()
-                context.coordinator.isPlaying = false
-                uiView.currentFrame = context.coordinator.disconnectedFrame
-                viewModel.extensionStateText = "Disconnected"
-                return
-            } else if context.coordinator.extensionStatus == .connected {
-                // Network restored - show connecting animation, will transition to connected
-                DispatchQueue.main.async {
-                    context.coordinator.playConnectingFadeIn(uiView: uiView, viewModel: viewModel)
-                }
-                return
-            }
+        guard previousState != newState else { return }
+        context.coordinator.currentState = newState
+
+        // Stop any running animation before starting a new one
+        if context.coordinator.isPlaying {
+            uiView.stop()
+            context.coordinator.isPlaying = false
         }
 
-        // Always update coordinator state (important for animation loops that check these values)
-        let stateChanged = context.coordinator.extensionStatus != extensionStatus
-            || context.coordinator.engineStatus != engineStatus
-            || context.coordinator.connectPressed != connectPressed
-            || context.coordinator.disconnectPressed != disconnectPressed
+        switch (previousState, newState) {
+        // Normal flow: disconnected -> connecting
+        case (.disconnected, .connecting):
+            context.coordinator.playConnectingFadeIn(uiView: uiView)
 
-        context.coordinator.extensionStatus = extensionStatus
-        context.coordinator.engineStatus = engineStatus
-        context.coordinator.connectPressed = connectPressed
-        context.coordinator.disconnectPressed = disconnectPressed
+        // Normal flow: connecting -> connected
+        case (.connecting, .connected):
+            context.coordinator.playConnectingFadeOut(uiView: uiView)
 
-        // If network is unavailable, always show disconnected (grey) without animation
-        // This check must come BEFORE any animation logic
-        if networkUnavailable {
-            if context.coordinator.isPlaying || uiView.currentFrame != context.coordinator.disconnectedFrame {
-                uiView.stop()
-                context.coordinator.isPlaying = false
-                uiView.currentFrame = context.coordinator.disconnectedFrame
-                viewModel.extensionStateText = "Disconnected"
-            }
-            return
+        // Normal flow: connected -> disconnecting
+        case (.connected, .disconnecting):
+            context.coordinator.playDisconnectingFadeIn(uiView: uiView)
+
+        // Normal flow: disconnecting -> disconnected
+        case (.disconnecting, .disconnected):
+            context.coordinator.playDisconnectingFadeOut(uiView: uiView)
+
+        // Edge case: connecting -> disconnecting (user cancelled)
+        case (.connecting, .disconnecting):
+            context.coordinator.playDisconnectingFadeIn(uiView: uiView)
+
+        // Edge case: connecting -> disconnected (failed or cancelled)
+        case (.connecting, .disconnected):
+            context.coordinator.playDisconnectingFadeOut(uiView: uiView)
+
+        // Edge case: disconnecting -> connecting (reconnect)
+        case (.disconnecting, .connecting):
+            context.coordinator.playConnectingFadeIn(uiView: uiView)
+
+        // Direct jump to connected (e.g. app foreground)
+        case (_, .connected):
+            uiView.currentFrame = context.coordinator.connectedFrame
+
+        // Direct jump to disconnected (e.g. network unavailable)
+        case (_, .disconnected):
+            uiView.currentFrame = context.coordinator.disconnectedFrame
+
+        default:
+            break
         }
-
-        // If VPN tunnel is connected and not disconnecting, show connected state immediately
-        // This handles app foreground/background where we don't want to replay animations
-        // We check extensionStatus (iOS VPN state) as the source of truth
-        if extensionStatus == .connected && !disconnectPressed {
-            if context.coordinator.isPlaying || uiView.currentFrame != context.coordinator.connectedFrame {
-                uiView.stop()
-                context.coordinator.isPlaying = false
-                uiView.currentFrame = context.coordinator.connectedFrame
-                viewModel.extensionStateText = "Connected"
-            }
-            return
-        }
-
-        // If VPN tunnel is disconnected and not connecting, show disconnected state immediately
-        if extensionStatus == .disconnected && !connectPressed {
-            if context.coordinator.isPlaying || uiView.currentFrame != context.coordinator.disconnectedFrame {
-                uiView.stop()
-                context.coordinator.isPlaying = false
-                uiView.currentFrame = context.coordinator.disconnectedFrame
-                viewModel.extensionStateText = "Disconnected"
-            }
-            return
-        }
-
-        if context.coordinator.isPlaying || !stateChanged {
-            return
-        }
-
-        // Act based on the new status
-        switch extensionStatus {
-            case .connected:
-                if disconnectPressed {
-                    DispatchQueue.main.async {
-                        context.coordinator.playDisconnectingFadeIn(uiView: uiView, viewModel: viewModel)
-                    }
-                }
-                switch engineStatus {
-                case .connected:
-                    DispatchQueue.main.async {
-                        viewModel.extensionStateText = "Connected"
-                        viewModel.routeViewModel.getRoutes()
-                    }
-                    uiView.currentFrame = context.coordinator.connectedFrame
-                case .connecting:
-                    // Play connecting animation - the loop has proper exit conditions
-                    // for both user-initiated and automatic reconnections
-                    context.coordinator.playConnectingLoop(uiView: uiView, viewModel: viewModel)
-                case .disconnected:
-                    // Engine disconnected but tunnel still up - show disconnected state
-                    DispatchQueue.main.async {
-                        viewModel.extensionStateText = "Disconnected"
-                    }
-                    uiView.currentFrame = context.coordinator.disconnectedFrame
-                case .disconnecting:
-                    DispatchQueue.main.async {
-                        context.coordinator.playDisconnectingFadeIn(uiView: uiView, viewModel: viewModel)
-                    }
-                }
-            case .disconnected:
-                if connectPressed {
-                    DispatchQueue.main.async {
-                        context.coordinator.playConnectingFadeIn(uiView: uiView, viewModel: viewModel)
-                    }
-                }
-                DispatchQueue.main.async {
-                    viewModel.extensionStateText = "Disconnected"
-                }
-                uiView.currentFrame = context.coordinator.disconnectedFrame
-            case .connecting:
-                DispatchQueue.main.async {
-                    context.coordinator.playConnectingFadeIn(uiView: uiView, viewModel: viewModel)
-                }
-            case .disconnecting:
-                DispatchQueue.main.async {
-                    context.coordinator.playDisconnectingFadeIn(uiView: uiView, viewModel: viewModel)
-                }
-            default:
-                break
-            }
     }
-    
+
     func makeCoordinator() -> Coordinator {
-        Coordinator(
-            extensionStatus: extensionStatus,
-            engineStatus: engineStatus,
-            connectPressed: connectPressed,
-            disconnectPressed: disconnectPressed,
-            networkUnavailable: networkUnavailable
-        )
+        Coordinator(initialState: vpnState)
     }
 
     class Coordinator: NSObject {
         var isPlaying = false
-        var extensionStatus: NEVPNStatus?
-        var engineStatus: ClientState?
-        var connectPressed: Bool?
-        var disconnectPressed: Bool?
-        var networkUnavailable: Bool = false
-        var colorScheme: ColorScheme?
-        var isFirstUpdate = true
+        var currentState: VPNDisplayState
 
-        init(
-            extensionStatus: NEVPNStatus,
-            engineStatus: ClientState,
-            connectPressed: Bool,
-            disconnectPressed: Bool,
-            networkUnavailable: Bool
-        ) {
-            self.extensionStatus = extensionStatus
-            self.engineStatus = engineStatus
-            self.connectPressed = connectPressed
-            self.disconnectPressed = disconnectPressed
-            self.networkUnavailable = networkUnavailable
+        init(initialState: VPNDisplayState) {
+            self.currentState = initialState
             super.init()
         }
-        
+
         let connectedFrame: CGFloat = 142
         let disconnectedFrame: CGFloat = 339
         let connectingFadeIn: (startFrame: CGFloat, endFrame: CGFloat) = (0, 78)
         let connectingLoopRange: (startFrame: CGFloat, endFrame: CGFloat) = (78, 120)
         let connectingFadeOut: (startFrame: CGFloat, endFrame: CGFloat) = (121, 142)
-        let disconnectingLoopFadeIn: (startFrame: CGFloat, endFrame: CGFloat) = (152, 214)
+        let disconnectingFadeIn: (startFrame: CGFloat, endFrame: CGFloat) = (152, 214)
         let disconnectingLoopRange: (startFrame: CGFloat, endFrame: CGFloat) = (215, 258)
         let disconnectingFadeOut: (startFrame: CGFloat, endFrame: CGFloat) = (259, 339)
 
-        
-        func playConnectingFadeIn(uiView: LottieAnimationView, viewModel: ViewModel) {
-            DispatchQueue.main.async {
-                viewModel.extensionStateText = "Connecting..."
-            }
+        func playConnectingFadeIn(uiView: LottieAnimationView) {
             self.isPlaying = true
-            uiView.play(fromFrame: connectingFadeIn.startFrame, toFrame: connectingFadeIn.endFrame, loopMode: .playOnce) { [weak self] finished in
+            uiView.play(fromFrame: connectingFadeIn.startFrame, toFrame: connectingFadeIn.endFrame, loopMode: .playOnce) { [weak self] _ in
                 guard let self = self else { return }
-                // Network unavailable - show disconnected (tunnel stays alive for auto-reconnect)
-                if self.networkUnavailable {
-                    DispatchQueue.main.async {
-                        self.isPlaying = false
-                        uiView.currentFrame = self.disconnectedFrame
-                        viewModel.extensionStateText = "Disconnected"
-                    }
-                } else if self.engineStatus == .connected || self.extensionStatus == .connected {
-                    // Only show connected if network is available
-                    self.playFadeOut(uiView: uiView, startFrame: self.connectingFadeOut.startFrame, endFrame: self.connectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Connected")
+                if self.currentState == .connected {
+                    self.playConnectingFadeOut(uiView: uiView)
+                } else if self.currentState == .connecting {
+                    self.playConnectingLoop(uiView: uiView)
                 } else {
-                    // Loop the connecting animation only if the status is still connecting
-                    playConnectingLoop(uiView: uiView, viewModel: viewModel)
-                }
-            }
-        }
-        
-        func playConnectingLoop(uiView: LottieAnimationView, viewModel: ViewModel) {
-            self.isPlaying = true
-            DispatchQueue.main.async {
-                viewModel.extensionStateText = "Connecting..."
-            }
-            uiView.play(fromFrame: self.connectingLoopRange.startFrame, toFrame: self.connectingLoopRange.endFrame, loopMode: .playOnce) {[weak self] finished in
-                guard let self = self else { return }
-                // Network unavailable - show disconnected (tunnel stays alive for auto-reconnect)
-                if self.networkUnavailable {
-                    DispatchQueue.main.async {
-                        self.isPlaying = false
-                        uiView.currentFrame = self.disconnectedFrame
-                        viewModel.extensionStateText = "Disconnected"
-                    }
-                } else if self.engineStatus == .connected || self.extensionStatus == .connected {
-                    // Only show connected if network is available
-                    self.playFadeOut(uiView: uiView, startFrame: self.connectingFadeOut.startFrame, endFrame: self.connectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Connected")
-                } else if (self.engineStatus == .disconnecting || self.extensionStatus == .disconnecting || self.engineStatus == .disconnected || self.extensionStatus == .disconnected) && !(self.connectPressed ?? false) {
-                    self.playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
-                } else if !(self.connectPressed ?? false) && self.engineStatus == .connecting {
-                    // Automatic reconnection (not user-initiated) stuck in connecting state
-                    // Exit to disconnected state after one loop to avoid infinite animation
-                    self.playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
-                } else {
-                    playConnectingLoop(uiView: uiView, viewModel: viewModel)
-                }
-            }
-        }
-        
-        func playDisconnectingFadeIn(uiView: LottieAnimationView, viewModel: ViewModel) {
-            self.isPlaying = true
-            DispatchQueue.main.async {
-                viewModel.extensionStateText = "Disconnecting..."
-            }
-            uiView.play(fromFrame: disconnectingLoopFadeIn.startFrame, toFrame: disconnectingLoopFadeIn.endFrame, loopMode: .playOnce) { [weak self] finished in
-                guard let self = self else { return }
-                if self.extensionStatus == .disconnected {
-                    self.playFadeOut(uiView: uiView, startFrame: self.disconnectingFadeOut.startFrame, endFrame: self.disconnectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Disconnected")
-                } else {
-                    DispatchQueue.main.async {
-                        viewModel.connectPressed = false
-                    }
-                    playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
-                }
-            }
-        }
-        
-        func playDisconnectingLoop(uiView: LottieAnimationView, viewModel: ViewModel) {
-            self.isPlaying = true
-            DispatchQueue.main.async {
-                viewModel.extensionStateText = "Disconnecting..."
-            }
-            uiView.play(fromFrame: self.disconnectingLoopRange.startFrame, toFrame: self.disconnectingLoopRange.endFrame, loopMode: .playOnce) { [weak self] finished in
-                guard let self = self else { return }
-                if self.extensionStatus == .disconnected {
-                    self.playFadeOut(uiView: uiView, startFrame: self.disconnectingFadeOut.startFrame, endFrame: self.disconnectingFadeOut.endFrame, viewModel: viewModel, extensionStateText: "Disconnected")
-                } else if self.engineStatus == .connected && self.extensionStatus == .connected && !self.networkUnavailable {
-                    // Engine recovered to connected during internal restart (e.g., network switch)
-                    // Extension never disconnected, so skip fade out and go directly to connected state
-                    // Only if network is available (not airplane mode)
-                    DispatchQueue.main.async {
-                        self.isPlaying = false
-                        uiView.currentFrame = self.connectedFrame
-                        viewModel.extensionStateText = "Connected"
-                        viewModel.connectPressed = false
-                        viewModel.disconnectPressed = false
-                        viewModel.routeViewModel.getRoutes()
-                    }
-                } else if self.networkUnavailable {
-                    // Network unavailable (airplane mode) - show disconnected
-                    // Tunnel stays alive for auto-reconnect when network returns
-                    DispatchQueue.main.async {
-                        self.isPlaying = false
-                        uiView.currentFrame = self.disconnectedFrame
-                        viewModel.extensionStateText = "Disconnected"
-                        viewModel.connectPressed = false
-                        viewModel.disconnectPressed = false
-                    }
-                } else if (self.engineStatus == .disconnected || self.engineStatus == .connecting) && self.extensionStatus == .connected {
-                    // Engine disconnected/stuck connecting but network available
-                    // Show disconnected state immediately
-                    DispatchQueue.main.async {
-                        self.isPlaying = false
-                        uiView.currentFrame = self.disconnectedFrame
-                        viewModel.extensionStateText = "Disconnected"
-                        viewModel.connectPressed = false
-                        viewModel.disconnectPressed = false
-                    }
-                } else {
-                    playDisconnectingLoop(uiView: uiView, viewModel: viewModel)
+                    self.isPlaying = false
                 }
             }
         }
 
-        func playFadeOut(uiView: LottieAnimationView, startFrame: CGFloat, endFrame: CGFloat, viewModel: ViewModel, extensionStateText: String) {
+        func playConnectingLoop(uiView: LottieAnimationView) {
             self.isPlaying = true
-            uiView.play(fromFrame: startFrame, toFrame: endFrame, loopMode: .playOnce) { [weak self] finished in
-                DispatchQueue.main.async {
-                    self?.isPlaying = false
-                    viewModel.extensionStateText = extensionStateText
-                    viewModel.connectPressed = false
-                    viewModel.disconnectPressed = false
+            uiView.play(fromFrame: connectingLoopRange.startFrame, toFrame: connectingLoopRange.endFrame, loopMode: .playOnce) { [weak self] _ in
+                guard let self = self else { return }
+                if self.currentState == .connected {
+                    self.playConnectingFadeOut(uiView: uiView)
+                } else if self.currentState == .connecting {
+                    self.playConnectingLoop(uiView: uiView)
+                } else {
+                    self.isPlaying = false
                 }
+            }
+        }
+
+        func playConnectingFadeOut(uiView: LottieAnimationView) {
+            self.isPlaying = true
+            uiView.play(fromFrame: connectingFadeOut.startFrame, toFrame: connectingFadeOut.endFrame, loopMode: .playOnce) { [weak self] _ in
+                self?.isPlaying = false
+            }
+        }
+
+        func playDisconnectingFadeIn(uiView: LottieAnimationView) {
+            self.isPlaying = true
+            uiView.play(fromFrame: disconnectingFadeIn.startFrame, toFrame: disconnectingFadeIn.endFrame, loopMode: .playOnce) { [weak self] _ in
+                guard let self = self else { return }
+                if self.currentState == .disconnected {
+                    self.playDisconnectingFadeOut(uiView: uiView)
+                } else if self.currentState == .disconnecting {
+                    self.playDisconnectingLoop(uiView: uiView)
+                } else {
+                    self.isPlaying = false
+                }
+            }
+        }
+
+        func playDisconnectingLoop(uiView: LottieAnimationView) {
+            self.isPlaying = true
+            uiView.play(fromFrame: disconnectingLoopRange.startFrame, toFrame: disconnectingLoopRange.endFrame, loopMode: .playOnce) { [weak self] _ in
+                guard let self = self else { return }
+                if self.currentState == .disconnected {
+                    self.playDisconnectingFadeOut(uiView: uiView)
+                } else if self.currentState == .disconnecting {
+                    self.playDisconnectingLoop(uiView: uiView)
+                } else {
+                    self.isPlaying = false
+                }
+            }
+        }
+
+        func playDisconnectingFadeOut(uiView: LottieAnimationView) {
+            self.isPlaying = true
+            uiView.play(fromFrame: disconnectingFadeOut.startFrame, toFrame: disconnectingFadeOut.endFrame, loopMode: .playOnce) { [weak self] _ in
+                self?.isPlaying = false
             }
         }
     }

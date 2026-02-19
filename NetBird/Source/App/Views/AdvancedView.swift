@@ -9,181 +9,99 @@ import SwiftUI
 
 struct AdvancedView: View {
     @EnvironmentObject var viewModel: ViewModel
-    @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
-    
+
     var body: some View {
-        ZStack {
-            Color("BgPage")
-                .edgesIgnoringSafeArea(.all)
-            
-            ScrollView { 
-                VStack(alignment: .leading) {
-                    Text("Add a pre-shared key")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(Color("TextPrimary"))
-                        .padding(.top, UIScreen.main.bounds.height * 0.04)
-                        .fixedSize(horizontal: false, vertical: true)
-                    
-                    Text("You will only communicate with peers that use the same key.")
-                        .multilineTextAlignment(.leading)
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundColor(Color("TextSecondary"))
-                        .padding(.top, 3)
-                        .fixedSize(horizontal: false, vertical: true)
-                    
-                    CustomTextField(placeholder: "Add a pre-shared key", text: $viewModel.presharedKey, secure: $viewModel.presharedKeySecure, height: 48)
-                        .padding(.top, 3)
+        Form {
+            Section {
+                if viewModel.presharedKeySecure {
+                    SecureField("Pre-shared key", text: $viewModel.presharedKey)
+                        .disabled(true)
+                } else {
+                    TextField("Pre-shared key", text: $viewModel.presharedKey)
+                        .disableAutocorrection(true)
+                        .autocapitalization(.none)
                         .onChange(of: viewModel.presharedKey) { value in
                             checkForValidPresharedKey(text: value)
                         }
-                    
-                    if viewModel.showInvalidPresharedKeyAlert {
-                        Text("Invalid key")
-                            .foregroundColor(.red)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    
-                    SolidButton(text: viewModel.presharedKeySecure ? "Remove" : "Save") {
-                        if !viewModel.showInvalidPresharedKeyAlert {
-                            if viewModel.presharedKeySecure {
-                                viewModel.removePreSharedKey()
-                            } else {
-                                viewModel.updatePreSharedKey()
-                                print("save preshared key")
-                                presentationMode.wrappedValue.dismiss()
-                            }
+                }
+
+                if viewModel.showInvalidPresharedKeyAlert {
+                    Text("Invalid key")
+                        .foregroundColor(.red)
+                        .font(.footnote)
+                }
+
+                Button(viewModel.presharedKeySecure ? "Remove" : "Save") {
+                    if !viewModel.showInvalidPresharedKeyAlert {
+                        if viewModel.presharedKeySecure {
+                            viewModel.removePreSharedKey()
+                        } else {
+                            viewModel.updatePreSharedKey()
                         }
                     }
-                    .padding(.top, 10)
-                    
-                    Divider()
-                        .padding([.top, .bottom])
-                    
-                    Toggle(isOn: $viewModel.traceLogsEnabled) {
-                        Text("Enable Trace logs")
-                            .multilineTextAlignment(.leading)
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundColor(Color("TextSecondary"))
-                            .padding(.top, 3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .toggleStyle(SwitchToggleStyle(tint: .orange))
-                    
-                    SolidButton(text: "Share logs") {
-                        shareButtonTapped()
-                    }
-                    .padding(.top, 3)
-                    
-                    Divider()
-                        .padding([.top, .bottom])
-                    
-                    Toggle(isOn: $viewModel.rosenpassEnabled) {
-                        Text("Enable Rosenpass")
-                            .multilineTextAlignment(.leading)
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundColor(Color("TextSecondary"))
-                            .padding(.top, 3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .toggleStyle(SwitchToggleStyle(tint: .orange))
+                }
+            } header: {
+                Text("Pre-shared Key")
+            } footer: {
+                Text("You will only communicate with peers that use the same key.")
+            }
+
+            Section(header: Text("Logging")) {
+                Toggle("Trace logs", isOn: $viewModel.traceLogsEnabled)
+                    .toggleStyle(SwitchToggleStyle(tint: .accentColor))
+
+                Button("Share logs") {
+                    shareButtonTapped()
+                }
+            }
+
+            Section(header: Text("Rosenpass")) {
+                Toggle("Enable Rosenpass", isOn: $viewModel.rosenpassEnabled)
+                    .toggleStyle(SwitchToggleStyle(tint: .accentColor))
                     .onChange(of: viewModel.rosenpassEnabled) { value in
                         if !value {
                             viewModel.rosenpassPermissive = false
                         }
                         viewModel.setRosenpassEnabled(enabled: value)
                     }
-                    
-                    Toggle(isOn: $viewModel.rosenpassPermissive) {
-                        Text("Enable Rosenpass permissive mode")
-                            .multilineTextAlignment(.leading)
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundColor(Color("TextSecondary"))
-                            .padding(.top, 3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .toggleStyle(SwitchToggleStyle(tint: .orange))
+
+                Toggle("Permissive mode", isOn: $viewModel.rosenpassPermissive)
+                    .toggleStyle(SwitchToggleStyle(tint: .accentColor))
                     .onChange(of: viewModel.rosenpassPermissive) { value in
                         if value {
                             viewModel.rosenpassEnabled = true
                         }
                         viewModel.setRosenpassPermissive(permissive: value)
                     }
-                    
-                    Divider()
-                        .padding([.top, .bottom])
-                    
-                    Text("Network & Security")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(Color("TextPrimary"))
-                        .padding(.top, 8)
-                        .fixedSize(horizontal: false, vertical: true)
-                    
-                    Toggle(isOn: $viewModel.forceRelayConnection) {
-                        Text("Force relay connection")
-                            .multilineTextAlignment(.leading)
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundColor(Color("TextSecondary"))
-                            .padding(.top, 3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .toggleStyle(SwitchToggleStyle(tint: .orange))
+            }
+
+            Section(header: Text("Network & Security")) {
+                Toggle("Force relay connection", isOn: $viewModel.forceRelayConnection)
+                    .toggleStyle(SwitchToggleStyle(tint: .accentColor))
                     .onChange(of: viewModel.forceRelayConnection) { value in
                         viewModel.setForcedRelayConnection(isEnabled: value)
                     }
-                    
-                    Spacer()
-                }
-                .padding([.leading, .trailing], UIScreen.main.bounds.width * 0.10)
-                .frame(maxWidth: .infinity, alignment: .leading) // Ensures VStack uses full width
-            }
-            .ignoresSafeArea(.keyboard) // Prevents keyboard from shifting views up
-            
-            alertOverlay(isPresented: viewModel.showLogLevelChangedAlert, onDismiss: {
-                viewModel.showLogLevelChangedAlert = false
-            }) {
-                LogLevelAlert()
-            }
-
-            alertOverlay(isPresented: viewModel.showForceRelayAlert, onDismiss: {
-                viewModel.showForceRelayAlert = false
-            }) {
-                ForceRelayAlert()
             }
         }
         .onAppear {
             viewModel.loadRosenpassSettings()
             viewModel.loadPreSharedKey()
         }
-        .navigationViewStyle(StackNavigationViewStyle())
+        .navigationTitle("Advanced")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
-        .navigationBarItems(leading: CustomBackButton(text: "Advanced") {
-            presentationMode.wrappedValue.dismiss()
-        })
-        .onTapGesture {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        .alert(isPresented: $viewModel.showLogLevelChangedAlert) {
+            Alert(
+                title: Text("Changing Log Level"),
+                message: Text("Changing log level will take effect after next connect."),
+                dismissButton: .default(Text("OK"))
+            )
         }
-    }
-    
-    @ViewBuilder
-    private func alertOverlay<Content: View>(
-        isPresented: Bool,
-        onDismiss: @escaping () -> Void,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        if isPresented {
-            Color.black.opacity(0.4)
-                .edgesIgnoringSafeArea(.all)
-                .onTapGesture {
-                    viewModel.buttonLock = true
-                    onDismiss()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        viewModel.buttonLock = false
-                    }
-                }
-
-            content()
-                .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
+        .alert(isPresented: $viewModel.showForceRelayAlert) {
+            Alert(
+                title: Text("Force Relay"),
+                message: Text("To apply the setting, you will need to reconnect."),
+                dismissButton: .default(Text("OK"))
+            )
         }
     }
 
@@ -191,20 +109,18 @@ struct AdvancedView: View {
         Task.detached(priority: .utility) {
             let fileManager = FileManager.default
             let tempDir = fileManager.temporaryDirectory.appendingPathComponent("netbird-logs-\(UUID().uuidString)")
-            
+
             do {
                 try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
             } catch {
                 AppLogger.shared.log("Failed to create temp directory: \(error)")
                 return
             }
-            
+
             var filesToShare: [URL] = []
-            
-            // Export Go SDK logs
+
             if let goLogURL = AppLogger.getGoLogFileURL() {
                 let goLogPath = tempDir.appendingPathComponent("netbird-engine.log")
-                
                 do {
                     try fileManager.copyItem(at: goLogURL, to: goLogPath)
                     filesToShare.append(goLogPath)
@@ -212,11 +128,9 @@ struct AdvancedView: View {
                     AppLogger.shared.log("Failed to export Go log: \(error)")
                 }
             }
-            
-            // Export Swift logs
+
             if let swiftLogURL = AppLogger.getLogFileURL() {
                 let swiftLogPath = tempDir.appendingPathComponent("netbird-app.log")
-                
                 do {
                     try fileManager.copyItem(at: swiftLogURL, to: swiftLogPath)
                     filesToShare.append(swiftLogPath)
@@ -224,24 +138,23 @@ struct AdvancedView: View {
                     AppLogger.shared.log("Failed to export Swift log: \(error)")
                 }
             }
-            
+
             guard !filesToShare.isEmpty else {
                 AppLogger.shared.log("No log files to share")
                 try? FileManager.default.removeItem(at: tempDir)
                 return
             }
-            
+
             let readOnlyFilesToShare = filesToShare
-            
+
             await MainActor.run {
                 let activityViewController = UIActivityViewController(activityItems: readOnlyFilesToShare, applicationActivities: nil)
-                
+
                 activityViewController.excludedActivityTypes = [
                     .assignToContact,
                     .saveToCameraRoll
                 ]
-                
-                // Clean up temp files after share completes (success or cancel)
+
                 activityViewController.completionWithItemsHandler = { _, _, _, _ in
                     do {
                         try FileManager.default.removeItem(at: tempDir)
@@ -249,10 +162,9 @@ struct AdvancedView: View {
                         AppLogger.shared.log("Failed to cleanup temp log files: \(error)")
                     }
                 }
-                
+
                 if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                    let rootViewController = windowScene.windows.first?.rootViewController {
-                    // Configure popover for iPad to prevent crash
                     if let popover = activityViewController.popoverPresentationController {
                         popover.sourceView = rootViewController.view
                         popover.sourceRect = CGRect(x: rootViewController.view.bounds.midX,
@@ -276,77 +188,15 @@ struct AdvancedView: View {
             viewModel.showInvalidPresharedKeyAlert = true
         }
     }
-    
+
     func isValidBase64EncodedString(_ input: String) -> Bool {
-        // Allow empty string as valid input
         if input.isEmpty {
             return true
         }
-
-        // Check if the string is valid Base64
         guard let data = Data(base64Encoded: input) else {
             return false
         }
-
-        // Check if the decoded data is 32 bytes (256 bits)
         return data.count == 32
-    }
-}
-
-struct ForceRelayAlert: View {
-    @EnvironmentObject var viewModel: ViewModel
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image("exclamation-circle")
-                .renderingMode(.template)
-                .padding(.top, 20)
-                .foregroundColor(Color.accentColor)
-            Text("To apply the setting, you will need to reconnect.")
-                .foregroundColor(Color("TextAlert"))
-                .multilineTextAlignment(.center)
-            HStack {
-                Spacer()
-                Button(action: {
-                    viewModel.showForceRelayAlert = false
-                }) {
-                    Text("OK")
-                        .padding()
-                        .foregroundColor(Color.accentColor)
-                }
-                .background(Color.clear)
-                .padding(.trailing)
-            }
-        }
-        .padding()
-        .background(Color("BgSideDrawer"))
-        .cornerRadius(15)
-        .shadow(radius: 10)
-    }
-}
-
-struct LogLevelAlert: View {
-    @EnvironmentObject var viewModel: ViewModel
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image("exclamation-circle")
-                .padding(.top, 20)
-            Text("Changing Log Level")
-                .font(.title)
-                .foregroundColor(Color("TextAlert"))
-            Text("Changing log level will take effect after next connect.")
-                .foregroundColor(Color("TextAlert"))
-                .multilineTextAlignment(.center)
-            SolidButton(text: "Confirm") {
-                viewModel.showLogLevelChangedAlert = false
-            }
-            .padding(.top, 20)
-        }
-        .padding()
-        .background(Color("BgSideDrawer"))
-        .cornerRadius(15)
-        .shadow(radius: 10)
     }
 }
 
