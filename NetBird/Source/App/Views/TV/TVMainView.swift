@@ -42,7 +42,7 @@ struct TVMainView: View {
 
             TVNetworksView()
                 .tabItem {
-                    Label("Networks", systemImage: "globe")
+                    Label("Resources", systemImage: "globe")
                 }
                 .tag(2)
 
@@ -178,7 +178,7 @@ struct TVConnectionView: View {
 
                     TVCompactStatCard(
                         icon: "globe",
-                        title: "Networks",
+                        title: "Resources",
                         value: activeNetworksCount,
                         total: totalNetworksCount
                     )
