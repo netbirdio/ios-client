@@ -156,9 +156,16 @@ struct TVConnectionView: View {
                     TVConnectionButton(viewModel: viewModel)
                         .padding(.vertical, 16)
 
-                    Text(viewModel.extensionStateText)
-                        .font(.system(size: 42, weight: .bold))
-                        .foregroundColor(statusColor)
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(statusColor)
+                            .frame(width: 10, height: 10)
+                            .shadow(color: statusColor.opacity(0.4), radius: 4)
+
+                        Text(viewModel.extensionStateText)
+                            .font(.system(size: 32, weight: .semibold))
+                            .foregroundColor(statusColor)
+                    }
                 }
 
                 Spacer()
@@ -207,6 +214,10 @@ struct TVConnectionView: View {
                 .padding(.horizontal, 120)
                 .padding(.bottom, 50)
             }
+
+//            #if DEBUG
+//            TVDebugStateOverlay()
+//            #endif
         }
     }
     
@@ -215,9 +226,8 @@ struct TVConnectionView: View {
     private var statusColor: Color {
         switch viewModel.extensionStateText {
         case "Connected": return .green
-        case "Connecting": return .orange
-        case "Disconnecting": return .orange
-        default: return TVColors.textSecondary
+        case "Connecting...", "Disconnecting...": return .orange
+        default: return .red.opacity(0.8)
         }
     }
     
@@ -270,41 +280,29 @@ struct TVConnectionButton: View {
                 Text(buttonText)
                     .font(.system(size: 32, weight: .semibold))
             }
-            .foregroundColor(isFocused && !isConnected ? .black : .white)
+            .foregroundColor(buttonColor)
             .padding(.horizontal, 80)
             .padding(.vertical, 30)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            colors: gradientColors,
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+                    .fill(Color.white.opacity(0.06))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color.white.opacity(isFocused ? 0.3 : 0), lineWidth: 2)
+                    .stroke(
+                        buttonColor.opacity(isFocused ? 0.8 : 0.4),
+                        lineWidth: isFocused ? 2.5 : 1.5
+                    )
             )
             .shadow(
-                color: isFocused ? buttonColor.opacity(0.6) : .clear,
-                radius: isFocused ? 20 : 0,
-                y: isFocused ? 8 : 0
+                color: isFocused ? buttonColor.opacity(0.5) : .clear,
+                radius: isFocused ? 24 : 0,
+                y: isFocused ? 6 : 0
             )
         }
         .buttonStyle(TVConnectButtonStyle(isFocused: isFocused))
         .focused($isFocused)
         .disabled(viewModel.buttonLock)
-    }
-
-    /// Gradient colors: focused state gets a top-to-bottom gradient for depth;
-    /// unfocused state is slightly dimmed so focused contrast is stronger.
-    private var gradientColors: [Color] {
-        if isFocused {
-            return [buttonColor, buttonColor.opacity(0.7)]
-        }
-        return [buttonColor.opacity(0.8), buttonColor.opacity(0.8)]
     }
     
     private var isConnected: Bool {
@@ -314,24 +312,24 @@ struct TVConnectionButton: View {
     private var buttonText: String {
         switch viewModel.extensionStateText {
         case "Connected": return "Disconnect"
-        case "Connecting": return "Connecting..."
-        case "Disconnecting": return "Disconnecting..."
+        case "Connecting...": return "Connecting..."
+        case "Disconnecting...": return "Disconnecting..."
         default: return "Connect"
         }
     }
-    
+
     private var buttonIcon: String {
         switch viewModel.extensionStateText {
         case "Connected": return "stop.fill"
-        case "Connecting", "Disconnecting": return "hourglass"
+        case "Connecting...", "Disconnecting...": return "hourglass"
         default: return "play.fill"
         }
     }
-    
+
     private var buttonColor: Color {
         switch viewModel.extensionStateText {
         case "Connected": return .red.opacity(0.8)
-        case "Connecting", "Disconnecting": return .orange
+        case "Connecting...", "Disconnecting...": return .orange
         default: return .accentColor
         }
     }
@@ -344,7 +342,7 @@ struct TVConnectionButton: View {
         }
 
         if viewModel.extensionStateText == "Connected" ||
-           viewModel.extensionStateText == "Connecting" {
+           viewModel.extensionStateText == "Connecting..." {
             buttonLogger.info("handleTap: calling viewModel.close()")
             viewModel.close()
         } else {
