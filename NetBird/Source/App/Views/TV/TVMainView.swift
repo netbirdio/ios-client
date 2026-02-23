@@ -132,41 +132,41 @@ struct TVConnectionView: View {
 
     var body: some View {
         ZStack {
-            // Gradient background — subtle glow when connected
-            TVGradientBackground(showAccentGlow: viewModel.extensionStateText == "Connected")
+            TVGradientBackground(showAccentGlow: false)
 
             // Central content — fully centered on screen
             VStack(spacing: 0) {
                 Spacer()
 
-                // Hero: device info + button + status
-                VStack(spacing: 28) {
-                    if !viewModel.fqdn.isEmpty {
-                        Text(viewModel.fqdn)
-                            .font(.system(size: 34, weight: .semibold))
-                            .foregroundColor(TVColors.textSecondary)
-                    }
+                // Device info — fixed height so button position stays stable
+                VStack(spacing: 12) {
+                    Text(viewModel.fqdn.isEmpty ? " " : viewModel.fqdn)
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundColor(TVColors.textSecondary)
+                        .opacity(viewModel.fqdn.isEmpty ? 0 : 1)
 
-                    if !viewModel.ip.isEmpty {
-                        Text(viewModel.ip)
-                            .font(.system(size: 30, weight: .medium, design: .monospaced))
-                            .foregroundColor(TVColors.textSecondary.opacity(0.7))
-                    }
-
-                    TVConnectionButton(viewModel: viewModel)
-                        .padding(.vertical, 16)
-
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(statusColor)
-                            .frame(width: 10, height: 10)
-                            .shadow(color: statusColor.opacity(0.4), radius: 4)
-
-                        Text(viewModel.extensionStateText)
-                            .font(.system(size: 32, weight: .semibold))
-                            .foregroundColor(statusColor)
-                    }
+                    Text(viewModel.ip.isEmpty ? " " : viewModel.ip)
+                        .font(.system(size: 30, weight: .medium, design: .monospaced))
+                        .foregroundColor(TVColors.textSecondary.opacity(0.7))
+                        .opacity(viewModel.ip.isEmpty ? 0 : 1)
                 }
+                .padding(.bottom, 28)
+
+                // Button + status — always at the same vertical position
+                TVConnectionButton(viewModel: viewModel)
+                    .padding(.vertical, 16)
+
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 10, height: 10)
+                        .shadow(color: statusColor.opacity(0.4), radius: 4)
+
+                    Text(viewModel.extensionStateText)
+                        .font(.system(size: 32, weight: .semibold))
+                        .foregroundColor(statusColor)
+                }
+                .padding(.top, 28)
 
                 Spacer()
 
@@ -214,10 +214,6 @@ struct TVConnectionView: View {
                 .padding(.horizontal, 120)
                 .padding(.bottom, 50)
             }
-
-//            #if DEBUG
-//            TVDebugStateOverlay()
-//            #endif
         }
     }
     
@@ -235,17 +231,17 @@ struct TVConnectionView: View {
         guard viewModel.extensionStateText == "Connected" else { return "0" }
         return viewModel.peerViewModel.peerInfo.filter { $0.connStatus == "Connected" }.count.description
     }
-    
+
     private var totalPeersCount: String {
         guard viewModel.extensionStateText == "Connected" else { return "0" }
         return viewModel.peerViewModel.peerInfo.count.description
     }
-    
+
     private var activeNetworksCount: String {
         guard viewModel.extensionStateText == "Connected" else { return "0" }
         return viewModel.routeViewModel.routeInfo.filter { $0.selected }.count.description
     }
-    
+
     private var totalNetworksCount: String {
         guard viewModel.extensionStateText == "Connected" else { return "0" }
         return viewModel.routeViewModel.routeInfo.count.description
