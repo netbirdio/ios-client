@@ -201,23 +201,34 @@ class ViewModel: ObservableObject {
     func updateVPNDisplayState() {
         let newState: VPNDisplayState
 
-        // Immediate feedback before extension state catches up
-        if disconnectPressed && extensionState != .disconnected {
-            newState = .disconnecting
-        } else if connectPressed && extensionState == .disconnected {
+        // Extension state is the source of truth.
+        // Flags only provide immediate UI feedback for the brief gap
+        // between button press and extension state change.
+        switch extensionState {
+        case .connected:
+            // Extension confirmed connected — clear both flags
+            connectPressed = false
+            disconnectPressed = false
+            newState = .connected
+        case .connecting:
+            connectPressed = false
             newState = .connecting
-        } else {
-            // Extension state is the source of truth for tunnel lifecycle
-            switch extensionState {
-            case .connected:
-                newState = .connected
-            case .connecting:
+        case .disconnecting:
+            disconnectPressed = false
+            newState = .disconnecting
+        case .disconnected:
+            // Extension confirmed disconnected — clear both flags,
+            // unless a flag was JUST set (immediate feedback)
+            if connectPressed {
                 newState = .connecting
-            case .disconnecting:
-                newState = .disconnecting
-            default:
+            } else {
+                disconnectPressed = false
                 newState = .disconnected
             }
+        default:
+            connectPressed = false
+            disconnectPressed = false
+            newState = .disconnected
         }
 
         vpnDisplayState = newState
@@ -295,13 +306,8 @@ class ViewModel: ObservableObject {
                     self.extensionState = status
                     self.updateVPNDisplayState()
 
-                    // Reset flags when reaching terminal states
                     if status == .connected {
-                        self.connectPressed = false
                         self.routeViewModel.getRoutes()
-                    } else if status == .disconnected {
-                        self.disconnectPressed = false
-                        self.connectPressed = false
                     }
                 }
             }
