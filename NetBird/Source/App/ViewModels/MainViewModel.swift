@@ -107,6 +107,8 @@ class ViewModel: ObservableObject {
     }
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
+    @Published var connectOnDemand = false
+    @Published var showOnDemandAlert = false
     @Published var showRosenpassChangedAlert = false
     @Published var networkUnavailable = false
     @Published var isInternetConnected = true
@@ -140,6 +142,7 @@ class ViewModel: ObservableObject {
 
         // forceRelayConnection uses UserDefaults (not SDK), so it's safe to load during init
         self.forceRelayConnection = self.getForcedRelayConnectionEnabled()
+        self.connectOnDemand = self.getConnectOnDemandEnabled()
 
         networkMonitor.pathUpdateHandler = { [weak self] path in
             DispatchQueue.main.async {
@@ -299,6 +302,10 @@ class ViewModel: ObservableObject {
                     if status == .connected {
                         self.connectPressed = false
                         self.routeViewModel.getRoutes()
+                        // Re-enable On Demand if user has the setting turned on
+                        if self.connectOnDemand {
+                            self.networkExtensionAdapter.setOnDemandEnabled(true)
+                        }
                     } else if status == .disconnected {
                         self.disconnectPressed = false
                         self.connectPressed = false
@@ -313,6 +320,9 @@ class ViewModel: ObservableObject {
         self.fqdn = ""
         defaults.removeObject(forKey: "ip")
         defaults.removeObject(forKey: "fqdn")
+
+        // Disable On Demand to prevent reconnect loops without valid credentials
+        networkExtensionAdapter.setOnDemandEnabled(false)
 
         // Clear config JSON (contains server credentials and all settings)
         Preferences.removeConfigFromUserDefaults()
@@ -431,6 +441,21 @@ class ViewModel: ObservableObject {
         #endif
     }
     
+    func setConnectOnDemand(isEnabled: Bool) {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(isEnabled, forKey: GlobalConstants.keyConnectOnDemand)
+        self.connectOnDemand = isEnabled
+        networkExtensionAdapter.setOnDemandEnabled(isEnabled)
+        if isEnabled {
+            self.showOnDemandAlert = true
+        }
+    }
+
+    func getConnectOnDemandEnabled() -> Bool {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        return userDefaults?.bool(forKey: GlobalConstants.keyConnectOnDemand) ?? false
+    }
+
     func getDefaultStatus() -> StatusDetails {
         return StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
     }

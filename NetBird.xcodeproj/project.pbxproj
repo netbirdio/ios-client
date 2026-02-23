@@ -133,10 +133,6 @@
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
 		55B5E81B2F39158200852AA7 /* InternetStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B5E81A2F39158200852AA7 /* InternetStatusView.swift */; };
-		55EB61262F454B8F00D282D7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 55EB61252F454B8F00D282D7 /* GoogleService-Info.plist */; };
-		55EB61272F454B8F00D282D7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 55EB61252F454B8F00D282D7 /* GoogleService-Info.plist */; };
-		55EB61282F454B8F00D282D7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 55EB61252F454B8F00D282D7 /* GoogleService-Info.plist */; };
-		55EB61292F454B8F00D282D7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 55EB61252F454B8F00D282D7 /* GoogleService-Info.plist */; };
 		71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */; };
 		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
 		962925F1DAA24D40B98D395B /* iOSPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42873052F9544A89B1408339 /* iOSPeersView.swift */; };
@@ -303,7 +299,6 @@
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
 		53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedUserDefaultsTests.swift; sourceTree = "<group>"; };
 		55B5E81A2F39158200852AA7 /* InternetStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InternetStatusView.swift; sourceTree = "<group>"; };
-		55EB61252F454B8F00D282D7 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		5BFDF94163AF4C32A44DB3CD /* FirstLaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstLaunchView.swift; sourceTree = "<group>"; };
 		8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppLoggerTests.swift; sourceTree = "<group>"; };
 		8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSConnectionView.swift; sourceTree = "<group>"; };
@@ -477,7 +472,6 @@
 		50A8910E2A792A15007C48FC = {
 			isa = PBXGroup;
 			children = (
-				55EB61252F454B8F00D282D7 /* GoogleService-Info.plist */,
 				50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */,
 				50245A0A2A7AA9390034792B /* NetBird-Bridging-Header.h */,
 				50A891192A792A15007C48FC /* NetBird */,
@@ -803,7 +797,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				55EB61272F454B8F00D282D7 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -811,7 +804,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				55EB61292F454B8F00D282D7 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -821,7 +813,6 @@
 			files = (
 				501B0DCE2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD22AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
-				55EB61282F454B8F00D282D7 /* GoogleService-Info.plist in Resources */,
 				501B0DDC2AE04DDE004BE7A7 /* button-connected.json in Resources */,
 				501B0DD62AE04DDE004BE7A7 /* button-start-connecting.json in Resources */,
 				501B0DDA2AE04DDE004BE7A7 /* button-full.json in Resources */,
@@ -843,7 +834,6 @@
 				501B0DCD2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD12AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
 				501B0DDB2AE04DDE004BE7A7 /* button-connected.json in Resources */,
-				55EB61262F454B8F00D282D7 /* GoogleService-Info.plist in Resources */,
 				501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
 				501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */,
 			);

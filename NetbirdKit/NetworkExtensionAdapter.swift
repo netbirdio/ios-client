@@ -330,6 +330,38 @@ public class NetworkExtensionAdapter: ObservableObject {
         self.vpnManager?.connection.stopVPNTunnel()
     }
 
+    /// Updates the VPN On Demand configuration on the current manager.
+    /// When enabled, iOS will automatically reconnect the VPN after network changes or reboot.
+    /// Should only be enabled when the user is logged in to avoid reconnect loops.
+    func setOnDemandEnabled(_ enabled: Bool) {
+        guard let manager = self.vpnManager else {
+            logger.warning("setOnDemandEnabled: No VPN manager available")
+            return
+        }
+
+        if enabled {
+            let connectRule = NEOnDemandRuleConnect()
+            connectRule.interfaceTypeMatch = .any
+            manager.onDemandRules = [connectRule]
+        } else {
+            manager.onDemandRules = []
+        }
+        manager.isOnDemandEnabled = enabled
+
+        manager.saveToPreferences { error in
+            if let error = error {
+                self.logger.error("setOnDemandEnabled: Failed to save preferences: \(error.localizedDescription)")
+            } else {
+                self.logger.info("setOnDemandEnabled: On Demand \(enabled ? "enabled" : "disabled") successfully")
+            }
+        }
+    }
+
+    /// Returns the current On Demand enabled state from the VPN manager.
+    var isOnDemandEnabled: Bool {
+        return vpnManager?.isOnDemandEnabled ?? false
+    }
+
     func login(completion: @escaping (String) -> Void) {
         if self.session == nil {
             logger.error("login: No session available for login")

@@ -81,6 +81,12 @@ struct AdvancedView: View {
                     .onChange(of: viewModel.forceRelayConnection) { value in
                         viewModel.setForcedRelayConnection(isEnabled: value)
                     }
+
+                Toggle("Connect On Demand", isOn: $viewModel.connectOnDemand)
+                    .toggleStyle(SwitchToggleStyle(tint: .accentColor))
+                    .onChange(of: viewModel.connectOnDemand) { value in
+                        viewModel.setConnectOnDemand(isEnabled: value)
+                    }
             }
         }
         .onAppear {
@@ -100,6 +106,13 @@ struct AdvancedView: View {
             Alert(
                 title: Text("Force Relay"),
                 message: Text("To apply the setting, you will need to reconnect."),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .alert(isPresented: $viewModel.showOnDemandAlert) {
+            Alert(
+                title: Text("Connect On Demand"),
+                message: Text("VPN will automatically reconnect after network changes and device reboot."),
                 dismissButton: .default(Text("OK"))
             )
         }
