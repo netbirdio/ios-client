@@ -159,7 +159,6 @@
 		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
 		B1A2C3D52F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
 		B2C3D4E5F647890AB1CD0004 /* TVPreSharedKeyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F647890AB1CD0003 /* TVPreSharedKeyButton.swift */; };
-		C3D4E5F6A7B849001234AB01 /* TVMockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6A7B849001234AB00 /* TVMockData.swift */; };
 		F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 		F1258DEA2ED7B7D600C0D205 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE92ED7B7D200C0D205 /* Extensions.swift */; };
 		F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292042EDE5608001D91B8 /* JustifiedText.swift */; };
@@ -323,7 +322,6 @@
 		A1B2C3D4E5F647890AB1CD02 /* TVQRCodeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVQRCodeSheet.swift; sourceTree = "<group>"; };
 		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
 		B2C3D4E5F647890AB1CD0003 /* TVPreSharedKeyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPreSharedKeyButton.swift; sourceTree = "<group>"; };
-		C3D4E5F6A7B849001234AB00 /* TVMockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVMockData.swift; sourceTree = "<group>"; };
 		C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSNetworksView.swift; sourceTree = "<group>"; };
 		F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerViewModel.swift; sourceTree = "<group>"; };
 		F1258DE92ED7B7D200C0D205 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
@@ -424,7 +422,6 @@
 			children = (
 				4483B26C2F19331A00BD9F66 /* TVColors.swift */,
 				7666DE2AC1944E4D9129A6BE /* TVGradientBackground.swift */,
-				C3D4E5F6A7B849001234AB00 /* TVMockData.swift */,
 				A1B2C3D4E5F647890AB1CD02 /* TVQRCodeSheet.swift */,
 				B2C3D4E5F647890AB1CD0003 /* TVPreSharedKeyButton.swift */,
 				44F3E39A2EE2F9FA00C87FEC /* TVAuthView.swift */,
@@ -949,7 +946,6 @@
 				443782C72EDF288A00F9FA94 /* TVNetworksView.swift in Sources */,
 				44F3E39B2EE2F9FA00C87FEC /* TVAuthView.swift in Sources */,
 				4483B26D2F19331A00BD9F66 /* TVColors.swift in Sources */,
-				C3D4E5F6A7B849001234AB01 /* TVMockData.swift in Sources */,
 				6E2FE722F13945F48A3C9341 /* TVGradientBackground.swift in Sources */,
 				A1B2C3D4E5F647890AB1CD01 /* TVQRCodeSheet.swift in Sources */,
 				B2C3D4E5F647890AB1CD0004 /* TVPreSharedKeyButton.swift in Sources */,
