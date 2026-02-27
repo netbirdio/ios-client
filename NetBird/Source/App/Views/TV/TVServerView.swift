@@ -49,8 +49,7 @@ struct TVServerView: View {
     var body: some View {
         ZStack {
             // Background
-            TVColors.bgMenu
-                .ignoresSafeArea()
+            TVGradientBackground()
 
             HStack(spacing: 60) {
                 // Left Side - Form
@@ -74,16 +73,15 @@ struct TVServerView: View {
                             .foregroundColor(TVColors.textPrimary)
 
                         TextField("", text: $managementServerUrl, prompt: nil)
-                            .textFieldStyle(.plain)
                             .font(.system(size: 28))
                             .padding(20)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(TVColors.bgPrimary)
+                                    .fill(Color.white.opacity(0.06))
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(focusedField == .serverUrl ? Color.accentColor : Color.clear, lineWidth: 3)
+                                    .stroke(focusedField == .serverUrl ? Color.accentColor : Color.white.opacity(0.1), lineWidth: focusedField == .serverUrl ? 3 : 1)
                             )
                             .focused($focusedField, equals: .serverUrl)
                             .onChange(of: managementServerUrl) {
@@ -146,16 +144,15 @@ struct TVServerView: View {
                                 .foregroundColor(TVColors.textPrimary)
 
                             TextField("0EF79C2F-DEE1-419B-BFC8-1BF529332998", text: $setupKey)
-                                .textFieldStyle(.plain)
                                 .font(.system(size: 24, design: .monospaced))
                                 .padding(20)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(TVColors.bgPrimary)
+                                        .fill(Color.white.opacity(0.06))
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .stroke(focusedField == .setupKey ? Color.accentColor : Color.clear, lineWidth: 3)
+                                        .stroke(focusedField == .setupKey ? Color.accentColor : Color.white.opacity(0.1), lineWidth: focusedField == .setupKey ? 3 : 1)
                                 )
                                 .focused($focusedField, equals: .setupKey)
                                 .onChange(of: setupKey) {
@@ -279,7 +276,7 @@ struct TVServerView: View {
                 }
                 .padding(50)
                 .frame(width: 400)
-                .background(TVColors.bgPrimary.opacity(0.3))
+                .background(Color.white.opacity(0.03))
             }
         }
         .onAppear {

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0C71C019350D42AB8F110336 /* iOSSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */; };
 		1C4E6A81CD33FF6D2DEFF8D5 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91FA1F06D3375864C74EAB3B /* Foundation.framework */; };
 		1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */; };
 		36F90EF57603411B9916FDD6 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
@@ -109,7 +110,6 @@
 		508BD8472AF140D50055E415 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 508BD8462AF140D50055E415 /* FirebaseAnalytics */; };
 		508BD8492AF140D50055E415 /* FirebaseAnalyticsSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 508BD8482AF140D50055E415 /* FirebaseAnalyticsSwift */; };
 		508BD84B2AF140D50055E415 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 508BD84A2AF140D50055E415 /* FirebaseCrashlytics */; };
-		509CCD682BE8FFBF00B7C2D8 /* TabBarButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD672BE8FFBF00B7C2D8 /* TabBarButton.swift */; };
 		509CCD6A2BE908C000B7C2D8 /* RoutesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */; };
 		509CCD6C2BE90D0E00B7C2D8 /* PeerTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD6B2BE90D0E00B7C2D8 /* PeerTabView.swift */; };
 		509CCD6E2BE90D2100B7C2D8 /* RouteTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD6D2BE90D2100B7C2D8 /* RouteTabView.swift */; };
@@ -134,23 +134,31 @@
 		50CD84362AD82F9400CF830B /* ServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50CD84352AD82F9400CF830B /* ServerView.swift */; };
 		50D402972BD9B89300D4AC5B /* PeerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D402962BD9B89300D4AC5B /* PeerViewModel.swift */; };
 		50E608132A7958B100BAF09B /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608122A7958B100BAF09B /* MainViewModel.swift */; };
-		50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E6081F2A7979D600BAF09B /* SideDrawer.swift */; };
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
-		553537422F3A139900B321E7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 553537412F3A139900B321E7 /* GoogleService-Info.plist */; };
-		553537432F3A139900B321E7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 553537412F3A139900B321E7 /* GoogleService-Info.plist */; };
-		553537442F3A139900B321E7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 553537412F3A139900B321E7 /* GoogleService-Info.plist */; };
-		553537452F3A139900B321E7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 553537412F3A139900B321E7 /* GoogleService-Info.plist */; };
+		5577744C2F51AC1F00B09401 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5577744B2F51AC1F00B09401 /* GoogleService-Info.plist */; };
+		5577744D2F51AC1F00B09401 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5577744B2F51AC1F00B09401 /* GoogleService-Info.plist */; };
+		5577744E2F51AC1F00B09401 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5577744B2F51AC1F00B09401 /* GoogleService-Info.plist */; };
+		5577744F2F51AC1F00B09401 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5577744B2F51AC1F00B09401 /* GoogleService-Info.plist */; };
+		55B5E81B2F39158200852AA7 /* InternetStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B5E81A2F39158200852AA7 /* InternetStatusView.swift */; };
+		6E2FE722F13945F48A3C9341 /* TVGradientBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7666DE2AC1944E4D9129A6BE /* TVGradientBackground.swift */; };
+		71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */; };
 		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
+		962925F1DAA24D40B98D395B /* iOSPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42873052F9544A89B1408339 /* iOSPeersView.swift */; };
 		978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
 		978FC4712EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
 		978FC4722EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
 		978FC4732EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
 		978FC4742EEDF168002D0EB8 /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782BD2EDF284A00F9FA94 /* Platform.swift */; };
+		9B6C03E5ED4245A597C0FBE7 /* iOSConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */; };
 		9CC0E000AE3F165CA72FD465 /* AppLoggerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */; };
+		A1B2C3D4E5F647890AB1CD01 /* TVQRCodeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F647890AB1CD02 /* TVQRCodeSheet.swift */; };
 		A1B2C3D52EEDF501001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		A1B2C3D72EEDF503001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
+		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
+		B1A2C3D52F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
+		B2C3D4E5F647890AB1CD0004 /* TVPreSharedKeyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F647890AB1CD0003 /* TVPreSharedKeyButton.swift */; };
 		F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 		F1258DEA2ED7B7D600C0D205 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE92ED7B7D200C0D205 /* Extensions.swift */; };
 		F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292042EDE5608001D91B8 /* JustifiedText.swift */; };
@@ -232,7 +240,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSSettingsView.swift; sourceTree = "<group>"; };
 		3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlobalConstantsTests.swift; sourceTree = "<group>"; };
+		42873052F9544A89B1408339 /* iOSPeersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSPeersView.swift; sourceTree = "<group>"; };
 		441C5AEE2EDF0DAE0055EEFC /* NetBird TV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "NetBird TV.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		441C5AFD2EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NetBirdTVNetworkExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		443782BD2EDF284A00F9FA94 /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
@@ -279,7 +289,6 @@
 		506332012AF9415500BC8F0E /* CustomTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTextField.swift; sourceTree = "<group>"; };
 		50733EE9CE10FEDDA61600B8 /* NetBirdTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NetBirdTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		508BD8442AF04A990055E415 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
-		509CCD672BE8FFBF00B7C2D8 /* TabBarButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarButton.swift; sourceTree = "<group>"; };
 		509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutesViewModel.swift; sourceTree = "<group>"; };
 		509CCD6B2BE90D0E00B7C2D8 /* PeerTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerTabView.swift; sourceTree = "<group>"; };
 		509CCD6D2BE90D2100B7C2D8 /* RouteTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteTabView.swift; sourceTree = "<group>"; };
@@ -299,15 +308,21 @@
 		50D402962BD9B89300D4AC5B /* PeerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerViewModel.swift; sourceTree = "<group>"; };
 		50E608022A7950CB00BAF09B /* Device.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Device.swift; sourceTree = "<group>"; };
 		50E608122A7958B100BAF09B /* MainViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewModel.swift; sourceTree = "<group>"; };
-		50E6081F2A7979D600BAF09B /* SideDrawer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SideDrawer.swift; sourceTree = "<group>"; };
 		50E608232A79966600BAF09B /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
 		53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedUserDefaultsTests.swift; sourceTree = "<group>"; };
-		553537412F3A139900B321E7 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		5577744B2F51AC1F00B09401 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		55B5E81A2F39158200852AA7 /* InternetStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InternetStatusView.swift; sourceTree = "<group>"; };
+		7666DE2AC1944E4D9129A6BE /* TVGradientBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVGradientBackground.swift; sourceTree = "<group>"; };
 		8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppLoggerTests.swift; sourceTree = "<group>"; };
+		8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSConnectionView.swift; sourceTree = "<group>"; };
 		91FA1F06D3375864C74EAB3B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		978FC46F2EEDF167002D0EB8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationProvider.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F647890AB1CD02 /* TVQRCodeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVQRCodeSheet.swift; sourceTree = "<group>"; };
+		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
+		B2C3D4E5F647890AB1CD0003 /* TVPreSharedKeyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPreSharedKeyButton.swift; sourceTree = "<group>"; };
+		C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSNetworksView.swift; sourceTree = "<group>"; };
 		F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerViewModel.swift; sourceTree = "<group>"; };
 		F1258DE92ED7B7D200C0D205 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		F1B292042EDE5608001D91B8 /* JustifiedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JustifiedText.swift; sourceTree = "<group>"; };
@@ -324,10 +339,17 @@
 			);
 			target = 441C5AFC2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */;
 		};
+		557774D02F51B87000B09401 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"NetBird-TV-Info.plist",
+			);
+			target = 441C5AED2EDF0DAE0055EEFC /* NetBird TV */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		441C5AEF2EDF0DAE0055EEFC /* NetBird TV */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "NetBird TV"; sourceTree = "<group>"; };
+		441C5AEF2EDF0DAE0055EEFC /* NetBird TV */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (557774D02F51B87000B09401 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = "NetBird TV"; sourceTree = "<group>"; };
 		441C5AFF2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (441C5B072EDF0DD20055EEFC /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = NetBirdTVNetworkExtension; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -406,6 +428,9 @@
 			isa = PBXGroup;
 			children = (
 				4483B26C2F19331A00BD9F66 /* TVColors.swift */,
+				7666DE2AC1944E4D9129A6BE /* TVGradientBackground.swift */,
+				A1B2C3D4E5F647890AB1CD02 /* TVQRCodeSheet.swift */,
+				B2C3D4E5F647890AB1CD0003 /* TVPreSharedKeyButton.swift */,
 				44F3E39A2EE2F9FA00C87FEC /* TVAuthView.swift */,
 				443782C02EDF288A00F9FA94 /* TVMainView.swift */,
 				443782C12EDF288A00F9FA94 /* TVNetworksView.swift */,
@@ -472,7 +497,7 @@
 		50A8910E2A792A15007C48FC = {
 			isa = PBXGroup;
 			children = (
-				553537412F3A139900B321E7 /* GoogleService-Info.plist */,
+				5577744B2F51AC1F00B09401 /* GoogleService-Info.plist */,
 				50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */,
 				50245A0A2A7AA9390034792B /* NetBird-Bridging-Header.h */,
 				50A891192A792A15007C48FC /* NetBird */,
@@ -535,6 +560,7 @@
 			children = (
 				50E608092A79557A00BAF09B /* Components */,
 				50A8911C2A792A15007C48FC /* MainView.swift */,
+				55B5E81A2F39158200852AA7 /* InternetStatusView.swift */,
 				50E608232A79966600BAF09B /* AboutView.swift */,
 				50E608252A79968500BAF09B /* AdvancedView.swift */,
 				50CD84352AD82F9400CF830B /* ServerView.swift */,
@@ -569,14 +595,13 @@
 			children = (
 				F1B292042EDE5608001D91B8 /* JustifiedText.swift */,
 				F1258DE92ED7B7D200C0D205 /* Extensions.swift */,
-				50E6081F2A7979D600BAF09B /* SideDrawer.swift */,
 				502455BC2A79B0480034792B /* CustomBackButton.swift */,
 				502455BE2A79B4500034792B /* SolidButton.swift */,
 				50CD81AF2AD5B94D00CF830B /* PeerCard.swift */,
+				B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */,
 				508BD8442AF04A990055E415 /* SafariView.swift */,
 				506331FA2AF52AB900BC8F0E /* CustomLottieView.swift */,
 				506332012AF9415500BC8F0E /* CustomTextField.swift */,
-				509CCD672BE8FFBF00B7C2D8 /* TabBarButton.swift */,
 				50BB17402C30239400518BCA /* RouteCard.swift */,
 				505344B82C3EFE4C00223065 /* TransparentGradientButton.swift */,
 			);
@@ -586,6 +611,7 @@
 		50E6080A2A79568800BAF09B /* App */ = {
 			isa = PBXGroup;
 			children = (
+				A35A69207D60447AA6465276 /* iOS */,
 				443782C42EDF288A00F9FA94 /* TV */,
 				443782BE2EDF284A00F9FA94 /* Platform */,
 				50A8911A2A792A15007C48FC /* NetBirdApp.swift */,
@@ -603,6 +629,18 @@
 				53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */,
 			);
 			path = NetBirdTests;
+			sourceTree = "<group>";
+		};
+		A35A69207D60447AA6465276 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */,
+				42873052F9544A89B1408339 /* iOSPeersView.swift */,
+				C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */,
+				2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */,
+			);
+			name = iOS;
+			path = Views/iOS;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -786,7 +824,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				553537452F3A139900B321E7 /* GoogleService-Info.plist in Resources */,
+				5577744E2F51AC1F00B09401 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -794,7 +832,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				553537422F3A139900B321E7 /* GoogleService-Info.plist in Resources */,
+				5577744D2F51AC1F00B09401 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -802,10 +840,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				553537442F3A139900B321E7 /* GoogleService-Info.plist in Resources */,
 				501B0DCE2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD22AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
 				501B0DDC2AE04DDE004BE7A7 /* button-connected.json in Resources */,
+				5577744C2F51AC1F00B09401 /* GoogleService-Info.plist in Resources */,
 				501B0DD62AE04DDE004BE7A7 /* button-start-connecting.json in Resources */,
 				501B0DDA2AE04DDE004BE7A7 /* button-full.json in Resources */,
 				501B0DD02AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
@@ -826,8 +864,8 @@
 				501B0DCD2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD12AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
 				501B0DDB2AE04DDE004BE7A7 /* button-connected.json in Resources */,
+				5577744F2F51AC1F00B09401 /* GoogleService-Info.plist in Resources */,
 				501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
-				553537432F3A139900B321E7 /* GoogleService-Info.plist in Resources */,
 				501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -915,6 +953,9 @@
 				443782C72EDF288A00F9FA94 /* TVNetworksView.swift in Sources */,
 				44F3E39B2EE2F9FA00C87FEC /* TVAuthView.swift in Sources */,
 				4483B26D2F19331A00BD9F66 /* TVColors.swift in Sources */,
+				6E2FE722F13945F48A3C9341 /* TVGradientBackground.swift in Sources */,
+				A1B2C3D4E5F647890AB1CD01 /* TVQRCodeSheet.swift in Sources */,
+				B2C3D4E5F647890AB1CD0004 /* TVPreSharedKeyButton.swift in Sources */,
 				443782C82EDF288A00F9FA94 /* TVMainView.swift in Sources */,
 				978FC4732EEDF167002D0EB8 /* AppLogger.swift in Sources */,
 			);
@@ -959,6 +1000,7 @@
 				50CD81502AD0355000CF830B /* PacketTunnelProviderSettingsManager.swift in Sources */,
 				50003BCD2AFD3B2B00E5EB6B /* ClientState.swift in Sources */,
 				50CD81B12AD5B94D00CF830B /* PeerCard.swift in Sources */,
+				B1A2C3D52F3A000100000001 /* PeerDetailSheet.swift in Sources */,
 				50C78AD12A82BBFD006E898D /* Device.swift in Sources */,
 				505118CF2AD96ECA003027D3 /* x25519.c in Sources */,
 				F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */,
@@ -981,8 +1023,8 @@
 				502455BF2A79B4500034792B /* SolidButton.swift in Sources */,
 				50BB17412C30239400518BCA /* RouteCard.swift in Sources */,
 				505344B92C3EFE4C00223065 /* TransparentGradientButton.swift in Sources */,
-				50E608202A7979D600BAF09B /* SideDrawer.swift in Sources */,
 				50216D932ACB2488009574C9 /* NetworkExtensionAdapter.swift in Sources */,
+				55B5E81B2F39158200852AA7 /* InternetStatusView.swift in Sources */,
 				509CCD6C2BE90D0E00B7C2D8 /* PeerTabView.swift in Sources */,
 				506331FB2AF52AB900BC8F0E /* CustomLottieView.swift in Sources */,
 				50003BCC2AFD3B0C00E5EB6B /* ClientState.swift in Sources */,
@@ -1000,11 +1042,11 @@
 				50E608262A79968500BAF09B /* AdvancedView.swift in Sources */,
 				50E608242A79966600BAF09B /* AboutView.swift in Sources */,
 				50CD81622AD0595E00CF830B /* DNSManager.swift in Sources */,
-				509CCD682BE8FFBF00B7C2D8 /* TabBarButton.swift in Sources */,
 				502455BD2A79B0480034792B /* CustomBackButton.swift in Sources */,
 				50216D892ACB18EE009574C9 /* Preferences.swift in Sources */,
 				A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */,
 				50CD81B02AD5B94D00CF830B /* PeerCard.swift in Sources */,
+				B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */,
 				50003BCE2AFD405600E5EB6B /* ConnectionListener.swift in Sources */,
 				50003BC72AFBD7F200E5EB6B /* NetBirdAdapter.swift in Sources */,
 				F1B292052EDE5610001D91B8 /* JustifiedText.swift in Sources */,
@@ -1012,6 +1054,10 @@
 				F1B2920A2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */,
 				978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */,
 				978FC4742EEDF168002D0EB8 /* Platform.swift in Sources */,
+				9B6C03E5ED4245A597C0FBE7 /* iOSConnectionView.swift in Sources */,
+				962925F1DAA24D40B98D395B /* iOSPeersView.swift in Sources */,
+				71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */,
+				0C71C019350D42AB8F110336 /* iOSSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1087,7 +1133,9 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "NetBird-TV-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = NetBird;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
@@ -1128,7 +1176,9 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "NetBird-TV-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = NetBird;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
@@ -1416,7 +1466,7 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -1438,7 +1488,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 0.0.18;
+				MARKETING_VERSION = 0.0.16;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1462,7 +1512,7 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -1484,7 +1534,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 0.0.18;
+				MARKETING_VERSION = 0.0.16;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
