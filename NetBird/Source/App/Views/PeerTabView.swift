@@ -74,46 +74,10 @@ struct PeerListHeader: View {
 
 struct NoPeersView: View {
     var body: some View {
-        VStack {
-            Image("icon-empty-box")
-                .resizable()
-                .scaledToFit()
-                .frame(height: Screen.height * 0.2)
-                .padding(.top, Screen.height * 0.05)
-
-            Text("It looks like there are no machines that you can connect to...")
-                .font(.system(size: 18 * Layout.fontScale, weight: .regular))
-                .foregroundColor(Color("TextPrimary"))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, Screen.width * 0.075)
-                .padding(.top, Screen.height * 0.04)
-
-            if let url = URL(string: "https://docs.netbird.io") {
-                Link(destination: url) {
-                    Text("Learn why")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.accentColor)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.orange.opacity(0.8), lineWidth: 2)
-                                )
-                        )
-                }
-                .padding(.top, Screen.height * 0.04)
-                .padding(.horizontal, Screen.width * 0.05)
-            } else {
-                Text("Unable to load the documentation link.")
-                    .font(.footnote)
-                    .foregroundColor(.red)
-                    .padding(.top, Screen.height * 0.04)
-            }
-        }
-        .padding(.horizontal, Screen.width * 0.05)
+        EmptyTabPlaceholder(
+            message: "It looks like there are no machines that you can connect to...",
+            learnMoreURL: URL(string: "https://docs.netbird.io")
+        )
     }
 }
 
@@ -132,21 +96,25 @@ struct PeerListView: View {
                     }
                     #if os(iOS)
                     .contextMenu {
-                        Button("Copy FQDN") {
-                            UIPasteboard.general.string = peer.fqdn
-                            viewModel.showFqdnCopiedAlert = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                withAnimation {
-                                    viewModel.showFqdnCopiedAlert = false
+                        if !peer.fqdn.isEmpty {
+                            Button("Copy FQDN") {
+                                UIPasteboard.general.string = peer.fqdn
+                                viewModel.showFqdnCopiedAlert = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    withAnimation {
+                                        viewModel.showFqdnCopiedAlert = false
+                                    }
                                 }
                             }
                         }
-                        Button("Copy IP") {
-                            UIPasteboard.general.string = peer.ip
-                            viewModel.showIpCopiedAlert = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                withAnimation {
-                                    viewModel.showIpCopiedAlert = false
+                        if !peer.ip.isEmpty {
+                            Button("Copy IP") {
+                                UIPasteboard.general.string = peer.ip
+                                viewModel.showIpCopiedAlert = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    withAnimation {
+                                        viewModel.showIpCopiedAlert = false
+                                    }
                                 }
                             }
                         }

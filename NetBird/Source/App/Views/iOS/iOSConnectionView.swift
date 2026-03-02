@@ -110,7 +110,7 @@ struct iOSConnectionView: View {
                                 }
                             }
                         }) {
-                            CustomLottieView(vpnState: $viewModel.vpnDisplayState, viewModel: viewModel)
+                            CustomLottieView(vpnState: $viewModel.vpnDisplayState)
                                 .id(animationKey)
                                 .frame(width: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79), height: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79))
                                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
@@ -127,6 +127,17 @@ struct iOSConnectionView: View {
                         Spacer()
                     }
                     .padding()
+
+                    // Network warning banner – above tab bar
+                    if viewModel.vpnDisplayState == .connected && !viewModel.isInternetConnected {
+                        VStack {
+                            Spacer()
+                            NetworkWarningBanner()
+                                .padding(.bottom, geometry.safeAreaInsets.bottom + 80)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .animation(.easeInOut(duration: 0.3), value: viewModel.isInternetConnected)
+                    }
 
                     // Hidden NavigationLink for ServerView
                     NavigationLink("", destination: ServerView(), isActive: $viewModel.navigateToServerView)
@@ -148,13 +159,6 @@ struct iOSConnectionView: View {
                             print("Finish login")
                             viewModel.networkExtensionAdapter.startVPNConnection()
                         })
-                    }
-                    // Internet status – top-left corner
-                    if !viewModel.networkExtensionAdapter.showBrowser {
-                        InternetStatusView()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                            .padding(.top, 16)
-                            .padding(.leading, 16)
                     }
 
                 } else {

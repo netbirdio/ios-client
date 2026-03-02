@@ -6,7 +6,6 @@ import NetworkExtension
 struct CustomLottieView: UIViewRepresentable {
     @Environment(\.colorScheme) var colorScheme
     @Binding var vpnState: VPNDisplayState
-    @StateObject var viewModel: ViewModel
 
     func makeUIView(context: Context) -> LottieAnimationView {
         let animationView = LottieAnimationView()

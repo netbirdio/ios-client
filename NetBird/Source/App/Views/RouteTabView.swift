@@ -79,34 +79,10 @@ struct RouteListView: View {
 }
 
 struct NoRoutesView: View {
-    
     var body: some View {
-        Group {
-            Image("icon-empty-box")
-                .padding(.top, Screen.height * 0.05)
-            Text("It looks like there are no resources that you can connect to ...")
-                .font(.system(size: 18 * Layout.fontScale, weight: .regular))
-                .foregroundColor(Color("TextPrimary"))
-                .multilineTextAlignment(.center)
-                .padding(.top, Screen.height * 0.04)
-                .padding([.leading, .trailing], Screen.width * 0.075)
-            Link(destination: URL(string: "https://docs.netbird.io/how-to/networks")!) {
-                Text("Learn why")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.accentColor)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 3)
-                                    .stroke(Color.orange.darker(), lineWidth: 2)
-                            )
-                    )
-                .padding(.top, Screen.height * 0.04)
-            }
-        }
-        .padding([.leading, .trailing], Screen.width * 0.05)
+        EmptyTabPlaceholder(
+            message: "It looks like there are no resources that you can connect to...",
+            learnMoreURL: URL(string: "https://docs.netbird.io/how-to/networks")
+        )
     }
 }

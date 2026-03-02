@@ -172,7 +172,7 @@ extension View {
     func platformPadding(_ edges: Edge.Set = .all) -> some View {
         self.padding(edges, Layout.contentPadding)
     }
-    
+
     /// Makes the view focusable on tvOS (no-op on iOS)
     @ViewBuilder
     func tvFocusable() -> some View {

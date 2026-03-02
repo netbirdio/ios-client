@@ -55,17 +55,19 @@ struct iOSSettingsView: View {
                         }
                     }
 
-                    Link(destination: URL(string: "https://docs.netbird.io")!) {
-                        HStack {
-                            Image(systemName: "book")
-                                .foregroundColor(.accentColor)
-                                .frame(width: 24)
-                            Text("Documentation")
-                                .foregroundColor(Color("TextPrimary"))
-                            Spacer()
-                            Image(systemName: "arrow.up.right.square")
-                                .foregroundColor(Color("TextSecondary"))
-                                .font(.system(size: 14))
+                    if let docsURL = URL(string: "https://docs.netbird.io") {
+                        Link(destination: docsURL) {
+                            HStack {
+                                Image(systemName: "book")
+                                    .foregroundColor(.accentColor)
+                                    .frame(width: 24)
+                                Text("Documentation")
+                                    .foregroundColor(Color("TextPrimary"))
+                                Spacer()
+                                Image(systemName: "arrow.up.right.square")
+                                    .foregroundColor(Color("TextSecondary"))
+                                    .font(.system(size: 14))
+                            }
                         }
                     }
                 }
