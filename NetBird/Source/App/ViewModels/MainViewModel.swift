@@ -10,6 +10,7 @@
 
 import SwiftUI
 import NetworkExtension
+import Network
 import os
 import Combine
 import NetBirdSDK
@@ -42,6 +43,13 @@ class SetupKeyErrListener: NSObject, NetBirdSDKErrListenerProtocol {
     }
 }
 
+enum VPNDisplayState {
+    case connected
+    case connecting
+    case disconnecting
+    case disconnected
+}
+
 /// For both iOS and tvOS (tvOS 17+ required for VPN support).
 @MainActor
 class ViewModel: ObservableObject {
@@ -65,16 +73,15 @@ class ViewModel: ObservableObject {
     @Published var showFqdnCopiedAlert = false
     @Published var showIpCopiedAlert = false
     @Published var showAuthenticationRequired = false
-    @Published var isSheetExpanded = false
-    @Published var presentSideDrawer = false
     @Published var navigateToServerView = false
     
     @Published var extensionState: NEVPNStatus = .disconnected
     @Published var managementStatus: ClientState = .disconnected
     @Published var statusDetailsValid = false
     @Published var extensionStateText = "Disconnected"
-    @Published var connectPressed = false
-    @Published var disconnectPressed = false
+    @Published var vpnDisplayState: VPNDisplayState = .disconnected
+    var connectPressed = false
+    var disconnectPressed = false
     
     @Published var rosenpassEnabled = false
     @Published var rosenpassPermissive = false
@@ -102,6 +109,7 @@ class ViewModel: ObservableObject {
     @Published var showForceRelayAlert = false
     @Published var showRosenpassChangedAlert = false
     @Published var networkUnavailable = false
+    @Published var isInternetConnected = true
 
     /// Platform-agnostic configuration provider.
     /// Abstracts iOS SDK preferences vs tvOS UserDefaults + IPC.
@@ -109,8 +117,10 @@ class ViewModel: ObservableObject {
 
     var buttonLock = false
     let defaults = UserDefaults.standard
-    
+
     private var cancellables = Set<AnyCancellable>()
+    private let networkMonitor = NWPathMonitor()
+    private let monitorQueue = DispatchQueue(label: "io.netbird.networkMonitor")
     
     @Published var peerViewModel: PeerViewModel
     @Published var routeViewModel: RoutesViewModel
@@ -130,6 +140,14 @@ class ViewModel: ObservableObject {
 
         // forceRelayConnection uses UserDefaults (not SDK), so it's safe to load during init
         self.forceRelayConnection = self.getForcedRelayConnectionEnabled()
+
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            DispatchQueue.main.async {
+                self?.isInternetConnected = path.status == .satisfied
+                self?.updateVPNDisplayState()
+            }
+        }
+        networkMonitor.start(queue: monitorQueue)
 
         $setupKey
             .removeDuplicates()
@@ -151,6 +169,7 @@ class ViewModel: ObservableObject {
         userDefaults?.set(false, forKey: GlobalConstants.keyNetworkUnavailable)
         userDefaults?.synchronize()
         #endif
+        updateVPNDisplayState()
         logger.info("connect: connectPressed=true, buttonLock=true, starting adapter...")
 
         // Reset buttonLock after 3 seconds
@@ -175,6 +194,54 @@ class ViewModel: ObservableObject {
                 self.buttonLock = false
             }
             self.networkExtensionAdapter.stop()
+            self.updateVPNDisplayState()
+        }
+    }
+
+    func updateVPNDisplayState() {
+        let newState: VPNDisplayState
+
+        // Extension state is the source of truth.
+        // Flags only provide immediate UI feedback for the brief gap
+        // between button press and extension state change.
+        switch extensionState {
+        case .connected:
+            // Extension confirmed connected — clear both flags
+            connectPressed = false
+            disconnectPressed = false
+            newState = .connected
+        case .connecting:
+            connectPressed = false
+            newState = .connecting
+        case .disconnecting:
+            disconnectPressed = false
+            newState = .disconnecting
+        case .disconnected:
+            // Extension confirmed disconnected — clear both flags,
+            // unless a flag was JUST set (immediate feedback)
+            if connectPressed {
+                newState = .connecting
+            } else {
+                disconnectPressed = false
+                newState = .disconnected
+            }
+        default:
+            connectPressed = false
+            disconnectPressed = false
+            newState = .disconnected
+        }
+
+        vpnDisplayState = newState
+
+        switch newState {
+        case .connected:
+            extensionStateText = isInternetConnected ? "Connected" : "Offline"
+        case .connecting:
+            extensionStateText = "Connecting..."
+        case .disconnecting:
+            extensionStateText = "Disconnecting..."
+        case .disconnected:
+            extensionStateText = "Disconnected"
         }
     }
     
@@ -184,9 +251,9 @@ class ViewModel: ObservableObject {
             self.checkExtensionState()
             self.checkNetworkUnavailableFlag()
 
-            if self.extensionState == .disconnected && self.extensionStateText == "Connected" {
+            if self.extensionState == .disconnected && self.vpnDisplayState == .connected {
                 self.showAuthenticationRequired = true
-                self.extensionStateText = "Disconnected"
+                self.updateVPNDisplayState()
             }
 
             if details.ip != self.ip || details.fqdn != self.fqdn || details.managementStatus != self.managementStatus
@@ -204,6 +271,7 @@ class ViewModel: ObservableObject {
                 
                 if details.managementStatus != self.managementStatus {
                     self.managementStatus = details.managementStatus
+                    self.updateVPNDisplayState()
                 }
                 
                 // Login required detection is handled by the network extension via signalLoginRequired()
@@ -236,27 +304,11 @@ class ViewModel: ObservableObject {
                 if statuses.contains(status) && self.extensionState != status {
                     print("Changing extension status to \(status.rawValue)")
                     self.extensionState = status
+                    self.updateVPNDisplayState()
 
-                    // On tvOS, update extensionStateText directly since we don't have CustomLottieView
-                    #if os(tvOS)
-                    switch status {
-                    case .connected:
-                        self.extensionStateText = "Connected"
-                        self.connectPressed = false
-                        // Fetch routes when connected so the Networks counter is accurate on the home screen
+                    if status == .connected {
                         self.routeViewModel.getRoutes()
-                    case .disconnected:
-                        self.extensionStateText = "Disconnected"
-                        self.disconnectPressed = false
-                    case .connecting:
-                        self.extensionStateText = "Connecting"
-                    case .disconnecting:
-                        self.extensionStateText = "Disconnecting"
-                    default:
-                        break
                     }
-                    self.logger.info("checkExtensionState: tvOS - extensionStateText = \(self.extensionStateText)")
-                    #endif
                 }
             }
         }
@@ -290,7 +342,6 @@ class ViewModel: ObservableObject {
         if configProvider.commit() {
             self.close()
             self.presharedKeySecure = true
-            self.presentSideDrawer = false
             self.showPreSharedKeyChangedInfo = true
         } else {
             print("Failed to update preshared key")
@@ -420,8 +471,8 @@ class ViewModel: ObservableObject {
 
         // Reset connection state
         extensionState = .disconnected
-        extensionStateText = "Disconnected"
         managementStatus = .disconnected
+        updateVPNDisplayState()
 
         // Clear peer info
         peerViewModel.peerInfo = []
@@ -451,6 +502,7 @@ class ViewModel: ObservableObject {
         if isUnavailable != networkUnavailable {
             AppLogger.shared.log("Network unavailable flag changed: \(isUnavailable)")
             networkUnavailable = isUnavailable
+            updateVPNDisplayState()
         }
         #endif
         // tvOS: Network status is determined by extension state, not a shared flag
