@@ -58,6 +58,7 @@
 		44F3E3982EE2F89200C87FEC /* NetworkChangeListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50245A2D2A7BDC470034792B /* NetworkChangeListener.swift */; };
 		44F3E3992EE2F90900C87FEC /* libresolv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 44DCF5B82EDF4D900026078E /* libresolv.tbd */; };
 		44F3E39B2EE2F9FA00C87FEC /* TVAuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44F3E39A2EE2F9FA00C87FEC /* TVAuthView.swift */; };
+		4849965EC2515950756C8F10 /* VPNOnDemandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CD257EF78F038560FF3112D /* VPNOnDemandView.swift */; };
 		50003BBC2AFBCA6B00E5EB6B /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = 50003BBB2AFBCA6B00E5EB6B /* FirebasePerformance */; };
 		50003BBE2AFBCA7900E5EB6B /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = 50003BBD2AFBCA7900E5EB6B /* FirebasePerformance */; };
 		50003BC42AFBD7D500E5EB6B /* PacketTunnelProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50245A562A80431C0034792B /* PacketTunnelProvider.swift */; };
@@ -133,10 +134,6 @@
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
 		55B5E81B2F39158200852AA7 /* InternetStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B5E81A2F39158200852AA7 /* InternetStatusView.swift */; };
-		55EB61262F454B8F00D282D7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 55EB61252F454B8F00D282D7 /* GoogleService-Info.plist */; };
-		55EB61272F454B8F00D282D7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 55EB61252F454B8F00D282D7 /* GoogleService-Info.plist */; };
-		55EB61282F454B8F00D282D7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 55EB61252F454B8F00D282D7 /* GoogleService-Info.plist */; };
-		55EB61292F454B8F00D282D7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 55EB61252F454B8F00D282D7 /* GoogleService-Info.plist */; };
 		71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */; };
 		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
 		962925F1DAA24D40B98D395B /* iOSPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42873052F9544A89B1408339 /* iOSPeersView.swift */; };
@@ -150,6 +147,14 @@
 		A1B2C3D52EEDF501001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		A1B2C3D72EEDF503001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
+		A1C3D5E92F000003001A2B3C /* WiFiOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */; };
+		A1C3D5EA2F000004001A2B3C /* WiFiOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */; };
+		A1C3D5EB2F000005001A2B3C /* WiFiOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */; };
+		A1C3D5EC2F000006001A2B3C /* WiFiOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */; };
+		A1C3D5ED2F000007001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
+		A1C3D5EE2F000008001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
+		A1C3D5EF2F000009001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
+		A1C3D5F02F00000A001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
 		E1A0B0012F5E000100000001 /* EmptyTabPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */; };
 		E1B0C0012F60000100000001 /* NetworkWarningBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */; };
@@ -303,13 +308,15 @@
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
 		53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedUserDefaultsTests.swift; sourceTree = "<group>"; };
 		55B5E81A2F39158200852AA7 /* InternetStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InternetStatusView.swift; sourceTree = "<group>"; };
-		55EB61252F454B8F00D282D7 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		5BFDF94163AF4C32A44DB3CD /* FirstLaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstLaunchView.swift; sourceTree = "<group>"; };
 		8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppLoggerTests.swift; sourceTree = "<group>"; };
 		8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSConnectionView.swift; sourceTree = "<group>"; };
 		91FA1F06D3375864C74EAB3B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		978FC46F2EEDF167002D0EB8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
+		9CD257EF78F038560FF3112D /* VPNOnDemandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNOnDemandView.swift; sourceTree = "<group>"; };
 		A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationProvider.swift; sourceTree = "<group>"; };
+		A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiOnDemandPolicy.swift; sourceTree = "<group>"; };
+		A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellularOnDemandPolicy.swift; sourceTree = "<group>"; };
 		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
 		C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSNetworksView.swift; sourceTree = "<group>"; };
 		E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyTabPlaceholder.swift; sourceTree = "<group>"; };
@@ -477,7 +484,6 @@
 		50A8910E2A792A15007C48FC = {
 			isa = PBXGroup;
 			children = (
-				55EB61252F454B8F00D282D7 /* GoogleService-Info.plist */,
 				50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */,
 				50245A0A2A7AA9390034792B /* NetBird-Bridging-Header.h */,
 				50A891192A792A15007C48FC /* NetBird */,
@@ -520,6 +526,8 @@
 			children = (
 				978FC46F2EEDF167002D0EB8 /* AppLogger.swift */,
 				F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */,
+				A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */,
+				A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */,
 				F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */,
 				50245A292A7BDB590034792B /* Preferences.swift */,
 				A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */,
@@ -616,6 +624,7 @@
 				42873052F9544A89B1408339 /* iOSPeersView.swift */,
 				C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */,
 				2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */,
+				9CD257EF78F038560FF3112D /* VPNOnDemandView.swift */,
 				5BFDF94163AF4C32A44DB3CD /* FirstLaunchView.swift */,
 			);
 			name = iOS;
@@ -803,7 +812,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				55EB61272F454B8F00D282D7 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -811,7 +819,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				55EB61292F454B8F00D282D7 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -821,7 +828,6 @@
 			files = (
 				501B0DCE2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD22AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
-				55EB61282F454B8F00D282D7 /* GoogleService-Info.plist in Resources */,
 				501B0DDC2AE04DDE004BE7A7 /* button-connected.json in Resources */,
 				501B0DD62AE04DDE004BE7A7 /* button-start-connecting.json in Resources */,
 				501B0DDA2AE04DDE004BE7A7 /* button-full.json in Resources */,
@@ -843,7 +849,6 @@
 				501B0DCD2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD12AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
 				501B0DDB2AE04DDE004BE7A7 /* button-connected.json in Resources */,
-				55EB61262F454B8F00D282D7 /* GoogleService-Info.plist in Resources */,
 				501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
 				501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */,
 			);
@@ -911,6 +916,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				445B5F752EECAF01008932B8 /* GlobalConstants.swift in Sources */,
+				A1C3D5E92F000003001A2B3C /* WiFiOnDemandPolicy.swift in Sources */,
+				A1C3D5ED2F000007001A2B3C /* CellularOnDemandPolicy.swift in Sources */,
 				445B5F762EECAF02008932B8 /* EnvVarPackager.swift in Sources */,
 				443782D02EDF29A800F9FA94 /* Device.swift in Sources */,
 				443782D12EDF29A800F9FA94 /* Preferences.swift in Sources */,
@@ -947,6 +954,8 @@
 				44F3E38D2EE2151100C87FEC /* Device.swift in Sources */,
 				44F3E38E2EE2151100C87FEC /* RoutesSelectionDetails.swift in Sources */,
 				445B5F732EECAE32008932B8 /* GlobalConstants.swift in Sources */,
+				A1C3D5EA2F000004001A2B3C /* WiFiOnDemandPolicy.swift in Sources */,
+				A1C3D5EE2F000008001A2B3C /* CellularOnDemandPolicy.swift in Sources */,
 				44F3E38F2EE2151100C87FEC /* DNSManager.swift in Sources */,
 				44F3E3902EE2151100C87FEC /* StatusDetails.swift in Sources */,
 				44F3E3912EE2151100C87FEC /* ClientState.swift in Sources */,
@@ -971,6 +980,8 @@
 				50213A2D2A8D0AA30031D993 /* Preferences.swift in Sources */,
 				50CD81A82AD5504B00CF830B /* StatusDetails.swift in Sources */,
 				F1B2920B2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */,
+				A1C3D5EB2F000005001A2B3C /* WiFiOnDemandPolicy.swift in Sources */,
+				A1C3D5EF2F000009001A2B3C /* CellularOnDemandPolicy.swift in Sources */,
 				50003BCA2AFD2F5E00E5EB6B /* ConnectionListener.swift in Sources */,
 				50213A262A8D0A870031D993 /* NetworkChangeListener.swift in Sources */,
 				50CD81502AD0355000CF830B /* PacketTunnelProviderSettingsManager.swift in Sources */,
@@ -1024,12 +1035,15 @@
 				50003BC72AFBD7F200E5EB6B /* NetBirdAdapter.swift in Sources */,
 				50E608132A7958B100BAF09B /* MainViewModel.swift in Sources */,
 				F1B2920A2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */,
+				A1C3D5EC2F000006001A2B3C /* WiFiOnDemandPolicy.swift in Sources */,
+				A1C3D5F02F00000A001A2B3C /* CellularOnDemandPolicy.swift in Sources */,
 				978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */,
 				978FC4742EEDF168002D0EB8 /* Platform.swift in Sources */,
 				9B6C03E5ED4245A597C0FBE7 /* iOSConnectionView.swift in Sources */,
 				962925F1DAA24D40B98D395B /* iOSPeersView.swift in Sources */,
 				71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */,
 				0C71C019350D42AB8F110336 /* iOSSettingsView.swift in Sources */,
+				4849965EC2515950756C8F10 /* VPNOnDemandView.swift in Sources */,
 				F2DCB2437ECA42C3AEC3C895 /* FirstLaunchView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1106,7 +1120,9 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "NetBird-TV-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = NetBird;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
@@ -1147,7 +1163,9 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "NetBird-TV-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = NetBird;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
@@ -1435,7 +1453,7 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -1443,6 +1461,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NetBird/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NetBird;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -1457,7 +1476,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1481,7 +1500,7 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -1489,6 +1508,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NetBird/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NetBird;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -1503,7 +1523,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

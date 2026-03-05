@@ -340,9 +340,16 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
 
         if enabled {
-            let connectRule = NEOnDemandRuleConnect()
-            connectRule.interfaceTypeMatch = .any
-            manager.onDemandRules = [connectRule]
+            // Build rules from saved settings
+            let rules = buildOnDemandRules()
+            if rules.isEmpty {
+                // Fallback: connect on any interface
+                let connectRule = NEOnDemandRuleConnect()
+                connectRule.interfaceTypeMatch = .any
+                manager.onDemandRules = [connectRule]
+            } else {
+                manager.onDemandRules = rules
+            }
         } else {
             manager.onDemandRules = []
         }
@@ -355,6 +362,97 @@ public class NetworkExtensionAdapter: ObservableObject {
                 self.logger.info("setOnDemandEnabled: On Demand \(enabled ? "enabled" : "disabled") successfully")
             }
         }
+    }
+
+    /// Applies granular On Demand rules based on Wi-Fi/Cellular policies and network lists.
+    func applyOnDemandRules(wifiPolicy: WiFiOnDemandPolicy, cellularPolicy: CellularOnDemandPolicy, wifiNetworks: [String]) {
+        guard let manager = self.vpnManager else {
+            logger.warning("applyOnDemandRules: No VPN manager available")
+            return
+        }
+
+        let rules = buildOnDemandRulesFrom(wifiPolicy: wifiPolicy, cellularPolicy: cellularPolicy, wifiNetworks: wifiNetworks)
+        if rules.isEmpty {
+            let connectRule = NEOnDemandRuleConnect()
+            connectRule.interfaceTypeMatch = .any
+            manager.onDemandRules = [connectRule]
+        } else {
+            manager.onDemandRules = rules
+        }
+
+        manager.saveToPreferences { error in
+            if let error = error {
+                self.logger.error("applyOnDemandRules: Failed to save preferences: \(error.localizedDescription)")
+            } else {
+                self.logger.info("applyOnDemandRules: Rules applied successfully")
+            }
+        }
+    }
+
+    /// Builds NEOnDemandRule array from persisted UserDefaults settings.
+    private func buildOnDemandRules() -> [NEOnDemandRule] {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        let wifiRaw = userDefaults?.string(forKey: GlobalConstants.keyOnDemandWiFiPolicy) ?? WiFiOnDemandPolicy.always.rawValue
+        let cellularRaw = userDefaults?.string(forKey: GlobalConstants.keyOnDemandCellularPolicy) ?? CellularOnDemandPolicy.always.rawValue
+        let wifiPolicy = WiFiOnDemandPolicy(rawValue: wifiRaw) ?? .always
+        let cellularPolicy = CellularOnDemandPolicy(rawValue: cellularRaw) ?? .always
+        let wifiNetworks = userDefaults?.stringArray(forKey: GlobalConstants.keyOnDemandWiFiNetworks) ?? []
+        return buildOnDemandRulesFrom(wifiPolicy: wifiPolicy, cellularPolicy: cellularPolicy, wifiNetworks: wifiNetworks)
+    }
+
+    /// Converts policy enums into NEOnDemandRule objects.
+    private func buildOnDemandRulesFrom(wifiPolicy: WiFiOnDemandPolicy, cellularPolicy: CellularOnDemandPolicy, wifiNetworks: [String]) -> [NEOnDemandRule] {
+        var rules: [NEOnDemandRule] = []
+
+        // Wi-Fi rules
+        switch wifiPolicy {
+        case .always:
+            let rule = NEOnDemandRuleConnect()
+            rule.interfaceTypeMatch = .wiFi
+            rules.append(rule)
+        case .onlyOn:
+            if !wifiNetworks.isEmpty {
+                let connectRule = NEOnDemandRuleConnect()
+                connectRule.interfaceTypeMatch = .wiFi
+                connectRule.ssidMatch = wifiNetworks
+                rules.append(connectRule)
+                let disconnectRule = NEOnDemandRuleDisconnect()
+                disconnectRule.interfaceTypeMatch = .wiFi
+                rules.append(disconnectRule)
+            }
+        case .exceptOn:
+            if !wifiNetworks.isEmpty {
+                let disconnectRule = NEOnDemandRuleDisconnect()
+                disconnectRule.interfaceTypeMatch = .wiFi
+                disconnectRule.ssidMatch = wifiNetworks
+                rules.append(disconnectRule)
+            }
+            let connectRule = NEOnDemandRuleConnect()
+            connectRule.interfaceTypeMatch = .wiFi
+            rules.append(connectRule)
+        case .never:
+            let rule = NEOnDemandRuleDisconnect()
+            rule.interfaceTypeMatch = .wiFi
+            rules.append(rule)
+        case .doNothing:
+            break
+        }
+
+        // Cellular rules
+        switch cellularPolicy {
+        case .always:
+            let rule = NEOnDemandRuleConnect()
+            rule.interfaceTypeMatch = .cellular
+            rules.append(rule)
+        case .never:
+            let rule = NEOnDemandRuleDisconnect()
+            rule.interfaceTypeMatch = .cellular
+            rules.append(rule)
+        case .doNothing:
+            break
+        }
+
+        return rules
     }
 
     /// Returns the current On Demand enabled state from the VPN manager.
