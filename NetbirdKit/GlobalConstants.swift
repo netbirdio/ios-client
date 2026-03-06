@@ -15,6 +15,10 @@ struct GlobalConstants {
     static let keyForceRelayConnection = "isConnectionForceRelayed"
     static let keyLoginRequired = "netbird.loginRequired"
     static let keyNetworkUnavailable = "netbird.networkUnavailable"
+    static let keyConnectOnDemand = "netbird.connectOnDemand"
+    static let keyOnDemandWiFiPolicy = "netbird.onDemand.wifiPolicy"
+    static let keyOnDemandCellularPolicy = "netbird.onDemand.cellularPolicy"
+    static let keyOnDemandWiFiNetworks = "netbird.onDemand.wifiNetworks"
 
     static let configFileName = "netbird.cfg"
     static let stateFileName = "state.json"

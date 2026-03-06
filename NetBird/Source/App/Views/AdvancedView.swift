@@ -81,6 +81,7 @@ struct AdvancedView: View {
                     .onChange(of: viewModel.forceRelayConnection) { value in
                         viewModel.setForcedRelayConnection(isEnabled: value)
                     }
+
             }
         }
         .onAppear {
