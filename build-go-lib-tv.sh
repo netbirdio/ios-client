@@ -17,6 +17,7 @@ fi
 cd $netbirdPath
 
 gomobile-netbird init
+go get github.com/netbirdio/gomobile-tvos-fork@latest
 CGO_ENABLED=0 gomobile-netbird bind -target=ios,iossimulator,tvos,tvossimulator -bundleid=io.netbird.framework -ldflags="-X github.com/netbirdio/netbird/version.version=$version" -o $rn_app_path/NetBirdSDK.xcframework $netbirdPath/client/ios/NetBirdSDK
 
 cd -
