@@ -49,6 +49,18 @@ struct TVColors {
         colorOrFallback("BgSideDrawer", fallback: Color(white: 0.2))
     }
 
+    // MARK: - Gradient Colors
+
+    /// Top-leading color for the full-screen gradient background.
+    static var gradientTop: Color {
+        Color(red: 0.10, green: 0.10, blue: 0.20)
+    }
+
+    /// Bottom-trailing color for the full-screen gradient background.
+    static var gradientBottom: Color {
+        Color(red: 0.03, green: 0.03, blue: 0.06)
+    }
+
     // MARK: - Helper
 
     private static func colorOrFallback(_ name: String, fallback: Color) -> Color {
@@ -95,8 +107,8 @@ struct TVLayout {
 
     // MARK: - Sizes
 
-    /// Logo width on main screens
-    static let logoWidth: CGFloat = 300
+    /// Logo width on main screens (brand anchor, top-left)
+    static let logoWidth: CGFloat = 150
 
     /// Logo width on secondary screens (dialogs, info panels)
     static let logoWidthSmall: CGFloat = 200
@@ -127,16 +139,16 @@ struct TVLayout {
     static let fontTitle: CGFloat = 48
 
     /// Section header
-    static let fontHeader: CGFloat = 32
+    static let fontHeader: CGFloat = 36
 
     /// Card title / primary text
-    static let fontBody: CGFloat = 26
+    static let fontBody: CGFloat = 32
 
     /// Secondary/subtitle text
-    static let fontSubtitle: CGFloat = 22
+    static let fontSubtitle: CGFloat = 28
 
     /// Small/caption text
-    static let fontCaption: CGFloat = 18
+    static let fontCaption: CGFloat = 24
 
     /// Device code display (auth view)
     static let fontDeviceCode: CGFloat = 64
@@ -150,7 +162,7 @@ struct TVLayout {
     static let buttonPaddingV: CGFloat = 18
 
     /// Button font size
-    static let buttonFontSize: CGFloat = 24
+    static let buttonFontSize: CGFloat = 30
 
     // MARK: - Focus Effects
 
@@ -163,4 +175,5 @@ struct TVLayout {
     /// Border width when focused
     static let focusBorderWidth: CGFloat = 4
 }
+
 #endif

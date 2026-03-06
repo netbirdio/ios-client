@@ -16,12 +16,11 @@ import UIKit
 /// Displays the list of network routes in a tvOS-friendly format.
 struct TVNetworksView: View {
     @EnvironmentObject var viewModel: ViewModel
-    
+
     var body: some View {
         ZStack {
-        TVColors.bgMenu
-                .ignoresSafeArea()
-            
+            TVGradientBackground()
+
             if viewModel.extensionStateText == "Connected" &&
                viewModel.routeViewModel.routeInfo.count > 0 {
                 TVNetworkListContent()
@@ -45,7 +44,7 @@ struct TVNetworkListContent: View {
         VStack(alignment: .leading, spacing: 20) {
             // Header (non-focusable)
             HStack {
-                Text("Networks")
+                Text("Resources")
                     .font(.system(size: 48, weight: .bold))
                     .foregroundColor(TVColors.textPrimary)
 
@@ -53,7 +52,7 @@ struct TVNetworkListContent: View {
 
                 // Stats
                 Text("\(activeCount) of \(totalCount) enabled")
-                    .font(.system(size: 24))
+                    .font(.system(size: 30, weight: .medium))
                     .foregroundColor(TVColors.textSecondary)
             }
             .padding(.horizontal, 80)
@@ -83,15 +82,9 @@ struct TVNetworkListContent: View {
             .padding(.horizontal, 80)
             .padding(.bottom, 30)
 
-            // Network grid
+            // Network list
             ScrollView {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 30),
-                        GridItem(.flexible(), spacing: 30)
-                    ],
-                    spacing: 30
-                ) {
+                LazyVStack(spacing: 4) {
                     ForEach(viewModel.routeViewModel.filteredRoutes, id: \.id) { route in
                         TVNetworkCard(
                             route: route,
@@ -99,6 +92,12 @@ struct TVNetworkListContent: View {
                         )
                     }
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.white.opacity(0.04))
+                )
                 .padding(.top, 15)
                 .padding(.horizontal, 80)
                 .padding(.bottom, 80)
@@ -107,11 +106,11 @@ struct TVNetworkListContent: View {
     }
     
     // Computed Properties
-    
+
     private var activeCount: Int {
         viewModel.routeViewModel.routeInfo.filter { $0.selected }.count
     }
-    
+
     private var totalCount: Int {
         viewModel.routeViewModel.routeInfo.count
     }
@@ -137,56 +136,46 @@ struct TVNetworkCard: View {
 
     var body: some View {
         Button(action: toggleRoute) {
-            HStack(spacing: 25) {
+            HStack(spacing: 20) {
                 // Status toggle indicator
                 ZStack {
-                    Circle()
+                    Capsule()
                         .fill(route.selected ? Color.green : Color.gray.opacity(0.3))
-                        .frame(width: 50, height: 50)
+                        .frame(width: 70, height: 40)
 
-                    Image(systemName: route.selected ? "checkmark" : "xmark")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 32, height: 32)
+                        .offset(x: route.selected ? 15 : -15)
+                        .animation(.easeInOut(duration: 0.2), value: route.selected)
                 }
 
                 // Route info
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(route.name)
-                        .font(.system(size: 26, weight: .semibold))
-                        .foregroundColor(isFocused ? .white : TVColors.textPrimary)
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(isFocused ? .black : TVColors.textPrimary)
                         .lineLimit(1)
 
                     Text(routeDisplayText)
-                        .font(.system(size: 20))
-                        .foregroundColor(isFocused ? .white.opacity(0.8) : TVColors.textSecondary)
+                        .font(.system(size: 18))
+                        .foregroundColor(isFocused ? .black.opacity(0.6) : TVColors.textSecondary)
                         .lineLimit(2)
                 }
 
                 Spacer()
-
-                Text(route.selected ? "Enabled" : "Disabled")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(isFocused ? .white : (route.selected ? .green : .gray))
             }
-            .padding(30)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 18)
             .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(TVColors.bgPrimary)
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(isFocused ? Color.white : Color.clear)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(
-                        isFocused ? Color.accentColor : (route.selected ? Color.green.opacity(0.3) : Color.clear),
-                        lineWidth: isFocused ? 4 : 2
-                    )
-            )
-            .scaleEffect(isFocused ? 1.03 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TVSettingsButtonStyle())
         .focused($isFocused)
     }
-    
+
     private var routeDisplayText: String {
         if route.network == "invalid Prefix" {
             if let domains = route.domains, domains.count > 2 {
@@ -207,28 +196,45 @@ struct TVNetworkCard: View {
 }
 
 struct TVNoNetworksView: View {
+    @State private var showDocsQR = false
+
     var body: some View {
         VStack(spacing: 40) {
             Image("icon-empty-box")
                 .resizable()
                 .scaledToFit()
                 .frame(height: 200)
-            
-            Text("No Networks Available")
-                .font(.system(size: 40, weight: .bold))
+
+            Text("No Resources Available")
+                .font(.system(size: 44, weight: .bold))
                 .foregroundColor(TVColors.textPrimary)
-            
+
             Text("Connect to NetBird to see available networks,\nor configure network routes in your NetBird admin.")
-                .font(.system(size: 26))
+                .font(.system(size: 32))
                 .foregroundColor(TVColors.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 700)
-            
-            // Learn more link (opens on user's phone via QR or second screen)
-            Text("Visit docs.netbird.io/how-to/networks for more info")
-                .font(.system(size: 22))
+
+            Button {
+                showDocsQR = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "qrcode.viewfinder")
+                        .font(.system(size: 26))
+                    Text("Visit docs.netbird.io")
+                        .font(.system(size: 28))
+                }
                 .foregroundColor(.accentColor)
-                .padding(.top, 20)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 20)
+        }
+        .sheet(isPresented: $showDocsQR) {
+            TVQRCodeSheet(
+                url: "https://docs.netbird.io/how-to/networks",
+                title: "Network Resources",
+                subtitle: "Scan this QR code to visit our docs"
+            )
         }
     }
 }

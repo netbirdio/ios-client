@@ -9,17 +9,17 @@ import Foundation
 import Combine
 
 class PeerViewModel: ObservableObject {
-    @Published var peerInfo: [PeerInfo] = []  
+    @Published var peerInfo: [PeerInfo] = []
     @Published var selectionFilter: String = "All"
     @Published var peerFilter: String = ""
-    
+
     @Published var tappedPeer: PeerInfo? = nil
     @Published var selectedPeerId: UUID?
-    
+
     @Published var freezeDisplayedPeers: Bool = false
     private var displayedPeersBackup: [PeerInfo] = []
     var lockID: String = UUID().uuidString
-    
+
     var filteredPeers: [PeerInfo] {
         return peerInfo.filter { peer in
             switch selectionFilter {
