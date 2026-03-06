@@ -343,10 +343,10 @@ public class NetworkExtensionAdapter: ObservableObject {
             // Build rules from saved settings
             let rules = buildOnDemandRules()
             if rules.isEmpty {
-                // Fallback: connect on any interface
-                let connectRule = NEOnDemandRuleConnect()
-                connectRule.interfaceTypeMatch = .any
-                manager.onDemandRules = [connectRule]
+                // All policies are "Do Nothing" — don't interfere with connection state
+                let ignoreRule = NEOnDemandRuleIgnore()
+                ignoreRule.interfaceTypeMatch = .any
+                manager.onDemandRules = [ignoreRule]
             } else {
                 manager.onDemandRules = rules
             }
@@ -373,9 +373,10 @@ public class NetworkExtensionAdapter: ObservableObject {
 
         let rules = buildOnDemandRulesFrom(wifiPolicy: wifiPolicy, cellularPolicy: cellularPolicy, wifiNetworks: wifiNetworks)
         if rules.isEmpty {
-            let connectRule = NEOnDemandRuleConnect()
-            connectRule.interfaceTypeMatch = .any
-            manager.onDemandRules = [connectRule]
+            // All policies are "Do Nothing" — don't interfere with connection state
+            let ignoreRule = NEOnDemandRuleIgnore()
+            ignoreRule.interfaceTypeMatch = .any
+            manager.onDemandRules = [ignoreRule]
         } else {
             manager.onDemandRules = rules
         }
@@ -416,10 +417,11 @@ public class NetworkExtensionAdapter: ObservableObject {
                 connectRule.interfaceTypeMatch = .wiFi
                 connectRule.ssidMatch = wifiNetworks
                 rules.append(connectRule)
-                let disconnectRule = NEOnDemandRuleDisconnect()
-                disconnectRule.interfaceTypeMatch = .wiFi
-                rules.append(disconnectRule)
             }
+            // Disconnect on all other Wi-Fi networks (or all Wi-Fi if list is empty)
+            let disconnectRule = NEOnDemandRuleDisconnect()
+            disconnectRule.interfaceTypeMatch = .wiFi
+            rules.append(disconnectRule)
         case .exceptOn:
             if !wifiNetworks.isEmpty {
                 let disconnectRule = NEOnDemandRuleDisconnect()
@@ -438,7 +440,8 @@ public class NetworkExtensionAdapter: ObservableObject {
             break
         }
 
-        // Cellular rules
+        // Cellular rules (cellular is not available on tvOS)
+        #if !os(tvOS)
         switch cellularPolicy {
         case .always:
             let rule = NEOnDemandRuleConnect()
@@ -451,6 +454,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         case .doNothing:
             break
         }
+        #endif
 
         return rules
     }

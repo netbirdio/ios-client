@@ -158,14 +158,6 @@ class ViewModel: ObservableObject {
         }
         networkMonitor.start(queue: monitorQueue)
 
-        networkMonitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
-                self?.isInternetConnected = path.status == .satisfied
-                self?.updateVPNDisplayState()
-            }
-        }
-        networkMonitor.start(queue: monitorQueue)
-
         $setupKey
             .removeDuplicates()
             .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
@@ -443,8 +435,8 @@ class ViewModel: ObservableObject {
         defaults.removeObject(forKey: "ip")
         defaults.removeObject(forKey: "fqdn")
 
-        // Disable On Demand to prevent reconnect loops without valid credentials
-        networkExtensionAdapter.setOnDemandEnabled(false)
+        // Disable and persist On Demand off to keep UI/storage/manager in sync
+        setConnectOnDemand(isEnabled: false)
 
         // Clear config JSON (contains server credentials and all settings)
         Preferences.removeConfigFromUserDefaults()
@@ -603,8 +595,9 @@ class ViewModel: ObservableObject {
     }
 
     func addOnDemandWiFiNetwork(_ ssid: String) {
-        guard !ssid.isEmpty, !onDemandWiFiNetworks.contains(ssid) else { return }
-        onDemandWiFiNetworks.append(ssid)
+        let trimmed = ssid.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !onDemandWiFiNetworks.contains(trimmed) else { return }
+        onDemandWiFiNetworks.append(trimmed)
         saveOnDemandSettings()
     }
 
