@@ -32,6 +32,8 @@ enum MainAlertType: String, Identifiable {
     case serverChanged
     case preSharedKeyChanged
     case authenticationRequired
+    case onDemandConflict
+    case onDemandDisconnect
 
     var id: String { rawValue }
 }
@@ -104,6 +106,28 @@ struct iOSMainView: View {
                     message: Text("The server requires a new authentication."),
                     dismissButton: .default(Text("OK"))
                 )
+            case .onDemandConflict:
+                return Alert(
+                    title: Text("VPN On Demand Conflict"),
+                    message: Text("Your current On Demand rules prevent connecting on this network. Would you like to disable VPN On Demand and connect?"),
+                    primaryButton: .default(Text("Disable & Connect")) {
+                        viewModel.connectWithOnDemandDisabled()
+                    },
+                    secondaryButton: .cancel(Text("Edit Rules")) {
+                        selectedTab = 3 // Switch to Settings tab
+                    }
+                )
+            case .onDemandDisconnect:
+                return Alert(
+                    title: Text("VPN On Demand Active"),
+                    message: Text("VPN On Demand is enabled and will automatically reconnect the VPN based on your rules. Do you want to disable On Demand and disconnect?"),
+                    primaryButton: .destructive(Text("Disable & Disconnect")) {
+                        viewModel.closeWithOnDemandDisabled()
+                    },
+                    secondaryButton: .default(Text("Cancel")) {
+                        
+                    }
+                )
             }
         }
     }
@@ -163,6 +187,12 @@ struct iOSMainView: View {
             }
             .onChange(of: viewModel.showAuthenticationRequired) { show in
                 if show { activeAlert = .authenticationRequired; viewModel.showAuthenticationRequired = false }
+            }
+            .onChange(of: viewModel.showOnDemandConflictAlert) { show in
+                if show { activeAlert = .onDemandConflict; viewModel.showOnDemandConflictAlert = false }
+            }
+            .onChange(of: viewModel.showOnDemandDisconnectAlert) { show in
+                if show { activeAlert = .onDemandDisconnect; viewModel.showOnDemandDisconnectAlert = false }
             }
 
             // Toast alerts
