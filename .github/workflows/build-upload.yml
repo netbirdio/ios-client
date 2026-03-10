@@ -164,6 +164,9 @@ jobs:
             -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8" \
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            DEVELOPMENT_TEAM=TA739QLA7A \
             CURRENT_PROJECT_VERSION=${{ steps.settings.outputs.build-number }} \
             ${{ steps.settings.outputs.version-args }}
 
