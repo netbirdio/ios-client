@@ -67,10 +67,12 @@ jobs:
           mkdir -p ~/.appstoreconnect/private_keys
           echo "$API_KEY_BASE64" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8
 
-      - name: Install distribution certificate
+      - name: Install signing certificates
         env:
-          CERTIFICATE_BASE64: ${{ secrets.DISTRIBUTION_CERTIFICATE_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          DIST_CERT_BASE64: ${{ secrets.DISTRIBUTION_CERTIFICATE_BASE64 }}
+          DIST_CERT_PASSWORD: ${{ secrets.DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          DEV_CERT_BASE64: ${{ secrets.DEVELOPMENT_CERTIFICATE_BASE64 }}
+          DEV_CERT_PASSWORD: ${{ secrets.DEVELOPMENT_CERTIFICATE_PASSWORD }}
         run: |
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
@@ -80,18 +82,25 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Import certificate
-          CERT_PATH=$RUNNER_TEMP/certificate.p12
-          echo "$CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
-          security import "$CERT_PATH" \
-            -P "$CERTIFICATE_PASSWORD" \
+          # Import Distribution certificate
+          echo "$DIST_CERT_BASE64" | base64 --decode > $RUNNER_TEMP/dist.p12
+          security import $RUNNER_TEMP/dist.p12 \
+            -P "$DIST_CERT_PASSWORD" \
             -A -t cert -f pkcs12 \
             -k "$KEYCHAIN_PATH"
+
+          # Import Development certificate
+          echo "$DEV_CERT_BASE64" | base64 --decode > $RUNNER_TEMP/dev.p12
+          security import $RUNNER_TEMP/dev.p12 \
+            -P "$DEV_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
           security set-key-partition-list -S apple-tool:,apple: \
             -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
 
-          # Store keychain password for cleanup
+          # Store for cleanup
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       - name: Create GoogleService-Info.plist
@@ -148,14 +157,6 @@ jobs:
           xcodebuild -resolvePackageDependencies \
             -project NetBird.xcodeproj \
             -scheme NetBird
-
-      - name: Configure distribution signing
-        working-directory: ios-client
-        run: |
-          # Switch from Automatic/Development to Manual/Distribution in the project file only
-          # (SPM dependencies are not affected since they have their own Package.swift config)
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' NetBird.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development"/CODE_SIGN_IDENTITY = "Apple Distribution"/g' NetBird.xcodeproj/project.pbxproj
 
       - name: Archive
         working-directory: ios-client
