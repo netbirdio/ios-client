@@ -152,7 +152,9 @@ jobs:
       - name: Configure distribution signing
         working-directory: ios-client
         run: |
-          # Update signing identity in the project file (applies only to project targets, not SPM deps)
+          # Switch from Automatic/Development to Manual/Distribution in the project file only
+          # (SPM dependencies are not affected since they have their own Package.swift config)
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' NetBird.xcodeproj/project.pbxproj
           sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development"/CODE_SIGN_IDENTITY = "Apple Distribution"/g' NetBird.xcodeproj/project.pbxproj
 
       - name: Archive
