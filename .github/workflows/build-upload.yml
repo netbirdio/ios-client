@@ -151,6 +151,24 @@ jobs:
             echo "version-args=" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Dump version and build info
+        working-directory: ios-client
+        run: |
+          # Read current project values
+          PROJECT_VERSION=$(xcodebuild -project NetBird.xcodeproj -scheme NetBird -showBuildSettings 2>/dev/null | grep -m1 'CURRENT_PROJECT_VERSION' | awk '{print $NF}')
+          MARKETING_VERSION=$(xcodebuild -project NetBird.xcodeproj -scheme NetBird -showBuildSettings 2>/dev/null | grep -m1 'MARKETING_VERSION' | awk '{print $NF}')
+
+          echo "========================================="
+          echo "  Project MARKETING_VERSION: $MARKETING_VERSION"
+          echo "  Project CURRENT_PROJECT_VERSION: $PROJECT_VERSION"
+          echo "  Override version: ${{ inputs.version }}"
+          echo "  Override build-number: ${{ inputs.build-number }}"
+          echo "  Final build number: ${{ steps.settings.outputs.build-number }}"
+          echo "  Final version args: ${{ steps.settings.outputs.version-args }}"
+          echo "  Git ref: ${{ inputs.ref }}"
+          echo "  Run number: ${GITHUB_RUN_NUMBER}"
+          echo "========================================="
+
       - name: Install provisioning profiles
         env:
           PROFILE_APP_BASE64: ${{ secrets.PROVISIONING_PROFILE_APP_BASE64 }}
