@@ -26,7 +26,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
            let options = FirebaseOptions(contentsOfFile: path) {
             FirebaseApp.configure(options: options)
         }
-        print("Test CI/CD")
         return true
     }
 }
