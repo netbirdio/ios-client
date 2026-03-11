@@ -335,10 +335,17 @@
 			);
 			target = 441C5AFC2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */;
 		};
+		55472B742F61A89200382947 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"NetBird-TV-Info.plist",
+			);
+			target = 441C5AED2EDF0DAE0055EEFC /* NetBird TV */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		441C5AEF2EDF0DAE0055EEFC /* NetBird TV */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "NetBird TV"; sourceTree = "<group>"; };
+		441C5AEF2EDF0DAE0055EEFC /* NetBird TV */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (55472B742F61A89200382947 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = "NetBird TV"; sourceTree = "<group>"; };
 		441C5AFF2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (441C5B072EDF0DD20055EEFC /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = NetBirdTVNetworkExtension; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -1118,7 +1125,9 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "NetBird-TV-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = NetBird;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
@@ -1159,7 +1168,9 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "NetBird-TV-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = NetBird;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
@@ -1455,6 +1466,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NetBird/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NetBird;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -1501,6 +1513,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NetBird/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NetBird;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
