@@ -335,17 +335,10 @@
 			);
 			target = 441C5AFC2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */;
 		};
-		55472B742F61A89200382947 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				"NetBird-TV-Info.plist",
-			);
-			target = 441C5AED2EDF0DAE0055EEFC /* NetBird TV */;
-		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		441C5AEF2EDF0DAE0055EEFC /* NetBird TV */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (55472B742F61A89200382947 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = "NetBird TV"; sourceTree = "<group>"; };
+		441C5AEF2EDF0DAE0055EEFC /* NetBird TV */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "NetBird TV"; sourceTree = "<group>"; };
 		441C5AFF2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (441C5B072EDF0DD20055EEFC /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = NetBirdTVNetworkExtension; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -1481,7 +1474,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1528,7 +1521,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
