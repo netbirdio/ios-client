@@ -114,6 +114,7 @@ class ViewModel: ObservableObject {
     @Published var onDemandWiFiPolicy: WiFiOnDemandPolicy = .always
     @Published var onDemandCellularPolicy: CellularOnDemandPolicy = .always
     @Published var onDemandWiFiNetworks: [String] = []
+    @Published var knownSSIDs: [String] = []
     @Published var showRosenpassChangedAlert = false
     @Published var networkUnavailable = false
     @Published var isInternetConnected = true
@@ -577,6 +578,7 @@ class ViewModel: ObservableObject {
         self.onDemandWiFiPolicy = WiFiOnDemandPolicy(rawValue: wifiRaw) ?? .always
         self.onDemandCellularPolicy = CellularOnDemandPolicy(rawValue: cellularRaw) ?? .always
         self.onDemandWiFiNetworks = userDefaults?.stringArray(forKey: GlobalConstants.keyOnDemandWiFiNetworks) ?? []
+        self.knownSSIDs = userDefaults?.stringArray(forKey: GlobalConstants.keyKnownSSIDs) ?? []
     }
 
     func saveOnDemandSettings() {
@@ -604,6 +606,20 @@ class ViewModel: ObservableObject {
     func removeOnDemandWiFiNetwork(at offsets: IndexSet) {
         onDemandWiFiNetworks.remove(atOffsets: offsets)
         saveOnDemandSettings()
+    }
+
+    func recordKnownSSID(_ ssid: String) {
+        let trimmed = ssid.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !knownSSIDs.contains(trimmed) else { return }
+        knownSSIDs.append(trimmed)
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(knownSSIDs, forKey: GlobalConstants.keyKnownSSIDs)
+    }
+
+    func removeKnownSSID(_ ssid: String) {
+        knownSSIDs.removeAll { $0 == ssid }
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(knownSSIDs, forKey: GlobalConstants.keyKnownSSIDs)
     }
 
     func getDefaultStatus() -> StatusDetails {

@@ -92,45 +92,57 @@ struct VPNOnDemandView: View {
         }
     }
 
+    /// All non-current SSIDs to display: known + manually added, deduplicated.
+    private var otherNetworks: [String] {
+        var result = viewModel.knownSSIDs.filter { $0 != currentSSID }
+        for ssid in viewModel.onDemandWiFiNetworks where ssid != currentSSID && !result.contains(ssid) {
+            result.append(ssid)
+        }
+        return result
+    }
+
     private func networkListSection(header: String) -> some View {
         Section(header: Text(header)) {
-            ForEach(viewModel.onDemandWiFiNetworks, id: \.self) { network in
-                HStack {
-                    Image(systemName: "wifi")
-                        .foregroundColor(Color("TextSecondary"))
-                    Text(network)
-                }
-            }
-            .onDelete { offsets in
-                viewModel.removeOnDemandWiFiNetwork(at: offsets)
-            }
-
-            if let ssid = currentSSID, !viewModel.onDemandWiFiNetworks.contains(ssid) {
+            // Current connected network
+            if let ssid = currentSSID {
                 Button {
-                    viewModel.addOnDemandWiFiNetwork(ssid)
+                    toggleNetwork(ssid)
                 } label: {
                     HStack {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: viewModel.onDemandWiFiNetworks.contains(ssid) ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(viewModel.onDemandWiFiNetworks.contains(ssid) ? .accentColor : Color("TextSecondary"))
+                        Image(systemName: "wifi")
                             .foregroundColor(.accentColor)
-                        Text("Add current: ")
-                            .foregroundColor(Color("TextPrimary"))
                         Text(ssid)
+                            .foregroundColor(Color("TextPrimary"))
+                        Spacer()
+                        Text("Connected")
+                            .font(.caption)
                             .foregroundColor(Color("TextSecondary"))
                     }
                 }
             }
 
+            // Other networks
+            ForEach(otherNetworks, id: \.self) { ssid in
+                networkRow(ssid: ssid)
+            }
+
+            // Add network manually
             if showAddNetworkField {
                 HStack {
                     TextField("Network name", text: $newNetworkName)
                         .disableAutocorrection(true)
                         .autocapitalization(.none)
                     Button("Add") {
-                        viewModel.addOnDemandWiFiNetwork(newNetworkName)
+                        let trimmed = newNetworkName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        viewModel.recordKnownSSID(trimmed)
+                        viewModel.addOnDemandWiFiNetwork(trimmed)
                         newNetworkName = ""
                         showAddNetworkField = false
                     }
-                    .disabled(newNetworkName.isEmpty)
+                    .disabled(newNetworkName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                              || viewModel.onDemandWiFiNetworks.contains(newNetworkName.trimmingCharacters(in: .whitespacesAndNewlines)))
                 }
             } else {
                 Button {
@@ -139,12 +151,53 @@ struct VPNOnDemandView: View {
                     HStack {
                         Image(systemName: "plus.circle.fill")
                             .foregroundColor(.accentColor)
-                        Text("Add new network")
+                        Text("Add other network")
                             .foregroundColor(Color("TextPrimary"))
                     }
                 }
             }
         }
+    }
+
+    private func networkRow(ssid: String) -> some View {
+        HStack {
+            Button {
+                toggleNetwork(ssid)
+            } label: {
+                HStack {
+                    Image(systemName: viewModel.onDemandWiFiNetworks.contains(ssid) ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(viewModel.onDemandWiFiNetworks.contains(ssid) ? .accentColor : Color("TextSecondary"))
+                    Image(systemName: "wifi")
+                        .foregroundColor(Color("TextSecondary"))
+                    Text(ssid)
+                        .foregroundColor(Color("TextPrimary"))
+                }
+            }
+            .buttonStyle(.borderless)
+            Spacer()
+            Button {
+                removeNetworkEntirely(ssid)
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(Color("TextSecondary"))
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+
+    private func toggleNetwork(_ ssid: String) {
+        if let idx = viewModel.onDemandWiFiNetworks.firstIndex(of: ssid) {
+            viewModel.removeOnDemandWiFiNetwork(at: IndexSet(integer: idx))
+        } else {
+            viewModel.addOnDemandWiFiNetwork(ssid)
+        }
+    }
+
+    private func removeNetworkEntirely(_ ssid: String) {
+        if let idx = viewModel.onDemandWiFiNetworks.firstIndex(of: ssid) {
+            viewModel.removeOnDemandWiFiNetwork(at: IndexSet(integer: idx))
+        }
+        viewModel.removeKnownSSID(ssid)
     }
 
     private var connectionDescription: String {
@@ -194,6 +247,9 @@ struct VPNOnDemandView: View {
         NEHotspotNetwork.fetchCurrent { network in
             DispatchQueue.main.async {
                 self.currentSSID = network?.ssid
+                if let ssid = network?.ssid {
+                    viewModel.recordKnownSSID(ssid)
+                }
             }
         }
     }

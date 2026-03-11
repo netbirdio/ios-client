@@ -19,6 +19,7 @@ struct GlobalConstants {
     static let keyOnDemandWiFiPolicy = "netbird.onDemand.wifiPolicy"
     static let keyOnDemandCellularPolicy = "netbird.onDemand.cellularPolicy"
     static let keyOnDemandWiFiNetworks = "netbird.onDemand.wifiNetworks"
+    static let keyKnownSSIDs = "netbird.knownSSIDs"
 
     static let configFileName = "netbird.cfg"
     static let stateFileName = "state.json"
