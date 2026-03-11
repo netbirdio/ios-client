@@ -3,7 +3,6 @@ name: Build
 on:
   push:
     branches: [main]
-  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -39,35 +38,13 @@ jobs:
       - name: Install gomobile
         run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
 
-      - name: Debug - List files before xcframework build
-        working-directory: ios-client
-        run: |
-          echo "=== Before xcframework build ==="
-          ls -la NetBird/Source/App/Views/ || echo "Views dir missing BEFORE"
-
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
         run: ./build-go-lib.sh ../netbird
 
-      - name: Debug - List files after xcframework build
-        working-directory: ios-client
-        run: |
-          echo "=== After xcframework build ==="
-          ls -la NetBird/ || echo "NetBird dir missing"
-          ls -la NetBird/Source/App/Views/ || echo "Views dir missing AFTER"
-
       - name: Install xcpretty
         working-directory: ios-client
         run: gem install xcpretty
-
-      - name: Debug - List Source files
-        working-directory: ios-client
-        run: |
-          echo "=== Checking NetBird/Source/App structure ==="
-          ls -la NetBird/Source/App/ || echo "App dir not found"
-          ls -la NetBird/Source/App/Views/ || echo "Views dir not found"
-          ls -la NetBird/Source/App/Views/Components/ || echo "Components dir not found"
-          ls -la NetBird/Source/App/ViewModels/ || echo "ViewModels dir not found"
 
       - name: Create dummy GoogleService-Info.plist
         working-directory: ios-client
@@ -100,8 +77,6 @@ jobs:
             <key>IS_APPINVITE_ENABLED</key>
             <false/>
             <key>IS_GCM_ENABLED</key>
-            <false/>
-            <key>IS_SIGNIN_ENABLED</key>
             <false/>
             <key>GOOGLE_APP_ID</key>
             <string>dummy</string>
@@ -176,35 +151,13 @@ jobs:
         working-directory: netbird
         run: go get github.com/netbirdio/gomobile-tvos-fork@latest
 
-      - name: Debug - List files before xcframework build
-        working-directory: ios-client
-        run: |
-          echo "=== Before xcframework build ==="
-          ls -la NetBird/Source/App/Views/ || echo "Views dir missing BEFORE"
-
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
         run: ./build-go-lib-tv.sh ../netbird
 
-      - name: Debug - List files after xcframework build
-        working-directory: ios-client
-        run: |
-          echo "=== After xcframework build ==="
-          ls -la NetBird/ || echo "NetBird dir missing"
-          ls -la NetBird/Source/App/Views/ || echo "Views dir missing AFTER"
-
       - name: Install xcpretty
         working-directory: ios-client
         run: gem install xcpretty
-
-      - name: Debug - List Source files
-        working-directory: ios-client
-        run: |
-          echo "=== Checking NetBird/Source/App structure ==="
-          ls -la NetBird/Source/App/ || echo "App dir not found"
-          ls -la NetBird/Source/App/Views/ || echo "Views dir not found"
-          ls -la NetBird/Source/App/Views/Components/ || echo "Components dir not found"
-          ls -la NetBird/Source/App/ViewModels/ || echo "ViewModels dir not found"
 
       - name: Create dummy GoogleService-Info.plist
         working-directory: ios-client
@@ -238,8 +191,6 @@ jobs:
             <false/>
             <key>IS_GCM_ENABLED</key>
             <false/>
-            <key>IS_SIGNIN_ENABLED</key>
-            <false/>
             <key>GOOGLE_APP_ID</key>
             <string>dummy</string>
           </dict>
@@ -253,28 +204,28 @@ jobs:
             -project NetBird.xcodeproj \
             -scheme NetBird
 
-      - name: Build iOS App
+      - name: Build tvOS App
         working-directory: ios-client
         run: |
           set -o pipefail
           xcodebuild build \
             -project NetBird.xcodeproj \
             -scheme NetBird \
-            -destination 'generic/platform=iOS' \
+            -destination 'generic/platform=tvOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             | xcpretty --color
 
-      - name: Build Network Extension
+      - name: Build tvOS Network Extension
         working-directory: ios-client
         run: |
           set -o pipefail
           xcodebuild build \
             -project NetBird.xcodeproj \
             -scheme NetbirdNetworkExtension \
-            -destination 'generic/platform=iOS' \
+            -destination 'generic/platform=tvOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
