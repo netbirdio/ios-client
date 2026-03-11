@@ -2,9 +2,9 @@ name: TestFlight
 
 on:
   push:
-    branches: [main, ci-cd]
+    branches: [main]
   pull_request:
-    branches: [main, ci-cd]
+    branches: [main]
   issue_comment:
     types: [created]
 

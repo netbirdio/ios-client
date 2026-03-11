@@ -271,4 +271,6 @@ jobs:
         run: |
           security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
           rm -rf ~/.appstoreconnect/private_keys 2>/dev/null || true
-          rm -f $RUNNER_TEMP/certificate.p12 2>/dev/null || true
+          rm -f $RUNNER_TEMP/dist.p12 $RUNNER_TEMP/dev.p12 2>/dev/null || true
+          rm -f $RUNNER_TEMP/app.mobileprovision $RUNNER_TEMP/ext.mobileprovision 2>/dev/null || true
+          rm -rf ~/Library/MobileDevice/Provisioning\ Profiles 2>/dev/null || true
