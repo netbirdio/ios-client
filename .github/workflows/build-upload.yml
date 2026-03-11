@@ -151,6 +151,64 @@ jobs:
             echo "version-args=" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Install provisioning profiles
+        env:
+          PROFILE_APP_BASE64: ${{ secrets.PROVISIONING_PROFILE_APP_BASE64 }}
+          PROFILE_EXT_BASE64: ${{ secrets.PROVISIONING_PROFILE_EXTENSION_BASE64 }}
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+
+          # Install app profile
+          echo "$PROFILE_APP_BASE64" | base64 --decode > $RUNNER_TEMP/app.mobileprovision
+          APP_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/app.mobileprovision))
+          APP_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/app.mobileprovision))
+          cp $RUNNER_TEMP/app.mobileprovision \
+            ~/Library/MobileDevice/Provisioning\ Profiles/${APP_UUID}.mobileprovision
+          echo "APP_PROFILE_NAME=$APP_NAME" >> "$GITHUB_ENV"
+
+          # Install extension profile
+          echo "$PROFILE_EXT_BASE64" | base64 --decode > $RUNNER_TEMP/ext.mobileprovision
+          EXT_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/ext.mobileprovision))
+          EXT_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/ext.mobileprovision))
+          cp $RUNNER_TEMP/ext.mobileprovision \
+            ~/Library/MobileDevice/Provisioning\ Profiles/${EXT_UUID}.mobileprovision
+          echo "EXT_PROFILE_NAME=$EXT_NAME" >> "$GITHUB_ENV"
+
+          echo "Installed profiles: app='$APP_NAME' ($APP_UUID), ext='$EXT_NAME' ($EXT_UUID)"
+
+      - name: Generate ExportOptions.plist
+        working-directory: ios-client
+        run: |
+          cat > ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>destination</key>
+            <string>upload</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>teamID</key>
+            <string>TA739QLA7A</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>io.netbird.app</key>
+              <string>${APP_PROFILE_NAME}</string>
+              <key>io.netbird.app.NetbirdNetworkExtension</key>
+              <string>${EXT_PROFILE_NAME}</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
+
       - name: Resolve Swift packages
         working-directory: ios-client
         run: |
@@ -186,7 +244,6 @@ jobs:
             -archivePath $RUNNER_TEMP/NetBird.xcarchive \
             -exportOptionsPlist ExportOptions.plist \
             -exportPath $RUNNER_TEMP/export \
-            -allowProvisioningUpdates \
             -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8" \
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER_ID"
