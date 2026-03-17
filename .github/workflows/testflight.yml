@@ -1,0 +1,147 @@
+name: TestFlight
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  gate:
+    name: Validate trigger
+    if: >
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/testflight'))
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref }}
+      should-build: ${{ steps.resolve.outputs.should-build }}
+    steps:
+      - name: Resolve build ref and validate
+        id: resolve
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Push to main/ci-cd — always build
+            if (context.eventName === 'push') {
+              core.setOutput('ref', context.sha);
+              core.setOutput('should-build', 'true');
+              return;
+            }
+
+            // PR opened/updated — build if not from fork
+            if (context.eventName === 'pull_request') {
+              const headRepo = context.payload.pull_request.head.repo.full_name;
+              const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
+
+              if (headRepo !== baseRepo) {
+                core.info(`Skipping fork PR from ${headRepo}`);
+                core.setOutput('should-build', 'false');
+                return;
+              }
+
+              core.setOutput('ref', context.payload.pull_request.head.sha);
+              core.setOutput('should-build', 'true');
+              return;
+            }
+
+            // /testflight comment on PR — validate permissions and fork status
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            // Skip fork PRs
+            if (pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.info(`Skipping fork PR from ${pr.head.repo.full_name}`);
+              core.setOutput('should-build', 'false');
+              return;
+            }
+
+            // Check commenter has write access
+            const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: context.actor,
+            });
+
+            if (!['admin', 'write'].includes(perm.permission)) {
+              core.info(`User ${context.actor} does not have write access`);
+              core.setOutput('should-build', 'false');
+              return;
+            }
+
+            core.setOutput('ref', pr.head.sha);
+            core.setOutput('should-build', 'true');
+
+      - name: React to comment
+        if: github.event_name == 'issue_comment' && steps.resolve.outputs.should-build == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'rocket',
+            });
+
+  build:
+    name: Build and Upload
+    needs: gate
+    if: needs.gate.outputs.should-build == 'true'
+    uses: ./.github/workflows/build-upload.yml
+    with:
+      ref: ${{ needs.gate.outputs.ref }}
+    secrets: inherit
+
+  notify:
+    name: Notify PR
+    needs: [gate, build]
+    if: always() && (github.event_name == 'issue_comment' || github.event_name == 'pull_request')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment build result on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const buildResult = '${{ needs.build.result }}';
+            const ref = '${{ needs.gate.outputs.ref }}';
+            const shortSha = ref.substring(0, 7);
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            let prNumber;
+            if (context.eventName === 'pull_request') {
+              prNumber = context.payload.pull_request.number;
+            } else {
+              prNumber = context.issue.number;
+            }
+
+            let body;
+            if (buildResult === 'success') {
+              body = `**TestFlight build uploaded** for \`${shortSha}\`\n\nThe build has been submitted to App Store Connect and will be available in TestFlight shortly.\n\n[View workflow run](${runUrl})`;
+            } else if (buildResult === 'skipped') {
+              return;
+            } else {
+              body = `**TestFlight build failed** for \`${shortSha}\`\n\n[View workflow run](${runUrl})`;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: body,
+            });

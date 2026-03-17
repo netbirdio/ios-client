@@ -231,7 +231,6 @@ struct iOSMainView: View {
                     .animation(.default, value: viewModel.showIpCopiedAlert)
                     .zIndex(1)
                 }
-
                 Spacer().frame(height: 80)
             }
         }

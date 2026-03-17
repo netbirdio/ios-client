@@ -159,7 +159,10 @@
 		A1C3D5EE2F000008001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		A1C3D5EF2F000009001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		A1C3D5F02F00000A001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
+		AA1B2C022F4E5A0100D1E2F3 /* TVGradientBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */; };
 		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
+		BB3D4E022F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */; };
+		CC5F6A022F4E5A0300D1E2F3 /* TVQRCodeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC5F6A012F4E5A0300D1E2F3 /* TVQRCodeSheet.swift */; };
 		E1A0B0012F5E000100000001 /* EmptyTabPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */; };
 		E1B0C0012F60000100000001 /* NetworkWarningBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */; };
 		E1C0D0012F72000100000001 /* AppButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C0D0002F72000100000001 /* AppButton.swift */; };
@@ -322,8 +325,11 @@
 		A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationProvider.swift; sourceTree = "<group>"; };
 		A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiOnDemandPolicy.swift; sourceTree = "<group>"; };
 		A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellularOnDemandPolicy.swift; sourceTree = "<group>"; };
+		AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVGradientBackground.swift; sourceTree = "<group>"; };
 		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
+		BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPreSharedKeyButton.swift; sourceTree = "<group>"; };
 		C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSNetworksView.swift; sourceTree = "<group>"; };
+		CC5F6A012F4E5A0300D1E2F3 /* TVQRCodeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVQRCodeSheet.swift; sourceTree = "<group>"; };
 		E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyTabPlaceholder.swift; sourceTree = "<group>"; };
 		E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkWarningBanner.swift; sourceTree = "<group>"; };
 		E1C0D0002F72000100000001 /* AppButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppButton.swift; sourceTree = "<group>"; };
@@ -428,6 +434,9 @@
 				443782C12EDF288A00F9FA94 /* TVNetworksView.swift */,
 				443782C22EDF288A00F9FA94 /* TVPeersView.swift */,
 				443782C32EDF288A00F9FA94 /* TVSettingsView.swift */,
+				AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */,
+				BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */,
+				CC5F6A012F4E5A0300D1E2F3 /* TVQRCodeSheet.swift */,
 				F8BCB110545747678AA5A9C2 /* TVServerView.swift */,
 			);
 			name = TV;
@@ -950,6 +959,9 @@
 				44F3E39B2EE2F9FA00C87FEC /* TVAuthView.swift in Sources */,
 				4483B26D2F19331A00BD9F66 /* TVColors.swift in Sources */,
 				443782C82EDF288A00F9FA94 /* TVMainView.swift in Sources */,
+				AA1B2C022F4E5A0100D1E2F3 /* TVGradientBackground.swift in Sources */,
+				BB3D4E022F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift in Sources */,
+				CC5F6A022F4E5A0300D1E2F3 /* TVQRCodeSheet.swift in Sources */,
 				978FC4732EEDF167002D0EB8 /* AppLogger.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1141,7 +1153,7 @@
 					"@executable_path/Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.0.16;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1184,7 +1196,7 @@
 					"@executable_path/Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.0.16;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
