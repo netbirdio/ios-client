@@ -70,8 +70,8 @@ jobs:
           SHORT=$(git rev-parse --short HEAD)
           REF="${{ inputs.netbird-ref }}"
 
-          # Try to get a version from git tag on current commit
-          TAG=$(git describe --tags --exact-match 2>/dev/null || true)
+          # Get latest version tag from the repo
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
 
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
