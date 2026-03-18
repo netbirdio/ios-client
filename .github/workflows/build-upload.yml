@@ -60,19 +60,39 @@ jobs:
       - name: Install gomobile
         run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
 
-      - name: Log netbird version info
+      - name: Resolve netbird version
+        id: netbird
         working-directory: netbird
         run: |
+          COMMIT=$(git rev-parse HEAD)
+          SHORT=$(git rev-parse --short HEAD)
+          REF="${{ inputs.netbird-ref }}"
+
+          # Try to get a version from git tag on current commit
+          TAG=$(git describe --tags --exact-match 2>/dev/null || true)
+
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [ -n "$TAG" ]; then
+            VERSION="${TAG#v}"
+          else
+            VERSION="dev-${SHORT}"
+          fi
+
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
+          echo "short=$SHORT" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
           echo "========================================="
-          echo "  NetBird ref: ${{ inputs.netbird-ref || 'default branch' }}"
-          echo "  NetBird commit: $(git rev-parse HEAD)"
-          echo "  NetBird short commit: $(git rev-parse --short HEAD)"
-          echo "  NetBird version for build: ${{ inputs.version || 'development' }}"
+          echo "  NetBird ref: ${REF:-default branch}"
+          echo "  NetBird commit: $COMMIT"
+          echo "  NetBird short commit: $SHORT"
+          echo "  NetBird version for build: $VERSION"
           echo "========================================="
 
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
-        run: ./build-go-lib.sh ../netbird ${{ inputs.version }}
+        run: ./build-go-lib.sh ../netbird ${{ steps.netbird.outputs.version }}
 
       - name: Setup App Store Connect API key
         working-directory: ios-client
