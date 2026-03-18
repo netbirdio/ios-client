@@ -49,6 +49,8 @@ jobs:
         with:
           repository: netbirdio/netbird
           ref: ${{ inputs.netbird-ref || '' }}
+          fetch-depth: 0
+          fetch-tags: true
           path: netbird
 
       - name: Setup Go
