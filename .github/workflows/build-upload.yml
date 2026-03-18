@@ -17,6 +17,11 @@ on:
         type: string
         default: ''
         description: 'Marketing version override (e.g. from git tag)'
+      netbird-ref:
+        required: false
+        type: string
+        default: ''
+        description: 'Git ref for netbird submodule checkout (e.g. v0.66.4). Defaults to main.'
 
 concurrency:
   group: build-upload-${{ inputs.ref }}
@@ -54,9 +59,19 @@ jobs:
       - name: Install gomobile
         run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
 
+      - name: Log netbird version info
+        working-directory: netbird
+        run: |
+          echo "========================================="
+          echo "  NetBird ref: ${{ inputs.netbird-ref || 'default branch' }}"
+          echo "  NetBird commit: $(git rev-parse HEAD)"
+          echo "  NetBird short commit: $(git rev-parse --short HEAD)"
+          echo "  NetBird version for build: ${{ inputs.version || 'development' }}"
+          echo "========================================="
+
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
-        run: ./build-go-lib.sh ../netbird
+        run: ./build-go-lib.sh ../netbird ${{ inputs.version }}
 
       - name: Setup App Store Connect API key
         working-directory: ios-client
