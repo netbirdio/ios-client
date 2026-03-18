@@ -17,11 +17,6 @@ on:
         type: string
         default: ''
         description: 'Marketing version override (e.g. from git tag)'
-      netbird-ref:
-        required: false
-        type: string
-        default: ''
-        description: 'Git ref for netbird submodule checkout (e.g. v0.66.4). Defaults to main.'
 
 concurrency:
   group: build-upload-${{ inputs.ref }}
