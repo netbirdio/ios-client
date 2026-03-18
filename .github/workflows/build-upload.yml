@@ -48,6 +48,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: netbirdio/netbird
+          ref: ${{ inputs.netbird-ref || '' }}
           path: netbird
 
       - name: Setup Go
