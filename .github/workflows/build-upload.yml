@@ -66,8 +66,6 @@ jobs:
         id: netbird
         working-directory: netbird
         run: |
-          COMMIT=$(git rev-parse HEAD)
-          SHORT=$(git rev-parse --short HEAD)
           REF="${{ inputs.netbird-ref }}"
 
           # Get latest version tag from the repo
@@ -78,23 +76,35 @@ jobs:
           elif [ -n "$TAG" ]; then
             VERSION="${TAG#v}"
           else
-            VERSION="dev-${SHORT}"
+            VERSION="dev-$(git rev-parse --short HEAD)"
           fi
 
-          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
-          echo "short=$SHORT" >> "$GITHUB_OUTPUT"
+          # Get the commit that the tag points to
+          if [ -n "$TAG" ]; then
+            TAG_COMMIT=$(git rev-list -n 1 "$TAG")
+            TAG_COMMIT_SHORT=$(git rev-parse --short "$TAG_COMMIT")
+          else
+            TAG_COMMIT=$(git rev-parse HEAD)
+            TAG_COMMIT_SHORT=$(git rev-parse --short HEAD)
+          fi
+
+          echo "commit=$TAG_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "short=$TAG_COMMIT_SHORT" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
           echo "========================================="
           echo "  NetBird ref: ${REF:-default branch}"
-          echo "  NetBird commit: $COMMIT"
-          echo "  NetBird short commit: $SHORT"
+          echo "  NetBird tag: ${TAG:-none}"
+          echo "  NetBird tag commit: $TAG_COMMIT"
+          echo "  NetBird HEAD commit: $(git rev-parse HEAD)"
           echo "  NetBird version for build: $VERSION"
           echo "========================================="
 
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
-        run: ./build-go-lib.sh ../netbird ${{ steps.netbird.outputs.version }}
+        run: |
+          echo "Building with version: ${{ steps.netbird.outputs.version }}"
+          ./build-go-lib.sh ../netbird ${{ steps.netbird.outputs.version }}
 
       - name: Setup App Store Connect API key
         working-directory: ios-client
