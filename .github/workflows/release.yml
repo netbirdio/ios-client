@@ -28,4 +28,5 @@ jobs:
     with:
       ref: ${{ github.ref }}
       version: ${{ needs.prepare.outputs.version }}
+      netbird-ref: v${{ needs.prepare.outputs.version }}
     secrets: inherit
