@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Parse tag version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+    steps:
+      - name: Strip v prefix from tag
+        id: parse
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build and Upload Release
+    needs: prepare
+    uses: ./.github/workflows/build-upload.yml
+    with:
+      ref: ${{ github.ref }}
+      version: ${{ needs.prepare.outputs.version }}
+      netbird-ref: v${{ needs.prepare.outputs.version }}
+    secrets: inherit

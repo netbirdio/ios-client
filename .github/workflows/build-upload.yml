@@ -1,0 +1,319 @@
+name: Build and Upload to App Store Connect
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+        description: 'Git ref to checkout and build'
+      build-number:
+        required: false
+        type: string
+        default: ''
+        description: 'Build number override (defaults to GITHUB_RUN_NUMBER)'
+      version:
+        required: false
+        type: string
+        default: ''
+        description: 'Marketing version override (e.g. from git tag)'
+
+concurrency:
+  group: build-upload-${{ inputs.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-upload:
+    name: Archive and Upload
+    runs-on: macos-15
+    steps:
+      - name: Select Xcode 26.1.1
+        run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer
+
+      - name: Checkout ios-client
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          path: ios-client
+
+      - name: Checkout netbird
+        uses: actions/checkout@v4
+        with:
+          repository: netbirdio/netbird
+          ref: ${{ inputs.netbird-ref || '' }}
+          fetch-depth: 0
+          fetch-tags: true
+          path: netbird
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: netbird/go.sum
+
+      - name: Install gomobile
+        run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
+
+      - name: Resolve netbird version
+        id: netbird
+        working-directory: netbird
+        run: |
+          REF="${{ inputs.netbird-ref }}"
+
+          # Get latest version tag from the repo
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [ -n "$TAG" ]; then
+            VERSION="${TAG#v}"
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+
+          # Get the commit that the tag points to
+          if [ -n "$TAG" ]; then
+            TAG_COMMIT=$(git rev-list -n 1 "$TAG")
+            TAG_COMMIT_SHORT=$(git rev-parse --short "$TAG_COMMIT")
+          else
+            TAG_COMMIT=$(git rev-parse HEAD)
+            TAG_COMMIT_SHORT=$(git rev-parse --short HEAD)
+          fi
+
+          echo "commit=$TAG_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "short=$TAG_COMMIT_SHORT" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          echo "========================================="
+          echo "  NetBird ref: ${REF:-default branch}"
+          echo "  NetBird tag: ${TAG:-none}"
+          echo "  NetBird tag commit: $TAG_COMMIT"
+          echo "  NetBird HEAD commit: $(git rev-parse HEAD)"
+          echo "  NetBird version for build: $VERSION"
+          echo "========================================="
+
+      - name: Build NetBirdSDK xcframework
+        working-directory: ios-client
+        run: |
+          echo "Building with version: ${{ steps.netbird.outputs.version }}"
+          ./build-go-lib.sh ../netbird ${{ steps.netbird.outputs.version }}
+
+      - name: Setup App Store Connect API key
+        working-directory: ios-client
+        env:
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$API_KEY_BASE64" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8
+
+      - name: Install signing certificates
+        env:
+          DIST_CERT_BASE64: ${{ secrets.DISTRIBUTION_CERTIFICATE_BASE64 }}
+          DIST_CERT_PASSWORD: ${{ secrets.DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          DEV_CERT_BASE64: ${{ secrets.DEVELOPMENT_CERTIFICATE_BASE64 }}
+          DEV_CERT_PASSWORD: ${{ secrets.DEVELOPMENT_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          # Create and configure temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import Distribution certificate
+          echo "$DIST_CERT_BASE64" | base64 --decode > $RUNNER_TEMP/dist.p12
+          security import $RUNNER_TEMP/dist.p12 \
+            -P "$DIST_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          # Import Development certificate
+          echo "$DEV_CERT_BASE64" | base64 --decode > $RUNNER_TEMP/dev.p12
+          security import $RUNNER_TEMP/dev.p12 \
+            -P "$DEV_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # Store for cleanup
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Create GoogleService-Info.plist
+        working-directory: ios-client
+        env:
+          PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+        run: |
+          if [ -n "$PLIST_BASE64" ]; then
+            echo "$PLIST_BASE64" | base64 --decode > GoogleService-Info.plist
+          else
+            cat > GoogleService-Info.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CLIENT_ID</key><string>dummy</string>
+            <key>REVERSED_CLIENT_ID</key><string>dummy</string>
+            <key>API_KEY</key><string>dummy</string>
+            <key>GCM_SENDER_ID</key><string>dummy</string>
+            <key>PLIST_VERSION</key><string>1</string>
+            <key>BUNDLE_ID</key><string>io.netbird.app</string>
+            <key>PROJECT_ID</key><string>dummy</string>
+            <key>STORAGE_BUCKET</key><string>dummy</string>
+            <key>IS_ADS_ENABLED</key><false/>
+            <key>IS_ANALYTICS_ENABLED</key><false/>
+            <key>IS_APPINVITE_ENABLED</key><false/>
+            <key>IS_GCM_ENABLED</key><false/>
+            <key>IS_SIGNIN_ENABLED</key><false/>
+            <key>GOOGLE_APP_ID</key><string>dummy</string>
+          </dict>
+          </plist>
+          EOF
+          fi
+
+      - name: Determine build settings
+        id: settings
+        run: |
+          BUILD_NUMBER="${{ inputs.build-number }}"
+          if [ -z "$BUILD_NUMBER" ]; then
+            BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          fi
+          echo "build-number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+
+          VERSION="${{ inputs.version }}"
+          if [ -n "$VERSION" ]; then
+            echo "version-args=MARKETING_VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "version-args=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dump version and build info
+        working-directory: ios-client
+        run: |
+          # Read current project values
+          PROJECT_VERSION=$(xcodebuild -project NetBird.xcodeproj -scheme NetBird -showBuildSettings 2>/dev/null | grep -m1 'CURRENT_PROJECT_VERSION' | awk '{print $NF}')
+          MARKETING_VERSION=$(xcodebuild -project NetBird.xcodeproj -scheme NetBird -showBuildSettings 2>/dev/null | grep -m1 'MARKETING_VERSION' | awk '{print $NF}')
+
+          echo "========================================="
+          echo "  Project MARKETING_VERSION: $MARKETING_VERSION"
+          echo "  Project CURRENT_PROJECT_VERSION: $PROJECT_VERSION"
+          echo "  Override version: ${{ inputs.version }}"
+          echo "  Override build-number: ${{ inputs.build-number }}"
+          echo "  Final build number: ${{ steps.settings.outputs.build-number }}"
+          echo "  Final version args: ${{ steps.settings.outputs.version-args }}"
+          echo "  Git ref: ${{ inputs.ref }}"
+          echo "  Run number: ${GITHUB_RUN_NUMBER}"
+          echo "========================================="
+
+      - name: Install provisioning profiles
+        env:
+          PROFILE_APP_BASE64: ${{ secrets.PROVISIONING_PROFILE_APP_BASE64 }}
+          PROFILE_EXT_BASE64: ${{ secrets.PROVISIONING_PROFILE_EXTENSION_BASE64 }}
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+
+          # Install app profile
+          echo "$PROFILE_APP_BASE64" | base64 --decode > $RUNNER_TEMP/app.mobileprovision
+          APP_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/app.mobileprovision))
+          APP_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/app.mobileprovision))
+          cp $RUNNER_TEMP/app.mobileprovision \
+            ~/Library/MobileDevice/Provisioning\ Profiles/${APP_UUID}.mobileprovision
+          echo "APP_PROFILE_NAME=$APP_NAME" >> "$GITHUB_ENV"
+
+          # Install extension profile
+          echo "$PROFILE_EXT_BASE64" | base64 --decode > $RUNNER_TEMP/ext.mobileprovision
+          EXT_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/ext.mobileprovision))
+          EXT_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/ext.mobileprovision))
+          cp $RUNNER_TEMP/ext.mobileprovision \
+            ~/Library/MobileDevice/Provisioning\ Profiles/${EXT_UUID}.mobileprovision
+          echo "EXT_PROFILE_NAME=$EXT_NAME" >> "$GITHUB_ENV"
+
+          echo "Installed profiles: app='$APP_NAME' ($APP_UUID), ext='$EXT_NAME' ($EXT_UUID)"
+
+      - name: Generate ExportOptions.plist
+        working-directory: ios-client
+        run: |
+          cat > ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>destination</key>
+            <string>upload</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>teamID</key>
+            <string>TA739QLA7A</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>io.netbird.app</key>
+              <string>${APP_PROFILE_NAME}</string>
+              <key>io.netbird.app.NetbirdNetworkExtension</key>
+              <string>${EXT_PROFILE_NAME}</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Resolve Swift packages
+        working-directory: ios-client
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project NetBird.xcodeproj \
+            -scheme NetBird
+
+      - name: Archive
+        working-directory: ios-client
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild archive \
+            -project NetBird.xcodeproj \
+            -scheme NetBird \
+            -destination 'generic/platform=iOS' \
+            -archivePath $RUNNER_TEMP/NetBird.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8" \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER_ID" \
+            CURRENT_PROJECT_VERSION=${{ steps.settings.outputs.build-number }} \
+            ${{ steps.settings.outputs.version-args }}
+
+      - name: Export and Upload to App Store Connect
+        working-directory: ios-client
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/NetBird.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath $RUNNER_TEMP/export \
+            -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8" \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER_ID"
+
+      - name: Clean up signing assets
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          rm -rf ~/.appstoreconnect/private_keys 2>/dev/null || true
+          rm -f $RUNNER_TEMP/dist.p12 $RUNNER_TEMP/dev.p12 2>/dev/null || true
+          rm -f $RUNNER_TEMP/app.mobileprovision $RUNNER_TEMP/ext.mobileprovision 2>/dev/null || true
+          rm -rf ~/Library/MobileDevice/Provisioning\ Profiles 2>/dev/null || true
