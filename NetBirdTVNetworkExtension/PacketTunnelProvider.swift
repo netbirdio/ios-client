@@ -296,7 +296,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         // On tvOS, try to get management URL from UserDefaults config first
         var managementURL = NetBirdAdapter.defaultManagementURL
-        if let configJSON = Preferences.loadConfigFromUserDefaults(),
+        if let storedURL = UserDefaults.standard.string(forKey: "netbird_management_url_local"), !storedURL.isEmpty {
+            // Prefer the explicitly saved URL (set via IPC from SetManagementURL:)
+            logger.info("initializeConfig: Using explicit management URL: \(storedURL, privacy: .public)")
+            managementURL = storedURL
+        } else if let configJSON = Preferences.loadConfigFromUserDefaults(),
            let storedURL = NetBirdAdapter.extractManagementURL(from: configJSON) {
             logger.info("initializeConfig: Using management URL from UserDefaults: \(storedURL, privacy: .public)")
             managementURL = storedURL
