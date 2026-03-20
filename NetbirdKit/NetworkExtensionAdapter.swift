@@ -340,6 +340,15 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
 
         if enabled {
+            let defaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+            let loginRequired = defaults?.bool(forKey: GlobalConstants.keyLoginRequired) ?? true
+            if loginRequired {
+                logger.warning("setOnDemandEnabled: Refusing to enable On Demand — user is not logged in")
+                return
+            }
+        }
+
+        if enabled {
             // Build rules from saved settings
             let rules = buildOnDemandRules()
             if rules.isEmpty {

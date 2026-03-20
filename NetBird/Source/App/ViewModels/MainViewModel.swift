@@ -233,7 +233,7 @@ class ViewModel: ObservableObject {
                 return false
             case .onlyOn:
                 guard let currentSSID = getCurrentSSID(), !currentSSID.isEmpty else {
-                    return onDemandWiFiNetworks.isEmpty
+                    return false
                 }
                 return onDemandWiFiNetworks.contains(currentSSID)
             case .exceptOn:
@@ -256,6 +256,44 @@ class ViewModel: ObservableObject {
         }
 
         return true
+    }
+
+    /// Checks whether On Demand has an active connect rule that will reconnect the tunnel
+    /// after a manual disconnect. Unlike onDemandRulesAllowConnect(), this excludes .doNothing
+    /// and only evaluates the currently active interface.
+    private func onDemandWillReconnect() -> Bool {
+        let path = networkMonitor.currentPath
+
+        let isOnWiFi = path.usesInterfaceType(.wifi)
+        let isOnCellular = path.usesInterfaceType(.cellular)
+
+        if isOnWiFi {
+            switch onDemandWiFiPolicy {
+            case .always:
+                return true
+            case .onlyOn:
+                guard let currentSSID = getCurrentSSID(), !currentSSID.isEmpty else {
+                    return false
+                }
+                return onDemandWiFiNetworks.contains(currentSSID)
+            case .exceptOn:
+                guard let currentSSID = getCurrentSSID(), !currentSSID.isEmpty else {
+                    return false
+                }
+                return !onDemandWiFiNetworks.contains(currentSSID)
+            case .never, .doNothing:
+                return false
+            }
+        } else if isOnCellular {
+            switch onDemandCellularPolicy {
+            case .always:
+                return true
+            case .never, .doNothing:
+                return false
+            }
+        }
+
+        return false
     }
 
     private func getCurrentSSID() -> String? {
