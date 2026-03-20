@@ -30,6 +30,18 @@ struct iOSSettingsView: View {
 
                 Section(header: Text("Settings")) {
                     NavigationLink {
+                        VPNOnDemandView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.trianglehead.2.clockwise")
+                                .foregroundColor(.accentColor)
+                                .frame(width: 24)
+                            Text("VPN On Demand")
+                                .foregroundColor(Color("TextPrimary"))
+                        }
+                    }
+
+                    NavigationLink {
                         AdvancedView()
                     } label: {
                         HStack {

@@ -107,6 +107,14 @@ class ViewModel: ObservableObject {
     }
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
+    @Published var connectOnDemand = false
+    @Published var showOnDemandAlert = false
+    @Published var showOnDemandConflictAlert = false
+    @Published var showOnDemandDisconnectAlert = false
+    @Published var onDemandWiFiPolicy: WiFiOnDemandPolicy = .always
+    @Published var onDemandCellularPolicy: CellularOnDemandPolicy = .always
+    @Published var onDemandWiFiNetworks: [String] = []
+    @Published var knownSSIDs: [String] = []
     @Published var showRosenpassChangedAlert = false
     @Published var networkUnavailable = false
     @Published var isInternetConnected = true
@@ -140,6 +148,8 @@ class ViewModel: ObservableObject {
 
         // forceRelayConnection uses UserDefaults (not SDK), so it's safe to load during init
         self.forceRelayConnection = self.getForcedRelayConnectionEnabled()
+        self.connectOnDemand = self.getConnectOnDemandEnabled()
+        self.loadOnDemandSettings()
 
         networkMonitor.pathUpdateHandler = { [weak self] path in
             DispatchQueue.main.async {
@@ -160,6 +170,21 @@ class ViewModel: ObservableObject {
     
     func connect()  {
         logger.info("connect: ENTRY POINT - function called")
+
+        #if os(iOS)
+        // Check if On Demand rules would block the connection on the current interface
+        if connectOnDemand && !onDemandRulesAllowConnect() {
+            logger.info("connect: On Demand rules conflict with current network, showing alert")
+            showOnDemandConflictAlert = true
+            return
+        }
+        #endif
+
+        performConnect()
+    }
+
+    /// Performs the actual VPN connection (called directly or after user dismisses On Demand conflict).
+    func performConnect() {
         self.connectPressed = true
         self.buttonLock = true
         // Reset networkUnavailable flag when user initiates connection
@@ -169,6 +194,7 @@ class ViewModel: ObservableObject {
         userDefaults?.set(false, forKey: GlobalConstants.keyNetworkUnavailable)
         userDefaults?.synchronize()
         #endif
+
         updateVPNDisplayState()
         logger.info("connect: connectPressed=true, buttonLock=true, starting adapter...")
 
@@ -184,8 +210,123 @@ class ViewModel: ObservableObject {
             self.logger.info("connect: networkExtensionAdapter.start() completed")
         }
     }
+
+    /// Disables On Demand and connects (user chose to override conflicting rules).
+    func connectWithOnDemandDisabled() {
+        setConnectOnDemand(isEnabled: false)
+        performConnect()
+    }
+
+    #if os(iOS)
+    /// Checks whether On Demand rules would allow a connection on the current network interface.
+    /// Uses NWPathMonitor snapshot and current SSID to evaluate against saved policies.
+    private func onDemandRulesAllowConnect() -> Bool {
+        let path = networkMonitor.currentPath
+
+        // Determine which interface is active
+        let isOnWiFi = path.usesInterfaceType(.wifi)
+        let isOnCellular = path.usesInterfaceType(.cellular)
+
+        if isOnWiFi {
+            switch onDemandWiFiPolicy {
+            case .never:
+                return false
+            case .onlyOn:
+                guard let currentSSID = getCurrentSSID(), !currentSSID.isEmpty else {
+                    return false
+                }
+                return onDemandWiFiNetworks.contains(currentSSID)
+            case .exceptOn:
+                guard let currentSSID = getCurrentSSID(), !currentSSID.isEmpty else {
+                    return true
+                }
+                return !onDemandWiFiNetworks.contains(currentSSID)
+            case .always, .doNothing:
+                return true
+            }
+        }
+
+        if isOnCellular {
+            switch onDemandCellularPolicy {
+            case .never:
+                return false
+            case .always, .doNothing:
+                return true
+            }
+        }
+
+        return true
+    }
+
+    /// Checks whether On Demand has an active connect rule that will reconnect the tunnel
+    /// after a manual disconnect. Unlike onDemandRulesAllowConnect(), this excludes .doNothing
+    /// and only evaluates the currently active interface.
+    private func onDemandWillReconnect() -> Bool {
+        let path = networkMonitor.currentPath
+
+        let isOnWiFi = path.usesInterfaceType(.wifi)
+        let isOnCellular = path.usesInterfaceType(.cellular)
+
+        if isOnWiFi {
+            switch onDemandWiFiPolicy {
+            case .always:
+                return true
+            case .onlyOn:
+                guard let currentSSID = getCurrentSSID(), !currentSSID.isEmpty else {
+                    return false
+                }
+                return onDemandWiFiNetworks.contains(currentSSID)
+            case .exceptOn:
+                guard let currentSSID = getCurrentSSID(), !currentSSID.isEmpty else {
+                    return false
+                }
+                return !onDemandWiFiNetworks.contains(currentSSID)
+            case .never, .doNothing:
+                return false
+            }
+        } else if isOnCellular {
+            switch onDemandCellularPolicy {
+            case .always:
+                return true
+            case .never, .doNothing:
+                return false
+            }
+        }
+
+        return false
+    }
+
+    private func getCurrentSSID() -> String? {
+        // Synchronous check not possible with NEHotspotNetwork.fetchCurrent()
+        // Use cached value from last fetch if available
+        return _cachedSSID
+    }
+
+    private var _cachedSSID: String?
+
+    func refreshCurrentSSID() {
+        NEHotspotNetwork.fetchCurrent { [weak self] network in
+            DispatchQueue.main.async {
+                self?._cachedSSID = network?.ssid
+            }
+        }
+    }
+    #endif
     
     func close() -> Void {
+        #if os(iOS)
+        // Warn user that On Demand will reconnect if rules match
+        if connectOnDemand && onDemandRulesAllowConnect() {
+            showOnDemandDisconnectAlert = true
+            return
+        }
+        #endif
+
+        performClose()
+    }
+
+    /// Performs the actual VPN disconnect.
+    func performClose() {
         self.disconnectPressed = true
         DispatchQueue.main.async {
             print("Stopping extension")
@@ -196,6 +337,12 @@ class ViewModel: ObservableObject {
             self.networkExtensionAdapter.stop()
             self.updateVPNDisplayState()
         }
+    }
+
+    /// Disables On Demand and disconnects (user chose to prevent auto-reconnect).
+    func closeWithOnDemandDisabled() {
+        setConnectOnDemand(isEnabled: false)
+        performClose()
     }
 
     func updateVPNDisplayState() {
@@ -246,6 +393,9 @@ class ViewModel: ObservableObject {
     }
     
     func startPollingDetails() {
+        #if os(iOS)
+        refreshCurrentSSID()
+        #endif
         networkExtensionAdapter.startTimer { details in
 
             self.checkExtensionState()
@@ -308,6 +458,10 @@ class ViewModel: ObservableObject {
 
                     if status == .connected {
                         self.routeViewModel.getRoutes()
+                        // Re-enable On Demand if user has the setting turned on
+                        if self.connectOnDemand {
+                            self.networkExtensionAdapter.setOnDemandEnabled(true)
+                        }
                     }
                 }
             }
@@ -319,6 +473,9 @@ class ViewModel: ObservableObject {
         self.fqdn = ""
         defaults.removeObject(forKey: "ip")
         defaults.removeObject(forKey: "fqdn")
+
+        // Disable and persist On Demand off to keep UI/storage/manager in sync
+        setConnectOnDemand(isEnabled: false)
 
         // Clear config JSON (contains server credentials and all settings)
         Preferences.removeConfigFromUserDefaults()
@@ -437,6 +594,72 @@ class ViewModel: ObservableObject {
         #endif
     }
     
+    func setConnectOnDemand(isEnabled: Bool) {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(isEnabled, forKey: GlobalConstants.keyConnectOnDemand)
+        self.connectOnDemand = isEnabled
+        networkExtensionAdapter.setOnDemandEnabled(isEnabled)
+        if isEnabled {
+            self.showOnDemandAlert = true
+        }
+    }
+
+    func getConnectOnDemandEnabled() -> Bool {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        return userDefaults?.bool(forKey: GlobalConstants.keyConnectOnDemand) ?? false
+    }
+
+    func loadOnDemandSettings() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        let wifiRaw = userDefaults?.string(forKey: GlobalConstants.keyOnDemandWiFiPolicy) ?? WiFiOnDemandPolicy.always.rawValue
+        let cellularRaw = userDefaults?.string(forKey: GlobalConstants.keyOnDemandCellularPolicy) ?? CellularOnDemandPolicy.always.rawValue
+        self.onDemandWiFiPolicy = WiFiOnDemandPolicy(rawValue: wifiRaw) ?? .always
+        self.onDemandCellularPolicy = CellularOnDemandPolicy(rawValue: cellularRaw) ?? .always
+        self.onDemandWiFiNetworks = userDefaults?.stringArray(forKey: GlobalConstants.keyOnDemandWiFiNetworks) ?? []
+        self.knownSSIDs = userDefaults?.stringArray(forKey: GlobalConstants.keyKnownSSIDs) ?? []
+    }
+
+    func saveOnDemandSettings() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(onDemandWiFiPolicy.rawValue, forKey: GlobalConstants.keyOnDemandWiFiPolicy)
+        userDefaults?.set(onDemandCellularPolicy.rawValue, forKey: GlobalConstants.keyOnDemandCellularPolicy)
+        userDefaults?.set(onDemandWiFiNetworks, forKey: GlobalConstants.keyOnDemandWiFiNetworks)
+
+        if connectOnDemand {
+            networkExtensionAdapter.applyOnDemandRules(
+                wifiPolicy: onDemandWiFiPolicy,
+                cellularPolicy: onDemandCellularPolicy,
+                wifiNetworks: onDemandWiFiNetworks
+            )
+        }
+    }
+
+    func addOnDemandWiFiNetwork(_ ssid: String) {
+        let trimmed = ssid.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !onDemandWiFiNetworks.contains(trimmed) else { return }
+        onDemandWiFiNetworks.append(trimmed)
+        saveOnDemandSettings()
+    }
+
+    func removeOnDemandWiFiNetwork(at offsets: IndexSet) {
+        onDemandWiFiNetworks.remove(atOffsets: offsets)
+        saveOnDemandSettings()
+    }
+
+    func recordKnownSSID(_ ssid: String) {
+        let trimmed = ssid.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !knownSSIDs.contains(trimmed) else { return }
+        knownSSIDs.append(trimmed)
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(knownSSIDs, forKey: GlobalConstants.keyKnownSSIDs)
+    }
+
+    func removeKnownSSID(_ ssid: String) {
+        knownSSIDs.removeAll { $0 == ssid }
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(knownSSIDs, forKey: GlobalConstants.keyKnownSSIDs)
+    }
+
     func getDefaultStatus() -> StatusDetails {
         return StatusDetails(ip: "", fqdn: "", managementStatus: .disconnected, peerInfo: [])
     }
