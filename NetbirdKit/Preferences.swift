@@ -119,7 +119,26 @@ class Preferences {
             return
         }
         defaults.removeObject(forKey: configJSONKey)
+        defaults.removeObject(forKey: managementURLKey)
         defaults.synchronize()
+    }
+
+    // MARK: - Management URL Storage
+    //
+    // Stored separately because the config JSON from Go SDK serializes ManagementURL
+    // as a nested object (not a plain string), making regex/JSON extraction unreliable.
+
+    private static let managementURLKey = "netbird_management_url"
+
+    /// Save the management URL explicitly (called when user changes server).
+    static func saveManagementURL(_ url: String) {
+        sharedUserDefaults()?.set(url, forKey: managementURLKey)
+        sharedUserDefaults()?.synchronize()
+    }
+
+    /// Load the explicitly saved management URL.
+    static func loadManagementURL() -> String? {
+        return sharedUserDefaults()?.string(forKey: managementURLKey)
     }
 
     /// Restore config from UserDefaults to the config file path.

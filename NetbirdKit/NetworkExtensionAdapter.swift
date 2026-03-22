@@ -177,10 +177,25 @@ public class NetworkExtensionAdapter: ObservableObject {
         // Note: Shared UserDefaults doesn't work on tvOS between app and extension,
         // but we can still use it to store config in the main app
         if let configJSON = Preferences.loadConfigFromUserDefaults(), !configJSON.isEmpty {
-            logger.info("initializeConfigFromApp: Config exists in UserDefaults, sending to extension via IPC")
+            logger.info("initializeConfigFromApp: Config exists in UserDefaults (\(configJSON.count) chars), sending to extension via IPC")
+
+            // Check if session exists for IPC
+            if self.session == nil {
+                logger.error("initializeConfigFromApp: session is nil! IPC will fail. Config won't reach extension.")
+            }
 
             // Send config to extension via IPC (settings are already in the JSON)
             await sendConfigToExtensionAsync(configJSON)
+
+            // Also send the management URL separately — the config JSON from Go SDK
+            // serializes ManagementURL as a nested object, not a plain string,
+            // so regex extraction in the extension fails.
+            if let managementURL = Preferences.loadManagementURL() {
+                logger.info("initializeConfigFromApp: Sending management URL separately: \(managementURL, privacy: .public)")
+                await sendManagementURLToExtensionAsync(managementURL)
+            } else {
+                logger.warning("initializeConfigFromApp: No separate management URL saved")
+            }
             return
         }
 
@@ -203,7 +218,34 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// Async wrapper for sendConfigToExtension
     private func sendConfigToExtensionAsync(_ configJSON: String) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            sendConfigToExtension(configJSON) { _ in
+            sendConfigToExtension(configJSON) { [weak self] success in
+                self?.logger.info("sendConfigToExtensionAsync: IPC result = \(success)")
+                continuation.resume()
+            }
+        }
+    }
+
+    /// Send the management URL to the extension separately via IPC.
+    /// This is needed because the Go SDK config JSON serializes ManagementURL
+    /// as a nested object, making regex extraction unreliable.
+    private func sendManagementURLToExtensionAsync(_ url: String) async {
+        guard let session = self.session else {
+            logger.warning("sendManagementURLToExtensionAsync: No session available")
+            return
+        }
+
+        let messageString = "SetManagementURL:\(url)"
+        guard let messageData = messageString.data(using: .utf8) else { return }
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            do {
+                try session.sendProviderMessage(messageData) { [weak self] response in
+                    let success = response.flatMap { String(data: $0, encoding: .utf8) } == "true"
+                    self?.logger.info("sendManagementURLToExtensionAsync: result = \(success)")
+                    continuation.resume()
+                }
+            } catch {
+                self.logger.error("sendManagementURLToExtensionAsync: Failed: \(error.localizedDescription)")
                 continuation.resume()
             }
         }

@@ -74,6 +74,8 @@ struct TVMainView: View {
                     isPresented: $viewModel.networkExtensionAdapter.showBrowser,
                     onCancel: {
                         viewModel.networkExtensionAdapter.showBrowser = false
+                        viewModel.connectPressed = false
+                        viewModel.updateVPNDisplayState()
                     },
                     onComplete: {
                         #if DEBUG

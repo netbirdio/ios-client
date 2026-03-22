@@ -146,6 +146,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // This bypasses the broken shared UserDefaults
             let configJSON = String(s.dropFirst("SetConfig:".count))
             setConfigFromMainApp(configJSON: configJSON, completionHandler: completionHandler)
+        case let s where s.hasPrefix("SetManagementURL:"):
+            // Receive management URL separately — the config JSON from Go SDK
+            // serializes ManagementURL as a nested object, so regex extraction fails.
+            let url = String(s.dropFirst("SetManagementURL:".count))
+            logger.info("handleAppMessage: Saving management URL: \(url, privacy: .public)")
+            UserDefaults.standard.set(url, forKey: "netbird_management_url_local")
+            UserDefaults.standard.synchronize()
+            completionHandler("true".data(using: .utf8))
         case "ClearConfig":
             // Clear the extension-local config on logout
             clearLocalConfig(completionHandler: completionHandler)
@@ -288,7 +296,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         // On tvOS, try to get management URL from UserDefaults config first
         var managementURL = NetBirdAdapter.defaultManagementURL
-        if let configJSON = Preferences.loadConfigFromUserDefaults(),
+        if let storedURL = UserDefaults.standard.string(forKey: "netbird_management_url_local"), !storedURL.isEmpty {
+            // Prefer the explicitly saved URL (set via IPC from SetManagementURL:)
+            logger.info("initializeConfig: Using explicit management URL: \(storedURL, privacy: .public)")
+            managementURL = storedURL
+        } else if let configJSON = Preferences.loadConfigFromUserDefaults(),
            let storedURL = NetBirdAdapter.extractManagementURL(from: configJSON) {
             logger.info("initializeConfig: Using management URL from UserDefaults: \(storedURL, privacy: .public)")
             managementURL = storedURL
@@ -315,8 +327,24 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 completionHandler(data)
             } else if let supported = ssoSupported {
                 logger.info("initializeConfig: SSO supported = \(supported), config should be saved")
-                // Verify config was written
-                let configExists = fileManager.fileExists(atPath: configPath)
+                var configExists = fileManager.fileExists(atPath: configPath)
+
+                // For embedded IdP servers, saveConfigIfSSOSupported reports ssoSupported=false
+                // and does not write the config file. Write it manually from the auth object.
+                if !configExists {
+                    var jsonError: NSError?
+                    let configJSON = auth.getConfigJSON(&jsonError)
+                    if jsonError == nil, !configJSON.isEmpty {
+                        logger.info("initializeConfig: SSO not supported, writing config manually for embedded IdP")
+                        do {
+                            try configJSON.write(toFile: configPath, atomically: true, encoding: .utf8)
+                            configExists = true
+                        } catch {
+                            logger.error("initializeConfig: Failed to write config manually - \(error.localizedDescription)")
+                        }
+                    }
+                }
+
                 logger.info("initializeConfig: Config exists after save = \(configExists)")
                 let data = configExists ? "true".data(using: .utf8) : "false".data(using: .utf8)
                 completionHandler(data)

@@ -475,14 +475,19 @@ public class NetBirdAdapter {
         // Note: Shared App Group UserDefaults does NOT work on tvOS due to sandbox restrictions.
         var managementURL = Self.defaultManagementURL
 
-        let configJSON: String? = UserDefaults.standard.string(forKey: "netbird_config_json_local")
-
-        if let configJSON = configJSON,
-           let storedURL = Self.extractManagementURL(from: configJSON) {
-            adapterLogger.info("loginAsync: Using management URL from config: \(storedURL, privacy: .public)")
+        // First, try the explicitly saved management URL (most reliable — set via IPC).
+        // The config JSON from Go SDK serializes ManagementURL as a nested object,
+        // so regex extraction from config JSON is unreliable.
+        if let storedURL = UserDefaults.standard.string(forKey: "netbird_management_url_local"), !storedURL.isEmpty {
+            adapterLogger.info("loginAsync: Using explicit management URL: \(storedURL, privacy: .public)")
             managementURL = storedURL
+        } else if let configJSON = UserDefaults.standard.string(forKey: "netbird_config_json_local"),
+                  let extractedURL = Self.extractManagementURL(from: configJSON) {
+            // Fallback: try regex extraction from config JSON
+            adapterLogger.info("loginAsync: Using management URL from config JSON: \(extractedURL, privacy: .public)")
+            managementURL = extractedURL
         } else {
-            adapterLogger.info("loginAsync: No config found, using default management URL")
+            adapterLogger.warning("loginAsync: No management URL found, using default: \(managementURL, privacy: .public)")
         }
         #else
         let managementURL = ""

@@ -70,7 +70,7 @@ struct TVPeerListContent: View {
                         .font(.system(size: 28))
                         .foregroundColor(TVColors.textPrimary)
                         .autocorrectionDisabled()
-                        .onChange(of: viewModel.peerViewModel.peerFilter) { _ in
+                        .onChange(of: viewModel.peerViewModel.peerFilter) {
                             selectedPeer = nil
                         }
 

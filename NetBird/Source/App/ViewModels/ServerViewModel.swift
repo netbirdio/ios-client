@@ -166,14 +166,24 @@ class ServerViewModel : ObservableObject {
                 onSuccess: { [weak self] ssoSupported in
                     Task { @MainActor in
                         if ssoSupported {
-                            // On tvOS, try to save config to UserDefaults since file writes may have failed
                             #if os(tvOS)
                             self?.saveConfigToUserDefaults(authenticator: authenticator)
+                            Preferences.saveManagementURL(managementServerUrl)
                             #endif
                             self?.isOperationSuccessful = true
                         } else {
+                            // On tvOS, embedded IdP servers report ssoSupported=false but still
+                            // support device code auth flow. Save the config and proceed — the
+                            // actual login flow (loginTV with forceDeviceAuth) will handle auth.
+                            #if os(tvOS)
+                            self?.saveConfigToUserDefaults(authenticator: authenticator)
+                            Preferences.saveManagementURL(managementServerUrl)
+                            print("tvOS: ssoSupported=false (embedded IdP), config and management URL saved")
+                            self?.isOperationSuccessful = true
+                            #else
                             self?.isUiEnabled = true
                             self?.viewErrors.ssoNotSupportedError = "SSO isn't available for the provided server, register this device with a setup key"
+                            #endif
                         }
                         continuation.resume()
                     }
@@ -188,6 +198,7 @@ class ServerViewModel : ObservableObject {
                         if errorMessage.contains("operation not permitted") || errorMessage.contains("permission denied") {
                             print("tvOS: File write failed, saving config to UserDefaults")
                             self?.saveConfigToUserDefaults(authenticator: authenticator)
+                            Preferences.saveManagementURL(managementServerUrl)
                             self?.isOperationSuccessful = true
                             continuation.resume()
                             return
