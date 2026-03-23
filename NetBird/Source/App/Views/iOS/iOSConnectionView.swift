@@ -38,7 +38,7 @@ struct iOSConnectionView: View {
                     VStack {
                         Image(imageName)
                             .resizable(resizingMode: .stretch)
-                            .aspectRatio(contentMode: .fit)
+                            .aspectRatio(contentMode: DeviceType.isPad ? .fill : .fit)
                             .padding(.top, Screen.height * (DeviceType.isPad ? (isLandscape ? -0.15 : 0.36) : 0.19))
                             .padding(.leading, UIScreen.main.bounds.height * (isLandscape ? 0.04 : 0))
                             .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
