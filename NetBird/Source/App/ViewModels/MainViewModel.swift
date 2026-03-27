@@ -74,7 +74,12 @@ class ViewModel: ObservableObject {
     @Published var showIpCopiedAlert = false
     @Published var showAuthenticationRequired = false
     @Published var navigateToServerView = false
-    
+    @Published var navigateToProfilesView = false
+
+    #if os(iOS)
+    @Published var activeProfileName: String = ProfileManager.shared.getActiveProfileName()
+    #endif
+
     @Published var extensionState: NEVPNStatus = .disconnected
     @Published var managementStatus: ClientState = .disconnected
     @Published var statusDetailsValid = false
