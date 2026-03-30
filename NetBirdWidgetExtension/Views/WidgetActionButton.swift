@@ -27,7 +27,8 @@ struct WidgetActionButton<TransitionContent: View, Label: View>: View {
 
     @ViewBuilder
     private func openAppLink<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        if let url = WidgetConstants.deepLinkConnect {
+        let url = entry.loginRequired ? WidgetConstants.deepLinkLogin : WidgetConstants.deepLinkConnect
+        if let url {
             Link(destination: url, label: content)
         } else {
             content()

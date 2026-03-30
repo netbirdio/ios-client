@@ -50,6 +50,7 @@ struct VPNStatusEntry: TimelineEntry {
     let ip: String
     let fqdn: String
     let needsAppSetup: Bool
+    let loginRequired: Bool
 
     var isConnected: Bool { status == .connected }
 }

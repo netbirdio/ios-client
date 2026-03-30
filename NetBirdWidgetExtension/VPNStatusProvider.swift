@@ -9,7 +9,8 @@ struct VPNStatusProvider: TimelineProvider {
             status: .disconnected,
             ip: "100.x.x.x",
             fqdn: "device.netbird.cloud",
-            needsAppSetup: false
+            needsAppSetup: false,
+            loginRequired: false
         )
     }
 
@@ -51,7 +52,8 @@ struct VPNStatusProvider: TimelineProvider {
                 status: status,
                 ip: ip,
                 fqdn: fqdn,
-                needsAppSetup: manager == nil || loginRequired
+                needsAppSetup: manager == nil || loginRequired,
+                loginRequired: loginRequired
             )
             completion(entry)
         }

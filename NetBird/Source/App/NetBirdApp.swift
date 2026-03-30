@@ -36,6 +36,7 @@ struct NetBirdApp: App {
     @StateObject private var viewModelLoader = ViewModelLoader()
     @Environment(\.scenePhase) var scenePhase
     @State private var activationTask: Task<Void, Never>?
+    @State private var pendingURL: URL?
 
     #if os(iOS)
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
@@ -61,6 +62,10 @@ struct NetBirdApp: App {
                         handleWidgetURL(url, viewModel: viewModel)
                     }
                     .onAppear {
+                        if let url = pendingURL {
+                            handleWidgetURL(url, viewModel: viewModel)
+                            pendingURL = nil
+                        }
                         if UIApplication.shared.applicationState == .active {
                             startActivation(viewModel: viewModel)
                         }
@@ -88,6 +93,11 @@ struct NetBirdApp: App {
                     #endif
             } else {
                 loadingView
+                    #if os(iOS)
+                    .onOpenURL { url in
+                        pendingURL = url
+                    }
+                    #endif
             }
         }
     }
@@ -143,6 +153,8 @@ struct NetBirdApp: App {
     private func handleWidgetURL(_ url: URL, viewModel: ViewModel) {
         guard url.scheme == "netbird" else { return }
         switch url.host {
+        case "login":
+            viewModel.connect()
         case "connect":
             if viewModel.vpnDisplayState == .disconnected {
                 viewModel.connect()
