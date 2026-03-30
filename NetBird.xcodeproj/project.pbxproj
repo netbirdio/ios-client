@@ -889,6 +889,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				55472AC52F59E3C000382947 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -896,6 +897,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				55472AC82F59E3C000382947 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -905,6 +907,7 @@
 			files = (
 				501B0DCE2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD22AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
+				55472AC62F59E3C000382947 /* GoogleService-Info.plist in Resources */,
 				501B0DDC2AE04DDE004BE7A7 /* button-connected.json in Resources */,
 				501B0DD62AE04DDE004BE7A7 /* button-start-connecting.json in Resources */,
 				501B0DDA2AE04DDE004BE7A7 /* button-full.json in Resources */,
@@ -926,6 +929,7 @@
 				501B0DCD2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD12AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
 				501B0DDB2AE04DDE004BE7A7 /* button-connected.json in Resources */,
+				55472AC72F59E3C000382947 /* GoogleService-Info.plist in Resources */,
 				501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
 				501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */,
 			);
