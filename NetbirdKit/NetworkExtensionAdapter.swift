@@ -343,7 +343,12 @@ public class NetworkExtensionAdapter: ObservableObject {
             }
         }
 
-        self.loginURL = loginURLString
+        guard let url = loginURLString, !url.isEmpty else {
+            logger.error("performLogin: no login URL received from extension, aborting")
+            return
+        }
+
+        self.loginURL = url
         self.showBrowser = true
     }
 
@@ -351,7 +356,18 @@ public class NetworkExtensionAdapter: ObservableObject {
         logger.info("startVPNConnection: called")
         let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
         logger.info("startVPNConnection: logLevel = \(logLevel)")
-        let options: [String: NSObject] = ["logLevel": logLevel as NSObject]
+        var options: [String: NSObject] = ["logLevel": logLevel as NSObject]
+        #if os(iOS)
+        // Pass active profile paths so the extension can reinitialize the adapter
+        // if the profile changed while the extension process was still alive.
+        if let configPath = Preferences.configFile() {
+            options["configPath"] = configPath as NSObject
+        }
+        if let statePath = Preferences.stateFile() {
+            options["statePath"] = statePath as NSObject
+        }
+        logger.info("startVPNConnection: configPath=\(Preferences.configFile() ?? "nil")")
+        #endif
 
         guard let session = self.session else {
             logger.error("startVPNConnection: ERROR - session is nil!")
@@ -515,9 +531,10 @@ public class NetworkExtensionAdapter: ObservableObject {
         return vpnManager?.isOnDemandEnabled ?? false
     }
 
-    func login(completion: @escaping (String) -> Void) {
-        if self.session == nil {
+    func login(completion: @escaping (String?) -> Void) {
+        guard let session = self.session else {
             logger.error("login: No session available for login")
+            completion(nil)
             return
         }
 
@@ -526,38 +543,43 @@ public class NetworkExtensionAdapter: ObservableObject {
             #if os(tvOS)
             let messageString = "LoginTV"
             #else
-            let messageString = "Login"
+            // Include active profile paths so the extension can reinitialize
+            // its adapter for the correct profile before performing login.
+            // Format: "Login:<configPath>|<statePath>"
+            var messageString = "Login"
+            if let configPath = Preferences.configFile(), let statePath = Preferences.stateFile() {
+                messageString = "Login:\(configPath)|\(statePath)"
+            }
             #endif
 
             if let messageData = messageString.data(using: .utf8) {
                 // Send the message to the network extension
-                try self.session!.sendProviderMessage(messageData) { response in
-                    if let response = response {
-                        #if os(tvOS)
-                        // For tvOS, decode DeviceAuthResponse struct
-                        do {
-                            let authResponse = try self.decoder.decode(DeviceAuthResponse.self, from: response)
-                            DispatchQueue.main.async {
-                                self.userCode = authResponse.userCode
-                            }
-                            completion(authResponse.url)
-                        } catch {
-                            print("login: Failed to decode DeviceAuthResponse - \(error)")
-                            // Fallback to plain string for backwards compatibility
-                            if let string = String(data: response, encoding: .utf8) {
-                                completion(string)
-                            }
-                        }
-                        #else
-                        if let string = String(data: response, encoding: .utf8) {
-                            completion(string)
-                        }
-                        #endif
+                try session.sendProviderMessage(messageData) { response in
+                    guard let response = response else {
+                        self.logger.error("login: No response from extension")
+                        completion(nil)
                         return
                     }
+                    #if os(tvOS)
+                    // For tvOS, decode DeviceAuthResponse struct
+                    do {
+                        let authResponse = try self.decoder.decode(DeviceAuthResponse.self, from: response)
+                        DispatchQueue.main.async {
+                            self.userCode = authResponse.userCode
+                        }
+                        completion(authResponse.url)
+                    } catch {
+                        print("login: Failed to decode DeviceAuthResponse - \(error)")
+                        // Fallback to plain string for backwards compatibility
+                        completion(String(data: response, encoding: .utf8))
+                    }
+                    #else
+                    completion(String(data: response, encoding: .utf8))
+                    #endif
                 }
             } else {
                 print("Error converting message to Data")
+                completion(nil)
             }
         } catch {
             print("error when performing network extension action")

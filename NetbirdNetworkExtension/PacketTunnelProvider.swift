@@ -17,9 +17,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         return PacketTunnelProviderSettingsManager(with: self)
     }()
 
-    private lazy var adapter: NetBirdAdapter? = {
-        return NetBirdAdapter(with: self.tunnelManager)
-    }()
+    private var adapter: NetBirdAdapter?
 
     var pathMonitor: NWPathMonitor?
     let monitorQueue = DispatchQueue(label: "NetworkMonitor")
@@ -35,6 +33,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
         }
+
+        // Extract profile paths passed from the main app via startVPNTunnel(options:).
+        // If paths differ from what the current adapter was initialized with, recreate
+        // the adapter so it uses the correct profile's config and state files.
+        #if os(iOS)
+        let configPath = (options?["configPath"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let statePath  = (options?["statePath"]  as? String).flatMap { $0.isEmpty ? nil : $0 }
+        if adapter == nil || (configPath != nil && configPath != adapter?.initializedConfigPath) {
+            AppLogger.shared.log("PacketTunnelProvider: (re)creating adapter for configPath=\(configPath ?? "default")")
+            adapter = NetBirdAdapter(with: tunnelManager, configPath: configPath, statePath: statePath)
+        }
+        #else
+        if adapter == nil {
+            adapter = NetBirdAdapter(with: tunnelManager)
+        }
+        #endif
 
         monitorQueue.async { [weak self] in
             self?.currentNetworkType = nil
@@ -103,6 +117,19 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         switch string {
         case "Login":
+            login(completionHandler: completionHandler)
+        case let s where s.hasPrefix("Login:"):
+            // Format: "Login:<configPath>|<statePath>"
+            let payload = String(s.dropFirst("Login:".count))
+            let parts = payload.components(separatedBy: "|")
+            if parts.count == 2 {
+                let configPath = parts[0]
+                let statePath  = parts[1]
+                if configPath != adapter?.initializedConfigPath {
+                    AppLogger.shared.log("handleAppMessage: profile change detected, recreating adapter for \(configPath)")
+                    adapter = NetBirdAdapter(with: tunnelManager, configPath: configPath, statePath: statePath)
+                }
+            }
             login(completionHandler: completionHandler)
         case "Status":
             getStatus(completionHandler: completionHandler)

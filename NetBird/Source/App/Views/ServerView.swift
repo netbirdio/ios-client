@@ -23,7 +23,18 @@ struct ServerView: View {
 
     var body: some View {
         Form {
-            Section(header: Text("Server")) {
+            Section(
+                header: Text("Server"),
+                footer: HStack(spacing: 6) {
+                    Text("Current:")
+                        .foregroundColor(Color("TextSecondary"))
+                    Text(ProfileManager.shared.managementURL(for: ProfileManager.shared.getActiveProfileName()) ?? defaultManagementServerUrl)
+                        .foregroundColor(Color("TextPrimary"))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .font(.footnote)
+            ) {
                 ZStack(alignment: .leading) {
                     TextField("https://example-api.domain.com:443", text: $managementServerUrl)
                         .foregroundColor(Color("TextPrimary"))
