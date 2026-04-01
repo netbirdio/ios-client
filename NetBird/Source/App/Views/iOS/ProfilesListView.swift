@@ -1,40 +1,11 @@
 //
-//  ProfilesView.swift
+//  ProfilesListView.swift
 //  NetBird
-//
-//  Multi-profile management screens.
 //
 
 import SwiftUI
 
 #if os(iOS)
-
-// MARK: - Profile Badge (Connection Screen)
-
-struct ProfileBadge: View {
-    let profileName: String
-    var onTap: (() -> Void)?
-
-    var body: some View {
-        Button {
-            onTap?()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "person.fill")
-                    .font(.caption2)
-                Text(profileName)
-                    .font(.caption.bold())
-            }
-            .foregroundColor(.accentColor)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color.accentColor.opacity(0.15))
-            .clipShape(Capsule())
-        }
-    }
-}
-
-// MARK: - Profiles List
 
 struct ProfilesListView: View {
     @EnvironmentObject var viewModel: ViewModel
@@ -153,8 +124,8 @@ struct ProfilesListView: View {
             loadProfiles()
         }
         .sheet(isPresented: $showAddSheet) {
-            AddProfileSheet { newName in
-                addProfile(newName)
+            AddProfileSheet {
+                loadProfiles()
             }
         }
         .alert("Switch Profile", isPresented: $showSwitchAlert, presenting: selectedProfile) { profile in
@@ -194,25 +165,17 @@ struct ProfilesListView: View {
         profiles = ProfileManager.shared.listProfiles()
     }
 
-    private func addProfile(_ name: String) {
-        do {
-            try ProfileManager.shared.addProfile(name)
-            loadProfiles()
-        } catch {
-            errorMessage = error.localizedDescription
-            showErrorAlert = true
-        }
-    }
-
     private func switchToProfile(_ profile: Profile) {
-        // Stop VPN first
         viewModel.performClose()
+        viewModel.switchConnectionInfo(to: profile.name)
 
         do {
             try ProfileManager.shared.switchProfile(profile.name)
-            // Reload configuration for the new profile
             viewModel.reloadConfiguration()
             viewModel.activeProfileName = ProfileManager.shared.getActiveProfileName()
+            if let url = ProfileManager.shared.managementURL(for: profile.name) {
+                Preferences.saveManagementURL(url)
+            }
             loadProfiles()
         } catch {
             errorMessage = error.localizedDescription
@@ -231,7 +194,6 @@ struct ProfilesListView: View {
     }
 
     private func logoutProfile(_ profile: Profile) {
-        // If logging out the active profile, disconnect first
         if profile.isActive {
             viewModel.performClose()
         }
@@ -245,65 +207,11 @@ struct ProfilesListView: View {
     }
 }
 
-// MARK: - Add Profile Sheet
-
-struct AddProfileSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var profileName = ""
-    var onCreate: ((String) -> Void)?
-
-    private var isValid: Bool {
-        !profileName.isEmpty && profileName.range(of: "^[a-zA-Z0-9_-]+$", options: .regularExpression) != nil
-    }
-
-    var body: some View {
-        NavigationView {
-            List {
-                Section {
-                    TextField("Profile name", text: $profileName)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                } footer: {
-                    Text("Only letters, numbers, underscores and hyphens allowed")
-                        .font(.footnote)
-                        .foregroundColor(Color("TextSecondary"))
-                }
-            }
-            .listStyle(.insetGrouped)
-            .navigationTitle("New Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .foregroundColor(.accentColor)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Create") {
-                        onCreate?(profileName)
-                        dismiss()
-                    }
-                    .foregroundColor(.accentColor)
-                    .disabled(!isValid)
-                }
-            }
-        }
-        .navigationViewStyle(.stack)
-    }
-}
-
-// MARK: - Previews
-
-#Preview("Profiles List") {
+#Preview {
     NavigationView {
         ProfilesListView()
             .environmentObject(ViewModel())
     }
-}
-
-#Preview("Add Profile Sheet") {
-    AddProfileSheet()
 }
 
 #endif

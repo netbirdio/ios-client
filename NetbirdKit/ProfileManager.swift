@@ -64,13 +64,24 @@ class ProfileManager {
 
     /// Returns all profiles with their active status.
     func listProfiles() -> [Profile] {
-        let activeProfile = getActiveProfileName()
+        let meta = readMeta()
+        let activeProfile = meta?.activeProfile.isEmpty == false ? meta!.activeProfile : defaultProfileName
+        let deletedSet = Set(meta?.deletedProfiles ?? [])
+
+        // Retry deletion of any directories still present after a previous attempt.
+        for name in deletedSet {
+            if let dir = profileDirectory(for: name), fileManager.fileExists(atPath: dir) {
+                try? fileManager.removeItem(atPath: dir)
+            }
+        }
+
         guard let profilesDir = profilesDirectory() else { return [] }
 
         do {
             let contents = try fileManager.contentsOfDirectory(atPath: profilesDir)
             var profiles: [Profile] = []
             for name in contents.sorted() {
+                guard !deletedSet.contains(name) else { continue }
                 let fullPath = (profilesDir as NSString).appendingPathComponent(name)
                 var isDir: ObjCBool = false
                 if fileManager.fileExists(atPath: fullPath, isDirectory: &isDir), isDir.boolValue {
@@ -103,6 +114,16 @@ class ProfileManager {
         guard let dir = profileDirectory(for: sanitized) else {
             throw ProfileError.containerUnavailable
         }
+
+        // If the profile was previously deleted but SDK goroutines recreated its directory,
+        // remove the stale directory and tombstone so the profile can be created fresh.
+        var meta = readMeta() ?? ProfileMeta(activeProfile: defaultProfileName)
+        if meta.deletedProfiles.contains(sanitized) {
+            try? fileManager.removeItem(atPath: dir)
+            meta.deletedProfiles.removeAll { $0 == sanitized }
+            try? writeMeta(meta)
+        }
+
         guard !fileManager.fileExists(atPath: dir) else {
             throw ProfileError.alreadyExists(sanitized)
         }
@@ -134,17 +155,33 @@ class ProfileManager {
         guard let dir = profileDirectory(for: name), fileManager.fileExists(atPath: dir) else {
             throw ProfileError.notFound(name)
         }
+
+        // Persist the tombstone BEFORE deleting the directory.
+        // The Go SDK may recreate the directory via background goroutines; the tombstone
+        // ensures the profile stays hidden in listProfiles() even if that happens.
+        var meta = readMeta() ?? ProfileMeta(activeProfile: defaultProfileName)
+        if !meta.deletedProfiles.contains(name) {
+            meta.deletedProfiles.append(name)
+            try writeMeta(meta)
+        }
+
         try fileManager.removeItem(atPath: dir)
     }
 
-    /// Clears authentication data for a profile by removing its state file.
+    /// Clears authentication data for a profile by removing its config and state files.
+    /// Both files must be removed: state.json holds runtime state,
+    /// netbird.cfg holds the auth tokens — removing only one is insufficient.
     func logoutProfile(_ name: String) throws {
         guard let dir = profileDirectory(for: name) else {
             throw ProfileError.containerUnavailable
         }
-        let statePath = (dir as NSString).appendingPathComponent(GlobalConstants.stateFileName)
+        let statePath  = (dir as NSString).appendingPathComponent(GlobalConstants.stateFileName)
+        let configPath = (dir as NSString).appendingPathComponent(GlobalConstants.configFileName)
         if fileManager.fileExists(atPath: statePath) {
             try fileManager.removeItem(atPath: statePath)
+        }
+        if fileManager.fileExists(atPath: configPath) {
+            try fileManager.removeItem(atPath: configPath)
         }
     }
 
@@ -174,25 +211,32 @@ class ProfileManager {
         return (dir as NSString).appendingPathComponent(GlobalConstants.stateFileName)
     }
 
-    /// Returns the management URL for a specific profile by reading its config file.
+    /// Returns the management URL for a specific profile.
+    /// Reads from netbird.cfg first; falls back to the ProfileConnectionCache
+    /// so the URL remains visible even after logout (when the config is deleted).
     func managementURL(for profile: String) -> String? {
-        guard let cfgPath = configPath(for: profile),
-              fileManager.fileExists(atPath: cfgPath),
-              let data = fileManager.contents(atPath: cfgPath),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
+        if let cfgPath = configPath(for: profile),
+           fileManager.fileExists(atPath: cfgPath),
+           let data = fileManager.contents(atPath: cfgPath),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            // ManagementURL can be a string or a nested object with Scheme/Host/Path
+            var urlFromFile: String?
+            if let urlString = json["ManagementURL"] as? String {
+                urlFromFile = urlString
+            } else if let urlObj = json["ManagementURL"] as? [String: Any],
+                      let scheme = urlObj["Scheme"] as? String,
+                      let host = urlObj["Host"] as? String {
+                let path = urlObj["Path"] as? String ?? ""
+                urlFromFile = "\(scheme)://\(host)\(path)"
+            }
+            if let url = urlFromFile {
+                // Keep cache in sync so it's available after logout
+                ProfileConnectionCache().saveManagementURL(url, for: profile)
+                return url
+            }
         }
-        // ManagementURL can be a string or a nested object with Scheme/Host/Path
-        if let urlString = json["ManagementURL"] as? String {
-            return urlString
-        }
-        if let urlObj = json["ManagementURL"] as? [String: Any],
-           let scheme = urlObj["Scheme"] as? String,
-           let host = urlObj["Host"] as? String {
-            let path = urlObj["Path"] as? String ?? ""
-            return "\(scheme)://\(host)\(path)"
-        }
-        return nil
+        // Config missing (e.g. after logout) — return cached value
+        return ProfileConnectionCache().managementURL(for: profile)
     }
 
     // MARK: - Private Helpers
@@ -267,6 +311,21 @@ class ProfileManager {
 
     private struct ProfileMeta: Codable {
         var activeProfile: String
+        /// Profiles pending deletion — kept as a tombstone so that directories
+        /// recreated by SDK background goroutines don't reappear in the list.
+        var deletedProfiles: [String]
+
+        init(activeProfile: String, deletedProfiles: [String] = []) {
+            self.activeProfile = activeProfile
+            self.deletedProfiles = deletedProfiles
+        }
+
+        /// Backward-compatible decode: old profiles.json files have no deletedProfiles field.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            activeProfile = try c.decode(String.self, forKey: .activeProfile)
+            deletedProfiles = (try? c.decode([String].self, forKey: .deletedProfiles)) ?? []
+        }
     }
 
     private func readMeta() -> ProfileMeta? {
