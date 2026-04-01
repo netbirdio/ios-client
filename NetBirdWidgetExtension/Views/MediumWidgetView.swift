@@ -16,6 +16,11 @@ struct MediumWidgetView: View {
                     iconLabel(isConnected: isConnected)
                 }
                 .frame(width: 80)
+            } else if let url = entry.isConnected ? WidgetConstants.deepLinkDisconnect : WidgetConstants.deepLinkConnect {
+                Link(destination: url) {
+                    iconLabel(isConnected: entry.isConnected)
+                }
+                .frame(width: 80)
             }
         }
         .padding()

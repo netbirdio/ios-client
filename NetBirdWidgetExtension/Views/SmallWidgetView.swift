@@ -20,6 +20,10 @@ struct SmallWidgetView: View {
                 } label: { isConnected in
                     pillLabel(isConnected: isConnected)
                 }
+            } else if let url = entry.isConnected ? WidgetConstants.deepLinkDisconnect : WidgetConstants.deepLinkConnect {
+                Link(destination: url) {
+                    pillLabel(isConnected: entry.isConnected)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

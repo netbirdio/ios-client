@@ -40,11 +40,20 @@ struct VPNStatusProvider: TimelineProvider {
             let manager = (error == nil) ? managers?.first : nil
             let status: WidgetVPNStatus
 
+            let persistedRaw = defaults?.string(forKey: WidgetConstants.keyVPNStatus) ?? "disconnected"
+            let persisted = WidgetVPNStatus(rawValue: persistedRaw) ?? .disconnected
+
             if let manager {
-                status = WidgetVPNStatus(neStatus: manager.connection.status)
+                let neStatus = WidgetVPNStatus(neStatus: manager.connection.status)
+                // Prefer a persisted transition state (.connecting/.disconnecting) when NE
+                // still reports the old stable state — this avoids the brief snap-back
+                // right after a widget-triggered toggle rewrites keyVPNStatus.
+                let usePersistedTransition = persisted.isTransitioning && neStatus.isStable &&
+                    !(persisted == .connecting && neStatus == .connected) &&
+                    !(persisted == .disconnecting && neStatus == .disconnected)
+                status = usePersistedTransition ? persisted : neStatus
             } else {
-                let raw = defaults?.string(forKey: WidgetConstants.keyVPNStatus) ?? "disconnected"
-                status = WidgetVPNStatus(rawValue: raw) ?? .disconnected
+                status = persisted
             }
 
             let entry = VPNStatusEntry(

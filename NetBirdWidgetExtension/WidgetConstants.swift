@@ -3,6 +3,7 @@ import Foundation
 enum WidgetConstants {
     static let appGroupSuite = "group.io.netbird.app"
     static let deepLinkConnect = URL(string: "netbird://connect")
+    static let deepLinkDisconnect = URL(string: "netbird://disconnect")
     static let deepLinkLogin = URL(string: "netbird://login")
 
     // UserDefaults keys (must match GlobalConstants in NetbirdKit)

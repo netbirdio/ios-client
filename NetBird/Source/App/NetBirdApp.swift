@@ -107,14 +107,14 @@ struct NetBirdApp: App {
     private func startActivation(viewModel: ViewModel) {
         activationTask?.cancel()
         activationTask = Task { @MainActor in
-            guard isAppActive else { return }
+            guard isAppActive, !Task.isCancelled else { return }
 
             if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
                 viewModel.extensionState = initialStatus
                 viewModel.updateVPNDisplayState()
             }
 
-            guard isAppActive else { return }
+            guard isAppActive, !Task.isCancelled else { return }
             viewModel.checkExtensionState()
             #if os(iOS)
             viewModel.checkLoginRequiredFlag()

@@ -30,7 +30,13 @@ struct ConnectVPNIntent: AppIntent {
         let session = manager.connection as? NETunnelProviderSession
         try session?.startVPNTunnel()
 
-        await VPNIntentHelpers.waitForStableState(manager: manager)
-        return .result(dialog: "NetBird VPN connected.")
+        let final = await VPNIntentHelpers.waitForStableState(manager: manager)
+        if final == .connected {
+            return .result(dialog: "NetBird VPN connected.")
+        } else if VPNIntentHelpers.isLoginRequired {
+            return .result(dialog: "NetBird requires sign-in. Please open the app.")
+        } else {
+            return .result(dialog: "NetBird VPN failed to connect.")
+        }
     }
 }

@@ -15,7 +15,9 @@ import os
 import Combine
 import NetBirdSDK
 import UserNotifications
+#if os(iOS)
 import WidgetKit
+#endif
 
 /// Used by updateManagementURL to check if SSO is supported
 class SSOCheckListener: NSObject, NetBirdSDKSSOListenerProtocol {
@@ -429,23 +431,27 @@ class ViewModel: ObservableObject {
     }
 
     private func updateDetailsIfChanged(_ details: StatusDetails) {
-        let ipChanged = !details.ip.isEmpty && details.ip != ip
-        let fqdnChanged = !details.fqdn.isEmpty && details.fqdn != fqdn
+        let ipChanged = details.ip != ip
+        let fqdnChanged = details.fqdn != fqdn
         let statusChanged = details.managementStatus != managementStatus
 
         guard ipChanged || fqdnChanged || statusChanged else { return }
 
-        if fqdnChanged {
-            defaults.set(details.fqdn, forKey: "fqdn")
-            fqdn = details.fqdn
-        }
         if ipChanged {
             defaults.set(details.ip, forKey: "ip")
             ip = details.ip
         }
+        if fqdnChanged {
+            defaults.set(details.fqdn, forKey: "fqdn")
+            fqdn = details.fqdn
+        }
         if statusChanged {
             managementStatus = details.managementStatus
             updateVPNDisplayState()
+        } else if ipChanged || fqdnChanged {
+            #if os(iOS)
+            updateWidgetState()
+            #endif
         }
     }
 

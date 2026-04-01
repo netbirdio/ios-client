@@ -19,7 +19,8 @@ enum VPNIntentHelpers {
         defaults?.bool(forKey: WidgetConstants.keyLoginRequired) ?? false
     }
 
-    static func waitForStableState(manager: NETunnelProviderManager) async {
+    @discardableResult
+    static func waitForStableState(manager: NETunnelProviderManager) async -> WidgetVPNStatus {
         let deadline = Date().addingTimeInterval(WidgetConstants.pollTimeout)
 
         while Date() < deadline {
@@ -27,7 +28,7 @@ enum VPNIntentHelpers {
 
             if isLoginRequired {
                 WidgetCenter.shared.reloadAllTimelines()
-                return
+                return WidgetVPNStatus(neStatus: manager.connection.status)
             }
 
             if WidgetVPNStatus(neStatus: manager.connection.status).isStable { break }
@@ -36,5 +37,6 @@ enum VPNIntentHelpers {
         let final = WidgetVPNStatus(neStatus: manager.connection.status)
         defaults?.set(final.rawValue, forKey: WidgetConstants.keyVPNStatus)
         WidgetCenter.shared.reloadAllTimelines()
+        return final
     }
 }

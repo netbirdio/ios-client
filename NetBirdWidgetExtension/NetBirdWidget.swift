@@ -26,7 +26,6 @@ struct NetBirdWidget: Widget {
             } else {
                 WidgetEntryView(entry: entry)
                     .padding()
-                    .background()
             }
         }
         .configurationDisplayName("NetBird VPN")

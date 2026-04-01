@@ -24,7 +24,11 @@ struct DisconnectVPNIntent: AppIntent {
 
         manager.connection.stopVPNTunnel()
 
-        await VPNIntentHelpers.waitForStableState(manager: manager)
-        return .result(dialog: "NetBird VPN disconnected.")
+        let final = await VPNIntentHelpers.waitForStableState(manager: manager)
+        if final == .disconnected {
+            return .result(dialog: "NetBird VPN disconnected.")
+        } else {
+            return .result(dialog: "NetBird VPN failed to disconnect.")
+        }
     }
 }
