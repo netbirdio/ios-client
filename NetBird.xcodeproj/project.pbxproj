@@ -203,6 +203,7 @@
 			isa = PBXContainerItemProxy;
 			containerPortal = 50A8910F2A792A15007C48FC /* Project object */;
 			proxyType = 1;
+			remoteGlobalIDString = 55D865822F70982000A2EFF8;
 			remoteInfo = NetBirdWidgetExtensionExtension;
 		};
 /* End PBXContainerItemProxy section */

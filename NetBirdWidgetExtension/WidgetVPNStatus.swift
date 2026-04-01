@@ -53,4 +53,15 @@ struct VPNStatusEntry: TimelineEntry {
     let loginRequired: Bool
 
     var isConnected: Bool { status == .connected }
+
+    /// Deep-link URL for the pre-iOS 17 `Link` fallback.
+    /// Mirrors the routing logic in `WidgetActionButton` so both paths stay in sync.
+    /// Returns `nil` when a transitioning state makes any tap meaningless.
+    var fallbackDeepLink: URL? {
+        guard !status.isTransitioning else { return nil }
+        if needsAppSetup && !isConnected {
+            return loginRequired ? WidgetConstants.deepLinkLogin : WidgetConstants.deepLinkConnect
+        }
+        return isConnected ? WidgetConstants.deepLinkDisconnect : WidgetConstants.deepLinkConnect
+    }
 }

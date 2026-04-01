@@ -20,7 +20,7 @@ struct SmallWidgetView: View {
                 } label: { isConnected in
                     pillLabel(isConnected: isConnected)
                 }
-            } else if let url = entry.isConnected ? WidgetConstants.deepLinkDisconnect : WidgetConstants.deepLinkConnect {
+            } else if let url = entry.fallbackDeepLink {
                 Link(destination: url) {
                     pillLabel(isConnected: entry.isConnected)
                 }
