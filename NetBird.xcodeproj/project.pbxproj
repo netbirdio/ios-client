@@ -133,6 +133,10 @@
 		50E608132A7958B100BAF09B /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608122A7958B100BAF09B /* MainViewModel.swift */; };
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
+		5554ACC22F7E59700047BDAC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5554ACC12F7E59700047BDAC /* GoogleService-Info.plist */; };
+		5554ACC32F7E59700047BDAC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5554ACC12F7E59700047BDAC /* GoogleService-Info.plist */; };
+		5554ACC42F7E59700047BDAC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5554ACC12F7E59700047BDAC /* GoogleService-Info.plist */; };
+		5554ACC52F7E59700047BDAC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5554ACC12F7E59700047BDAC /* GoogleService-Info.plist */; };
 		55B5E81B2F39158200852AA7 /* InternetStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B5E81A2F39158200852AA7 /* InternetStatusView.swift */; };
 		71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */; };
 		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
@@ -159,16 +163,16 @@
 		AA0001022F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001032F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001042F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
+		AA0002052F22000200000001 /* ProfileBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002012F22000200000001 /* ProfileBadge.swift */; };
+		AA0002062F22000200000001 /* ProfilesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002022F22000200000001 /* ProfilesListView.swift */; };
+		AA0002072F22000200000001 /* AddProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002032F22000200000001 /* AddProfileSheet.swift */; };
+		AA0002082F22000200000001 /* AddProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002042F22000200000001 /* AddProfileViewModel.swift */; };
 		AA0009012F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
 		AA0009022F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
 		AA0009032F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
 		AA0009042F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
 		AA1B2C022F4E5A0100D1E2F3 /* TVGradientBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */; };
 		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
-		AA0002052F22000200000001 /* ProfileBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002012F22000200000001 /* ProfileBadge.swift */; };
-		AA0002062F22000200000001 /* ProfilesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002022F22000200000001 /* ProfilesListView.swift */; };
-		AA0002072F22000200000001 /* AddProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002032F22000200000001 /* AddProfileSheet.swift */; };
-		AA0002082F22000200000001 /* AddProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002042F22000200000001 /* AddProfileViewModel.swift */; };
 		BB3D4E022F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */; };
 		CC5F6A022F4E5A0300D1E2F3 /* TVQRCodeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC5F6A012F4E5A0300D1E2F3 /* TVQRCodeSheet.swift */; };
 		E1A0B0012F5E000100000001 /* EmptyTabPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */; };
@@ -322,6 +326,7 @@
 		50E608232A79966600BAF09B /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
 		53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedUserDefaultsTests.swift; sourceTree = "<group>"; };
+		5554ACC12F7E59700047BDAC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		55B5E81A2F39158200852AA7 /* InternetStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InternetStatusView.swift; sourceTree = "<group>"; };
 		5BFDF94163AF4C32A44DB3CD /* FirstLaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstLaunchView.swift; sourceTree = "<group>"; };
 		8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppLoggerTests.swift; sourceTree = "<group>"; };
@@ -330,13 +335,13 @@
 		978FC46F2EEDF167002D0EB8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		9CD257EF78F038560FF3112D /* VPNOnDemandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNOnDemandView.swift; sourceTree = "<group>"; };
 		A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationProvider.swift; sourceTree = "<group>"; };
+		A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiOnDemandPolicy.swift; sourceTree = "<group>"; };
+		A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellularOnDemandPolicy.swift; sourceTree = "<group>"; };
+		AA0001002F22000100000001 /* ProfileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileManager.swift; sourceTree = "<group>"; };
 		AA0002012F22000200000001 /* ProfileBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileBadge.swift; sourceTree = "<group>"; };
 		AA0002022F22000200000001 /* ProfilesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesListView.swift; sourceTree = "<group>"; };
 		AA0002032F22000200000001 /* AddProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProfileSheet.swift; sourceTree = "<group>"; };
 		AA0002042F22000200000001 /* AddProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProfileViewModel.swift; sourceTree = "<group>"; };
-		A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiOnDemandPolicy.swift; sourceTree = "<group>"; };
-		A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellularOnDemandPolicy.swift; sourceTree = "<group>"; };
-		AA0001002F22000100000001 /* ProfileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileManager.swift; sourceTree = "<group>"; };
 		AA0009002F22000900000001 /* ProfileConnectionCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileConnectionCache.swift; sourceTree = "<group>"; };
 		AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVGradientBackground.swift; sourceTree = "<group>"; };
 		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
@@ -511,6 +516,7 @@
 		50A8910E2A792A15007C48FC = {
 			isa = PBXGroup;
 			children = (
+				5554ACC12F7E59700047BDAC /* GoogleService-Info.plist */,
 				50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */,
 				50245A0A2A7AA9390034792B /* NetBird-Bridging-Header.h */,
 				50A891192A792A15007C48FC /* NetBird */,
@@ -845,6 +851,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5554ACC42F7E59700047BDAC /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -852,6 +859,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5554ACC32F7E59700047BDAC /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -861,6 +869,7 @@
 			files = (
 				501B0DCE2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD22AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
+				5554ACC22F7E59700047BDAC /* GoogleService-Info.plist in Resources */,
 				501B0DDC2AE04DDE004BE7A7 /* button-connected.json in Resources */,
 				501B0DD62AE04DDE004BE7A7 /* button-start-connecting.json in Resources */,
 				501B0DDA2AE04DDE004BE7A7 /* button-full.json in Resources */,
@@ -882,6 +891,7 @@
 				501B0DCD2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD12AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
 				501B0DDB2AE04DDE004BE7A7 /* button-connected.json in Resources */,
+				5554ACC52F7E59700047BDAC /* GoogleService-Info.plist in Resources */,
 				501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
 				501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */,
 			);
