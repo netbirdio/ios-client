@@ -244,6 +244,13 @@ class ViewModel: ObservableObject {
             self.logger.info("connect: Task started, calling networkExtensionAdapter.start()")
             await self.networkExtensionAdapter.start()
             self.logger.info("connect: networkExtensionAdapter.start() completed")
+            // If start() returned but VPN never launched (e.g. IPC failed to get login URL)
+            // and the browser login sheet is not showing, the tunnel won't start on its own.
+            // Reset the stuck "Connecting..." state so the user can try again.
+            if self.extensionState == .disconnected && !self.networkExtensionAdapter.showBrowser {
+                self.connectPressed = false
+                self.updateVPNDisplayState()
+            }
         }
     }
 
@@ -436,6 +443,7 @@ class ViewModel: ObservableObject {
 
             self.checkExtensionState()
             self.checkNetworkUnavailableFlag()
+            self.checkLoginRequiredFlag()
 
             let currentState = self.extensionState
 
@@ -814,6 +822,15 @@ class ViewModel: ObservableObject {
 
         // Show authentication required UI
         self.showAuthenticationRequired = true
+
+        // Clear any stuck "Connecting..." state
+        self.connectPressed = false
+        self.updateVPNDisplayState()
+
+        // Temporarily disable on-demand to stop iOS from looping reconnect attempts
+        // while the user is not authenticated. It will be re-enabled automatically
+        // after a successful connection (see checkExtensionState).
+        self.networkExtensionAdapter.setOnDemandEnabled(false)
 
         // Schedule local notification if authorized
         UNUserNotificationCenter.current().getNotificationSettings { settings in

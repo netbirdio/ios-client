@@ -177,6 +177,13 @@ class ProfileManager {
         }
         let statePath  = (dir as NSString).appendingPathComponent(GlobalConstants.stateFileName)
         let configPath = (dir as NSString).appendingPathComponent(GlobalConstants.configFileName)
+
+        // Persist the management URL before deleting the config so that after
+        // logout the correct server URL can still be displayed and used for login.
+        if let url = managementURL(for: name) {
+            ProfileConnectionCache().saveManagementURL(url, for: name)
+        }
+
         if fileManager.fileExists(atPath: statePath) {
             try fileManager.removeItem(atPath: statePath)
         }
@@ -212,8 +219,8 @@ class ProfileManager {
     }
 
     /// Returns the management URL for a specific profile.
-    /// Reads from netbird.cfg first; falls back to the ProfileConnectionCache
-    /// so the URL remains visible even after logout (when the config is deleted).
+    /// Reads from netbird.cfg first; falls back to the dedicated server URL file,
+    /// then ProfileConnectionCache as last resort.
     func managementURL(for profile: String) -> String? {
         if let cfgPath = configPath(for: profile),
            fileManager.fileExists(atPath: cfgPath),
@@ -230,13 +237,35 @@ class ProfileManager {
                 urlFromFile = "\(scheme)://\(host)\(path)"
             }
             if let url = urlFromFile {
-                // Keep cache in sync so it's available after logout
+                // Persist to dedicated file and cache so it survives logout
+                saveServerURL(url, for: profile)
                 ProfileConnectionCache().saveManagementURL(url, for: profile)
                 return url
             }
         }
-        // Config missing (e.g. after logout) — return cached value
+        // Config missing (e.g. after logout) — try dedicated server URL file first
+        if let url = savedServerURL(for: profile) {
+            return url
+        }
         return ProfileConnectionCache().managementURL(for: profile)
+    }
+
+    /// Saves the management URL to a dedicated file inside the profile directory.
+    /// This file is NOT deleted by logoutProfile(), so it survives logout.
+    func saveServerURL(_ url: String, for profile: String) {
+        guard let dir = profileDirectory(for: profile) else { return }
+        let filePath = (dir as NSString).appendingPathComponent(GlobalConstants.serverURLFileName)
+        try? url.write(toFile: filePath, atomically: true, encoding: .utf8)
+    }
+
+    /// Reads the management URL from the dedicated server URL file.
+    func savedServerURL(for profile: String) -> String? {
+        guard let dir = profileDirectory(for: profile) else { return nil }
+        let filePath = (dir as NSString).appendingPathComponent(GlobalConstants.serverURLFileName)
+        guard fileManager.fileExists(atPath: filePath),
+              let url = try? String(contentsOfFile: filePath, encoding: .utf8),
+              !url.isEmpty else { return nil }
+        return url
     }
 
     // MARK: - Private Helpers
