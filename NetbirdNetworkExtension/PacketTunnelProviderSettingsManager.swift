@@ -23,11 +23,9 @@ class PacketTunnelProviderSettingsManager {
     }
     
     func setRoutes(v4Routes: [NEIPv4Route], v6Routes: [NEIPv6Route], containsDefault: Bool) {
-            let prev = self.needFallbackNS
             self.needFallbackNS = containsDefault
             self.ipv4Routes = v4Routes
             self.ipv6Routes = v6Routes
-            AppLogger.shared.log("setRoutes: v4=\(v4Routes.count) v6=\(v6Routes.count) containsDefault=\(containsDefault) needFallbackNS: \(prev)->\(containsDefault)")
             self.updateTunnel()
     }
 
@@ -52,7 +50,6 @@ class PacketTunnelProviderSettingsManager {
             dnsSettings.searchDomains = searchDomains
         }
 
-        AppLogger.shared.log("setDNS: server=\(config.serverIP) matchDomains=[\"\"] searchDomains=\(searchDomains) (mgmt routeAll=\(config.routeAll) domains=\(config.domains.count))")
         self.dnsSettings = dnsSettings
         self.updateTunnel()
     }
@@ -67,14 +64,13 @@ class PacketTunnelProviderSettingsManager {
     
     private func updateTunnel() {
         if let tunnelSettings = createTunnelSettings() {
-            AppLogger.shared.log("updateTunnel: dns=\(tunnelSettings.dnsSettings?.servers ?? []) matchDomains=\(tunnelSettings.dnsSettings?.matchDomains ?? []) v4Routes=\(tunnelSettings.ipv4Settings?.includedRoutes?.count ?? 0)")
             if let tunnelProvider = self.packetTunnelProvider {
                 tunnelProvider.setTunnelSettings(tunnelNetworkSettings: tunnelSettings)
             } else {
-                AppLogger.shared.log("updateTunnel: tunnel provider is nil")
+                print("Failed to get tunnel provider")
             }
         } else {
-            AppLogger.shared.log("updateTunnel: failed to create settings")
+            print("Failed to update tunnel")
         }
     }
     
