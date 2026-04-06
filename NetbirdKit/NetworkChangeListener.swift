@@ -19,11 +19,16 @@ enum IPAddressType {
 
 class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
     func onNetworkChanged(_ p0: String?) {
-        guard let validString = p0, !validString.isEmpty else {
-            return
+        let routesString = p0 ?? ""
+
+        if routesString.isEmpty {
+            AppLogger.shared.log("onNetworkChanged: empty routes from Go")
+        } else {
+            AppLogger.shared.log("onNetworkChanged: routes=\(routesString)")
         }
-        
-        let (v4Routes, v6Routes, containsDefault) = parseRoutesToNESettings(routesString: validString)
+
+        let (v4Routes, v6Routes, containsDefault) = parseRoutesToNESettings(routesString: routesString)
+        AppLogger.shared.log("onNetworkChanged: v4=\(v4Routes.count) v6=\(v6Routes.count) containsDefault=\(containsDefault)")
         self.tunnelManager.setRoutes(v4Routes: v4Routes, v6Routes: v6Routes, containsDefault: containsDefault)
     }
     

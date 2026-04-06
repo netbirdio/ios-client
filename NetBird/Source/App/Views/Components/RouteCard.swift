@@ -98,7 +98,7 @@ struct RouteCard: View {
     }
 
     private var statusIndicatorColor: Color {
-        if peerViewModel.peerInfo.contains(where: { info in
+        if route.selected && peerViewModel.peerInfo.contains(where: { info in
             info.connStatus == "Connected" && (info.routes.contains(route.network ?? "") || route.domains?.contains(where: { $0.domain.contains(route.network ?? "") }) == true)
         }) {
             return Color.green

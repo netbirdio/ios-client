@@ -23,35 +23,36 @@ class PacketTunnelProviderSettingsManager {
     }
     
     func setRoutes(v4Routes: [NEIPv4Route], v6Routes: [NEIPv6Route], containsDefault: Bool) {
+            let prev = self.needFallbackNS
             self.needFallbackNS = containsDefault
             self.ipv4Routes = v4Routes
             self.ipv6Routes = v6Routes
+            AppLogger.shared.log("setRoutes: v4=\(v4Routes.count) v6=\(v6Routes.count) containsDefault=\(containsDefault) needFallbackNS: \(prev)->\(containsDefault)")
             self.updateTunnel()
     }
-    
+
     func setDNS(config: HostDNSConfig) {
-        var servers = [config.serverIP]
-        if !config.routeAll && needFallbackNS{
-            servers.append("1.1.1.1")
-        }
-        let dnsSettings = NEDNSSettings(servers: servers)
-        if config.routeAll {
-            dnsSettings.matchDomains = [""]
-        } else {
-            var searchDomains: [String] = []
-            var matchDomains: [String] = []
-            for domain in config.domains {
-                if domain.disabled {
-                    continue
-                }
-                matchDomains.append(domain.domain)
-                if !domain.matchOnly {
-                    searchDomains.append(domain.domain)
-                }
+        let dnsSettings = NEDNSSettings(servers: [config.serverIP])
+
+        // Always route all DNS through the tunnel on iOS.
+        // The Go DNS server has a root zone fallback handler that forwards
+        // unmatched queries to host DNS servers (e.g. 1.1.1.1).
+        // This avoids DNS failures when exit node routes (0.0.0.0/0) are
+        // added or removed, as iOS system DNS on cellular is unreliable
+        // with an active VPN tunnel.
+        dnsSettings.matchDomains = [""]
+
+        var searchDomains: [String] = []
+        for domain in config.domains {
+            if !domain.disabled && !domain.matchOnly {
+                searchDomains.append(domain.domain)
             }
-            dnsSettings.matchDomains = matchDomains
+        }
+        if !searchDomains.isEmpty {
             dnsSettings.searchDomains = searchDomains
         }
+
+        AppLogger.shared.log("setDNS: server=\(config.serverIP) matchDomains=[\"\"] searchDomains=\(searchDomains) (mgmt routeAll=\(config.routeAll) domains=\(config.domains.count))")
         self.dnsSettings = dnsSettings
         self.updateTunnel()
     }
@@ -66,13 +67,14 @@ class PacketTunnelProviderSettingsManager {
     
     private func updateTunnel() {
         if let tunnelSettings = createTunnelSettings() {
+            AppLogger.shared.log("updateTunnel: dns=\(tunnelSettings.dnsSettings?.servers ?? []) matchDomains=\(tunnelSettings.dnsSettings?.matchDomains ?? []) v4Routes=\(tunnelSettings.ipv4Settings?.includedRoutes?.count ?? 0)")
             if let tunnelProvider = self.packetTunnelProvider {
                 tunnelProvider.setTunnelSettings(tunnelNetworkSettings: tunnelSettings)
             } else {
-                print("Failed to get tunnel provider")
+                AppLogger.shared.log("updateTunnel: tunnel provider is nil")
             }
         } else {
-            print("Failed to update tunnel")
+            AppLogger.shared.log("updateTunnel: failed to create settings")
         }
     }
     
