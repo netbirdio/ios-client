@@ -21,6 +21,11 @@ on:
         type: string
         default: ''
         description: 'Marketing version override (e.g. from git tag)'
+      upload:
+        required: false
+        type: boolean
+        default: true
+        description: 'Upload to App Store Connect (false = build only)'
 
 concurrency:
   group: build-upload-${{ inputs.ref }}
@@ -300,6 +305,7 @@ jobs:
             ${{ steps.settings.outputs.version-args }}
 
       - name: Export and Upload to App Store Connect
+        if: inputs.upload
         working-directory: ios-client
         env:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
