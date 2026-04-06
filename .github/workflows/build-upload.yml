@@ -7,6 +7,10 @@ on:
         required: true
         type: string
         description: 'Git ref to checkout and build'
+      netbird-ref:
+        required: false
+        type: string
+        description: 'NetBird ref to checkout and build'
       build-number:
         required: false
         type: string
