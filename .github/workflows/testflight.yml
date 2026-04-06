@@ -93,15 +93,20 @@ jobs:
 
             // Parse optional parameters from comment: netbird-ref=xxx version=x.y.z
             const comment = context.payload.comment.body;
+            core.info(`Comment: ${comment}`);
             const netbirdRefMatch = comment.match(/netbird-ref=(\S+)/);
             if (netbirdRefMatch) {
               core.setOutput('netbird-ref', netbirdRefMatch[1]);
               core.info(`Using netbird-ref: ${netbirdRefMatch[1]}`);
+            } else {
+              core.info('No netbird-ref specified, using latest');
             }
             const versionMatch = comment.match(/version=(\S+)/);
             if (versionMatch) {
               core.setOutput('version', versionMatch[1]);
               core.info(`Using version: ${versionMatch[1]}`);
+            } else {
+              core.info('No version specified, using latest');
             }
 
       - name: React to comment
