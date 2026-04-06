@@ -21,6 +21,9 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
     func onNetworkChanged(_ p0: String?) {
         let routesString = p0 ?? ""
         let (v4Routes, v6Routes, containsDefault) = parseRoutesToNESettings(routesString: routesString)
+        if v4Routes.isEmpty && v6Routes.isEmpty && self.interfaceIP == nil {
+            return
+        }
         self.tunnelManager.setRoutes(v4Routes: v4Routes, v6Routes: v6Routes, containsDefault: containsDefault)
     }
     
