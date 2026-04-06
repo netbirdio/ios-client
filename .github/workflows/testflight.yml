@@ -12,6 +12,10 @@ permissions:
   contents: read
   pull-requests: write
 
+concurrency:
+  group: testflight-${{ github.ref }}-${{ github.head_ref || github.actor_id }}
+  cancel-in-progress: true
+
 jobs:
   gate:
     name: Validate trigger
@@ -26,6 +30,8 @@ jobs:
     outputs:
       ref: ${{ steps.resolve.outputs.ref }}
       should-build: ${{ steps.resolve.outputs.should-build }}
+      netbird-ref: ${{ steps.resolve.outputs.netbird-ref }}
+      version: ${{ steps.resolve.outputs.version }}
     steps:
       - name: Resolve build ref and validate
         id: resolve
@@ -85,6 +91,19 @@ jobs:
             core.setOutput('ref', pr.head.sha);
             core.setOutput('should-build', 'true');
 
+            // Parse optional parameters from comment: netbird-ref=xxx version=x.y.z
+            const comment = context.payload.comment.body;
+            const netbirdRefMatch = comment.match(/netbird-ref=(\S+)/);
+            if (netbirdRefMatch) {
+              core.setOutput('netbird-ref', netbirdRefMatch[1]);
+              core.info(`Using netbird-ref: ${netbirdRefMatch[1]}`);
+            }
+            const versionMatch = comment.match(/version=(\S+)/);
+            if (versionMatch) {
+              core.setOutput('version', versionMatch[1]);
+              core.info(`Using version: ${versionMatch[1]}`);
+            }
+
       - name: React to comment
         if: github.event_name == 'issue_comment' && steps.resolve.outputs.should-build == 'true'
         uses: actions/github-script@v7
@@ -104,6 +123,8 @@ jobs:
     uses: ./.github/workflows/build-upload.yml
     with:
       ref: ${{ needs.gate.outputs.ref }}
+      netbird-ref: ${{ needs.gate.outputs.netbird-ref }}
+      version: ${{ needs.gate.outputs.version }}
     secrets: inherit
 
   notify:
