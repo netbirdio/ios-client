@@ -3,10 +3,9 @@ name: TestFlight
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
-  issue_comment:
-    types: [created]
 
 permissions:
   contents: read
@@ -22,14 +21,12 @@ jobs:
     if: >
       github.event_name == 'push' ||
       (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository) ||
-      (github.event_name == 'issue_comment' &&
-       github.event.issue.pull_request &&
-       contains(github.event.comment.body, '/testflight'))
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     outputs:
       ref: ${{ steps.resolve.outputs.ref }}
       should-build: ${{ steps.resolve.outputs.should-build }}
+      upload: ${{ steps.resolve.outputs.upload }}
       netbird-ref: ${{ steps.resolve.outputs.netbird-ref }}
       version: ${{ steps.resolve.outputs.version }}
     steps:
@@ -38,10 +35,19 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            // Push to main/ci-cd — always build
+            // Push to main or tag — always build and upload
             if (context.eventName === 'push') {
               core.setOutput('ref', context.sha);
               core.setOutput('should-build', 'true');
+              core.setOutput('upload', 'true');
+
+              // Extract version from tag (v1.2.3 → 1.2.3)
+              const ref = context.ref;
+              if (ref.startsWith('refs/tags/v')) {
+                const version = ref.replace('refs/tags/v', '');
+                core.setOutput('version', version);
+                core.info(`Tag push, using version: ${version}`);
+              }
               return;
             }
 
@@ -58,68 +64,32 @@ jobs:
 
               core.setOutput('ref', context.payload.pull_request.head.sha);
               core.setOutput('should-build', 'true');
-              return;
+
+              // Parse /testflight line from PR description for upload flag and parameters
+              const body = context.payload.pull_request.body || '';
+              const hasTestflight = body.includes('/testflight');
+              core.setOutput('upload', hasTestflight ? 'true' : 'false');
+              core.info(`PR description ${hasTestflight ? 'contains' : 'does not contain'} /testflight, upload=${hasTestflight}`);
+
+              const lines = body.split('\n');
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed.startsWith('/testflight')) continue;
+
+                core.info(`Found /testflight line: ${trimmed}`);
+                const netbirdRefMatch = trimmed.match(/netbird-ref=(\S+)/);
+                if (netbirdRefMatch) {
+                  core.setOutput('netbird-ref', netbirdRefMatch[1]);
+                  core.info(`Using netbird-ref: ${netbirdRefMatch[1]}`);
+                }
+                const versionMatch = trimmed.match(/version=(\S+)/);
+                if (versionMatch) {
+                  core.setOutput('version', versionMatch[1]);
+                  core.info(`Using version: ${versionMatch[1]}`);
+                }
+                break;
+              }
             }
-
-            // /testflight comment on PR — validate permissions and fork status
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number,
-            });
-
-            // Skip fork PRs
-            if (pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
-              core.info(`Skipping fork PR from ${pr.head.repo.full_name}`);
-              core.setOutput('should-build', 'false');
-              return;
-            }
-
-            // Check commenter has write access
-            const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              username: context.actor,
-            });
-
-            if (!['admin', 'write'].includes(perm.permission)) {
-              core.info(`User ${context.actor} does not have write access`);
-              core.setOutput('should-build', 'false');
-              return;
-            }
-
-            core.setOutput('ref', pr.head.sha);
-            core.setOutput('should-build', 'true');
-
-            // Parse optional parameters from comment: netbird-ref=xxx version=x.y.z
-            const comment = context.payload.comment.body;
-            core.info(`Comment: ${comment}`);
-            const netbirdRefMatch = comment.match(/netbird-ref=(\S+)/);
-            if (netbirdRefMatch) {
-              core.setOutput('netbird-ref', netbirdRefMatch[1]);
-              core.info(`Using netbird-ref: ${netbirdRefMatch[1]}`);
-            } else {
-              core.info('No netbird-ref specified, using latest');
-            }
-            const versionMatch = comment.match(/version=(\S+)/);
-            if (versionMatch) {
-              core.setOutput('version', versionMatch[1]);
-              core.info(`Using version: ${versionMatch[1]}`);
-            } else {
-              core.info('No version specified, using latest');
-            }
-
-      - name: React to comment
-        if: github.event_name == 'issue_comment' && steps.resolve.outputs.should-build == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.reactions.createForIssueComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: context.payload.comment.id,
-              content: 'rocket',
-            });
 
   build:
     name: Build and Upload
@@ -130,12 +100,13 @@ jobs:
       ref: ${{ needs.gate.outputs.ref }}
       netbird-ref: ${{ needs.gate.outputs.netbird-ref }}
       version: ${{ needs.gate.outputs.version }}
+      upload: ${{ needs.gate.outputs.upload == 'true' }}
     secrets: inherit
 
   notify:
     name: Notify PR
     needs: [gate, build]
-    if: always() && (github.event_name == 'issue_comment' || github.event_name == 'pull_request')
+    if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -149,12 +120,7 @@ jobs:
             const shortSha = ref.substring(0, 7);
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
-            let prNumber;
-            if (context.eventName === 'pull_request') {
-              prNumber = context.payload.pull_request.number;
-            } else {
-              prNumber = context.issue.number;
-            }
+            const prNumber = context.payload.pull_request.number;
 
             let body;
             if (buildResult === 'success') {
