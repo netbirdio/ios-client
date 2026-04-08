@@ -55,14 +55,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         if adapter.needsLogin() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                let error = NSError(
-                    domain: "io.netbird.NetbirdNetworkExtension",
-                    code: 1001,
-                    userInfo: [NSLocalizedDescriptionKey: "Login required."]
-                )
-                completionHandler(error)
-            }
+            signalLoginRequired()
+            // Return the error immediately so iOS tears down the tunnel interface at once.
+            // A deferred completionHandler keeps the tunnel interface alive (black-hole state)
+            // and intercepts all network traffic — including ASWebAuthenticationSession requests
+            // to the OAuth server — causing "Page not found" during re-auth with On Demand enabled.
+            completionHandler(NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1001,
+                userInfo: [NSLocalizedDescriptionKey: "Login required."]
+            ))
             return
         }
 
@@ -243,7 +245,23 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         monitorQueue.asyncAfter(deadline: .now() + 30, execute: timeoutWorkItem)
 
         adapter.stop { [weak self] in
-            AppLogger.shared.log("restartClient: stop completed, starting client")
+            AppLogger.shared.log("restartClient: stop completed, checking login status")
+
+            // Tokens may have expired during a network change (common with self-hosted servers
+            // that have shorter token lifetimes). Check before restarting; if login is required
+            // signal the main app so it can show the re-auth UI instead of silently failing.
+            if self?.adapter?.needsLogin() == true {
+                AppLogger.shared.log("restartClient: login required — signaling main app, skipping restart")
+                self?.signalLoginRequired()
+                self?.monitorQueue.async {
+                    self?.adapter?.isRestarting = false
+                    self?.isRestartInProgress = false
+                }
+                timeoutWorkItem.cancel()
+                return
+            }
+
+            AppLogger.shared.log("restartClient: starting client")
             self?.adapter?.start { error in
                 // Cancel timeout whether start succeeds or not
                 timeoutWorkItem.cancel()
