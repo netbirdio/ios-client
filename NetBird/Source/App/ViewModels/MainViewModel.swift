@@ -208,13 +208,6 @@ class ViewModel: ObservableObject {
             self.logger.info("connect: Task started, calling networkExtensionAdapter.start()")
             await self.networkExtensionAdapter.start()
             self.logger.info("connect: networkExtensionAdapter.start() completed")
-            // If start() returned but VPN never launched (e.g. IPC failed to get login URL)
-            // and the browser login sheet is not showing, the tunnel won't start on its own.
-            // Reset the stuck "Connecting..." state so the user can try again.
-            if self.extensionState == .disconnected && !self.networkExtensionAdapter.showBrowser {
-                self.connectPressed = false
-                self.updateVPNDisplayState()
-            }
         }
     }
 
@@ -365,11 +358,21 @@ class ViewModel: ObservableObject {
             disconnectPressed = false
             newState = .connected
         case .connecting:
-            connectPressed = false
+            // Do NOT clear connectPressed here — iOS can emit .disconnecting right after
+            // .connecting during tunnel startup (cleanup of old instance). Keeping
+            // connectPressed=true lets the .disconnecting handler suppress that noise.
+            // connectPressed is cleared only on .connected or .disconnected.
             newState = .connecting
         case .disconnecting:
-            disconnectPressed = false
-            newState = .disconnecting
+            // Ignore transient .disconnecting emitted by iOS VPN framework during tunnel startup.
+            // When startVPNTunnel() is called, iOS briefly reports .disconnecting while cleaning
+            // up the previous tunnel instance — even though the user pressed Connect, not Disconnect.
+            if connectPressed {
+                newState = .connecting
+            } else {
+                disconnectPressed = false
+                newState = .disconnecting
+            }
         case .disconnected:
             // Extension confirmed disconnected — clear both flags,
             // unless a flag was JUST set (immediate feedback)
@@ -455,10 +458,18 @@ class ViewModel: ObservableObject {
         networkExtensionAdapter.stopTimer()
     }
     
+    // Prevents overlapping getExtensionStatus calls from delivering out-of-order results.
+    // loadAllFromPreferences() is slow and variable; without this guard a stale .disconnecting
+    // completion can arrive after a newer .disconnected one, causing a spurious Disconnecting flash.
+    private var isCheckingExtensionState = false
+
     func checkExtensionState() {
+        guard !isCheckingExtensionState else { return }
+        isCheckingExtensionState = true
         networkExtensionAdapter.getExtensionStatus { status in
             let statuses : [NEVPNStatus] = [.connected, .disconnected, .connecting, .disconnecting]
             DispatchQueue.main.async {
+                self.isCheckingExtensionState = false
                 if statuses.contains(status) && self.extensionState != status {
                     print("Changing extension status to \(status.rawValue)")
                     self.extensionState = status

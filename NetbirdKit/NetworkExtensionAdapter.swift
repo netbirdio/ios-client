@@ -91,14 +91,22 @@ public class NetworkExtensionAdapter: ObservableObject {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
         if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
             self.vpnManager = manager
+            // Only write preferences when strictly necessary.
+            // Calling saveToPreferences() on an already-configured manager triggers
+            // NEVPNStatusDidChange notifications — including a transient .disconnecting —
+            // that the polling timer picks up, producing the wrong UI sequence:
+            // Connecting → Disconnecting → Connected.
+            if !manager.isEnabled {
+                manager.isEnabled = true
+                try await manager.saveToPreferences()
+                try await manager.loadFromPreferences()
+            }
         } else {
             let newManager = createNewManager()
             try await newManager.saveToPreferences()
+            try await newManager.loadFromPreferences()
             self.vpnManager = newManager
         }
-        self.vpnManager?.isEnabled = true
-        try await self.vpnManager?.saveToPreferences()
-        try await self.vpnManager?.loadFromPreferences()
         self.session = self.vpnManager?.connection as? NETunnelProviderSession
     }
 
