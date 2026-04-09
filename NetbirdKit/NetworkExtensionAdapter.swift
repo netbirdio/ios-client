@@ -905,9 +905,15 @@ public class NetworkExtensionAdapter: ObservableObject {
                 let managers = try await NETunnelProviderManager.loadAllFromPreferences()
                 if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
                     completion(manager.connection.status)
+                } else {
+                    // No VPN manager exists yet (e.g. first connect before the iOS permission
+                    // dialog completes). Must still call completion so that isCheckingExtensionState
+                    // is reset to false; otherwise checkExtensionState() is permanently blocked.
+                    completion(.disconnected)
                 }
             } catch {
                 print("Error loading from preferences: \(error)")
+                completion(.disconnected)
             }
         }
     }
