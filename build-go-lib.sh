@@ -79,7 +79,7 @@ if [ "$tvos" = true ]; then
   gomobile-netbird init
   go get github.com/netbirdio/gomobile-tvos-fork@latest
 
-  CGO_ENABLED=0 gomobile-netbird bind \
+  gomobile-netbird bind \
     -target=ios,iossimulator,tvos,tvossimulator \
     -bundleid=io.netbird.framework \
     -ldflags="-X github.com/netbirdio/netbird/version.version=$version" \
@@ -89,7 +89,7 @@ else
   echo "Building for iOS"
   gomobile init
 
-  CGO_ENABLED=0 gomobile bind \
+  gomobile bind \
     -target=ios,iossimulator \
     -bundleid=io.netbird.framework \
     -ldflags="-X github.com/netbirdio/netbird/version.version=$version" \
