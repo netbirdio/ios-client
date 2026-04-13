@@ -122,16 +122,19 @@ jobs:
 
             const prNumber = context.payload.pull_request.number;
 
+            const uploaded = '${{ needs.gate.outputs.upload }}' === 'true';
             const version = '${{ needs.gate.outputs.version }}' || 'default';
             const buildNumber = '${{ github.run_number }}';
 
             let body;
-            if (buildResult === 'success') {
+            if (buildResult === 'success' && uploaded) {
               body = `**TestFlight build uploaded** \`${version} (${buildNumber})\` for \`${shortSha}\`\n\nThe build has been submitted to App Store Connect and will be available in TestFlight shortly.\n\n[View workflow run](${runUrl})`;
+            } else if (buildResult === 'success') {
+              body = `**Build succeeded** for \`${shortSha}\` (no upload — add \`/testflight\` to PR description to upload)\n\n[View workflow run](${runUrl})`;
             } else if (buildResult === 'skipped') {
               return;
             } else {
-              body = `**TestFlight build failed** for \`${shortSha}\`\n\n[View workflow run](${runUrl})`;
+              body = `**Build failed** for \`${shortSha}\`\n\n[View workflow run](${runUrl})`;
             }
 
             await github.rest.issues.createComment({
