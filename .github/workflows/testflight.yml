@@ -29,6 +29,7 @@ jobs:
       upload: ${{ steps.resolve.outputs.upload }}
       netbird-ref: ${{ steps.resolve.outputs.netbird-ref }}
       version: ${{ steps.resolve.outputs.version }}
+      build-number: ${{ steps.resolve.outputs.build-number }}
     steps:
       - name: Resolve build ref and validate
         id: resolve
@@ -87,6 +88,11 @@ jobs:
                   core.setOutput('version', versionMatch[1]);
                   core.info(`Using version: ${versionMatch[1]}`);
                 }
+                const buildNumberMatch = trimmed.match(/build-number=(\S+)/);
+                if (buildNumberMatch) {
+                  core.setOutput('build-number', buildNumberMatch[1]);
+                  core.info(`Using build-number: ${buildNumberMatch[1]}`);
+                }
                 break;
               }
             }
@@ -100,6 +106,7 @@ jobs:
       ref: ${{ needs.gate.outputs.ref }}
       netbird-ref: ${{ needs.gate.outputs.netbird-ref }}
       version: ${{ needs.gate.outputs.version }}
+      build-number: ${{ needs.gate.outputs.build-number }}
       upload: ${{ needs.gate.outputs.upload == 'true' }}
     secrets: inherit
 
@@ -122,13 +129,19 @@ jobs:
 
             const prNumber = context.payload.pull_request.number;
 
+            const uploaded = '${{ needs.gate.outputs.upload }}' === 'true';
+            const version = '${{ needs.gate.outputs.version }}' || 'default';
+            const buildNumber = '${{ needs.gate.outputs.build-number }}' || '${{ github.run_number }}';
+
             let body;
-            if (buildResult === 'success') {
-              body = `**TestFlight build uploaded** for \`${shortSha}\`\n\nThe build has been submitted to App Store Connect and will be available in TestFlight shortly.\n\n[View workflow run](${runUrl})`;
+            if (buildResult === 'success' && uploaded) {
+              body = `**TestFlight build uploaded** \`${version} (${buildNumber})\` for \`${shortSha}\`\n\nThe build has been submitted to App Store Connect and will be available in TestFlight shortly.\n\n[View workflow run](${runUrl})`;
+            } else if (buildResult === 'success') {
+              body = `**Build succeeded** for \`${shortSha}\` (no upload — add \`/testflight\` to PR description to upload)\n\n[View workflow run](${runUrl})`;
             } else if (buildResult === 'skipped') {
               return;
             } else {
-              body = `**TestFlight build failed** for \`${shortSha}\`\n\n[View workflow run](${runUrl})`;
+              body = `**Build failed** for \`${shortSha}\`\n\n[View workflow run](${runUrl})`;
             }
 
             await github.rest.issues.createComment({
