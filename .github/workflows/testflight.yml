@@ -94,11 +94,13 @@ jobs:
               core.setOutput('should-build', 'true');
 
               // Parse /testflight line from PR description for upload flag and parameters
-              const body = context.payload.pull_request.body || '';
+              // Strip HTML comments so template examples don't trigger upload
+              const body = (context.payload.pull_request.body || '').replace(/<!--[\s\S]*?-->/g, '');
               const hasTestflight = body.includes('/testflight');
               core.setOutput('upload', hasTestflight ? 'true' : 'false');
               core.info(`PR description ${hasTestflight ? 'contains' : 'does not contain'} /testflight, upload=${hasTestflight}`);
 
+              let explicitVersion = false;
               const lines = body.split('\n');
               for (const line of lines) {
                 const trimmed = line.trim();
@@ -114,6 +116,7 @@ jobs:
                 if (versionMatch) {
                   core.setOutput('version', versionMatch[1]);
                   core.info(`Using version: ${versionMatch[1]}`);
+                  explicitVersion = true;
                 }
                 const buildNumberMatch = trimmed.match(/build-number=(\S+)/);
                 if (buildNumberMatch) {
@@ -121,6 +124,15 @@ jobs:
                   core.info(`Using build-number: ${buildNumberMatch[1]}`);
                 }
                 break;
+              }
+
+              // Fall back to tag-derived version if not explicitly set
+              if (!explicitVersion) {
+                const derived = '${{ steps.derive-version.outputs.version }}';
+                if (derived) {
+                  core.setOutput('version', derived);
+                  core.info(`Using tag-derived version: ${derived}`);
+                }
               }
             }
 
