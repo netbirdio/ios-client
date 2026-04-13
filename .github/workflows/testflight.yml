@@ -122,9 +122,12 @@ jobs:
 
             const prNumber = context.payload.pull_request.number;
 
+            const version = '${{ needs.gate.outputs.version }}' || 'default';
+            const buildNumber = '${{ github.run_number }}';
+
             let body;
             if (buildResult === 'success') {
-              body = `**TestFlight build uploaded** for \`${shortSha}\`\n\nThe build has been submitted to App Store Connect and will be available in TestFlight shortly.\n\n[View workflow run](${runUrl})`;
+              body = `**TestFlight build uploaded** \`${version} (${buildNumber})\` for \`${shortSha}\`\n\nThe build has been submitted to App Store Connect and will be available in TestFlight shortly.\n\n[View workflow run](${runUrl})`;
             } else if (buildResult === 'skipped') {
               return;
             } else {
