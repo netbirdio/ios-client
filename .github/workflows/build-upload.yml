@@ -71,12 +71,7 @@ jobs:
 
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
-        run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            ./build-go-lib.sh "${{ inputs.version }}"
-          else
-            ./build-go-lib.sh
-          fi
+        run: ./build-go-lib.sh
 
       - name: Setup App Store Connect API key
         working-directory: ios-client
