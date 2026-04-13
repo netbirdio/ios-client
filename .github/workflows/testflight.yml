@@ -29,6 +29,7 @@ jobs:
       upload: ${{ steps.resolve.outputs.upload }}
       netbird-ref: ${{ steps.resolve.outputs.netbird-ref }}
       version: ${{ steps.resolve.outputs.version }}
+      build-number: ${{ steps.resolve.outputs.build-number }}
     steps:
       - name: Resolve build ref and validate
         id: resolve
@@ -87,6 +88,11 @@ jobs:
                   core.setOutput('version', versionMatch[1]);
                   core.info(`Using version: ${versionMatch[1]}`);
                 }
+                const buildNumberMatch = trimmed.match(/build-number=(\S+)/);
+                if (buildNumberMatch) {
+                  core.setOutput('build-number', buildNumberMatch[1]);
+                  core.info(`Using build-number: ${buildNumberMatch[1]}`);
+                }
                 break;
               }
             }
@@ -100,6 +106,7 @@ jobs:
       ref: ${{ needs.gate.outputs.ref }}
       netbird-ref: ${{ needs.gate.outputs.netbird-ref }}
       version: ${{ needs.gate.outputs.version }}
+      build-number: ${{ needs.gate.outputs.build-number }}
       upload: ${{ needs.gate.outputs.upload == 'true' }}
     secrets: inherit
 
@@ -124,7 +131,7 @@ jobs:
 
             const uploaded = '${{ needs.gate.outputs.upload }}' === 'true';
             const version = '${{ needs.gate.outputs.version }}' || 'default';
-            const buildNumber = '${{ github.run_number }}';
+            const buildNumber = '${{ needs.gate.outputs.build-number }}' || '${{ github.run_number }}';
 
             let body;
             if (buildResult === 'success' && uploaded) {
