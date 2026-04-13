@@ -42,11 +42,11 @@ jobs:
         run: |
           LATEST_TAG=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null || echo "")
           if [ -z "$LATEST_TAG" ]; then
-            echo "version=0.0.1" >> "$GITHUB_OUTPUT"
-            echo "No semver tags found, defaulting to 0.0.1"
+            echo "::error::No v* tags found — cannot derive version"
+            exit 1
           elif ! echo "$LATEST_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "version=0.0.1" >> "$GITHUB_OUTPUT"
-            echo "Latest tag '$LATEST_TAG' is not valid semver, defaulting to 0.0.1"
+            echo "::error::Latest tag '$LATEST_TAG' is not valid semver (expected vX.Y.Z)"
+            exit 1
           else
             VERSION="${LATEST_TAG#v}"
             MAJOR="${VERSION%%.*}"
