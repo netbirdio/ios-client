@@ -31,7 +31,6 @@ jobs:
       build-number: ${{ steps.resolve.outputs.build-number }}
     steps:
       - name: Checkout (for git tags)
-        if: github.event_name == 'push'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -39,18 +38,21 @@ jobs:
           sparse-checkout: .
 
       - name: Resolve version from latest tag
-        if: github.event_name == 'push'
         id: derive-version
         run: |
           LATEST_TAG=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null || echo "")
           if [ -z "$LATEST_TAG" ]; then
             echo "version=0.0.1" >> "$GITHUB_OUTPUT"
-            echo "No version tags found, defaulting to 0.0.1"
+            echo "No semver tags found, defaulting to 0.0.1"
+          elif ! echo "$LATEST_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "version=0.0.1" >> "$GITHUB_OUTPUT"
+            echo "Latest tag '$LATEST_TAG' is not valid semver, defaulting to 0.0.1"
           else
             VERSION="${LATEST_TAG#v}"
-            MAJOR=$(echo "$VERSION" | cut -d. -f1)
-            MINOR=$(echo "$VERSION" | cut -d. -f2)
-            PATCH=$(echo "$VERSION" | cut -d. -f3)
+            MAJOR="${VERSION%%.*}"
+            REST="${VERSION#*.}"
+            MINOR="${REST%%.*}"
+            PATCH="${REST#*.}"
             NEXT_PATCH=$((PATCH + 1))
             NEXT_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}"
             echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
