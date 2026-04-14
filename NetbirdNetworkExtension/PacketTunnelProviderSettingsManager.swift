@@ -28,30 +28,28 @@ class PacketTunnelProviderSettingsManager {
             self.ipv6Routes = v6Routes
             self.updateTunnel()
     }
-    
+
     func setDNS(config: HostDNSConfig) {
-        var servers = [config.serverIP]
-        if !config.routeAll && needFallbackNS{
-            servers.append("1.1.1.1")
-        }
-        let dnsSettings = NEDNSSettings(servers: servers)
-        if config.routeAll {
-            dnsSettings.matchDomains = [""]
-        } else {
-            var searchDomains: [String] = []
-            var matchDomains: [String] = []
-            for domain in config.domains {
-                if domain.disabled {
-                    continue
-                }
-                matchDomains.append(domain.domain)
-                if !domain.matchOnly {
-                    searchDomains.append(domain.domain)
-                }
+        let dnsSettings = NEDNSSettings(servers: [config.serverIP])
+
+        // Always route all DNS through the tunnel on iOS.
+        // The Go DNS server has a root zone fallback handler that forwards
+        // unmatched queries to host DNS servers (e.g. 1.1.1.1).
+        // This avoids DNS failures when exit node routes (0.0.0.0/0) are
+        // added or removed, as iOS system DNS on cellular is unreliable
+        // with an active VPN tunnel.
+        dnsSettings.matchDomains = [""]
+
+        var searchDomains: [String] = []
+        for domain in config.domains {
+            if !domain.disabled && !domain.matchOnly {
+                searchDomains.append(domain.domain)
             }
-            dnsSettings.matchDomains = matchDomains
+        }
+        if !searchDomains.isEmpty {
             dnsSettings.searchDomains = searchDomains
         }
+
         self.dnsSettings = dnsSettings
         self.updateTunnel()
     }
