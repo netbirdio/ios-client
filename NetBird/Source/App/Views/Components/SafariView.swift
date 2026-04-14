@@ -42,12 +42,13 @@ struct SafariView: UIViewControllerRepresentable {
         }
 
         func startSession(from viewController: UIViewController) {
-            // Use "http" callback scheme to intercept the localhost redirect
-            let session = ASWebAuthenticationSession(
-                url: parent.url,
-                callbackURLScheme: "http"
-            ) { [weak self] callbackURL, error in
-                guard let self = self else { return }
+            // The NetBird SDK uses a PKCE flow with an http://localhost redirect URI.
+            // ASWebAuthenticationSession intercepts that navigation before the browser
+            // follows it, so "http" works as a callback scheme in practice.
+            // A proper long-term fix requires the SDK to expose a custom-scheme
+            // redirect URI (e.g. "netbird://") for mobile OAuth flows.
+            let completionHandler: ASWebAuthenticationSession.CompletionHandler = { [weak self] callbackURL, error in
+                guard let self else { return }
 
                 DispatchQueue.main.async {
                     if let callbackURL = callbackURL {
@@ -62,6 +63,21 @@ struct SafariView: UIViewControllerRepresentable {
                 }
             }
 
+            let session: ASWebAuthenticationSession
+            if #available(iOS 17.4, *) {
+                session = ASWebAuthenticationSession(
+                    url: parent.url,
+                    callback: .customScheme("http"),
+                    completionHandler: completionHandler
+                )
+            } else {
+                session = ASWebAuthenticationSession(
+                    url: parent.url,
+                    callbackURLScheme: "http",
+                    completionHandler: completionHandler
+                )
+            }
+
             // Ephemeral = no shared cookies, fresh login every time
             session.prefersEphemeralWebBrowserSession = true
             session.presentationContextProvider = self
@@ -70,11 +86,15 @@ struct SafariView: UIViewControllerRepresentable {
         }
 
         func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-            // Return the key window as the presentation anchor
-            UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .flatMap { $0.windows }
-                .first(where: { $0.isKeyWindow }) ?? UIWindow()
+            guard let keyWindow = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap({ $0.windows })
+                .first(where: { $0.isKeyWindow })
+            else {
+                assertionFailure("No key window found — auth session may fail to present")
+                return UIWindow()
+            }
+            return keyWindow
         }
     }
 }

@@ -161,7 +161,11 @@ struct ServerView: View {
             return
         }
 
-        var serverUrl = managementServerUrl.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let rawUrl = managementServerUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        var urlComponents = URLComponents(string: rawUrl)
+        if let scheme = urlComponents?.scheme { urlComponents?.scheme = scheme.lowercased() }
+        if let host = urlComponents?.host { urlComponents?.host = host.lowercased() }
+        var serverUrl = urlComponents?.string ?? rawUrl
         if serverUrl.isEmpty {
             serverUrl = defaultManagementServerUrl
         }

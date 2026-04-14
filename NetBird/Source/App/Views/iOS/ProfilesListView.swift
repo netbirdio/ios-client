@@ -167,10 +167,10 @@ struct ProfilesListView: View {
 
     private func switchToProfile(_ profile: Profile) {
         viewModel.performClose()
-        viewModel.switchConnectionInfo(to: profile.name)
 
         do {
             try ProfileManager.shared.switchProfile(profile.name)
+            viewModel.switchConnectionInfo(to: profile.name)
             viewModel.reloadConfiguration()
             viewModel.activeProfileName = ProfileManager.shared.getActiveProfileName()
             if let url = ProfileManager.shared.managementURL(for: profile.name) {

@@ -39,7 +39,11 @@ class AddProfileViewModel: ObservableObject {
 
         // 3. Configure the management server for this profile
         let serverVM = ServerViewModel(configurationFilePath: configPath, deviceName: Device.getName())
-        let trimmedUrl = serverUrl.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trimmed = serverUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        var urlComponents = URLComponents(string: trimmed)
+        if let scheme = urlComponents?.scheme { urlComponents?.scheme = scheme.lowercased() }
+        if let host = urlComponents?.host { urlComponents?.host = host.lowercased() }
+        let trimmedUrl = urlComponents?.string ?? trimmed
         let finalUrl = trimmedUrl.isEmpty ? defaultManagementServerUrl : trimmedUrl
         let key = setupKey.trimmingCharacters(in: .whitespacesAndNewlines)
 

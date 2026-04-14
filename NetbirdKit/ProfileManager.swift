@@ -166,6 +166,7 @@ class ProfileManager {
         }
 
         try fileManager.removeItem(atPath: dir)
+        ProfileConnectionCache().remove(for: name)
     }
 
     /// Clears authentication data for a profile by removing its config and state files.
@@ -178,11 +179,12 @@ class ProfileManager {
         let statePath  = (dir as NSString).appendingPathComponent(GlobalConstants.stateFileName)
         let configPath = (dir as NSString).appendingPathComponent(GlobalConstants.configFileName)
 
-        // Persist the management URL before deleting the config so that after
-        // logout the correct server URL can still be displayed and used for login.
+        // Preserve the management URL for re-login, but clear stale connection data.
+        let cache = ProfileConnectionCache()
         if let url = managementURL(for: name) {
-            ProfileConnectionCache().saveManagementURL(url, for: name)
+            cache.saveManagementURL(url, for: name)
         }
+        cache.clearConnectionData(for: name)
 
         if fileManager.fileExists(atPath: statePath) {
             try fileManager.removeItem(atPath: statePath)

@@ -55,6 +55,24 @@ struct ProfileConnectionCache {
         persist(all)
     }
 
+    /// Clears ip/fqdn for a profile after logout, preserving managementURL for re-login.
+    func clearConnectionData(for profile: String) {
+        var all = load()
+        guard var entry = all[profile] else { return }
+        entry.ip = ""
+        entry.fqdn = ""
+        all[profile] = entry
+        persist(all)
+    }
+
+    /// Removes all cached data for a deleted profile.
+    func remove(for profile: String) {
+        var all = load()
+        guard all[profile] != nil else { return }
+        all.removeValue(forKey: profile)
+        persist(all)
+    }
+
     // MARK: - Private
 
     private func load() -> [String: ProfileConnectionEntry] {
