@@ -21,6 +21,11 @@ struct GlobalConstants {
     static let keyOnDemandWiFiNetworks = "netbird.onDemand.wifiNetworks"
     static let keyKnownSSIDs = "netbird.knownSSIDs"
 
+    // Widget shared state keys
+    static let keyWidgetVPNStatus = "netbird.widget.vpnStatus"
+    static let keyWidgetIP = "netbird.widget.ip"
+    static let keyWidgetFQDN = "netbird.widget.fqdn"
+
     static let configFileName = "netbird.cfg"
     static let stateFileName = "state.json"
 }

@@ -15,6 +15,9 @@ import os
 import Combine
 import NetBirdSDK
 import UserNotifications
+#if os(iOS)
+import WidgetKit
+#endif
 
 /// Used by updateManagementURL to check if SSO is supported
 class SSOCheckListener: NSObject, NetBirdSDKSSOListenerProtocol {
@@ -390,56 +393,83 @@ class ViewModel: ObservableObject {
         case .disconnected:
             extensionStateText = "Disconnected"
         }
+
+        #if os(iOS)
+        updateWidgetState()
+        #endif
     }
-    
+
+    #if os(iOS)
+    /// Writes current VPN state to shared UserDefaults so the widget can read it.
+    private func updateWidgetState() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        let statusString: String
+        switch vpnDisplayState {
+        case .connected: statusString = "connected"
+        case .connecting: statusString = "connecting"
+        case .disconnecting: statusString = "disconnecting"
+        case .disconnected: statusString = "disconnected"
+        }
+        userDefaults?.set(statusString, forKey: GlobalConstants.keyWidgetVPNStatus)
+        userDefaults?.set(ip, forKey: GlobalConstants.keyWidgetIP)
+        userDefaults?.set(fqdn, forKey: GlobalConstants.keyWidgetFQDN)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+    #endif
+
     func startPollingDetails() {
         #if os(iOS)
         refreshCurrentSSID()
         #endif
         networkExtensionAdapter.startTimer { details in
-
             self.checkExtensionState()
             self.checkNetworkUnavailableFlag()
-
-            if self.extensionState == .disconnected && self.vpnDisplayState == .connected {
-                self.showAuthenticationRequired = true
-                self.updateVPNDisplayState()
-            }
-
-            if details.ip != self.ip || details.fqdn != self.fqdn || details.managementStatus != self.managementStatus
-            {
-                if !details.fqdn.isEmpty && details.fqdn != self.fqdn {
-                    self.defaults.set(details.fqdn, forKey: "fqdn")
-                    self.fqdn = details.fqdn
-                    
-                }
-                if !details.ip.isEmpty && details.ip != self.ip {
-                    self.defaults.set(details.ip, forKey: "ip")
-                    self.ip = details.ip
-                }
-                print("Status: \(details.managementStatus) - Extension: \(self.extensionState)")
-                
-                if details.managementStatus != self.managementStatus {
-                    self.managementStatus = details.managementStatus
-                    self.updateVPNDisplayState()
-                }
-                
-                // Login required detection is handled by the network extension via signalLoginRequired()
-                // The app checks for this flag in checkLoginRequiredFlag() when becoming active
-            }
-            
+            self.updateDetailsIfChanged(details)
+            self.updatePeersIfChanged(details)
             self.statusDetailsValid = true
-            
-            let sortedPeerInfo = details.peerInfo.sorted(by: { a, b in
-                a.ip < b.ip
-            })
-            if sortedPeerInfo.count != self.peerViewModel.peerInfo.count || !sortedPeerInfo.elementsEqual(self.peerViewModel.peerInfo, by: { a, b in
-                a.ip == b.ip && a.connStatus == b.connStatus && a.relayed == b.relayed && a.direct == b.direct && a.connStatusUpdate == b.connStatusUpdate && a.routes.count == b.routes.count
-            }) {
-                print("Setting new peer info: \(sortedPeerInfo.count) Peers")
-                self.peerViewModel.peerInfo = sortedPeerInfo
-            }
-            
+        }
+    }
+
+    private func updateDetailsIfChanged(_ details: StatusDetails) {
+        let ipChanged = details.ip != ip
+        let fqdnChanged = details.fqdn != fqdn
+        let statusChanged = details.managementStatus != managementStatus
+
+        guard ipChanged || fqdnChanged || statusChanged else { return }
+
+        if ipChanged {
+            defaults.set(details.ip, forKey: "ip")
+            ip = details.ip
+        }
+        if fqdnChanged {
+            defaults.set(details.fqdn, forKey: "fqdn")
+            fqdn = details.fqdn
+        }
+        if statusChanged {
+            managementStatus = details.managementStatus
+            updateVPNDisplayState()
+        } else if ipChanged || fqdnChanged {
+            #if os(iOS)
+            updateWidgetState()
+            #endif
+        }
+    }
+
+    private func updatePeersIfChanged(_ details: StatusDetails) {
+        let sorted = details.peerInfo.sorted { $0.ip < $1.ip }
+        let current = peerViewModel.peerInfo
+
+        let changed = sorted.count != current.count || !sorted.elementsEqual(current) { a, b in
+            a.ip == b.ip
+                && a.connStatus == b.connStatus
+                && a.relayed == b.relayed
+                && a.direct == b.direct
+                && a.connStatusUpdate == b.connStatusUpdate
+                && a.routes.count == b.routes.count
+        }
+
+        if changed {
+            peerViewModel.peerInfo = sorted
         }
     }
     
@@ -449,21 +479,23 @@ class ViewModel: ObservableObject {
     
     func checkExtensionState() {
         networkExtensionAdapter.getExtensionStatus { status in
-            let statuses : [NEVPNStatus] = [.connected, .disconnected, .connecting, .disconnecting]
             DispatchQueue.main.async {
-                if statuses.contains(status) && self.extensionState != status {
-                    print("Changing extension status to \(status.rawValue)")
-                    self.extensionState = status
-                    self.updateVPNDisplayState()
+                self.applyExtensionStatus(status)
+            }
+        }
+    }
 
-                    if status == .connected {
-                        self.routeViewModel.getRoutes()
-                        // Re-enable On Demand if user has the setting turned on
-                        if self.connectOnDemand {
-                            self.networkExtensionAdapter.setOnDemandEnabled(true)
-                        }
-                    }
-                }
+    private func applyExtensionStatus(_ status: NEVPNStatus) {
+        let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .disconnecting]
+        guard knownStatuses.contains(status), extensionState != status else { return }
+
+        extensionState = status
+        updateVPNDisplayState()
+
+        if status == .connected {
+            routeViewModel.getRoutes()
+            if connectOnDemand {
+                networkExtensionAdapter.setOnDemandEnabled(true)
             }
         }
     }
@@ -733,30 +765,26 @@ class ViewModel: ObservableObject {
 
     /// Checks shared app-group container for login required flag set by the network extension.
     /// If set, schedules a local notification (if authorized) and shows the authentication UI.
-    /// iOS only - tvOS cannot share UserDefaults between app and extension, and uses IPC
-    /// via `checkLoginError` instead.
+    /// iOS only — tvOS uses IPC via `checkLoginError` in TVAuthView.
     func checkLoginRequiredFlag() {
         #if os(iOS)
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
-        guard userDefaults?.bool(forKey: GlobalConstants.keyLoginRequired) == true else {
-            return
-        }
+        guard userDefaults?.bool(forKey: GlobalConstants.keyLoginRequired) == true else { return }
 
-        // Clear the flag immediately
         userDefaults?.set(false, forKey: GlobalConstants.keyLoginRequired)
         userDefaults?.synchronize()
 
         AppLogger.shared.log("Login required flag detected from extension")
+        showAuthenticationRequired = true
+        scheduleLoginRequiredNotification()
+        #endif
+    }
 
-        // Show authentication required UI
-        self.showAuthenticationRequired = true
-
-        // Schedule local notification if authorized
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            guard settings.authorizationStatus == .authorized else {
-                AppLogger.shared.log("Notifications not authorized, skipping notification")
-                return
-            }
+    #if os(iOS)
+    private func scheduleLoginRequiredNotification() {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else { return }
 
             let content = UNMutableNotificationContent()
             content.title = "NetBird"
@@ -768,16 +796,12 @@ class ViewModel: ObservableObject {
                 content: content,
                 trigger: nil
             )
-
-            UNUserNotificationCenter.current().add(request) { error in
-                if let error = error {
+            center.add(request) { error in
+                if let error {
                     AppLogger.shared.log("Failed to schedule login notification: \(error.localizedDescription)")
-                } else {
-                    AppLogger.shared.log("Login required notification scheduled from main app")
                 }
             }
         }
-        #endif
-        // tvOS: Login errors are detected via IPC (checkLoginError in TVAuthView)
     }
+    #endif
 }
