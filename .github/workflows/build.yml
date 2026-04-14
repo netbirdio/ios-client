@@ -196,7 +196,7 @@ jobs:
         run: |
           xcodebuild -resolvePackageDependencies \
             -project NetBird.xcodeproj \
-            -scheme NetBird
+            -target "NetBird TV"
 
       - name: Build tvOS App
         working-directory: ios-client
@@ -204,7 +204,7 @@ jobs:
           set -o pipefail
           xcodebuild build \
             -project NetBird.xcodeproj \
-            -scheme NetBird \
+            -target "NetBird TV" \
             -destination 'generic/platform=tvOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
@@ -218,7 +218,7 @@ jobs:
           set -o pipefail
           xcodebuild build \
             -project NetBird.xcodeproj \
-            -scheme NetbirdNetworkExtension \
+            -target "NetBirdTVNetworkExtension" \
             -destination 'generic/platform=tvOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
