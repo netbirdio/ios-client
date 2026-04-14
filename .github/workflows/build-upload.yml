@@ -10,7 +10,7 @@ on:
       netbird-ref:
         required: false
         type: string
-        description: 'NetBird ref to checkout and build'
+        description: 'Override netbird submodule ref (default: use pinned submodule commit)'
       build-number:
         required: false
         type: string
@@ -47,68 +47,36 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           path: ios-client
+          submodules: recursive
 
-      - name: Checkout netbird
-        uses: actions/checkout@v4
-        with:
-          repository: netbirdio/netbird
-          ref: ${{ inputs.netbird-ref || '' }}
-          fetch-depth: 0
-          fetch-tags: true
-          path: netbird
+      - name: Override netbird submodule ref
+        if: inputs.netbird-ref != ''
+        working-directory: ios-client/netbird-core
+        run: |
+          git fetch origin ${{ inputs.netbird-ref }}
+          git checkout FETCH_HEAD
+
+      - name: Fetch netbird tags
+        working-directory: ios-client/netbird-core
+        run: git fetch --tags
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
-          cache-dependency-path: netbird/go.sum
+          go-version-file: 'ios-client/netbird-core/go.mod'
+          cache-dependency-path: ios-client/netbird-core/go.sum
 
       - name: Install gomobile
         run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
 
-      - name: Resolve netbird version
-        id: netbird
-        working-directory: netbird
-        run: |
-          REF="${{ inputs.netbird-ref }}"
-
-          # Get latest version tag from the repo
-          TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
-
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          elif [ -n "$TAG" ]; then
-            VERSION="${TAG#v}"
-          else
-            VERSION="dev-$(git rev-parse --short HEAD)"
-          fi
-
-          # Get the commit that the tag points to
-          if [ -n "$TAG" ]; then
-            TAG_COMMIT=$(git rev-list -n 1 "$TAG")
-            TAG_COMMIT_SHORT=$(git rev-parse --short "$TAG_COMMIT")
-          else
-            TAG_COMMIT=$(git rev-parse HEAD)
-            TAG_COMMIT_SHORT=$(git rev-parse --short HEAD)
-          fi
-
-          echo "commit=$TAG_COMMIT" >> "$GITHUB_OUTPUT"
-          echo "short=$TAG_COMMIT_SHORT" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-          echo "========================================="
-          echo "  NetBird ref: ${REF:-default branch}"
-          echo "  NetBird tag: ${TAG:-none}"
-          echo "  NetBird tag commit: $TAG_COMMIT"
-          echo "  NetBird HEAD commit: $(git rev-parse HEAD)"
-          echo "  NetBird version for build: $VERSION"
-          echo "========================================="
-
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
         run: |
-          echo "Building with version: ${{ steps.netbird.outputs.version }}"
-          ./build-go-lib.sh ../netbird ${{ steps.netbird.outputs.version }}
+          if [ -n "${{ inputs.version }}" ]; then
+            ./build-go-lib.sh "${{ inputs.version }}"
+          else
+            ./build-go-lib.sh
+          fi
 
       - name: Setup App Store Connect API key
         working-directory: ios-client
@@ -210,13 +178,20 @@ jobs:
           PROJECT_VERSION=$(xcodebuild -project NetBird.xcodeproj -scheme NetBird -showBuildSettings 2>/dev/null | grep -m1 'CURRENT_PROJECT_VERSION' | awk '{print $NF}')
           MARKETING_VERSION=$(xcodebuild -project NetBird.xcodeproj -scheme NetBird -showBuildSettings 2>/dev/null | grep -m1 'MARKETING_VERSION' | awk '{print $NF}')
 
+          # Read netbird submodule info
+          NETBIRD_COMMIT=$(cd netbird-core && git rev-parse --short HEAD)
+          NETBIRD_TAG=$(cd netbird-core && git describe --tags --exact-match 2>/dev/null || echo "none")
+
           echo "========================================="
           echo "  Project MARKETING_VERSION: $MARKETING_VERSION"
           echo "  Project CURRENT_PROJECT_VERSION: $PROJECT_VERSION"
           echo "  Override version: ${{ inputs.version }}"
           echo "  Override build-number: ${{ inputs.build-number }}"
+          echo "  Override netbird-ref: ${{ inputs.netbird-ref }}"
           echo "  Final build number: ${{ steps.settings.outputs.build-number }}"
           echo "  Final version args: ${{ steps.settings.outputs.version-args }}"
+          echo "  Netbird submodule commit: $NETBIRD_COMMIT"
+          echo "  Netbird submodule tag: $NETBIRD_TAG"
           echo "  Git ref: ${{ inputs.ref }}"
           echo "  Run number: ${GITHUB_RUN_NUMBER}"
           echo "========================================="
