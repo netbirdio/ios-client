@@ -118,6 +118,20 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             | xcpretty --color
 
+      - name: Build Widget Extension
+        working-directory: ios-client
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project NetBird.xcodeproj \
+            -scheme NetBirdWidgetExtensionExtension \
+            -destination 'generic/platform=iOS' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | xcpretty --color
+
   build_tvos:
     name: Build tvOS App
     runs-on: macos-15
