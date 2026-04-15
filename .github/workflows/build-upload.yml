@@ -255,7 +255,7 @@ jobs:
               <string>${APP_PROFILE_NAME}</string>
               <key>io.netbird.app.NetbirdNetworkExtension</key>
               <string>${EXT_PROFILE_NAME}</string>
-              <key>io.netbird.app.NetBirdWidgetExtensionExtension</key>
+              <key>io.netbird.app.NetBirdWidgetExtension</key>
               <string>${WIDGET_PROFILE_NAME}</string>
             </dict>
           </dict>
