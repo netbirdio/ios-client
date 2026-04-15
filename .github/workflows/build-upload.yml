@@ -200,6 +200,7 @@ jobs:
         env:
           PROFILE_APP_BASE64: ${{ secrets.PROVISIONING_PROFILE_APP_BASE64 }}
           PROFILE_EXT_BASE64: ${{ secrets.PROVISIONING_PROFILE_EXTENSION_BASE64 }}
+          PROFILE_WIDGET_BASE64: ${{ secrets.PROVISIONING_PROFILE_WIDGET_BASE64 }}
         run: |
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
 
@@ -213,7 +214,7 @@ jobs:
             ~/Library/MobileDevice/Provisioning\ Profiles/${APP_UUID}.mobileprovision
           echo "APP_PROFILE_NAME=$APP_NAME" >> "$GITHUB_ENV"
 
-          # Install extension profile
+          # Install network extension profile
           echo "$PROFILE_EXT_BASE64" | base64 --decode > $RUNNER_TEMP/ext.mobileprovision
           EXT_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< \
             $(security cms -D -i $RUNNER_TEMP/ext.mobileprovision))
@@ -223,7 +224,17 @@ jobs:
             ~/Library/MobileDevice/Provisioning\ Profiles/${EXT_UUID}.mobileprovision
           echo "EXT_PROFILE_NAME=$EXT_NAME" >> "$GITHUB_ENV"
 
-          echo "Installed profiles: app='$APP_NAME' ($APP_UUID), ext='$EXT_NAME' ($EXT_UUID)"
+          # Install widget extension profile
+          echo "$PROFILE_WIDGET_BASE64" | base64 --decode > $RUNNER_TEMP/widget.mobileprovision
+          WIDGET_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/widget.mobileprovision))
+          WIDGET_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/widget.mobileprovision))
+          cp $RUNNER_TEMP/widget.mobileprovision \
+            ~/Library/MobileDevice/Provisioning\ Profiles/${WIDGET_UUID}.mobileprovision
+          echo "WIDGET_PROFILE_NAME=$WIDGET_NAME" >> "$GITHUB_ENV"
+
+          echo "Installed profiles: app='$APP_NAME' ($APP_UUID), ext='$EXT_NAME' ($EXT_UUID), widget='$WIDGET_NAME' ($WIDGET_UUID)"
 
       - name: Generate ExportOptions.plist
         working-directory: ios-client
@@ -249,6 +260,8 @@ jobs:
               <string>${APP_PROFILE_NAME}</string>
               <key>io.netbird.app.NetbirdNetworkExtension</key>
               <string>${EXT_PROFILE_NAME}</string>
+              <key>io.netbird.app.NetBirdWidgetExtension</key>
+              <string>${WIDGET_PROFILE_NAME}</string>
             </dict>
           </dict>
           </plist>
@@ -300,5 +313,5 @@ jobs:
           security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
           rm -rf ~/.appstoreconnect/private_keys 2>/dev/null || true
           rm -f $RUNNER_TEMP/dist.p12 $RUNNER_TEMP/dev.p12 2>/dev/null || true
-          rm -f $RUNNER_TEMP/app.mobileprovision $RUNNER_TEMP/ext.mobileprovision 2>/dev/null || true
+          rm -f $RUNNER_TEMP/app.mobileprovision $RUNNER_TEMP/ext.mobileprovision $RUNNER_TEMP/widget.mobileprovision 2>/dev/null || true
           rm -rf ~/Library/MobileDevice/Provisioning\ Profiles 2>/dev/null || true
