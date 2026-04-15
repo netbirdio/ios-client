@@ -194,7 +194,13 @@ jobs:
         run: |
           xcodebuild -resolvePackageDependencies \
             -project NetBird.xcodeproj \
-            -scheme "NetBird TV"
+            -scheme "NetBird TV" \
+            -destination 'generic/platform=tvOS'
+
+      - name: Remove nanopb build file left by gomobile
+        run: |
+          find ~/Library/Developer/Xcode/DerivedData \
+            -path "*/checkouts/nanopb/build" ! -type d -delete 2>/dev/null || true
 
       - name: Archive
         working-directory: ios-client
