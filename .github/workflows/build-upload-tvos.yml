@@ -1,0 +1,238 @@
+name: Build and Upload tvOS to App Store Connect
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+        description: 'Git ref to checkout and build'
+      build-number:
+        required: false
+        type: string
+        default: ''
+        description: 'Build number override (defaults to GITHUB_RUN_NUMBER)'
+      upload:
+        required: false
+        type: boolean
+        default: true
+        description: 'Upload to App Store Connect (false = build only)'
+
+concurrency:
+  group: build-upload-tvos-${{ inputs.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-upload-tvos:
+    name: Archive and Upload tvOS
+    runs-on: macos-15
+    steps:
+      - name: Select Xcode 26.1.1
+        run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer
+
+      - name: Checkout ios-client
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          path: ios-client
+          submodules: recursive
+
+      - name: Fetch netbird tags
+        working-directory: ios-client/netbird-core
+        run: git fetch --tags
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'ios-client/netbird-core/go.mod'
+          cache-dependency-path: ios-client/netbird-core/go.sum
+
+      - name: Install gomobile-netbird
+        run: GOPROXY=direct go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@latest
+
+      - name: Build NetBirdSDK xcframework
+        working-directory: ios-client
+        run: ./build-go-lib.sh --tvos
+
+      - name: Setup App Store Connect API key
+        working-directory: ios-client
+        env:
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$API_KEY_BASE64" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8
+
+      - name: Install signing certificates
+        env:
+          DIST_CERT_BASE64: ${{ secrets.DISTRIBUTION_CERTIFICATE_BASE64 }}
+          DIST_CERT_PASSWORD: ${{ secrets.DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          DEV_CERT_BASE64: ${{ secrets.DEVELOPMENT_CERTIFICATE_BASE64 }}
+          DEV_CERT_PASSWORD: ${{ secrets.DEVELOPMENT_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "$DIST_CERT_BASE64" | base64 --decode > $RUNNER_TEMP/dist.p12
+          security import $RUNNER_TEMP/dist.p12 \
+            -P "$DIST_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          echo "$DEV_CERT_BASE64" | base64 --decode > $RUNNER_TEMP/dev.p12
+          security import $RUNNER_TEMP/dev.p12 \
+            -P "$DEV_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Create dummy GoogleService-Info.plist
+        working-directory: ios-client
+        run: |
+          cat > GoogleService-Info.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CLIENT_ID</key><string>dummy</string>
+            <key>REVERSED_CLIENT_ID</key><string>dummy</string>
+            <key>API_KEY</key><string>dummy</string>
+            <key>GCM_SENDER_ID</key><string>dummy</string>
+            <key>PLIST_VERSION</key><string>1</string>
+            <key>BUNDLE_ID</key><string>io.netbird.app.tv</string>
+            <key>PROJECT_ID</key><string>dummy</string>
+            <key>STORAGE_BUCKET</key><string>dummy</string>
+            <key>IS_ADS_ENABLED</key><false/>
+            <key>IS_ANALYTICS_ENABLED</key><false/>
+            <key>IS_APPINVITE_ENABLED</key><false/>
+            <key>IS_GCM_ENABLED</key><false/>
+            <key>IS_SIGNIN_ENABLED</key><false/>
+            <key>GOOGLE_APP_ID</key><string>dummy</string>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Determine build settings
+        id: settings
+        run: |
+          BUILD_NUMBER="${{ inputs.build-number }}"
+          if [ -z "$BUILD_NUMBER" ]; then
+            BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          fi
+          echo "build-number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Install provisioning profiles
+        env:
+          PROFILE_TV_APP_BASE64: ${{ secrets.PROVISIONING_PROFILE_TV_APP_BASE64 }}
+          PROFILE_TV_EXT_BASE64: ${{ secrets.PROVISIONING_PROFILE_TV_EXTENSION_BASE64 }}
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+
+          echo "$PROFILE_TV_APP_BASE64" | base64 --decode > $RUNNER_TEMP/tv_app.mobileprovision
+          TV_APP_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/tv_app.mobileprovision))
+          TV_APP_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/tv_app.mobileprovision))
+          cp $RUNNER_TEMP/tv_app.mobileprovision \
+            ~/Library/MobileDevice/Provisioning\ Profiles/${TV_APP_UUID}.mobileprovision
+          echo "TV_APP_PROFILE_NAME=$TV_APP_NAME" >> "$GITHUB_ENV"
+
+          echo "$PROFILE_TV_EXT_BASE64" | base64 --decode > $RUNNER_TEMP/tv_ext.mobileprovision
+          TV_EXT_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/tv_ext.mobileprovision))
+          TV_EXT_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /dev/stdin <<< \
+            $(security cms -D -i $RUNNER_TEMP/tv_ext.mobileprovision))
+          cp $RUNNER_TEMP/tv_ext.mobileprovision \
+            ~/Library/MobileDevice/Provisioning\ Profiles/${TV_EXT_UUID}.mobileprovision
+          echo "TV_EXT_PROFILE_NAME=$TV_EXT_NAME" >> "$GITHUB_ENV"
+
+          echo "Installed profiles: tv_app='$TV_APP_NAME' ($TV_APP_UUID), tv_ext='$TV_EXT_NAME' ($TV_EXT_UUID)"
+
+      - name: Generate ExportOptions.plist
+        working-directory: ios-client
+        run: |
+          cat > ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>destination</key>
+            <string>upload</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>teamID</key>
+            <string>TA739QLA7A</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>io.netbird.app.tv</key>
+              <string>${TV_APP_PROFILE_NAME}</string>
+              <key>io.netbird.app.tv.extension</key>
+              <string>${TV_EXT_PROFILE_NAME}</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Resolve Swift packages
+        working-directory: ios-client
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project NetBird.xcodeproj \
+            -scheme "NetBird TV"
+
+      - name: Archive
+        working-directory: ios-client
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild archive \
+            -project NetBird.xcodeproj \
+            -scheme "NetBird TV" \
+            -destination 'generic/platform=tvOS' \
+            -archivePath $RUNNER_TEMP/NetBirdTV.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8" \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER_ID" \
+            CURRENT_PROJECT_VERSION=${{ steps.settings.outputs.build-number }}
+
+      - name: Export and Upload to App Store Connect
+        if: inputs.upload
+        working-directory: ios-client
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/NetBirdTV.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath $RUNNER_TEMP/export-tvos \
+            -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8" \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER_ID"
+
+      - name: Clean up signing assets
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          rm -rf ~/.appstoreconnect/private_keys 2>/dev/null || true
+          rm -f $RUNNER_TEMP/dist.p12 $RUNNER_TEMP/dev.p12 2>/dev/null || true
+          rm -f $RUNNER_TEMP/tv_app.mobileprovision $RUNNER_TEMP/tv_ext.mobileprovision 2>/dev/null || true
+          rm -rf ~/Library/MobileDevice/Provisioning\ Profiles 2>/dev/null || true
