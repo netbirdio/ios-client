@@ -3,7 +3,6 @@ name: TestFlight
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -31,23 +30,54 @@ jobs:
       version: ${{ steps.resolve.outputs.version }}
       build-number: ${{ steps.resolve.outputs.build-number }}
     steps:
+      - name: Checkout (for git tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          sparse-checkout: .
+
+      - name: Resolve version from latest tag
+        id: derive-version
+        run: |
+          LATEST_TAG=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LATEST_TAG" ]; then
+            echo "::error::No v* tags found — cannot derive version"
+            exit 1
+          elif ! echo "$LATEST_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Latest tag '$LATEST_TAG' is not valid semver (expected vX.Y.Z)"
+            exit 1
+          else
+            VERSION="${LATEST_TAG#v}"
+            MAJOR="${VERSION%%.*}"
+            REST="${VERSION#*.}"
+            MINOR="${REST%%.*}"
+            PATCH="${REST#*.}"
+            NEXT_PATCH=$((PATCH + 1))
+            NEXT_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}"
+            echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+            echo "Latest tag: $LATEST_TAG → next version: $NEXT_VERSION"
+          fi
+
       - name: Resolve build ref and validate
         id: resolve
         uses: actions/github-script@v7
         with:
           script: |
-            // Push to main or tag — always build and upload
+            // Default build number from workflow run number (can be overridden by /testflight)
+            core.setOutput('build-number', '${{ github.run_number }}');
+
+            // Push to main — always build and upload
             if (context.eventName === 'push') {
               core.setOutput('ref', context.sha);
               core.setOutput('should-build', 'true');
               core.setOutput('upload', 'true');
 
-              // Extract version from tag (v1.2.3 → 1.2.3)
-              const ref = context.ref;
-              if (ref.startsWith('refs/tags/v')) {
-                const version = ref.replace('refs/tags/v', '');
-                core.setOutput('version', version);
-                core.info(`Tag push, using version: ${version}`);
+              // Use version derived from latest tag (patch bumped)
+              const derived = '${{ steps.derive-version.outputs.version }}';
+              if (derived) {
+                core.setOutput('version', derived);
+                core.info(`Main push, derived version: ${derived}`);
               }
               return;
             }
@@ -67,11 +97,13 @@ jobs:
               core.setOutput('should-build', 'true');
 
               // Parse /testflight line from PR description for upload flag and parameters
-              const body = context.payload.pull_request.body || '';
+              // Strip HTML comments so template examples don't trigger upload
+              const body = (context.payload.pull_request.body || '').replace(/<!--[\s\S]*?-->/g, '');
               const hasTestflight = body.includes('/testflight');
               core.setOutput('upload', hasTestflight ? 'true' : 'false');
               core.info(`PR description ${hasTestflight ? 'contains' : 'does not contain'} /testflight, upload=${hasTestflight}`);
 
+              let explicitVersion = false;
               const lines = body.split('\n');
               for (const line of lines) {
                 const trimmed = line.trim();
@@ -87,6 +119,7 @@ jobs:
                 if (versionMatch) {
                   core.setOutput('version', versionMatch[1]);
                   core.info(`Using version: ${versionMatch[1]}`);
+                  explicitVersion = true;
                 }
                 const buildNumberMatch = trimmed.match(/build-number=(\S+)/);
                 if (buildNumberMatch) {
@@ -94,6 +127,15 @@ jobs:
                   core.info(`Using build-number: ${buildNumberMatch[1]}`);
                 }
                 break;
+              }
+
+              // Fall back to tag-derived version if not explicitly set
+              if (!explicitVersion) {
+                const derived = '${{ steps.derive-version.outputs.version }}';
+                if (derived) {
+                  core.setOutput('version', derived);
+                  core.info(`Using tag-derived version: ${derived}`);
+                }
               }
             }
 
@@ -131,7 +173,7 @@ jobs:
 
             const uploaded = '${{ needs.gate.outputs.upload }}' === 'true';
             const version = '${{ needs.gate.outputs.version }}' || 'default';
-            const buildNumber = '${{ needs.gate.outputs.build-number }}' || '${{ github.run_number }}';
+            const buildNumber = '${{ needs.gate.outputs.build-number }}';
 
             let body;
             if (buildResult === 'success' && uploaded) {
