@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -59,84 +60,31 @@ jobs:
             echo "Latest tag: $LATEST_TAG → next version: $NEXT_VERSION"
           fi
 
-      - name: Resolve build ref and validate
+      - name: Resolve build ref
         id: resolve
         uses: actions/github-script@v7
         with:
           script: |
-            // Default build number from workflow run number (can be overridden by /testflight)
             core.setOutput('build-number', '${{ github.run_number }}');
 
-            // Push to main — always build and upload
+            const derived = '${{ steps.derive-version.outputs.version }}';
+            if (derived) {
+              core.setOutput('version', derived);
+            }
+
             if (context.eventName === 'push') {
               core.setOutput('ref', context.sha);
               core.setOutput('should-build', 'true');
               core.setOutput('upload', 'true');
-
-              // Use version derived from latest tag (patch bumped)
-              const derived = '${{ steps.derive-version.outputs.version }}';
-              if (derived) {
-                core.setOutput('version', derived);
-                core.info(`Main push, derived version: ${derived}`);
-              }
+              core.info(`Main push, version: ${derived}`);
               return;
             }
 
-            // PR opened/updated — build if not from fork
             if (context.eventName === 'pull_request') {
-              const headRepo = context.payload.pull_request.head.repo.full_name;
-              const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
-
-              if (headRepo !== baseRepo) {
-                core.info(`Skipping fork PR from ${headRepo}`);
-                core.setOutput('should-build', 'false');
-                return;
-              }
-
               core.setOutput('ref', context.payload.pull_request.head.sha);
               core.setOutput('should-build', 'true');
-
-              // Parse /testflight line from PR description for upload flag and parameters
-              // Strip HTML comments so template examples don't trigger upload
-              const body = (context.payload.pull_request.body || '').replace(/<!--[\s\S]*?-->/g, '');
-              const hasTestflight = body.includes('/testflight');
-              core.setOutput('upload', hasTestflight ? 'true' : 'false');
-              core.info(`PR description ${hasTestflight ? 'contains' : 'does not contain'} /testflight, upload=${hasTestflight}`);
-
-              let explicitVersion = false;
-              const lines = body.split('\n');
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed.startsWith('/testflight')) continue;
-
-                core.info(`Found /testflight line: ${trimmed}`);
-                const netbirdRefMatch = trimmed.match(/netbird-ref=(\S+)/);
-                if (netbirdRefMatch) {
-                  core.setOutput('netbird-ref', netbirdRefMatch[1]);
-                  core.info(`Using netbird-ref: ${netbirdRefMatch[1]}`);
-                }
-                const versionMatch = trimmed.match(/version=(\S+)/);
-                if (versionMatch) {
-                  core.setOutput('version', versionMatch[1]);
-                  core.info(`Using version: ${versionMatch[1]}`);
-                  explicitVersion = true;
-                }
-                const buildNumberMatch = trimmed.match(/build-number=(\S+)/);
-                if (buildNumberMatch) {
-                  core.setOutput('build-number', buildNumberMatch[1]);
-                  core.info(`Using build-number: ${buildNumberMatch[1]}`);
-                }
-                break;
-              }
-
-              // Fall back to tag-derived version if not explicitly set
-              if (!explicitVersion) {
-                const derived = '${{ steps.derive-version.outputs.version }}';
-                if (derived) {
-                  core.setOutput('version', derived);
-                  core.info(`Using tag-derived version: ${derived}`);
-                }
-              }
+              core.setOutput('upload', 'true');
+              core.info(`PR #${context.payload.pull_request.number}, version: ${derived}`);
             }
 
   build:
@@ -168,18 +116,13 @@ jobs:
             const ref = '${{ needs.gate.outputs.ref }}';
             const shortSha = ref.substring(0, 7);
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-
             const prNumber = context.payload.pull_request.number;
-
-            const uploaded = '${{ needs.gate.outputs.upload }}' === 'true';
             const version = '${{ needs.gate.outputs.version }}' || 'default';
             const buildNumber = '${{ needs.gate.outputs.build-number }}';
 
             let body;
-            if (buildResult === 'success' && uploaded) {
+            if (buildResult === 'success') {
               body = `**TestFlight build uploaded** \`${version} (${buildNumber})\` for \`${shortSha}\`\n\nThe build has been submitted to App Store Connect and will be available in TestFlight shortly.\n\n[View workflow run](${runUrl})`;
-            } else if (buildResult === 'success') {
-              body = `**Build succeeded** for \`${shortSha}\` (no upload — add \`/testflight\` to PR description to upload)\n\n[View workflow run](${runUrl})`;
             } else if (buildResult === 'skipped') {
               return;
             } else {
