@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened]
+    types: [opened, edited]
   issue_comment:
     types: [created]
 
@@ -50,9 +50,23 @@ jobs:
             }
 
             if (context.eventName === 'pull_request') {
+              const body = context.payload.pull_request.body || '';
+              if (!body.includes('/testflight')) {
+                core.info('No /testflight in PR description — skipping');
+                return;
+              }
               core.setOutput('ref', context.payload.pull_request.head.sha);
               core.setOutput('should-build', 'true');
               core.setOutput('upload', 'true');
+
+              // Parse overrides from PR description
+              const line = body.split('\n').find(l => l.trim().startsWith('/testflight')) || '';
+              const versionMatch = line.match(/version=(\S+)/);
+              if (versionMatch) core.setOutput('version-override', versionMatch[1]);
+              const buildMatch = line.match(/build-number=(\S+)/);
+              if (buildMatch) core.setOutput('build-number', buildMatch[1]);
+              const netbirdMatch = line.match(/netbird-ref=(\S+)/);
+              if (netbirdMatch) core.setOutput('netbird-ref', netbirdMatch[1]);
               return;
             }
 
