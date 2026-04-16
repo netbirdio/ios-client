@@ -42,6 +42,16 @@ jobs:
             core.setOutput('build-number', '${{ github.run_number }}');
             core.setOutput('should-build', 'false');
 
+            function parseCommand(body) {
+              const line = body.split('\n').find(l => l.trim().startsWith('/testflight')) || '';
+              const versionMatch = line.match(/version=([0-9]+\.[0-9]+\.[0-9]+)/);
+              if (versionMatch) core.setOutput('version-override', versionMatch[1]);
+              const buildMatch = line.match(/build-number=([0-9]+)/);
+              if (buildMatch) core.setOutput('build-number', buildMatch[1]);
+              const netbirdMatch = line.match(/netbird-ref=([a-zA-Z0-9._\/-]+)/);
+              if (netbirdMatch) core.setOutput('netbird-ref', netbirdMatch[1]);
+            }
+
             if (context.eventName === 'push') {
               core.setOutput('ref', context.sha);
               core.setOutput('should-build', 'true');
@@ -51,7 +61,8 @@ jobs:
 
             if (context.eventName === 'pull_request') {
               const body = context.payload.pull_request.body || '';
-              if (!body.includes('/testflight')) {
+              const hasCommand = body.split('\n').some(l => l.trim().startsWith('/testflight'));
+              if (!hasCommand) {
                 core.info('No /testflight in PR description — skipping');
                 return;
               }
@@ -59,14 +70,7 @@ jobs:
               core.setOutput('should-build', 'true');
               core.setOutput('upload', 'true');
 
-              // Parse overrides from PR description
-              const line = body.split('\n').find(l => l.trim().startsWith('/testflight')) || '';
-              const versionMatch = line.match(/version=(\S+)/);
-              if (versionMatch) core.setOutput('version-override', versionMatch[1]);
-              const buildMatch = line.match(/build-number=(\S+)/);
-              if (buildMatch) core.setOutput('build-number', buildMatch[1]);
-              const netbirdMatch = line.match(/netbird-ref=(\S+)/);
-              if (netbirdMatch) core.setOutput('netbird-ref', netbirdMatch[1]);
+              parseCommand(body);
               return;
             }
 
@@ -76,7 +80,8 @@ jobs:
                 return;
               }
               const body = context.payload.comment.body || '';
-              if (!body.includes('/testflight')) {
+              const hasCommand = body.split('\n').some(l => l.trim().startsWith('/testflight'));
+              if (!hasCommand) {
                 core.info('No /testflight command — skipping');
                 return;
               }
@@ -99,18 +104,19 @@ jobs:
                 repo: context.repo.repo,
                 pull_number: context.payload.issue.number,
               });
+
+              // Block fork PRs — untrusted code must not run with privileged credentials
+              const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
+              if (pr.data.head.repo.full_name !== baseRepo) {
+                core.info(`PR is from fork ${pr.data.head.repo.full_name} — skipping`);
+                return;
+              }
+
               core.setOutput('ref', pr.data.head.sha);
               core.setOutput('should-build', 'true');
               core.setOutput('upload', 'true');
 
-              // Parse overrides from /testflight line
-              const line = body.split('\n').find(l => l.trim().startsWith('/testflight')) || '';
-              const versionMatch = line.match(/version=(\S+)/);
-              if (versionMatch) core.setOutput('version-override', versionMatch[1]);
-              const buildMatch = line.match(/build-number=(\S+)/);
-              if (buildMatch) core.setOutput('build-number', buildMatch[1]);
-              const netbirdMatch = line.match(/netbird-ref=(\S+)/);
-              if (netbirdMatch) core.setOutput('netbird-ref', netbirdMatch[1]);
+              parseCommand(body);
             }
 
       - name: Checkout for version derivation
