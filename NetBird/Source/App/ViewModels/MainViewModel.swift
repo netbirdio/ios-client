@@ -108,7 +108,7 @@ class ViewModel: ObservableObject {
             UserDefaults.standard.synchronize()
         }
     }
-    @Published var forceRelayConnection = true
+    @Published var forceRelayConnection = false
     @Published var showForceRelayAlert = false
     @Published var connectOnDemand = false
     @Published var showOnDemandAlert = false
@@ -616,14 +616,8 @@ class ViewModel: ObservableObject {
     
     func getForcedRelayConnectionEnabled() -> Bool {
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
-        #if os(iOS)
-        userDefaults?.register(defaults: [GlobalConstants.keyForceRelayConnection: true])
-        return userDefaults?.bool(forKey: GlobalConstants.keyForceRelayConnection) ?? true
-        #else
-        // forced relay battery optimization not need on Apple Tv
         userDefaults?.register(defaults: [GlobalConstants.keyForceRelayConnection: false])
         return userDefaults?.bool(forKey: GlobalConstants.keyForceRelayConnection) ?? false
-        #endif
     }
     
     func setConnectOnDemand(isEnabled: Bool) {

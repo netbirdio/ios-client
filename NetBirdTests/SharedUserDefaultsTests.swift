@@ -51,11 +51,11 @@ final class SharedUserDefaultsTests: XCTestCase {
         XCTAssertFalse(value, "Login required flag should be false after clearing")
     }
 
-    func testForceRelayConnectionDefaultsToTrue() throws {
+    func testForceRelayConnectionDefaultsToFalse() throws {
         let defaults = try XCTUnwrap(userDefaults)
         defaults.removeObject(forKey: GlobalConstants.keyForceRelayConnection)
-        defaults.register(defaults: [GlobalConstants.keyForceRelayConnection: true])
+        defaults.register(defaults: [GlobalConstants.keyForceRelayConnection: false])
         let value = defaults.bool(forKey: GlobalConstants.keyForceRelayConnection)
-        XCTAssertTrue(value, "Force relay connection should default to true")
+        XCTAssertFalse(value, "Force relay connection should default to false")
     }
 }

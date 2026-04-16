@@ -14,12 +14,10 @@ class EnvVarPackager {
             return nil
         }
 
-        #if os(iOS)
-        let defaultForceRelay = true
-        #else
-        // Forced relay battery optimization not needed on Apple TV
+        // P2P connections are more efficient than relay for both performance
+        // and battery life. The previous default of true was a workaround for
+        // ICE stability issues that have since been fixed upstream.
         let defaultForceRelay = false
-        #endif
 
         defaults.register(defaults: [GlobalConstants.keyForceRelayConnection: defaultForceRelay])
         let forceRelayConnection = defaults.bool(forKey: GlobalConstants.keyForceRelayConnection)
