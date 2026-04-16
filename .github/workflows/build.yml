@@ -3,6 +3,8 @@ name: Build
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -111,6 +113,20 @@ jobs:
           xcodebuild build \
             -project NetBird.xcodeproj \
             -scheme NetbirdNetworkExtension \
+            -destination 'generic/platform=iOS' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | xcpretty --color
+
+      - name: Build Widget Extension
+        working-directory: ios-client
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project NetBird.xcodeproj \
+            -scheme NetBirdWidgetExtensionExtension \
             -destination 'generic/platform=iOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
