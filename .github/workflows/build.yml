@@ -237,7 +237,7 @@ jobs:
           set -o pipefail
           xcodebuild build \
             -project NetBird.xcodeproj \
-            -target "NetBirdTVNetworkExtension" \
+            -scheme "NetBirdTVNetworkExtension" \
             -destination 'generic/platform=tvOS' \
             -configuration Debug \
             -derivedDataPath $RUNNER_TEMP/DerivedData-tvos \
