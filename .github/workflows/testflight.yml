@@ -3,9 +3,9 @@ name: TestFlight
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -27,92 +27,48 @@ jobs:
       ref: ${{ steps.resolve.outputs.ref }}
       should-build: ${{ steps.resolve.outputs.should-build }}
       upload: ${{ steps.resolve.outputs.upload }}
-      netbird-ref: ${{ steps.resolve.outputs.netbird-ref }}
-      version: ${{ steps.resolve.outputs.version }}
       build-number: ${{ steps.resolve.outputs.build-number }}
     steps:
-      - name: Resolve build ref and validate
+      - name: Resolve build ref
         id: resolve
         uses: actions/github-script@v7
         with:
           script: |
-            // Push to main or tag — always build and upload
+            core.setOutput('build-number', '${{ github.run_number }}');
+            core.setOutput('should-build', 'true');
+            core.setOutput('upload', 'true');
+
             if (context.eventName === 'push') {
               core.setOutput('ref', context.sha);
-              core.setOutput('should-build', 'true');
-              core.setOutput('upload', 'true');
-
-              // Extract version from tag (v1.2.3 → 1.2.3)
-              const ref = context.ref;
-              if (ref.startsWith('refs/tags/v')) {
-                const version = ref.replace('refs/tags/v', '');
-                core.setOutput('version', version);
-                core.info(`Tag push, using version: ${version}`);
-              }
-              return;
-            }
-
-            // PR opened/updated — build if not from fork
-            if (context.eventName === 'pull_request') {
-              const headRepo = context.payload.pull_request.head.repo.full_name;
-              const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
-
-              if (headRepo !== baseRepo) {
-                core.info(`Skipping fork PR from ${headRepo}`);
-                core.setOutput('should-build', 'false');
-                return;
-              }
-
+            } else if (context.eventName === 'pull_request') {
               core.setOutput('ref', context.payload.pull_request.head.sha);
-              core.setOutput('should-build', 'true');
-
-              // Parse /testflight line from PR description for upload flag and parameters
-              const body = context.payload.pull_request.body || '';
-              const hasTestflight = body.includes('/testflight');
-              core.setOutput('upload', hasTestflight ? 'true' : 'false');
-              core.info(`PR description ${hasTestflight ? 'contains' : 'does not contain'} /testflight, upload=${hasTestflight}`);
-
-              const lines = body.split('\n');
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed.startsWith('/testflight')) continue;
-
-                core.info(`Found /testflight line: ${trimmed}`);
-                const netbirdRefMatch = trimmed.match(/netbird-ref=(\S+)/);
-                if (netbirdRefMatch) {
-                  core.setOutput('netbird-ref', netbirdRefMatch[1]);
-                  core.info(`Using netbird-ref: ${netbirdRefMatch[1]}`);
-                }
-                const versionMatch = trimmed.match(/version=(\S+)/);
-                if (versionMatch) {
-                  core.setOutput('version', versionMatch[1]);
-                  core.info(`Using version: ${versionMatch[1]}`);
-                }
-                const buildNumberMatch = trimmed.match(/build-number=(\S+)/);
-                if (buildNumberMatch) {
-                  core.setOutput('build-number', buildNumberMatch[1]);
-                  core.info(`Using build-number: ${buildNumberMatch[1]}`);
-                }
-                break;
-              }
             }
 
   build:
-    name: Build and Upload
+    name: Build and Upload iOS
     needs: gate
     if: needs.gate.outputs.should-build == 'true'
     uses: ./.github/workflows/build-upload.yml
     with:
       ref: ${{ needs.gate.outputs.ref }}
-      netbird-ref: ${{ needs.gate.outputs.netbird-ref }}
-      version: ${{ needs.gate.outputs.version }}
+      build-number: ${{ needs.gate.outputs.build-number }}
+      upload: ${{ needs.gate.outputs.upload == 'true' }}
+    secrets: inherit
+
+  build-tvos:
+    name: Build and Upload tvOS
+    needs: gate
+    if: needs.gate.outputs.should-build == 'true'
+    uses: ./.github/workflows/build-upload-tvos.yml
+    with:
+      ref: ${{ needs.gate.outputs.ref }}
       build-number: ${{ needs.gate.outputs.build-number }}
       upload: ${{ needs.gate.outputs.upload == 'true' }}
     secrets: inherit
 
   notify:
     name: Notify PR
-    needs: [gate, build]
+    needs: [gate, build, build-tvos]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -122,26 +78,29 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const buildResult = '${{ needs.build.result }}';
+            const iosResult = '${{ needs.build.result }}';
+            const tvosResult = '${{ needs.build-tvos.result }}';
             const ref = '${{ needs.gate.outputs.ref }}';
             const shortSha = ref.substring(0, 7);
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-
             const prNumber = context.payload.pull_request.number;
+            const buildNumber = '${{ needs.gate.outputs.build-number }}';
 
-            const uploaded = '${{ needs.gate.outputs.upload }}' === 'true';
-            const version = '${{ needs.gate.outputs.version }}' || 'default';
-            const buildNumber = '${{ needs.gate.outputs.build-number }}' || '${{ github.run_number }}';
+            const iosOk = iosResult === 'success';
+            const tvosOk = tvosResult === 'success';
+            const iosFailed = iosResult === 'failure';
+            const tvosFailed = tvosResult === 'failure';
 
             let body;
-            if (buildResult === 'success' && uploaded) {
-              body = `**TestFlight build uploaded** \`${version} (${buildNumber})\` for \`${shortSha}\`\n\nThe build has been submitted to App Store Connect and will be available in TestFlight shortly.\n\n[View workflow run](${runUrl})`;
-            } else if (buildResult === 'success') {
-              body = `**Build succeeded** for \`${shortSha}\` (no upload — add \`/testflight\` to PR description to upload)\n\n[View workflow run](${runUrl})`;
-            } else if (buildResult === 'skipped') {
-              return;
+            if (iosOk && tvosOk) {
+              body = `**TestFlight builds uploaded** \`(${buildNumber})\` for \`${shortSha}\` — iOS + tvOS\n\n[View workflow run](${runUrl})`;
+            } else if (iosOk && !tvosFailed) {
+              body = `**TestFlight build uploaded** \`(${buildNumber})\` for \`${shortSha}\` — iOS only (tvOS skipped)\n\n[View workflow run](${runUrl})`;
+            } else if (iosFailed || tvosFailed) {
+              const failed = [iosFailed && 'iOS', tvosFailed && 'tvOS'].filter(Boolean).join(', ');
+              body = `**Build failed** (${failed}) for \`${shortSha}\`\n\n[View workflow run](${runUrl})`;
             } else {
-              body = `**Build failed** for \`${shortSha}\`\n\n[View workflow run](${runUrl})`;
+              return;
             }
 
             await github.rest.issues.createComment({
