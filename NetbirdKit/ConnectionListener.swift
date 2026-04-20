@@ -83,6 +83,13 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         } else {
             adapter.clientState = .disconnected
             AppLogger.shared.log("onDisconnected: state=disconnected, wasRestarting=\(wasRestarting)")
+
+            // If session expired (not a network drop), signal login required so the user
+            // gets a notification. needsLogin() checks the management server error code.
+            if !wasRestarting && adapter.needsLogin() {
+                AppLogger.shared.log("onDisconnected: login required detected — signalling")
+                adapter.onLoginRequired?()
+            }
         }
         adapter.notifyStopCompleted()
     }

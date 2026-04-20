@@ -28,4 +28,7 @@ struct GlobalConstants {
 
     static let configFileName = "netbird.cfg"
     static let stateFileName = "state.json"
+
+    // Local notification identifiers
+    static let notificationLoginRequired = "netbird.login.required"
 }
