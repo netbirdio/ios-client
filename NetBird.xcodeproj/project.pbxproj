@@ -138,6 +138,9 @@
 		5554ACC42F7E59700047BDAC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5554ACC12F7E59700047BDAC /* GoogleService-Info.plist */; };
 		5554ACC52F7E59700047BDAC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5554ACC12F7E59700047BDAC /* GoogleService-Info.plist */; };
 		55B5E81B2F39158200852AA7 /* InternetStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B5E81A2F39158200852AA7 /* InternetStatusView.swift */; };
+		55D865852F70982000A2EFF8 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 55D865842F70982000A2EFF8 /* WidgetKit.framework */; };
+		55D865872F70982000A2EFF8 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 55D865862F70982000A2EFF8 /* SwiftUI.framework */; };
+		55D865982F70982100A2EFF8 /* NetBirdWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */; };
 		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
 		962925F1DAA24D40B98D395B /* iOSPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42873052F9544A89B1408339 /* iOSPeersView.swift */; };
@@ -208,6 +211,13 @@
 			remoteGlobalIDString = 50245A512A80431B0034792B;
 			remoteInfo = NetbirdNetworkExtension;
 		};
+		55D865962F70982100A2EFF8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 50A8910F2A792A15007C48FC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 55D865822F70982000A2EFF8;
+			remoteInfo = NetBirdWidgetExtensionExtension;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -251,6 +261,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				50245A5C2A80431C0034792B /* NetbirdNetworkExtension.appex in Embed Foundation Extensions */,
+				55D865982F70982100A2EFF8 /* NetBirdWidgetExtensionExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -328,6 +339,9 @@
 		53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedUserDefaultsTests.swift; sourceTree = "<group>"; };
 		5554ACC12F7E59700047BDAC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		55B5E81A2F39158200852AA7 /* InternetStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InternetStatusView.swift; sourceTree = "<group>"; };
+		55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NetBirdWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		55D865842F70982000A2EFF8 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		55D865862F70982000A2EFF8 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		5BFDF94163AF4C32A44DB3CD /* FirstLaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstLaunchView.swift; sourceTree = "<group>"; };
 		8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppLoggerTests.swift; sourceTree = "<group>"; };
 		8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSConnectionView.swift; sourceTree = "<group>"; };
@@ -365,11 +379,19 @@
 			);
 			target = 441C5AFC2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */;
 		};
+		55D865992F70982100A2EFF8 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 55D865822F70982000A2EFF8 /* NetBirdWidgetExtensionExtension */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		441C5AEF2EDF0DAE0055EEFC /* NetBird TV */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "NetBird TV"; sourceTree = "<group>"; };
 		441C5AFF2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (441C5B072EDF0DD20055EEFC /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = NetBirdTVNetworkExtension; sourceTree = "<group>"; };
+		55D865882F70982000A2EFF8 /* NetBirdWidgetExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (55D865992F70982100A2EFF8 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = NetBirdWidgetExtension; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -421,6 +443,15 @@
 				50003BBC2AFBCA6B00E5EB6B /* FirebasePerformance in Frameworks */,
 				5051190F2AE03F68003027D3 /* FirebaseAnalytics in Frameworks */,
 				44DCF5AF2EDF46140026078E /* NetBirdSDK.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		55D865802F70982000A2EFF8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55D865872F70982000A2EFF8 /* SwiftUI.framework in Frameworks */,
+				55D865852F70982000A2EFF8 /* WidgetKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -484,6 +515,8 @@
 				44DCF5B82EDF4D900026078E /* libresolv.tbd */,
 				50245A532A80431B0034792B /* NetworkExtension.framework */,
 				91FA1F06D3375864C74EAB3B /* Foundation.framework */,
+				55D865842F70982000A2EFF8 /* WidgetKit.framework */,
+				55D865862F70982000A2EFF8 /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -525,6 +558,7 @@
 				505118C72AD96ECA003027D3 /* WireGuardKitC */,
 				441C5AEF2EDF0DAE0055EEFC /* NetBird TV */,
 				441C5AFF2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */,
+				55D865882F70982000A2EFF8 /* NetBirdWidgetExtension */,
 				50A891182A792A15007C48FC /* Products */,
 				50245A182A7BCE830034792B /* Frameworks */,
 				651C942641826A7AA94ED369 /* NetBirdTests */,
@@ -539,6 +573,7 @@
 				441C5AEE2EDF0DAE0055EEFC /* NetBird TV.app */,
 				441C5AFD2EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex */,
 				50733EE9CE10FEDDA61600B8 /* NetBirdTests.xctest */,
+				55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -762,6 +797,7 @@
 			);
 			dependencies = (
 				50245A5B2A80431C0034792B /* PBXTargetDependency */,
+				55D865972F70982100A2EFF8 /* PBXTargetDependency */,
 			);
 			name = NetBird;
 			packageProductDependencies = (
@@ -775,6 +811,28 @@
 			productName = NetBirdiOS;
 			productReference = 50A891172A792A15007C48FC /* NetBird.app */;
 			productType = "com.apple.product-type.application";
+		};
+		55D865822F70982000A2EFF8 /* NetBirdWidgetExtensionExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 55D8659A2F70982100A2EFF8 /* Build configuration list for PBXNativeTarget "NetBirdWidgetExtensionExtension" */;
+			buildPhases = (
+				55D8657F2F70982000A2EFF8 /* Sources */,
+				55D865802F70982000A2EFF8 /* Frameworks */,
+				55D865812F70982000A2EFF8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				55D865882F70982000A2EFF8 /* NetBirdWidgetExtension */,
+			);
+			name = NetBirdWidgetExtensionExtension;
+			packageProductDependencies = (
+			);
+			productName = NetBirdWidgetExtensionExtension;
+			productReference = 55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		C4BEBDBD1DC2C4D7764C202C /* NetBirdTests */ = {
 			isa = PBXNativeTarget;
@@ -818,6 +876,9 @@
 						CreatedOnToolsVersion = 14.3.1;
 						LastSwiftMigration = 1430;
 					};
+					55D865822F70982000A2EFF8 = {
+						CreatedOnToolsVersion = 26.1.1;
+					};
 				};
 			};
 			buildConfigurationList = 50A891122A792A15007C48FC /* Build configuration list for PBXProject "NetBird" */;
@@ -842,6 +903,7 @@
 				441C5AED2EDF0DAE0055EEFC /* NetBird TV */,
 				441C5AFC2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */,
 				C4BEBDBD1DC2C4D7764C202C /* NetBirdTests */,
+				55D865822F70982000A2EFF8 /* NetBirdWidgetExtensionExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -894,6 +956,13 @@
 				5554ACC52F7E59700047BDAC /* GoogleService-Info.plist in Resources */,
 				501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
 				501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		55D865812F70982000A2EFF8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1106,6 +1175,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		55D8657F2F70982000A2EFF8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		75C1F1B3030A2B3C26074DAB /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1134,6 +1210,11 @@
 			name = NetBird;
 			target = 50A891162A792A15007C48FC /* NetBird */;
 			targetProxy = 075441E07E64305C28EF192A /* PBXContainerItemProxy */;
+		};
+		55D865972F70982100A2EFF8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 55D865822F70982000A2EFF8 /* NetBirdWidgetExtensionExtension */;
+			targetProxy = 55D865962F70982100A2EFF8 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1189,7 +1270,7 @@
 					"@executable_path/Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1232,7 +1313,7 @@
 					"@executable_path/Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
@@ -1511,7 +1592,7 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -1534,7 +1615,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1558,7 +1639,7 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -1581,7 +1662,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1590,6 +1671,82 @@
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "NetBird-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		55D8659B2F70982100A2EFF8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = NetBirdWidgetExtension/NetBirdWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = TA739QLA7A;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NetBirdWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = NetBirdWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.1.6;
+				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.NetBirdWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		55D8659C2F70982100A2EFF8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = NetBirdWidgetExtension/NetBirdWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TA739QLA7A;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NetBirdWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = NetBirdWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.1.6;
+				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.NetBirdWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -1672,6 +1829,15 @@
 			buildConfigurations = (
 				50A891262A792A16007C48FC /* Debug */,
 				50A891272A792A16007C48FC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		55D8659A2F70982100A2EFF8 /* Build configuration list for PBXNativeTarget "NetBirdWidgetExtensionExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				55D8659B2F70982100A2EFF8 /* Debug */,
+				55D8659C2F70982100A2EFF8 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

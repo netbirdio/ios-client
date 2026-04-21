@@ -145,14 +145,22 @@ public class NetworkExtensionAdapter: ObservableObject {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
         if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
             self.vpnManager = manager
+            // Only write preferences when strictly necessary.
+            // Calling saveToPreferences() on an already-configured manager triggers
+            // NEVPNStatusDidChange notifications — including a transient .disconnecting —
+            // that the polling timer picks up, producing the wrong UI sequence:
+            // Connecting → Disconnecting → Connected.
+            if !manager.isEnabled {
+                manager.isEnabled = true
+                try await manager.saveToPreferences()
+                try await manager.loadFromPreferences()
+            }
         } else {
             let newManager = createNewManager()
             try await newManager.saveToPreferences()
+            try await newManager.loadFromPreferences()
             self.vpnManager = newManager
         }
-        self.vpnManager?.isEnabled = true
-        try await self.vpnManager?.saveToPreferences()
-        try await self.vpnManager?.loadFromPreferences()
         self.session = self.vpnManager?.connection as? NETunnelProviderSession
     }
 
@@ -403,7 +411,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
 
     private func performLogin() async {
-        let loginURLString = await withCheckedContinuation { continuation in
+        let loginURLString: String? = await withCheckedContinuation { continuation in
             self.login { urlString in
                 continuation.resume(returning: urlString)
             }
@@ -975,9 +983,15 @@ public class NetworkExtensionAdapter: ObservableObject {
                 let managers = try await NETunnelProviderManager.loadAllFromPreferences()
                 if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
                     completion(manager.connection.status)
+                } else {
+                    // No VPN manager exists yet (e.g. first connect before the iOS permission
+                    // dialog completes). Must still call completion so that isCheckingExtensionState
+                    // is reset to false; otherwise checkExtensionState() is permanently blocked.
+                    completion(.disconnected)
                 }
             } catch {
                 print("Error loading from preferences: \(error)")
+                completion(.disconnected)
             }
         }
     }

@@ -15,6 +15,9 @@ import os
 import Combine
 import NetBirdSDK
 import UserNotifications
+#if os(iOS)
+import WidgetKit
+#endif
 
 /// Used by updateManagementURL to check if SSO is supported
 class SSOCheckListener: NSObject, NetBirdSDKSSOListenerProtocol {
@@ -401,11 +404,21 @@ class ViewModel: ObservableObject {
             disconnectPressed = false
             newState = .connected
         case .connecting:
-            connectPressed = false
+            // Do NOT clear connectPressed here — iOS can emit .disconnecting right after
+            // .connecting during tunnel startup (cleanup of old instance). Keeping
+            // connectPressed=true lets the .disconnecting handler suppress that noise.
+            // connectPressed is cleared only on .connected or .disconnected.
             newState = .connecting
         case .disconnecting:
-            disconnectPressed = false
-            newState = .disconnecting
+            // Ignore transient .disconnecting emitted by iOS VPN framework during tunnel startup.
+            // When startVPNTunnel() is called, iOS briefly reports .disconnecting while cleaning
+            // up the previous tunnel instance — even though the user pressed Connect, not Disconnect.
+            if connectPressed {
+                newState = .connecting
+            } else {
+                disconnectPressed = false
+                newState = .disconnecting
+            }
         case .disconnected:
             // Extension confirmed disconnected — clear both flags,
             // unless a flag was JUST set (immediate feedback)
@@ -433,14 +446,35 @@ class ViewModel: ObservableObject {
         case .disconnected:
             extensionStateText = "Disconnected"
         }
+
+        #if os(iOS)
+        updateWidgetState()
+        #endif
     }
-    
+
+    #if os(iOS)
+    /// Writes current VPN state to shared UserDefaults so the widget can read it.
+    private func updateWidgetState() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        let statusString: String
+        switch vpnDisplayState {
+        case .connected: statusString = "connected"
+        case .connecting: statusString = "connecting"
+        case .disconnecting: statusString = "disconnecting"
+        case .disconnected: statusString = "disconnected"
+        }
+        userDefaults?.set(statusString, forKey: GlobalConstants.keyWidgetVPNStatus)
+        userDefaults?.set(ip, forKey: GlobalConstants.keyWidgetIP)
+        userDefaults?.set(fqdn, forKey: GlobalConstants.keyWidgetFQDN)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+    #endif
+
     func startPollingDetails() {
         #if os(iOS)
         refreshCurrentSSID()
         #endif
         networkExtensionAdapter.startTimer { details in
-
             self.checkExtensionState()
             self.checkNetworkUnavailableFlag()
             self.checkLoginRequiredFlag()
@@ -501,23 +535,33 @@ class ViewModel: ObservableObject {
         networkExtensionAdapter.stopTimer()
     }
     
-    func checkExtensionState() {
-        networkExtensionAdapter.getExtensionStatus { status in
-            let statuses : [NEVPNStatus] = [.connected, .disconnected, .connecting, .disconnecting]
-            DispatchQueue.main.async {
-                if statuses.contains(status) && self.extensionState != status {
-                    print("Changing extension status to \(status.rawValue)")
-                    self.extensionState = status
-                    self.updateVPNDisplayState()
+    // Prevents overlapping getExtensionStatus calls from delivering out-of-order results.
+    // loadAllFromPreferences() is slow and variable; without this guard a stale .disconnecting
+    // completion can arrive after a newer .disconnected one, causing a spurious Disconnecting flash.
+    private var isCheckingExtensionState = false
 
-                    if status == .connected {
-                        self.routeViewModel.getRoutes()
-                        // Re-enable On Demand if user has the setting turned on
-                        if self.connectOnDemand {
-                            self.networkExtensionAdapter.setOnDemandEnabled(true)
-                        }
-                    }
-                }
+    func checkExtensionState() {
+        guard !isCheckingExtensionState else { return }
+        isCheckingExtensionState = true
+        networkExtensionAdapter.getExtensionStatus { status in
+            DispatchQueue.main.async {
+                self.isCheckingExtensionState = false
+                self.applyExtensionStatus(status)
+            }
+        }
+    }
+
+    private func applyExtensionStatus(_ status: NEVPNStatus) {
+        let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .disconnecting]
+        guard knownStatuses.contains(status), extensionState != status else { return }
+
+        extensionState = status
+        updateVPNDisplayState()
+
+        if status == .connected {
+            routeViewModel.getRoutes()
+            if connectOnDemand {
+                networkExtensionAdapter.setOnDemandEnabled(true)
             }
         }
     }
@@ -805,39 +849,32 @@ class ViewModel: ObservableObject {
 
     /// Checks shared app-group container for login required flag set by the network extension.
     /// If set, schedules a local notification (if authorized) and shows the authentication UI.
-    /// iOS only - tvOS cannot share UserDefaults between app and extension, and uses IPC
-    /// via `checkLoginError` instead.
+    /// iOS only — tvOS uses IPC via `checkLoginError` in TVAuthView.
     func checkLoginRequiredFlag() {
         #if os(iOS)
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
-        guard userDefaults?.bool(forKey: GlobalConstants.keyLoginRequired) == true else {
-            return
-        }
+        guard userDefaults?.bool(forKey: GlobalConstants.keyLoginRequired) == true else { return }
 
-        // Clear the flag immediately
         userDefaults?.set(false, forKey: GlobalConstants.keyLoginRequired)
         userDefaults?.synchronize()
 
         AppLogger.shared.log("Login required flag detected from extension")
-
-        // Show authentication required UI
-        self.showAuthenticationRequired = true
-
-        // Clear any stuck "Connecting..." state
-        self.connectPressed = false
-        self.updateVPNDisplayState()
-
-        // Temporarily disable on-demand to stop iOS from looping reconnect attempts
+        showAuthenticationRequired = true
+        connectPressed = false
+        updateVPNDisplayState()
+        // Temporarily disable On Demand to stop iOS from looping reconnect attempts
         // while the user is not authenticated. It will be re-enabled automatically
-        // after a successful connection (see checkExtensionState).
-        self.networkExtensionAdapter.setOnDemandEnabled(false)
+        // after a successful connection (see applyExtensionStatus).
+        networkExtensionAdapter.setOnDemandEnabled(false)
+        scheduleLoginRequiredNotification()
+        #endif
+    }
 
-        // Schedule local notification if authorized
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            guard settings.authorizationStatus == .authorized else {
-                AppLogger.shared.log("Notifications not authorized, skipping notification")
-                return
-            }
+    #if os(iOS)
+    private func scheduleLoginRequiredNotification() {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else { return }
 
             let content = UNMutableNotificationContent()
             content.title = "NetBird"
@@ -849,16 +886,12 @@ class ViewModel: ObservableObject {
                 content: content,
                 trigger: nil
             )
-
-            UNUserNotificationCenter.current().add(request) { error in
-                if let error = error {
+            center.add(request) { error in
+                if let error {
                     AppLogger.shared.log("Failed to schedule login notification: \(error.localizedDescription)")
-                } else {
-                    AppLogger.shared.log("Login required notification scheduled from main app")
                 }
             }
         }
-        #endif
-        // tvOS: Login errors are detected via IPC (checkLoginError in TVAuthView)
     }
+    #endif
 }

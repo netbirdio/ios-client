@@ -3,6 +3,8 @@ name: Build
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,25 +24,24 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: ios-client
+          submodules: recursive
 
-      - name: Checkout netbird
-        uses: actions/checkout@v4
-        with:
-          repository: netbirdio/netbird
-          path: netbird
+      - name: Fetch netbird tags
+        working-directory: ios-client/netbird-core
+        run: git fetch --tags
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
-          cache-dependency-path: netbird/go.sum
+          go-version-file: 'ios-client/netbird-core/go.mod'
+          cache-dependency-path: ios-client/netbird-core/go.sum
 
       - name: Install gomobile
         run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
 
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
-        run: ./build-go-lib.sh ../netbird
+        run: ./build-go-lib.sh
 
       - name: Install xcpretty
         working-directory: ios-client
@@ -119,6 +120,20 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             | xcpretty --color
 
+      - name: Build Widget Extension
+        working-directory: ios-client
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project NetBird.xcodeproj \
+            -scheme NetBirdWidgetExtensionExtension \
+            -destination 'generic/platform=iOS' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | xcpretty --color
+
   build_tvos:
     name: Build tvOS App
     runs-on: macos-15
@@ -131,29 +146,24 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: ios-client
+          submodules: recursive
 
-      - name: Checkout netbird
-        uses: actions/checkout@v4
-        with:
-          repository: netbirdio/netbird
-          path: netbird
+      - name: Fetch netbird tags
+        working-directory: ios-client/netbird-core
+        run: git fetch --tags
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
-          cache-dependency-path: netbird/go.sum
+          go-version-file: 'ios-client/netbird-core/go.mod'
+          cache-dependency-path: ios-client/netbird-core/go.sum
 
       - name: Install gomobile-netbird
         run: GOPROXY=direct go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@latest
 
-      - name: Add gomobile-tvos-fork to netbird dependencies
-        working-directory: netbird
-        run: go get github.com/netbirdio/gomobile-tvos-fork@latest
-
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
-        run: ./build-go-lib-tv.sh ../netbird
+        run: ./build-go-lib.sh --tvos
 
       - name: Install xcpretty
         working-directory: ios-client
@@ -202,7 +212,9 @@ jobs:
         run: |
           xcodebuild -resolvePackageDependencies \
             -project NetBird.xcodeproj \
-            -scheme NetBird
+            -scheme "NetBird TV" \
+            -destination 'generic/platform=tvOS' \
+            -derivedDataPath $RUNNER_TEMP/DerivedData-tvos
 
       - name: Build tvOS App
         working-directory: ios-client
@@ -210,9 +222,10 @@ jobs:
           set -o pipefail
           xcodebuild build \
             -project NetBird.xcodeproj \
-            -scheme NetBird \
+            -scheme "NetBird TV" \
             -destination 'generic/platform=tvOS' \
             -configuration Debug \
+            -derivedDataPath $RUNNER_TEMP/DerivedData-tvos \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -224,9 +237,10 @@ jobs:
           set -o pipefail
           xcodebuild build \
             -project NetBird.xcodeproj \
-            -scheme NetbirdNetworkExtension \
+            -scheme "NetBirdTVNetworkExtension" \
             -destination 'generic/platform=tvOS' \
             -configuration Debug \
+            -derivedDataPath $RUNNER_TEMP/DerivedData-tvos \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \

@@ -53,8 +53,8 @@ You can download and install the app from the App Store:
 
 ## Code structure
 The code is divided into 4 parts:
-- The main netbird Go code from the [NetBird](https://github.com/netbirdio/netbird) repo which is compiled into an xcframework. This contains most of the client logic.
-- The network extension /NetbirdNetworkExtension that is running in the background where the compiled Go code is executed.
+- The main netbird Go code, included as a git submodule at `/netbird-core` from the [NetBird](https://github.com/netbirdio/netbird) repo, compiled into an xcframework. This contains most of the client logic.
+- The network extension `/NetbirdNetworkExtension` that is running in the background where the compiled Go code is executed.
 - The UI and app code under `/NetBird`
 - The `/NetbirdKit/NetworkExtensionAdapter` that controls the extension and builds the link between UI and extension
 
@@ -62,44 +62,69 @@ The code is divided into 4 parts:
 
 - iOS 14.0+ / tvOS 17.0+
 - Xcode 16.1+
-- Go 1.24+
-- gomobile-netbird (NetBird's fork with tvOS support)
+- Go (version determined by the netbird submodule's `go.mod`)
+- gomobile (for iOS builds)
+- gomobile-netbird (for tvOS builds — NetBird's fork with tvOS support)
+
+### gomobile
+
+For iOS-only builds, install the standard gomobile:
+
+```bash
+go install golang.org/x/mobile/cmd/gomobile@latest
+```
 
 ### gomobile-netbird
 
-This project requires `gomobile-netbird`, NetBird's fork of gomobile that adds tvOS support. See: https://github.com/netbirdio/gomobile-tvos-fork
-
-To install:
+For tvOS builds, install `gomobile-netbird`, NetBird's fork of gomobile that adds tvOS support. See: https://github.com/netbirdio/gomobile-tvos-fork
 
 ```bash
 go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@latest
-gomobile-netbird init
 ```
 
 ## Run locally
 
-To build the app, this repository and the main netbird repository are needed.
+The main netbird Go code is included as a git submodule at `netbird-core/`.
 
 ```bash
-git clone https://github.com/netbirdio/netbird.git
-git clone https://github.com/netbirdio/ios-client.git
+git clone --recursive https://github.com/netbirdio/ios-client.git
 cd ios-client
 ```
 
-Build the XCFramework from the main netbird repo using the build script:
+If you already cloned without `--recursive`:
 ```bash
-./build-go-lib.sh ../netbird
+git submodule update --init --recursive
 ```
 
-Or manually with gomobile-netbird:
+Build the XCFramework for iOS:
 ```bash
-cd netbird
-gomobile-netbird bind -target=ios,iossimulator,tvos,tvossimulator -bundleid=io.netbird.framework -o ../ios-client/NetBirdSDK.xcframework ./client/ios/NetBirdSDK
+./build-go-lib.sh
 ```
 
-This builds a single universal XCFramework that supports iOS, iOS Simulator, tvOS, and tvOS Simulator.
+Or for tvOS (includes iOS, iOS Simulator, tvOS, and tvOS Simulator targets):
+```bash
+./build-go-lib.sh --tvos
+```
+
+You can also pass an explicit version:
+```bash
+./build-go-lib.sh 0.2.0
+./build-go-lib.sh --tvos 0.2.0
+```
 
 Open the Xcode project, and we are ready to go.
+
+### Updating the netbird submodule
+
+To update to a newer netbird version:
+```bash
+cd netbird-core
+git fetch --tags
+git checkout v0.x.y   # or any branch/commit
+cd ..
+git add netbird-core
+git commit -m "update netbird submodule to v0.x.y"
+```
 
 ### Running on iOS Device
 

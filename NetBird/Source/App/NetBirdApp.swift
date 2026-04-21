@@ -36,6 +36,7 @@ struct NetBirdApp: App {
     @StateObject private var viewModelLoader = ViewModelLoader()
     @Environment(\.scenePhase) var scenePhase
     @State private var activationTask: Task<Void, Never>?
+    @State private var pendingURL: URL?
 
     #if os(iOS)
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
@@ -56,109 +57,117 @@ struct NetBirdApp: App {
             if let viewModel = viewModelLoader.viewModel {
                 MainView()
                     .environmentObject(viewModel)
-                    .onAppear {
-                        // Start polling when MainView appears.
-                        // This handles the case where didBecomeActiveNotification fired
-                        // before the ViewModel was ready (during async initialization).
-                        #if os(iOS)
-                        if UIApplication.shared.applicationState == .active {
-                            activationTask?.cancel()
-                            activationTask = Task { @MainActor in
-                                guard UIApplication.shared.applicationState == .active else { return }
-                                // Load existing VPN manager to establish session and get initial state
-                                if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
-                                    viewModel.extensionState = initialStatus
-                                }
-                                guard UIApplication.shared.applicationState == .active else { return }
-                                viewModel.checkExtensionState()
-                                viewModel.checkLoginRequiredFlag()
-                                viewModel.startPollingDetails()
-                            }
-                        }
-                        #else
-                        // tvOS: scenePhase may not be reliable in onAppear, start polling directly
-                        activationTask?.cancel()
-                        activationTask = Task { @MainActor in
-                            guard scenePhase == .active else { return }
-                            // Load existing VPN manager to establish session and get initial state
-                            if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
-                                viewModel.extensionState = initialStatus
-                            }
-                            guard scenePhase == .active else { return }
-                            viewModel.checkExtensionState()
-                            viewModel.startPollingDetails()
-                        }
-                        #endif
-                    }
                     #if os(iOS)
-                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                        print("App is active!")
-                        activationTask?.cancel()
-                        activationTask = Task { @MainActor in
-                            guard UIApplication.shared.applicationState == .active else { return }
-                            // Load existing VPN manager first to establish session for status polling.
-                            // This must complete before polling starts to avoid returning default disconnected status
-                            // when the VPN is actually connected.
-                            if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
-                                // Set the initial extension state immediately so the UI shows the correct status
-                                viewModel.extensionState = initialStatus
-                            }
-                            guard UIApplication.shared.applicationState == .active else { return }
-                            viewModel.checkExtensionState()
-                            viewModel.checkLoginRequiredFlag()
-                            viewModel.startPollingDetails()
+                    .onOpenURL { url in
+                        handleWidgetURL(url, viewModel: viewModel)
+                    }
+                    .onAppear {
+                        if let url = pendingURL {
+                            handleWidgetURL(url, viewModel: viewModel)
+                            pendingURL = nil
                         }
+                        if UIApplication.shared.applicationState == .active {
+                            startActivation(viewModel: viewModel)
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                        startActivation(viewModel: viewModel)
                     }
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-                        print("App is inactive!")
-                        activationTask?.cancel()
-                        activationTask = nil
-                        viewModel.stopPollingDetails()
+                        stopActivation(viewModel: viewModel)
                     }
                     #endif
                     #if os(tvOS)
+                    .onAppear {
+                        if scenePhase == .active {
+                            startActivation(viewModel: viewModel)
+                        }
+                    }
                     .onChange(of: scenePhase) { _, newPhase in
-                        switch newPhase {
-                        case .active:
-                            print("App is active!")
-                            activationTask?.cancel()
-                            activationTask = Task { @MainActor in
-                                guard scenePhase == .active else { return }
-                                // Load existing VPN manager first to establish session for status polling.
-                                // This must complete before polling starts to avoid returning default disconnected status
-                                // when the VPN is actually connected.
-                                if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
-                                    // Set the initial extension state immediately so the UI shows the correct status
-                                    viewModel.extensionState = initialStatus
-                                }
-                                guard scenePhase == .active else { return }
-                                viewModel.checkExtensionState()
-                                viewModel.startPollingDetails()
-                            }
-                        case .inactive, .background:
-                            print("App is inactive!")
-                            activationTask?.cancel()
-                            activationTask = nil
-                            viewModel.stopPollingDetails()
-                        @unknown default:
-                            break
+                        if newPhase == .active {
+                            startActivation(viewModel: viewModel)
+                        } else {
+                            stopActivation(viewModel: viewModel)
                         }
                     }
                     #endif
             } else {
-                // Show loading screen while ViewModel initializes asynchronously.
-                // This prevents a black screen during Go runtime initialization.
-                ZStack {
-                    Color("BgPrimary")
-                        .ignoresSafeArea()
-                    Image("netbird-logo-menu")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 200)
-                }
+                loadingView
+                    #if os(iOS)
+                    .onOpenURL { url in
+                        pendingURL = url
+                    }
+                    #endif
             }
         }
     }
+
+    // MARK: - Activation
+
+    private func startActivation(viewModel: ViewModel) {
+        activationTask?.cancel()
+        activationTask = Task { @MainActor in
+            guard isAppActive, !Task.isCancelled else { return }
+
+            if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
+                viewModel.extensionState = initialStatus
+                viewModel.updateVPNDisplayState()
+            }
+
+            guard isAppActive, !Task.isCancelled else { return }
+            viewModel.checkExtensionState()
+            #if os(iOS)
+            viewModel.checkLoginRequiredFlag()
+            #endif
+            viewModel.startPollingDetails()
+        }
+    }
+
+    private func stopActivation(viewModel: ViewModel) {
+        activationTask?.cancel()
+        activationTask = nil
+        viewModel.stopPollingDetails()
+    }
+
+    private var isAppActive: Bool {
+        #if os(iOS)
+        UIApplication.shared.applicationState == .active
+        #else
+        scenePhase == .active
+        #endif
+    }
+
+    private var loadingView: some View {
+        ZStack {
+            Color("BgPrimary")
+                .ignoresSafeArea()
+            Image("netbird-logo-menu")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 200)
+        }
+    }
+
+    #if os(iOS)
+    /// Handles deep link URLs from the Home Screen widget.
+    private func handleWidgetURL(_ url: URL, viewModel: ViewModel) {
+        guard url.scheme == "netbird" else { return }
+        switch url.host {
+        case "login":
+            viewModel.connect()
+        case "connect":
+            if viewModel.vpnDisplayState == .disconnected {
+                viewModel.connect()
+            }
+        case "disconnect":
+            if viewModel.vpnDisplayState == .connected {
+                viewModel.close()
+            }
+        default:
+            break
+        }
+    }
+    #endif
 }
 
 /// Loads ViewModel asynchronously to avoid blocking app launch.
