@@ -79,6 +79,32 @@ struct TVSettingsView: View {
                             )
                         }
 
+                        TVSettingsSection(title: "Network") {
+                            TVSettingsToggleRow(
+                                icon: "network",
+                                title: "Disable IPv6",
+                                subtitle: "Disable IPv6 overlay addressing on the tunnel",
+                                isOn: Binding(
+                                    get: { viewModel.disableIPv6 },
+                                    set: { newValue in
+                                        viewModel.setDisableIPv6(disabled: newValue)
+                                    }
+                                )
+                            )
+
+                            TVSettingsToggleRow(
+                                icon: "arrow.triangle.branch",
+                                title: "Force Relay",
+                                subtitle: "Force all connections through relay servers",
+                                isOn: Binding(
+                                    get: { viewModel.forceRelayConnection },
+                                    set: { newValue in
+                                        viewModel.setForcedRelayConnection(isEnabled: newValue)
+                                    }
+                                )
+                            )
+                        }
+
                         TVSettingsSection(title: "Security") {
                             TVSettingsRow(
                                 icon: "key.fill",
@@ -125,6 +151,7 @@ struct TVSettingsView: View {
             // Load settings from storage to sync UI with actual values
             viewModel.loadRosenpassSettings()
             viewModel.loadPreSharedKey()
+            viewModel.loadIPv6Settings()
         }
         .sheet(isPresented: $showDocsQRCode) {
             TVQRCodeSheet(

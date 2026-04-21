@@ -39,9 +39,16 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
         guard let validIP = p0, !validIP.isEmpty else {
             return
         }
-        
+
         self.interfaceIP = validIP
         self.tunnelManager.setInterfaceIP(interfaceIP: validIP)
+    }
+
+    func setInterfaceIPv6(_ p0: String?) {
+        guard let validIPv6 = p0, !validIPv6.isEmpty else {
+            return
+        }
+        self.tunnelManager.setInterfaceIPv6(interfaceIPv6: validIPv6)
     }
     
     func parseRoutesToNESettings(routesString: String) -> ([NEIPv4Route], [NEIPv6Route], Bool) {

@@ -23,6 +23,11 @@ protocol ConfigurationProvider {
     /// Whether Rosenpass permissive mode is enabled (allows non-Rosenpass peers)
     var rosenpassPermissive: Bool { get set }
 
+    // MARK: - IPv6
+
+    /// Whether IPv6 overlay addressing is disabled
+    var disableIPv6: Bool { get set }
+
     // MARK: - Pre-Shared Key
 
     /// The current pre-shared key (empty string if not set)
@@ -86,6 +91,23 @@ final class iOSConfigurationProvider: ConfigurationProvider {
         }
     }
 
+    // MARK: - IPv6
+
+    var disableIPv6: Bool {
+        get {
+            var result = ObjCBool(false)
+            do {
+                try preferences.getDisableIPv6(&result)
+            } catch {
+                print("ConfigurationProvider: Failed to read disableIPv6 - \(error)")
+            }
+            return result.boolValue
+        }
+        set {
+            preferences.setDisableIPv6(newValue)
+        }
+    }
+
     // MARK: - Pre-Shared Key
 
     var preSharedKey: String {
@@ -141,6 +163,13 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     var rosenpassPermissive: Bool {
         get { extractJSONBool(field: "RosenpassPermissive") ?? false }
         set { updateJSONField(field: "RosenpassPermissive", value: newValue) }
+    }
+
+    // MARK: - IPv6
+
+    var disableIPv6: Bool {
+        get { extractJSONBool(field: "DisableIPv6") ?? false }
+        set { updateJSONField(field: "DisableIPv6", value: newValue) }
     }
 
     // MARK: - Pre-Shared Key

@@ -346,6 +346,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
             let peerInfo = PeerInfo(
                 ip: peer.ip,
+                ipv6: peer.iPv6,
                 fqdn: peer.fqdn,
                 localIceCandidateEndpoint: peer.localIceCandidateEndpoint,
                 remoteIceCandidateEndpoint: peer.remoteIceCandidateEndpoint,
@@ -369,6 +370,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let clientState = adapter.clientState
         let statusDetails = StatusDetails(
             ip: statusDetailsMessage.getIP(),
+            ipv6: statusDetailsMessage.getIPv6(),
             fqdn: statusDetailsMessage.getFQDN(),
             managementStatus: clientState,
             peerInfo: peerInfoArray

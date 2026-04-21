@@ -82,11 +82,17 @@ struct AdvancedView: View {
                         viewModel.setForcedRelayConnection(isEnabled: value)
                     }
 
+                Toggle("Disable IPv6", isOn: $viewModel.disableIPv6)
+                    .toggleStyle(SwitchToggleStyle(tint: .accentColor))
+                    .onChange(of: viewModel.disableIPv6) { value in
+                        viewModel.setDisableIPv6(disabled: value)
+                    }
             }
         }
         .onAppear {
             viewModel.loadRosenpassSettings()
             viewModel.loadPreSharedKey()
+            viewModel.loadIPv6Settings()
         }
         .navigationTitle("Advanced")
         .navigationBarTitleDisplayMode(.inline)
