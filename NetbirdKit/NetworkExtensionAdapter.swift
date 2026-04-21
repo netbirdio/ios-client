@@ -91,14 +91,22 @@ public class NetworkExtensionAdapter: ObservableObject {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
         if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
             self.vpnManager = manager
+            // Only write preferences when strictly necessary.
+            // Calling saveToPreferences() on an already-configured manager triggers
+            // NEVPNStatusDidChange notifications — including a transient .disconnecting —
+            // that the polling timer picks up, producing the wrong UI sequence:
+            // Connecting → Disconnecting → Connected.
+            if !manager.isEnabled {
+                manager.isEnabled = true
+                try await manager.saveToPreferences()
+                try await manager.loadFromPreferences()
+            }
         } else {
             let newManager = createNewManager()
             try await newManager.saveToPreferences()
+            try await newManager.loadFromPreferences()
             self.vpnManager = newManager
         }
-        self.vpnManager?.isEnabled = true
-        try await self.vpnManager?.saveToPreferences()
-        try await self.vpnManager?.loadFromPreferences()
         self.session = self.vpnManager?.connection as? NETunnelProviderSession
     }
 
@@ -160,6 +168,18 @@ public class NetworkExtensionAdapter: ObservableObject {
             // Note: For tvOS, config initialization happens in the extension's startTunnel
             // before the needsLogin check. The extension has permission to write to App Group.
             await performLogin()
+
+            #if os(iOS)
+            // If performLogin() didn't open the browser, the IPC failed because the extension
+            // is not running. Start the VPN connection anyway so the extension process starts,
+            // detects login required, signals the main app via UserDefaults, and stays alive
+            // long enough for the user to press Connect from the auth alert (which will retry
+            // IPC to a still-alive extension and succeed).
+            if !self.showBrowser {
+                logger.info("loginIfRequired: IPC failed (extension not running), starting VPN to launch extension")
+                startVPNConnection()
+            }
+            #endif
         } else {
             logger.info("loginIfRequired: login NOT required, calling startVPNConnection()")
             startVPNConnection()
@@ -337,13 +357,18 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
 
     private func performLogin() async {
-        let loginURLString = await withCheckedContinuation { continuation in
+        let loginURLString: String? = await withCheckedContinuation { continuation in
             self.login { urlString in
                 continuation.resume(returning: urlString)
             }
         }
 
-        self.loginURL = loginURLString
+        guard let url = loginURLString, !url.isEmpty else {
+            logger.error("performLogin: no login URL received from extension, aborting")
+            return
+        }
+
+        self.loginURL = url
         self.showBrowser = true
     }
 
@@ -515,9 +540,10 @@ public class NetworkExtensionAdapter: ObservableObject {
         return vpnManager?.isOnDemandEnabled ?? false
     }
 
-    func login(completion: @escaping (String) -> Void) {
-        if self.session == nil {
+    func login(completion: @escaping (String?) -> Void) {
+        guard let session = self.session else {
             logger.error("login: No session available for login")
+            completion(nil)
             return
         }
 
@@ -531,36 +557,36 @@ public class NetworkExtensionAdapter: ObservableObject {
 
             if let messageData = messageString.data(using: .utf8) {
                 // Send the message to the network extension
-                try self.session!.sendProviderMessage(messageData) { response in
-                    if let response = response {
-                        #if os(tvOS)
-                        // For tvOS, decode DeviceAuthResponse struct
-                        do {
-                            let authResponse = try self.decoder.decode(DeviceAuthResponse.self, from: response)
-                            DispatchQueue.main.async {
-                                self.userCode = authResponse.userCode
-                            }
-                            completion(authResponse.url)
-                        } catch {
-                            print("login: Failed to decode DeviceAuthResponse - \(error)")
-                            // Fallback to plain string for backwards compatibility
-                            if let string = String(data: response, encoding: .utf8) {
-                                completion(string)
-                            }
-                        }
-                        #else
-                        if let string = String(data: response, encoding: .utf8) {
-                            completion(string)
-                        }
-                        #endif
+                try session.sendProviderMessage(messageData) { response in
+                    guard let response = response else {
+                        self.logger.error("login: No response from extension")
+                        completion(nil)
                         return
                     }
+                    #if os(tvOS)
+                    // For tvOS, decode DeviceAuthResponse struct
+                    do {
+                        let authResponse = try self.decoder.decode(DeviceAuthResponse.self, from: response)
+                        DispatchQueue.main.async {
+                            self.userCode = authResponse.userCode
+                        }
+                        completion(authResponse.url)
+                    } catch {
+                        print("login: Failed to decode DeviceAuthResponse - \(error)")
+                        // Fallback to plain string for backwards compatibility
+                        completion(String(data: response, encoding: .utf8))
+                    }
+                    #else
+                    completion(String(data: response, encoding: .utf8))
+                    #endif
                 }
             } else {
                 print("Error converting message to Data")
+                completion(nil)
             }
         } catch {
             print("error when performing network extension action")
+            completion(nil)
         }
     }
     
@@ -879,9 +905,15 @@ public class NetworkExtensionAdapter: ObservableObject {
                 let managers = try await NETunnelProviderManager.loadAllFromPreferences()
                 if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
                     completion(manager.connection.status)
+                } else {
+                    // No VPN manager exists yet (e.g. first connect before the iOS permission
+                    // dialog completes). Must still call completion so that isCheckingExtensionState
+                    // is reset to false; otherwise checkExtensionState() is permanently blocked.
+                    completion(.disconnected)
                 }
             } catch {
                 print("Error loading from preferences: \(error)")
+                completion(.disconnected)
             }
         }
     }

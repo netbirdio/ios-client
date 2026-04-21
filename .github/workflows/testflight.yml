@@ -5,14 +5,16 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened]
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
   pull-requests: write
 
 concurrency:
-  group: testflight-${{ github.ref }}-${{ github.head_ref || github.actor_id }}
+  group: testflight-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -21,28 +23,147 @@ jobs:
     if: >
       github.event_name == 'push' ||
       (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      github.event_name == 'issue_comment'
     runs-on: ubuntu-latest
     outputs:
-      ref: ${{ steps.resolve.outputs.ref }}
-      should-build: ${{ steps.resolve.outputs.should-build }}
-      upload: ${{ steps.resolve.outputs.upload }}
-      build-number: ${{ steps.resolve.outputs.build-number }}
+      ref: ${{ steps.finalize.outputs.ref }}
+      should-build: ${{ steps.finalize.outputs.should-build }}
+      upload: ${{ steps.finalize.outputs.upload }}
+      netbird-ref: ${{ steps.finalize.outputs.netbird-ref }}
+      version: ${{ steps.finalize.outputs.version }}
+      build-number: ${{ steps.finalize.outputs.build-number }}
     steps:
-      - name: Resolve build ref
-        id: resolve
+      - name: Resolve ref and check permissions
+        id: pre
         uses: actions/github-script@v7
         with:
           script: |
             core.setOutput('build-number', '${{ github.run_number }}');
-            core.setOutput('should-build', 'true');
-            core.setOutput('upload', 'true');
+            core.setOutput('should-build', 'false');
+
+            function parseCommand(body) {
+              const line = body.split('\n').find(l => l.trim().startsWith('/testflight')) || '';
+              const versionMatch = line.match(/version=([0-9]+\.[0-9]+\.[0-9]+)/);
+              if (versionMatch) core.setOutput('version-override', versionMatch[1]);
+              const buildMatch = line.match(/build-number=([0-9]+)/);
+              if (buildMatch) core.setOutput('build-number', buildMatch[1]);
+              const netbirdMatch = line.match(/netbird-ref=([a-zA-Z0-9._\/-]+)/);
+              if (netbirdMatch) core.setOutput('netbird-ref', netbirdMatch[1]);
+            }
 
             if (context.eventName === 'push') {
               core.setOutput('ref', context.sha);
-            } else if (context.eventName === 'pull_request') {
-              core.setOutput('ref', context.payload.pull_request.head.sha);
+              core.setOutput('should-build', 'true');
+              core.setOutput('upload', 'true');
+              return;
             }
+
+            if (context.eventName === 'pull_request') {
+              const body = context.payload.pull_request.body || '';
+              const hasCommand = body.split('\n').some(l => l.trim().startsWith('/testflight'));
+              if (!hasCommand) {
+                core.info('No /testflight in PR description — skipping');
+                return;
+              }
+              core.setOutput('ref', context.payload.pull_request.head.sha);
+              core.setOutput('should-build', 'true');
+              core.setOutput('upload', 'true');
+
+              parseCommand(body);
+              return;
+            }
+
+            if (context.eventName === 'issue_comment') {
+              if (!context.payload.issue.pull_request) {
+                core.info('Not a PR comment — skipping');
+                return;
+              }
+              const body = context.payload.comment.body || '';
+              const hasCommand = body.split('\n').some(l => l.trim().startsWith('/testflight'));
+              if (!hasCommand) {
+                core.info('No /testflight command — skipping');
+                return;
+              }
+
+              // Permission check
+              const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: context.payload.comment.user.login,
+              });
+              const level = perm.permission;
+              if (level !== 'admin' && level !== 'write') {
+                core.info(`User ${context.payload.comment.user.login} has '${level}' — skipping`);
+                return;
+              }
+
+              // Get PR head SHA
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.issue.number,
+              });
+
+              // Block fork PRs — untrusted code must not run with privileged credentials
+              const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
+              if (pr.data.head.repo.full_name !== baseRepo) {
+                core.info(`PR is from fork ${pr.data.head.repo.full_name} — skipping`);
+                return;
+              }
+
+              core.setOutput('ref', pr.data.head.sha);
+              core.setOutput('should-build', 'true');
+              core.setOutput('upload', 'true');
+
+              parseCommand(body);
+            }
+
+      - name: Checkout for version derivation
+        if: steps.pre.outputs.should-build == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pre.outputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+          sparse-checkout: .
+
+      - name: Derive version from git tags
+        if: steps.pre.outputs.should-build == 'true'
+        id: derive
+        run: |
+          LATEST_TAG=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LATEST_TAG" ]; then
+            echo "::error::No v* tags found — cannot derive version"
+            exit 1
+          elif ! echo "$LATEST_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '$LATEST_TAG' is not valid semver (expected vX.Y.Z)"
+            exit 1
+          fi
+          VERSION="${LATEST_TAG#v}"
+          MAJOR="${VERSION%%.*}"
+          REST="${VERSION#*.}"
+          MINOR="${REST%%.*}"
+          PATCH="${REST#*.}"
+          NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Tag: $LATEST_TAG → next: $NEXT"
+
+      - name: Finalize outputs
+        id: finalize
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.setOutput('ref',          '${{ steps.pre.outputs.ref }}');
+            core.setOutput('should-build', '${{ steps.pre.outputs.should-build }}');
+            core.setOutput('upload',       '${{ steps.pre.outputs.upload }}');
+            core.setOutput('build-number', '${{ steps.pre.outputs.build-number }}');
+            core.setOutput('netbird-ref',  '${{ steps.pre.outputs.netbird-ref }}');
+
+            const override = '${{ steps.pre.outputs.version-override }}';
+            const derived  = '${{ steps.derive.outputs.version }}';
+            core.setOutput('version', override || derived);
+            core.info(`version: ${override || derived} (override=${override || 'none'}, derived=${derived})`);
 
   build:
     name: Build and Upload iOS
@@ -51,6 +172,8 @@ jobs:
     uses: ./.github/workflows/build-upload.yml
     with:
       ref: ${{ needs.gate.outputs.ref }}
+      netbird-ref: ${{ needs.gate.outputs.netbird-ref }}
+      version: ${{ needs.gate.outputs.version }}
       build-number: ${{ needs.gate.outputs.build-number }}
       upload: ${{ needs.gate.outputs.upload == 'true' }}
     secrets: inherit
@@ -69,7 +192,10 @@ jobs:
   notify:
     name: Notify PR
     needs: [gate, build, build-tvos]
-    if: always() && github.event_name == 'pull_request'
+    if: >
+      always() &&
+      (github.event_name == 'pull_request' || github.event_name == 'issue_comment') &&
+      needs.gate.outputs.should-build == 'true'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -78,27 +204,29 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const iosResult = '${{ needs.build.result }}';
-            const tvosResult = '${{ needs.build-tvos.result }}';
-            const ref = '${{ needs.gate.outputs.ref }}';
-            const shortSha = ref.substring(0, 7);
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const prNumber = context.payload.pull_request.number;
+            const iosResult   = '${{ needs.build.result }}';
+            const tvosResult  = '${{ needs.build-tvos.result }}';
+            const ref         = '${{ needs.gate.outputs.ref }}';
+            const shortSha    = ref.substring(0, 7);
+            const runUrl      = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const buildNumber = '${{ needs.gate.outputs.build-number }}';
+            const version     = '${{ needs.gate.outputs.version }}';
 
-            const iosOk = iosResult === 'success';
-            const tvosOk = tvosResult === 'success';
-            const iosFailed = iosResult === 'failure';
-            const tvosFailed = tvosResult === 'failure';
+            const prNumber = context.eventName === 'pull_request'
+              ? context.payload.pull_request.number
+              : context.payload.issue.number;
+
+            const iosOk    = iosResult  === 'success';
+            const tvosOk   = tvosResult === 'success';
+            const iosFail  = iosResult  === 'failure';
+            const tvosFail = tvosResult === 'failure';
 
             let body;
             if (iosOk && tvosOk) {
-              body = `**TestFlight builds uploaded** \`(${buildNumber})\` for \`${shortSha}\` — iOS + tvOS\n\n[View workflow run](${runUrl})`;
-            } else if (iosOk && !tvosFailed) {
-              body = `**TestFlight build uploaded** \`(${buildNumber})\` for \`${shortSha}\` — iOS only (tvOS skipped)\n\n[View workflow run](${runUrl})`;
-            } else if (iosFailed || tvosFailed) {
-              const failed = [iosFailed && 'iOS', tvosFailed && 'tvOS'].filter(Boolean).join(', ');
-              body = `**Build failed** (${failed}) for \`${shortSha}\`\n\n[View workflow run](${runUrl})`;
+              body = `**TestFlight builds uploaded** \`${version} (${buildNumber})\` for \`${shortSha}\` — iOS + tvOS\n\n[View workflow run](${runUrl})`;
+            } else if ((iosFail || tvosFail)) {
+              const failed = [iosFail && 'iOS', tvosFail && 'tvOS'].filter(Boolean).join(', ');
+              body = `**Build failed** (${failed}) \`${version} (${buildNumber})\` for \`${shortSha}\`\n\n[View workflow run](${runUrl})`;
             } else {
               return;
             }
@@ -107,5 +235,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: prNumber,
-              body: body,
+              body,
             });

@@ -361,11 +361,21 @@ class ViewModel: ObservableObject {
             disconnectPressed = false
             newState = .connected
         case .connecting:
-            connectPressed = false
+            // Do NOT clear connectPressed here — iOS can emit .disconnecting right after
+            // .connecting during tunnel startup (cleanup of old instance). Keeping
+            // connectPressed=true lets the .disconnecting handler suppress that noise.
+            // connectPressed is cleared only on .connected or .disconnected.
             newState = .connecting
         case .disconnecting:
-            disconnectPressed = false
-            newState = .disconnecting
+            // Ignore transient .disconnecting emitted by iOS VPN framework during tunnel startup.
+            // When startVPNTunnel() is called, iOS briefly reports .disconnecting while cleaning
+            // up the previous tunnel instance — even though the user pressed Connect, not Disconnect.
+            if connectPressed {
+                newState = .connecting
+            } else {
+                disconnectPressed = false
+                newState = .disconnecting
+            }
         case .disconnected:
             // Extension confirmed disconnected — clear both flags,
             // unless a flag was JUST set (immediate feedback)
@@ -424,6 +434,7 @@ class ViewModel: ObservableObject {
         networkExtensionAdapter.startTimer { details in
             self.checkExtensionState()
             self.checkNetworkUnavailableFlag()
+            self.checkLoginRequiredFlag()
             self.updateDetailsIfChanged(details)
             self.updatePeersIfChanged(details)
             self.statusDetailsValid = true
@@ -477,9 +488,17 @@ class ViewModel: ObservableObject {
         networkExtensionAdapter.stopTimer()
     }
     
+    // Prevents overlapping getExtensionStatus calls from delivering out-of-order results.
+    // loadAllFromPreferences() is slow and variable; without this guard a stale .disconnecting
+    // completion can arrive after a newer .disconnected one, causing a spurious Disconnecting flash.
+    private var isCheckingExtensionState = false
+
     func checkExtensionState() {
+        guard !isCheckingExtensionState else { return }
+        isCheckingExtensionState = true
         networkExtensionAdapter.getExtensionStatus { status in
             DispatchQueue.main.async {
+                self.isCheckingExtensionState = false
                 self.applyExtensionStatus(status)
             }
         }
@@ -776,6 +795,12 @@ class ViewModel: ObservableObject {
 
         AppLogger.shared.log("Login required flag detected from extension")
         showAuthenticationRequired = true
+        connectPressed = false
+        updateVPNDisplayState()
+        // Temporarily disable On Demand to stop iOS from looping reconnect attempts
+        // while the user is not authenticated. It will be re-enabled automatically
+        // after a successful connection (see applyExtensionStatus).
+        networkExtensionAdapter.setOnDemandEnabled(false)
         scheduleLoginRequiredNotification()
         #endif
     }

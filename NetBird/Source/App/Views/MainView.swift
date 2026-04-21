@@ -104,7 +104,10 @@ struct iOSMainView: View {
                 return Alert(
                     title: Text("Authentication required"),
                     message: Text("The server requires a new authentication."),
-                    dismissButton: .default(Text("OK"))
+                    primaryButton: .default(Text("Login")) {
+                        viewModel.connect()
+                    },
+                    secondaryButton: .cancel(Text("Later"))
                 )
             case .onDemandConflict:
                 return Alert(
