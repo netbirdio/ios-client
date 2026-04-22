@@ -150,14 +150,21 @@ jobs:
 
       - name: Resolve build number from TestFlight
         id: tfbuild
-        if: steps.pre.outputs.should-build == 'true' && steps.pre.outputs.build-number-override == ''
+        if: steps.pre.outputs.should-build == 'true'
         env:
           API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_ID: ${{ vars.APP_STORE_APP_ID_IOS }}
+          BUILD_OVERRIDE: ${{ steps.pre.outputs.build-number-override }}
         run: |
           set -euo pipefail
+
+          if [ -n "$BUILD_OVERRIDE" ]; then
+            echo "Using manual build-number override: $BUILD_OVERRIDE"
+            echo "build-number=$BUILD_OVERRIDE" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           VERSION="${{ steps.pre.outputs.version-override }}"
           if [ -z "$VERSION" ]; then
@@ -177,14 +184,22 @@ jobs:
           EXP=$((NOW + 1200))
           HEADER=$(printf '{"alg":"ES256","kid":"%s","typ":"JWT"}' "$API_KEY_ID" | base64 -w 0 | tr -d '=' | tr '+/' '-_')
           PAYLOAD=$(printf '{"iss":"%s","iat":%d,"exp":%d,"aud":"appstoreconnect-v1"}' "$API_ISSUER_ID" "$NOW" "$EXP" | base64 -w 0 | tr -d '=' | tr '+/' '-_')
-          SIGNATURE=$(printf '%s.%s' "$HEADER" "$PAYLOAD" | openssl dgst -binary -sha256 -sign "$KEY_FILE" | base64 -w 0 | tr -d '=' | tr '+/' '-_')
+          # openssl produces DER-encoded ECDSA; JWT ES256 requires raw 64-byte R||S
+          SIGNATURE=$(printf '%s.%s' "$HEADER" "$PAYLOAD" | \
+            openssl dgst -binary -sha256 -sign "$KEY_FILE" | \
+            python3 -c "import sys,base64;d=sys.stdin.buffer.read();i=2;rl=d[i+1];r=d[i+2:i+2+rl];i+=2+rl;sl=d[i+1];s=d[i+2:i+2+sl];r=r.lstrip(b'\x00').rjust(32,b'\x00');s=s.lstrip(b'\x00').rjust(32,b'\x00');print(base64.urlsafe_b64encode(r[-32:]+s[-32:]).rstrip(b'=').decode())")
           JWT="${HEADER}.${PAYLOAD}.${SIGNATURE}"
           rm -f "$KEY_FILE"
 
-          RESPONSE=$(curl -sf \
+          HTTP_STATUS=$(curl -s -o /tmp/tf_response.json -w "%{http_code}" \
             -H "Authorization: Bearer $JWT" \
             "https://api.appstoreconnect.apple.com/v1/builds?filter[app]=${APP_ID}&filter[preReleaseVersion.version]=${VERSION}&sort=-version&limit=25&fields[builds]=version")
-          echo "API response: $RESPONSE"
+          RESPONSE=$(cat /tmp/tf_response.json)
+          echo "HTTP $HTTP_STATUS — response: $RESPONSE"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::TestFlight API returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
 
           LATEST=$(echo "$RESPONSE" | jq -r '[.data[].attributes.version | tonumber] | max // 0')
           NEXT=$((LATEST + 1))
