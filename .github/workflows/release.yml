@@ -10,16 +10,47 @@ permissions:
 
 jobs:
   prepare:
-    name: Parse tag version
+    name: Parse tag and resolve build number
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.parse.outputs.version }}
+      build-number: ${{ steps.tfbuild.outputs.build-number }}
     steps:
       - name: Strip v prefix from tag
         id: parse
         run: |
           TAG="${GITHUB_REF_NAME}"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve build number from TestFlight
+        id: tfbuild
+        env:
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_ID: ${{ vars.APP_STORE_APP_ID_IOS }}
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          KEY_FILE=$(mktemp)
+          echo "$API_KEY_BASE64" | base64 --decode > "$KEY_FILE"
+
+          NOW=$(date +%s)
+          EXP=$((NOW + 1200))
+          HEADER=$(printf '{"alg":"ES256","kid":"%s","typ":"JWT"}' "$API_KEY_ID" | base64 -w 0 | tr -d '=' | tr '+/' '-_')
+          PAYLOAD=$(printf '{"iss":"%s","iat":%d,"exp":%d,"aud":"appstoreconnect-v1"}' "$API_ISSUER_ID" "$NOW" "$EXP" | base64 -w 0 | tr -d '=' | tr '+/' '-_')
+          SIGNATURE=$(printf '%s.%s' "$HEADER" "$PAYLOAD" | openssl dgst -binary -sha256 -sign "$KEY_FILE" | base64 -w 0 | tr -d '=' | tr '+/' '-_')
+          JWT="${HEADER}.${PAYLOAD}.${SIGNATURE}"
+          rm -f "$KEY_FILE"
+
+          RESPONSE=$(curl -sf \
+            -H "Authorization: Bearer $JWT" \
+            "https://api.appstoreconnect.apple.com/v1/builds?filter[app]=${APP_ID}&filter[preReleaseVersion.version]=${VERSION}&sort=-version&limit=1&fields[builds]=version" \
+            || echo '{}')
+
+          LATEST=$(echo "$RESPONSE" | jq -r '.data[0].attributes.version // "0"')
+          NEXT=$((LATEST + 1))
+          echo "build-number=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Latest build for $VERSION: $LATEST → next: $NEXT"
 
   build:
     name: Build and Upload Release
@@ -28,4 +59,5 @@ jobs:
     with:
       ref: ${{ github.ref }}
       version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build-number }}
     secrets: inherit

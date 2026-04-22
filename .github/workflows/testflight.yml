@@ -39,7 +39,6 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            core.setOutput('build-number', '${{ github.run_number }}');
             core.setOutput('should-build', 'false');
 
             function parseCommand(body) {
@@ -47,7 +46,7 @@ jobs:
               const versionMatch = line.match(/version=([0-9]+\.[0-9]+\.[0-9]+)/);
               if (versionMatch) core.setOutput('version-override', versionMatch[1]);
               const buildMatch = line.match(/build-number=([0-9]+)/);
-              if (buildMatch) core.setOutput('build-number', buildMatch[1]);
+              if (buildMatch) core.setOutput('build-number-override', buildMatch[1]);
               const netbirdMatch = line.match(/netbird-ref=([a-zA-Z0-9._\/-]+)/);
               if (netbirdMatch) core.setOutput('netbird-ref', netbirdMatch[1]);
             }
@@ -149,6 +148,41 @@ jobs:
           echo "version=$NEXT" >> "$GITHUB_OUTPUT"
           echo "Tag: $LATEST_TAG → next: $NEXT"
 
+      - name: Resolve build number from TestFlight
+        id: tfbuild
+        if: steps.pre.outputs.should-build == 'true' && steps.pre.outputs.build-number-override == ''
+        env:
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_ID: ${{ vars.APP_STORE_APP_ID_IOS }}
+        run: |
+          VERSION="${{ steps.pre.outputs.version-override }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="${{ steps.derive.outputs.version }}"
+          fi
+
+          KEY_FILE=$(mktemp)
+          echo "$API_KEY_BASE64" | base64 --decode > "$KEY_FILE"
+
+          NOW=$(date +%s)
+          EXP=$((NOW + 1200))
+          HEADER=$(printf '{"alg":"ES256","kid":"%s","typ":"JWT"}' "$API_KEY_ID" | base64 -w 0 | tr -d '=' | tr '+/' '-_')
+          PAYLOAD=$(printf '{"iss":"%s","iat":%d,"exp":%d,"aud":"appstoreconnect-v1"}' "$API_ISSUER_ID" "$NOW" "$EXP" | base64 -w 0 | tr -d '=' | tr '+/' '-_')
+          SIGNATURE=$(printf '%s.%s' "$HEADER" "$PAYLOAD" | openssl dgst -binary -sha256 -sign "$KEY_FILE" | base64 -w 0 | tr -d '=' | tr '+/' '-_')
+          JWT="${HEADER}.${PAYLOAD}.${SIGNATURE}"
+          rm -f "$KEY_FILE"
+
+          RESPONSE=$(curl -sf \
+            -H "Authorization: Bearer $JWT" \
+            "https://api.appstoreconnect.apple.com/v1/builds?filter[app]=${APP_ID}&filter[preReleaseVersion.version]=${VERSION}&sort=-version&limit=1&fields[builds]=version" \
+            || echo '{}')
+
+          LATEST=$(echo "$RESPONSE" | jq -r '.data[0].attributes.version // "0"')
+          NEXT=$((LATEST + 1))
+          echo "build-number=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Latest build for $VERSION: $LATEST → next: $NEXT"
+
       - name: Finalize outputs
         id: finalize
         uses: actions/github-script@v7
@@ -157,8 +191,14 @@ jobs:
             core.setOutput('ref',          '${{ steps.pre.outputs.ref }}');
             core.setOutput('should-build', '${{ steps.pre.outputs.should-build }}');
             core.setOutput('upload',       '${{ steps.pre.outputs.upload }}');
-            core.setOutput('build-number', '${{ steps.pre.outputs.build-number }}');
             core.setOutput('netbird-ref',  '${{ steps.pre.outputs.netbird-ref }}');
+
+            const buildNumber =
+              '${{ steps.pre.outputs.build-number-override }}' ||
+              '${{ steps.tfbuild.outputs.build-number }}' ||
+              '${{ github.run_number }}';
+            core.setOutput('build-number', buildNumber);
+            core.info(`build-number: ${buildNumber}`);
 
             const override = '${{ steps.pre.outputs.version-override }}';
             const derived  = '${{ steps.derive.outputs.version }}';
