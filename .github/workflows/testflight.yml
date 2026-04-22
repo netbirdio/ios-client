@@ -157,9 +157,17 @@ jobs:
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_ID: ${{ vars.APP_STORE_APP_ID_IOS }}
         run: |
+          set -euo pipefail
+
           VERSION="${{ steps.pre.outputs.version-override }}"
           if [ -z "$VERSION" ]; then
             VERSION="${{ steps.derive.outputs.version }}"
+          fi
+          echo "Querying TestFlight for app_id='${APP_ID}' version='${VERSION}'"
+
+          if [ -z "$APP_ID" ]; then
+            echo "::error::APP_STORE_APP_ID_IOS repository variable is not set"
+            exit 1
           fi
 
           KEY_FILE=$(mktemp)
@@ -175,10 +183,10 @@ jobs:
 
           RESPONSE=$(curl -sf \
             -H "Authorization: Bearer $JWT" \
-            "https://api.appstoreconnect.apple.com/v1/builds?filter[app]=${APP_ID}&filter[preReleaseVersion.version]=${VERSION}&sort=-version&limit=1&fields[builds]=version" \
-            || echo '{}')
+            "https://api.appstoreconnect.apple.com/v1/builds?filter[app]=${APP_ID}&filter[preReleaseVersion.version]=${VERSION}&sort=-version&limit=25&fields[builds]=version")
+          echo "API response: $RESPONSE"
 
-          LATEST=$(echo "$RESPONSE" | jq -r '.data[0].attributes.version // "0"')
+          LATEST=$(echo "$RESPONSE" | jq -r '[.data[].attributes.version | tonumber] | max // 0')
           NEXT=$((LATEST + 1))
           echo "build-number=$NEXT" >> "$GITHUB_OUTPUT"
           echo "Latest build for $VERSION: $LATEST → next: $NEXT"
