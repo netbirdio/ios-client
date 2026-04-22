@@ -28,7 +28,7 @@ class Preferences {
     // MARK: - SDK Preferences
 
     #if os(iOS)
-    /// Creates SDK preferences using App Group shared container paths.
+    /// Creates SDK preferences using the active profile's config/state paths.
     /// iOS only - file-based storage works reliably.
     static func newPreferences() -> NetBirdSDKPreferences {
         guard let configPath = configFile(), let statePath = stateFile() else {
@@ -72,11 +72,21 @@ class Preferences {
     }
 
     static func configFile() -> String? {
+        #if os(iOS)
+        // Use profile-aware paths on iOS
+        return ProfileManager.shared.activeConfigPath()
+        #else
         return getFilePath(fileName: GlobalConstants.configFileName)
+        #endif
     }
 
     static func stateFile() -> String? {
+        #if os(iOS)
+        // Use profile-aware paths on iOS
+        return ProfileManager.shared.activeStatePath()
+        #else
         return getFilePath(fileName: GlobalConstants.stateFileName)
+        #endif
     }
 
     // MARK: - App-Local UserDefaults Storage
