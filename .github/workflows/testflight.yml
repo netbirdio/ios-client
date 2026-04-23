@@ -161,12 +161,29 @@ jobs:
 
           echo "$PRIVATE_KEY_BASE64" | base64 --decode > /tmp/AuthKey.p8
 
-          NOW=$(date +%s)
-          EXP=$(($NOW + 1200))
-          HEADER=$(echo -n '{"alg":"ES256","kid":"'"$KEY_ID"'","typ":"JWT"}' | base64 -w0 | tr -d '=' | tr '/+' '_-')
-          PAYLOAD=$(echo -n '{"iss":"'"$ISSUER_ID"'","exp":'"$EXP"',"aud":"appstoreconnect-v1"}' | base64 -w0 | tr -d '=' | tr '/+' '_-')
-          SIGNATURE=$(echo -n "$HEADER.$PAYLOAD" | openssl dgst -sha256 -sign /tmp/AuthKey.p8 | base64 -w0 | tr -d '=' | tr '/+' '_-')
-          JWT="$HEADER.$PAYLOAD.$SIGNATURE"
+          JWT=$(python3 - <<EOF
+import base64, json, time
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+
+key = serialization.load_pem_private_key(open('/tmp/AuthKey.p8','rb').read(), password=None)
+
+def b64url(data):
+    if isinstance(data, str): data = data.encode()
+    return base64.urlsafe_b64encode(data).rstrip(b'=').decode()
+
+now = int(time.time())
+h = b64url(json.dumps({"alg":"ES256","kid":"$KEY_ID","typ":"JWT"}, separators=(',',':')))
+p = b64url(json.dumps({"iss":"$ISSUER_ID","exp":now+1200,"aud":"appstoreconnect-v1"}, separators=(',',':')))
+msg = f"{h}.{p}".encode()
+
+sig_der = key.sign(msg, ec.ECDSA(hashes.SHA256()))
+r, s = decode_dss_signature(sig_der)
+sig = b64url(r.to_bytes(32,'big') + s.to_bytes(32,'big'))
+print(f"{h}.{p}.{sig}")
+EOF
+          )
 
           HTTP_STATUS=$(curl -sg \
             -o /tmp/asc_response.json \
