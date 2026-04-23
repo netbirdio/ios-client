@@ -161,7 +161,10 @@ jobs:
         run: |
           VERSION="${{ steps.pre.outputs.version-override || steps.derive.outputs.version }}"
 
+          pip install cryptography --quiet
+
           echo "$PRIVATE_KEY_BASE64" | base64 --decode > /tmp/AuthKey.p8
+          trap 'rm -f /tmp/AuthKey.p8' EXIT
 
           JWT=$(python3 -c "import base64,json,time,os;from cryptography.hazmat.primitives import hashes,serialization;from cryptography.hazmat.primitives.asymmetric import ec;from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature;key=serialization.load_pem_private_key(open('/tmp/AuthKey.p8','rb').read(),password=None);b64url=lambda d:base64.urlsafe_b64encode(d if isinstance(d,bytes) else d.encode()).rstrip(b'=').decode();now=int(time.time());h=b64url(json.dumps({'alg':'ES256','kid':os.environ['KEY_ID'],'typ':'JWT'},separators=(',',':')));p=b64url(json.dumps({'iss':os.environ['ISSUER_ID'],'exp':now+1200,'aud':'appstoreconnect-v1'},separators=(',',':')));msg=f'{h}.{p}'.encode();sig_der=key.sign(msg,ec.ECDSA(hashes.SHA256()));r,s=decode_dss_signature(sig_der);sig=b64url(r.to_bytes(32,'big')+s.to_bytes(32,'big'));print(f'{h}.{p}.{sig}')")
 
@@ -180,7 +183,7 @@ jobs:
             exit 1
           fi
 
-          LATEST_BUILD=$(echo "$RESPONSE" | jq -r 'if (.data | length) > 0 then .data[0].attributes.version else "none" end')
+          LATEST_BUILD=$(echo "$RESPONSE" | jq -r 'if (.data | length) > 0 and (.data[0].attributes.version != null) then .data[0].attributes.version else "none" end')
 
           echo "latest-build=$LATEST_BUILD" >> "$GITHUB_OUTPUT"
 
@@ -190,7 +193,6 @@ jobs:
           echo "  Latest uploaded build: $LATEST_BUILD"
           echo "========================================="
 
-          rm -f /tmp/AuthKey.p8
 
       - name: Finalize outputs
         id: finalize
@@ -219,7 +221,8 @@ jobs:
             if (overrideBuild && overrideBuild !== runNumber) {
               buildNumber = overrideBuild;
             } else if (latestBuild && latestBuild !== 'none') {
-              buildNumber = String(parseInt(latestBuild, 10) + 1);
+              const parsed = parseInt(latestBuild, 10);
+              buildNumber = !isNaN(parsed) ? String(parsed + 1) : '1';
             } else {
               buildNumber = '1';
             }
