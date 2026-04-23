@@ -17,13 +17,21 @@ class PacketTunnelProviderSettingsManager {
     private var ipv6Routes: [NEIPv6Route]?
     private var dnsSettings: NEDNSSettings?
     private var needFallbackNS: Bool = false
-    
+    private var containsDefaultRoute: Bool = false
+
+    // Link-local dummy IPv6 used to satisfy NEIPv6Settings when we install a
+    // ::/0 blackhole route to prevent IPv6 leaks while the IPv4 default
+    // route is in the tunnel and IPv6 is not yet supported on the interface.
+    private static let ipv6BlackholeAddress = "fe80::1"
+    private static let ipv6BlackholePrefix: NSNumber = 64
+
     init(with packetTunnelProvider: PacketTunnelProvider) {
         self.packetTunnelProvider = packetTunnelProvider
     }
-    
+
     func setRoutes(v4Routes: [NEIPv4Route], v6Routes: [NEIPv6Route], containsDefault: Bool) {
             self.needFallbackNS = containsDefault
+            self.containsDefaultRoute = containsDefault
             self.ipv4Routes = v4Routes
             self.ipv6Routes = v6Routes
             self.updateTunnel()
@@ -87,13 +95,22 @@ class PacketTunnelProviderSettingsManager {
                 }
                 tunnelNetworkSettings.ipv4Settings = ipv4Settings
                 
-                let ipv6Settings = NEIPv6Settings(addresses: [], networkPrefixLengths: [])
-                
-                if self.ipv6Routes != nil {
-                    ipv6Settings.includedRoutes = self.ipv6Routes
+                if self.containsDefaultRoute {
+                    let ipv6Settings = NEIPv6Settings(
+                        addresses: [Self.ipv6BlackholeAddress],
+                        networkPrefixLengths: [Self.ipv6BlackholePrefix]
+                    )
+                    var v6Routes: [NEIPv6Route] = self.ipv6Routes ?? []
+                    v6Routes.append(NEIPv6Route(destinationAddress: "::", networkPrefixLength: 0))
+                    ipv6Settings.includedRoutes = v6Routes
+                    tunnelNetworkSettings.ipv6Settings = ipv6Settings
+                } else {
+                    let ipv6Settings = NEIPv6Settings(addresses: [], networkPrefixLengths: [])
+                    if self.ipv6Routes != nil {
+                        ipv6Settings.includedRoutes = self.ipv6Routes
+                    }
+                    tunnelNetworkSettings.ipv6Settings = ipv6Settings
                 }
-                
-                tunnelNetworkSettings.ipv6Settings = ipv6Settings
                 
                 tunnelNetworkSettings.mtu = 1280
                 
