@@ -198,7 +198,11 @@ jobs:
           fi
 
           KEY_FILE=$(mktemp)
-          echo "$API_KEY_BASE64" | base64 --decode > "$KEY_FILE"
+          if echo "$API_KEY_BASE64" | grep -q "BEGIN"; then
+            printf '%s' "$API_KEY_BASE64" > "$KEY_FILE"
+          else
+            echo "$API_KEY_BASE64" | base64 --decode > "$KEY_FILE"
+          fi
 
           NOW=$(date +%s)
           EXP=$((NOW + 1200))
