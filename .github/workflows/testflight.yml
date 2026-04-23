@@ -198,29 +198,23 @@ jobs:
           fi
 
           pip3 install cryptography --quiet --disable-pip-version-check
-
-          JWT=$(python3 - << 'PYEOF'
-import os, time, json, base64
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
-
-raw = os.environ['API_KEY_BASE64']
-pem = raw.encode() if b'BEGIN' in raw.encode() else base64.b64decode(raw)
-key = serialization.load_pem_private_key(pem, password=None)
-
-now = int(time.time())
-def b64url(data): return base64.urlsafe_b64encode(data).rstrip(b'=').decode()
-
-hdr = b64url(json.dumps({"alg":"ES256","kid":os.environ['API_KEY_ID'],"typ":"JWT"}).encode())
-pld = b64url(json.dumps({"iss":os.environ['API_ISSUER_ID'],"iat":now,"exp":now+1200,"aud":"appstoreconnect-v1"}).encode())
-
-sig_der = key.sign(f"{hdr}.{pld}".encode(), ec.ECDSA(hashes.SHA256()))
-r, s = decode_dss_signature(sig_der)
-sig = b64url(r.to_bytes(32, 'big') + s.to_bytes(32, 'big'))
-print(f"{hdr}.{pld}.{sig}")
-PYEOF
-          )
+          JWT=$(python3 -c "
+          import os, time, json, base64
+          from cryptography.hazmat.primitives import hashes, serialization
+          from cryptography.hazmat.primitives.asymmetric import ec
+          from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+          raw = os.environ['API_KEY_BASE64']
+          pem = raw.encode() if b'BEGIN' in raw.encode() else base64.b64decode(raw)
+          key = serialization.load_pem_private_key(pem, password=None)
+          now = int(time.time())
+          b64u = lambda d: base64.urlsafe_b64encode(d).rstrip(b'=').decode()
+          hdr = b64u(json.dumps({'alg':'ES256','kid':os.environ['API_KEY_ID'],'typ':'JWT'}).encode())
+          pld = b64u(json.dumps({'iss':os.environ['API_ISSUER_ID'],'iat':now,'exp':now+1200,'aud':'appstoreconnect-v1'}).encode())
+          sig_der = key.sign((hdr+'.'+pld).encode(), ec.ECDSA(hashes.SHA256()))
+          r, s = decode_dss_signature(sig_der)
+          sig = b64u(r.to_bytes(32,'big') + s.to_bytes(32,'big'))
+          print(hdr+'.'+pld+'.'+sig)
+          ")
 
           HTTP_STATUS=$(curl -s -o /tmp/tf_response.json -w "%{http_code}" \
             -H "Authorization: Bearer $JWT" \
