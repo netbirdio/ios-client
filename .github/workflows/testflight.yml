@@ -197,26 +197,30 @@ jobs:
             exit 1
           fi
 
-          KEY_FILE=$(mktemp)
-          if echo "$API_KEY_BASE64" | grep -q "BEGIN"; then
-            printf '%s' "$API_KEY_BASE64" > "$KEY_FILE"
-          else
-            echo "$API_KEY_BASE64" | base64 --decode > "$KEY_FILE"
-          fi
-          echo "Key file first line: $(head -1 "$KEY_FILE")"
-          echo "Key file size: $(wc -c < "$KEY_FILE") bytes"
-          openssl ec -in "$KEY_FILE" -noout 2>&1 || openssl pkey -in "$KEY_FILE" -noout 2>&1 || echo "::warning::Key check failed"
+          pip3 install cryptography --quiet --disable-pip-version-check
 
-          NOW=$(date +%s)
-          EXP=$((NOW + 1200))
-          HEADER=$(printf '{"alg":"ES256","kid":"%s","typ":"JWT"}' "$API_KEY_ID" | base64 -w 0 | tr -d '=' | tr '+/' '-_')
-          PAYLOAD=$(printf '{"iss":"%s","iat":%d,"exp":%d,"aud":"appstoreconnect-v1"}' "$API_ISSUER_ID" "$NOW" "$EXP" | base64 -w 0 | tr -d '=' | tr '+/' '-_')
-          # openssl produces DER-encoded ECDSA; JWT ES256 requires raw 64-byte R||S
-          SIGNATURE=$(printf '%s.%s' "$HEADER" "$PAYLOAD" | \
-            openssl dgst -binary -sha256 -sign "$KEY_FILE" | \
-            python3 -c "import sys,base64;d=sys.stdin.buffer.read();i=2;rl=d[i+1];r=d[i+2:i+2+rl];i+=2+rl;sl=d[i+1];s=d[i+2:i+2+sl];r=r.lstrip(b'\x00').rjust(32,b'\x00');s=s.lstrip(b'\x00').rjust(32,b'\x00');print(base64.urlsafe_b64encode(r[-32:]+s[-32:]).rstrip(b'=').decode())")
-          JWT="${HEADER}.${PAYLOAD}.${SIGNATURE}"
-          rm -f "$KEY_FILE"
+          JWT=$(python3 - << 'PYEOF'
+import os, time, json, base64
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+
+raw = os.environ['API_KEY_BASE64']
+pem = raw.encode() if b'BEGIN' in raw.encode() else base64.b64decode(raw)
+key = serialization.load_pem_private_key(pem, password=None)
+
+now = int(time.time())
+def b64url(data): return base64.urlsafe_b64encode(data).rstrip(b'=').decode()
+
+hdr = b64url(json.dumps({"alg":"ES256","kid":os.environ['API_KEY_ID'],"typ":"JWT"}).encode())
+pld = b64url(json.dumps({"iss":os.environ['API_ISSUER_ID'],"iat":now,"exp":now+1200,"aud":"appstoreconnect-v1"}).encode())
+
+sig_der = key.sign(f"{hdr}.{pld}".encode(), ec.ECDSA(hashes.SHA256()))
+r, s = decode_dss_signature(sig_der)
+sig = b64url(r.to_bytes(32, 'big') + s.to_bytes(32, 'big'))
+print(f"{hdr}.{pld}.{sig}")
+PYEOF
+          )
 
           HTTP_STATUS=$(curl -s -o /tmp/tf_response.json -w "%{http_code}" \
             -H "Authorization: Bearer $JWT" \
