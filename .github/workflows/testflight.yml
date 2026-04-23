@@ -168,9 +168,20 @@ jobs:
           SIGNATURE=$(echo -n "$HEADER.$PAYLOAD" | openssl dgst -sha256 -sign /tmp/AuthKey.p8 | base64 -w0 | tr -d '=' | tr '/+' '_-')
           JWT="$HEADER.$PAYLOAD.$SIGNATURE"
 
-          RESPONSE=$(curl -sfg \
+          HTTP_STATUS=$(curl -sg \
+            -o /tmp/asc_response.json \
+            -w "%{http_code}" \
             "https://api.appstoreconnect.apple.com/v1/builds?filter[app]=$APP_ID&filter[preReleaseVersion.version]=$VERSION&sort=-uploadedDate&limit=1" \
             -H "Authorization: Bearer $JWT")
+
+          RESPONSE=$(cat /tmp/asc_response.json)
+          echo "HTTP status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "API error response:"
+            echo "$RESPONSE" | jq . || echo "$RESPONSE"
+            exit 1
+          fi
 
           LATEST_BUILD=$(echo "$RESPONSE" | jq -r 'if (.data | length) > 0 then .data[0].attributes.buildNumber else "none" end')
 
