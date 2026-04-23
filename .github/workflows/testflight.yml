@@ -1,6 +1,7 @@
 name: TestFlight
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
@@ -148,6 +149,39 @@ jobs:
           NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
           echo "version=$NEXT" >> "$GITHUB_OUTPUT"
           echo "Tag: $LATEST_TAG → next: $NEXT"
+
+      - name: Fetch latest build number from App Store Connect
+        if: steps.pre.outputs.should-build == 'true'
+        env:
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APP_ID: ${{ secrets.APP_STORE_APP_ID_IOS }}
+        run: |
+          VERSION="${{ steps.pre.outputs.version-override || steps.derive.outputs.version }}"
+
+          echo "$PRIVATE_KEY_BASE64" | base64 --decode > /tmp/AuthKey.p8
+
+          NOW=$(date +%s)
+          EXP=$(($NOW + 1200))
+          HEADER=$(echo -n '{"alg":"ES256","kid":"'"$KEY_ID"'","typ":"JWT"}' | base64 -w0 | tr -d '=' | tr '/+' '_-')
+          PAYLOAD=$(echo -n '{"iss":"'"$ISSUER_ID"'","exp":'"$EXP"',"aud":"appstoreconnect-v1"}' | base64 -w0 | tr -d '=' | tr '/+' '_-')
+          SIGNATURE=$(echo -n "$HEADER.$PAYLOAD" | openssl dgst -sha256 -sign /tmp/AuthKey.p8 | base64 -w0 | tr -d '=' | tr '/+' '_-')
+          JWT="$HEADER.$PAYLOAD.$SIGNATURE"
+
+          RESPONSE=$(curl -sf \
+            "https://api.appstoreconnect.apple.com/v1/builds?filter[app]=$APP_ID&filter[preReleaseVersion.version]=$VERSION&sort=-uploadedDate&limit=1" \
+            -H "Authorization: Bearer $JWT")
+
+          LATEST_BUILD=$(echo "$RESPONSE" | jq -r 'if (.data | length) > 0 then .data[0].attributes.buildNumber else "none" end')
+
+          echo "========================================="
+          echo "  App Store Connect — latest build info"
+          echo "  Version: $VERSION"
+          echo "  Latest uploaded build: $LATEST_BUILD"
+          echo "========================================="
+
+          rm -f /tmp/AuthKey.p8
 
       - name: Finalize outputs
         id: finalize
