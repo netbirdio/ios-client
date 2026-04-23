@@ -22,6 +22,7 @@ jobs:
     name: Validate trigger
     if: >
       github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
        github.event.pull_request.head.repo.full_name == github.repository) ||
       github.event_name == 'issue_comment'
@@ -52,7 +53,7 @@ jobs:
               if (netbirdMatch) core.setOutput('netbird-ref', netbirdMatch[1]);
             }
 
-            if (context.eventName === 'push') {
+            if (context.eventName === 'workflow_dispatch' || context.eventName === 'push') {
               core.setOutput('ref', context.sha);
               core.setOutput('should-build', 'true');
               core.setOutput('upload', 'true');
