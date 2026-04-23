@@ -179,7 +179,7 @@ jobs:
             exit 1
           fi
 
-          LATEST_BUILD=$(echo "$RESPONSE" | jq -r 'if (.data | length) > 0 then .data[0].attributes.buildNumber else "none" end')
+          LATEST_BUILD=$(echo "$RESPONSE" | jq -r 'if (.data | length) > 0 then .data[0].attributes.version else "none" end')
 
           echo "========================================="
           echo "  App Store Connect — latest build info"
