@@ -32,7 +32,6 @@ jobs:
           VERSION: ${{ steps.parse.outputs.version }}
         run: |
           set -euo pipefail
-          pip3 install cryptography --quiet --disable-pip-version-check
           JWT=$(python3 -c "
           import os, time, json, base64
           from cryptography.hazmat.primitives import hashes, serialization
