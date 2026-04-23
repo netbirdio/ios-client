@@ -8,6 +8,14 @@ on:
     types: [opened, edited]
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.1.6)'
+        required: false
+      build-number:
+        description: 'Build number override (leave empty to resolve from TestFlight)'
+        required: false
 
 permissions:
   contents: read
@@ -70,6 +78,17 @@ jobs:
               core.setOutput('upload', 'true');
 
               parseCommand(body);
+              return;
+            }
+
+            if (context.eventName === 'workflow_dispatch') {
+              core.setOutput('ref', context.sha);
+              core.setOutput('should-build', 'true');
+              core.setOutput('upload', 'false');
+              const v = context.payload.inputs?.version;
+              if (v) core.setOutput('version-override', v);
+              const b = context.payload.inputs?.['build-number'];
+              if (b) core.setOutput('build-number-override', b);
               return;
             }
 
