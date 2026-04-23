@@ -203,6 +203,9 @@ jobs:
           else
             echo "$API_KEY_BASE64" | base64 --decode > "$KEY_FILE"
           fi
+          echo "Key file first line: $(head -1 "$KEY_FILE")"
+          echo "Key file size: $(wc -c < "$KEY_FILE") bytes"
+          openssl ec -in "$KEY_FILE" -noout 2>&1 || openssl pkey -in "$KEY_FILE" -noout 2>&1 || echo "::warning::Key check failed"
 
           NOW=$(date +%s)
           EXP=$((NOW + 1200))
