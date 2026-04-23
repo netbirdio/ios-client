@@ -195,17 +195,28 @@ jobs:
       - name: Finalize outputs
         id: finalize
         uses: actions/github-script@v7
+        env:
+          PRE_REF:            ${{ steps.pre.outputs.ref }}
+          PRE_SHOULD_BUILD:   ${{ steps.pre.outputs.should-build }}
+          PRE_UPLOAD:         ${{ steps.pre.outputs.upload }}
+          PRE_NETBIRD_REF:    ${{ steps.pre.outputs.netbird-ref }}
+          PRE_BUILD_NUMBER:   ${{ steps.pre.outputs.build-number }}
+          PRE_VERSION_OVERRIDE: ${{ steps.pre.outputs.version-override }}
+          DERIVE_VERSION:     ${{ steps.derive.outputs.version }}
+          ASC_LATEST_BUILD:   ${{ steps.asc-build.outputs.latest-build }}
+          GH_RUN_NUMBER:      ${{ github.run_number }}
         with:
           script: |
-            core.setOutput('ref',          '${{ steps.pre.outputs.ref }}');
-            core.setOutput('should-build', '${{ steps.pre.outputs.should-build }}');
-            core.setOutput('upload',       '${{ steps.pre.outputs.upload }}');
-            core.setOutput('netbird-ref',  '${{ steps.pre.outputs.netbird-ref }}');
+            core.setOutput('ref',          process.env.PRE_REF);
+            core.setOutput('should-build', process.env.PRE_SHOULD_BUILD);
+            core.setOutput('upload',       process.env.PRE_UPLOAD);
+            core.setOutput('netbird-ref',  process.env.PRE_NETBIRD_REF);
 
-            const overrideBuild = '${{ steps.pre.outputs.build-number }}';
-            const latestBuild   = '${{ steps.asc-build.outputs.latest-build }}';
+            const overrideBuild = process.env.PRE_BUILD_NUMBER || '';
+            const latestBuild   = process.env.ASC_LATEST_BUILD || '';
+            const runNumber     = process.env.GH_RUN_NUMBER    || '';
             let buildNumber;
-            if (overrideBuild && overrideBuild !== '${{ github.run_number }}') {
+            if (overrideBuild && overrideBuild !== runNumber) {
               buildNumber = overrideBuild;
             } else if (latestBuild && latestBuild !== 'none') {
               buildNumber = String(parseInt(latestBuild, 10) + 1);
@@ -215,8 +226,8 @@ jobs:
             core.info(`build-number: ${buildNumber} (latest=${latestBuild}, override=${overrideBuild})`);
             core.setOutput('build-number', buildNumber);
 
-            const override = '${{ steps.pre.outputs.version-override }}';
-            const derived  = '${{ steps.derive.outputs.version }}';
+            const override = process.env.PRE_VERSION_OVERRIDE || '';
+            const derived  = process.env.DERIVE_VERSION       || '';
             core.setOutput('version', override || derived);
             core.info(`version: ${override || derived} (override=${override || 'none'}, derived=${derived})`);
 
