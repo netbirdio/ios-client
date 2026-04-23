@@ -162,29 +162,7 @@ jobs:
 
           echo "$PRIVATE_KEY_BASE64" | base64 --decode > /tmp/AuthKey.p8
 
-          JWT=$(python3 - <<EOF
-import base64, json, time
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
-
-key = serialization.load_pem_private_key(open('/tmp/AuthKey.p8','rb').read(), password=None)
-
-def b64url(data):
-    if isinstance(data, str): data = data.encode()
-    return base64.urlsafe_b64encode(data).rstrip(b'=').decode()
-
-now = int(time.time())
-h = b64url(json.dumps({"alg":"ES256","kid":"$KEY_ID","typ":"JWT"}, separators=(',',':')))
-p = b64url(json.dumps({"iss":"$ISSUER_ID","exp":now+1200,"aud":"appstoreconnect-v1"}, separators=(',',':')))
-msg = f"{h}.{p}".encode()
-
-sig_der = key.sign(msg, ec.ECDSA(hashes.SHA256()))
-r, s = decode_dss_signature(sig_der)
-sig = b64url(r.to_bytes(32,'big') + s.to_bytes(32,'big'))
-print(f"{h}.{p}.{sig}")
-EOF
-          )
+          JWT=$(python3 -c "import base64,json,time,os;from cryptography.hazmat.primitives import hashes,serialization;from cryptography.hazmat.primitives.asymmetric import ec;from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature;key=serialization.load_pem_private_key(open('/tmp/AuthKey.p8','rb').read(),password=None);b64url=lambda d:base64.urlsafe_b64encode(d if isinstance(d,bytes) else d.encode()).rstrip(b'=').decode();now=int(time.time());h=b64url(json.dumps({'alg':'ES256','kid':os.environ['KEY_ID'],'typ':'JWT'},separators=(',',':')));p=b64url(json.dumps({'iss':os.environ['ISSUER_ID'],'exp':now+1200,'aud':'appstoreconnect-v1'},separators=(',',':')));msg=f'{h}.{p}'.encode();sig_der=key.sign(msg,ec.ECDSA(hashes.SHA256()));r,s=decode_dss_signature(sig_der);sig=b64url(r.to_bytes(32,'big')+s.to_bytes(32,'big'));print(f'{h}.{p}.{sig}')")
 
           HTTP_STATUS=$(curl -sg \
             -o /tmp/asc_response.json \
