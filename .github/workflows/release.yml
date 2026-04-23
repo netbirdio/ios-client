@@ -28,7 +28,7 @@ jobs:
           API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_ID: ${{ vars.APP_STORE_APP_ID_IOS }}
+          APP_ID: ${{ secrets.APP_STORE_APP_ID_IOS }}
           VERSION: ${{ steps.parse.outputs.version }}
         run: |
           set -euo pipefail
