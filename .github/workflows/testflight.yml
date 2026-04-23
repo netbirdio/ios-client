@@ -2,7 +2,7 @@ name: TestFlight
 
 on:
   push:
-    branches: [main]
+    branches: [main, ci/unified-build-number-from-testflight]
   pull_request:
     branches: [main]
     types: [opened, edited]
