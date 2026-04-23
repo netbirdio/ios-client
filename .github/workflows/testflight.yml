@@ -152,6 +152,7 @@ jobs:
 
       - name: Fetch latest build number from App Store Connect
         if: steps.pre.outputs.should-build == 'true'
+        id: asc-build
         env:
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -181,6 +182,8 @@ jobs:
 
           LATEST_BUILD=$(echo "$RESPONSE" | jq -r 'if (.data | length) > 0 then .data[0].attributes.version else "none" end')
 
+          echo "latest-build=$LATEST_BUILD" >> "$GITHUB_OUTPUT"
+
           echo "========================================="
           echo "  App Store Connect — latest build info"
           echo "  Version: $VERSION"
@@ -197,8 +200,20 @@ jobs:
             core.setOutput('ref',          '${{ steps.pre.outputs.ref }}');
             core.setOutput('should-build', '${{ steps.pre.outputs.should-build }}');
             core.setOutput('upload',       '${{ steps.pre.outputs.upload }}');
-            core.setOutput('build-number', '${{ steps.pre.outputs.build-number }}');
             core.setOutput('netbird-ref',  '${{ steps.pre.outputs.netbird-ref }}');
+
+            const overrideBuild = '${{ steps.pre.outputs.build-number }}';
+            const latestBuild   = '${{ steps.asc-build.outputs.latest-build }}';
+            let buildNumber;
+            if (overrideBuild && overrideBuild !== '${{ github.run_number }}') {
+              buildNumber = overrideBuild;
+            } else if (latestBuild && latestBuild !== 'none') {
+              buildNumber = String(parseInt(latestBuild, 10) + 1);
+            } else {
+              buildNumber = '1';
+            }
+            core.info(`build-number: ${buildNumber} (latest=${latestBuild}, override=${overrideBuild})`);
+            core.setOutput('build-number', buildNumber);
 
             const override = '${{ steps.pre.outputs.version-override }}';
             const derived  = '${{ steps.derive.outputs.version }}';
