@@ -69,6 +69,18 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
+        // Apply MDM managed configuration at the extension level.
+        // This ensures MDM values are applied even when the extension starts
+        // independently (e.g., via On Demand or Always-on VPN).
+        #if os(iOS)
+        if let extensionConfigPath = Preferences.configFile() {
+            let deviceName = Device.getName()
+            if ManagedConfigReader.applyIfAvailable(configPath: extensionConfigPath, deviceName: deviceName) {
+                AppLogger.shared.log("PacketTunnelProvider: MDM managed config applied")
+            }
+        }
+        #endif
+
         if adapter.needsLogin() {
             signalLoginRequired()
             // Return the error immediately so iOS tears down the tunnel interface at once.
