@@ -128,10 +128,12 @@ class ManagedConfigReader {
             return false
         }
 
-        // If MDM provides a setup key, attempt silent registration
+        // If MDM provides a setup key, attempt silent registration.
+        // Pass the MDM management URL so NewAuth connects to the correct server.
         if config.hasSetupKey() {
+            let mgmtUrl = config.getManagementURL() ?? ""
             do {
-                guard let auth = NetBirdSDKNewAuth(configPath, "", nil) else {
+                guard let auth = NetBirdSDKNewAuth(configPath, mgmtUrl, nil) else {
                     logger.warning("ManagedConfigReader: failed to create Auth for setup key login")
                     return true
                 }
