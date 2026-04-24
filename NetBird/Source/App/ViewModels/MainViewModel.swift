@@ -786,8 +786,14 @@ class ViewModel: ObservableObject {
     private func handleVPNStatusChangeForNotification() {
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         guard userDefaults?.bool(forKey: GlobalConstants.keyLoginRequired) == true else { return }
-        // Only notify when the app is in the background; foreground is handled by checkLoginRequiredFlag
-        guard UIApplication.shared.applicationState != .active else { return }
+        // Only notify when genuinely backgrounded; .inactive is a transitional state (e.g. app
+        // opening after a notification tap) — scheduling there fires extra banners via willPresent.
+        guard UIApplication.shared.applicationState == .background else { return }
+
+        // Clear the flag immediately so repeated NEVPNStatusDidChange events (VPN passes through
+        // several states during disconnect) don't each schedule their own notification.
+        userDefaults?.set(false, forKey: GlobalConstants.keyLoginRequired)
+        userDefaults?.synchronize()
 
         AppLogger.shared.log("VPN status changed with loginRequired flag — scheduling notification from main app")
         scheduleLoginRequiredNotification()
@@ -800,6 +806,11 @@ class ViewModel: ObservableObject {
                 AppLogger.shared.log("Notifications not authorized, skipping notification")
                 return
             }
+
+            // Cancel the delayed best-effort notification scheduled by the extension
+            // so that only this one (from the main app process) is delivered.
+            center.removePendingNotificationRequests(withIdentifiers: [GlobalConstants.notificationLoginRequired])
+            center.removeDeliveredNotifications(withIdentifiers: [GlobalConstants.notificationLoginRequired])
 
             let content = UNMutableNotificationContent()
             content.title = NSLocalizedString("notification_login_required_title", value: "VPN Disconnected", comment: "")

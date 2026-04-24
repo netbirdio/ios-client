@@ -293,17 +293,21 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         content.body = NSLocalizedString("notification_login_required_body", value: "Re-authentication required. Tap to log in and restore your VPN connection.", comment: "")
         content.sound = .default
 
+        // Delayed so the main app process (if backgrounded) can cancel this pending request
+        // and deliver its own — prevents the duplicate that occurs when both paths fire.
+        // If the app is force-quit, the delay expires and this notification fires instead.
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
         let request = UNNotificationRequest(
             identifier: GlobalConstants.notificationLoginRequired,
             content: content,
-            trigger: nil
+            trigger: trigger
         )
 
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
                 AppLogger.shared.log("Extension notification attempt failed: \(error.localizedDescription)")
             } else {
-                AppLogger.shared.log("Extension notification delivered successfully")
+                AppLogger.shared.log("Extension notification scheduled with 3s delay")
             }
         }
     }
