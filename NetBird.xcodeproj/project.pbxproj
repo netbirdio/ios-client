@@ -162,6 +162,18 @@
 		A1C3D5EE2F000008001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		A1C3D5EF2F000009001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		A1C3D5F02F00000A001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
+		AA0001012F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
+		AA0001022F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
+		AA0001032F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
+		AA0001042F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
+		AA0002052F22000200000001 /* ProfileBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002012F22000200000001 /* ProfileBadge.swift */; };
+		AA0002062F22000200000001 /* ProfilesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002022F22000200000001 /* ProfilesListView.swift */; };
+		AA0002072F22000200000001 /* AddProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002032F22000200000001 /* AddProfileSheet.swift */; };
+		AA0002082F22000200000001 /* AddProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002042F22000200000001 /* AddProfileViewModel.swift */; };
+		AA0009012F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
+		AA0009022F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
+		AA0009032F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
+		AA0009042F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
 		AA1B2C022F4E5A0100D1E2F3 /* TVGradientBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */; };
 		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
 		BB3D4E022F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */; };
@@ -339,6 +351,12 @@
 		A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationProvider.swift; sourceTree = "<group>"; };
 		A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiOnDemandPolicy.swift; sourceTree = "<group>"; };
 		A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellularOnDemandPolicy.swift; sourceTree = "<group>"; };
+		AA0001002F22000100000001 /* ProfileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileManager.swift; sourceTree = "<group>"; };
+		AA0002012F22000200000001 /* ProfileBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileBadge.swift; sourceTree = "<group>"; };
+		AA0002022F22000200000001 /* ProfilesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesListView.swift; sourceTree = "<group>"; };
+		AA0002032F22000200000001 /* AddProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProfileSheet.swift; sourceTree = "<group>"; };
+		AA0002042F22000200000001 /* AddProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProfileViewModel.swift; sourceTree = "<group>"; };
+		AA0009002F22000900000001 /* ProfileConnectionCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileConnectionCache.swift; sourceTree = "<group>"; };
 		AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVGradientBackground.swift; sourceTree = "<group>"; };
 		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
 		BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPreSharedKeyButton.swift; sourceTree = "<group>"; };
@@ -531,7 +549,7 @@
 		50A8910E2A792A15007C48FC = {
 			isa = PBXGroup;
 			children = (
-				5573F6ED2F9F523D00E63A73 /* GoogleService-Info.plist */,
+			5573F6ED2F9F523D00E63A73 /* GoogleService-Info.plist */,
 				50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */,
 				50245A0A2A7AA9390034792B /* NetBird-Bridging-Header.h */,
 				50A891192A792A15007C48FC /* NetBird */,
@@ -580,6 +598,8 @@
 				A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */,
 				F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */,
 				50245A292A7BDB590034792B /* Preferences.swift */,
+				AA0001002F22000100000001 /* ProfileManager.swift */,
+				AA0009002F22000900000001 /* ProfileConnectionCache.swift */,
 				A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */,
 				50245A2D2A7BDC470034792B /* NetworkChangeListener.swift */,
 				50CD81612AD0595E00CF830B /* DNSManager.swift */,
@@ -615,6 +635,7 @@
 				50E608122A7958B100BAF09B /* MainViewModel.swift */,
 				50D402962BD9B89300D4AC5B /* PeerViewModel.swift */,
 				509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */,
+				AA0002042F22000200000001 /* AddProfileViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -674,6 +695,9 @@
 				42873052F9544A89B1408339 /* iOSPeersView.swift */,
 				C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */,
 				2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */,
+				AA0002012F22000200000001 /* ProfileBadge.swift */,
+				AA0002022F22000200000001 /* ProfilesListView.swift */,
+				AA0002032F22000200000001 /* AddProfileSheet.swift */,
 				9CD257EF78F038560FF3112D /* VPNOnDemandView.swift */,
 				5BFDF94163AF4C32A44DB3CD /* FirstLaunchView.swift */,
 			);
@@ -1009,6 +1033,8 @@
 				445B5F762EECAF02008932B8 /* EnvVarPackager.swift in Sources */,
 				443782D02EDF29A800F9FA94 /* Device.swift in Sources */,
 				443782D12EDF29A800F9FA94 /* Preferences.swift in Sources */,
+				AA0001012F22000100000001 /* ProfileManager.swift in Sources */,
+				AA0009012F22000900000001 /* ProfileConnectionCache.swift in Sources */,
 				A1B2C3D52EEDF501001A2B3C /* ConfigurationProvider.swift in Sources */,
 				443782D42EDF29A800F9FA94 /* RoutesSelectionDetails.swift in Sources */,
 				443782D52EDF29A800F9FA94 /* StatusDetails.swift in Sources */,
@@ -1051,6 +1077,8 @@
 				44F3E3902EE2151100C87FEC /* StatusDetails.swift in Sources */,
 				44F3E3912EE2151100C87FEC /* ClientState.swift in Sources */,
 				44F3E3922EE2151100C87FEC /* Preferences.swift in Sources */,
+				AA0001022F22000100000001 /* ProfileManager.swift in Sources */,
+				AA0009022F22000900000001 /* ProfileConnectionCache.swift in Sources */,
 				A1B2C3D72EEDF503001A2B3C /* ConfigurationProvider.swift in Sources */,
 				44F3E3932EE2151100C87FEC /* NetworkExtensionAdapter.swift in Sources */,
 				44F3E3942EE2151100C87FEC /* ConnectionListener.swift in Sources */,
@@ -1069,6 +1097,8 @@
 				50245A572A80431C0034792B /* PacketTunnelProvider.swift in Sources */,
 				505118D12AD96ECA003027D3 /* key.c in Sources */,
 				50213A2D2A8D0AA30031D993 /* Preferences.swift in Sources */,
+				AA0001032F22000100000001 /* ProfileManager.swift in Sources */,
+				AA0009032F22000900000001 /* ProfileConnectionCache.swift in Sources */,
 				50CD81A82AD5504B00CF830B /* StatusDetails.swift in Sources */,
 				F1B2920B2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */,
 				A1C3D5EB2F000005001A2B3C /* WiFiOnDemandPolicy.swift in Sources */,
@@ -1119,6 +1149,8 @@
 				50E608242A79966600BAF09B /* AboutView.swift in Sources */,
 				50CD81622AD0595E00CF830B /* DNSManager.swift in Sources */,
 				50216D892ACB18EE009574C9 /* Preferences.swift in Sources */,
+				AA0001042F22000100000001 /* ProfileManager.swift in Sources */,
+				AA0009042F22000900000001 /* ProfileConnectionCache.swift in Sources */,
 				A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */,
 				50CD81B02AD5B94D00CF830B /* PeerCard.swift in Sources */,
 				B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */,
@@ -1134,6 +1166,10 @@
 				962925F1DAA24D40B98D395B /* iOSPeersView.swift in Sources */,
 				71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */,
 				0C71C019350D42AB8F110336 /* iOSSettingsView.swift in Sources */,
+				AA0002052F22000200000001 /* ProfileBadge.swift in Sources */,
+				AA0002062F22000200000001 /* ProfilesListView.swift in Sources */,
+				AA0002072F22000200000001 /* AddProfileSheet.swift in Sources */,
+				AA0002082F22000200000001 /* AddProfileViewModel.swift in Sources */,
 				4849965EC2515950756C8F10 /* VPNOnDemandView.swift in Sources */,
 				F2DCB2437ECA42C3AEC3C895 /* FirstLaunchView.swift in Sources */,
 			);
@@ -1234,7 +1270,7 @@
 					"@executable_path/Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1277,7 +1313,7 @@
 					"@executable_path/Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
@@ -1556,7 +1592,7 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -1579,7 +1615,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1603,7 +1639,7 @@
 				CODE_SIGN_ENTITLEMENTS = NetBird/NetBird.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				ENABLE_PREVIEWS = YES;
@@ -1626,7 +1662,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1665,7 +1701,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.NetBirdWidgetExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1703,7 +1739,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.NetBirdWidgetExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

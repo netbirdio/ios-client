@@ -47,6 +47,11 @@ struct iOSConnectionView: View {
 
                     // FQDN + IP + internet status
                     VStack {
+                        ProfileBadge(profileName: viewModel.activeProfileName) {
+                            viewModel.navigateToProfilesView = true
+                        }
+                        .padding(.top, 8)
+
                         Text(fqdnCopied ? "Copied" : viewModel.fqdn)
                             .foregroundColor(Color("TextPrimary"))
                             .font(.system(size: 20, weight: .regular))
@@ -138,6 +143,10 @@ struct iOSConnectionView: View {
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                         .animation(.easeInOut(duration: 0.3), value: viewModel.isInternetConnected)
                     }
+
+                    // Hidden NavigationLink for ProfilesView
+                    NavigationLink("", destination: ProfilesListView(), isActive: $viewModel.navigateToProfilesView)
+                        .hidden()
 
                     // Hidden NavigationLink for ServerView
                     NavigationLink("", destination: ServerView(), isActive: $viewModel.navigateToServerView)

@@ -77,7 +77,12 @@ class ViewModel: ObservableObject {
     @Published var showIpCopiedAlert = false
     @Published var showAuthenticationRequired = false
     @Published var navigateToServerView = false
-    
+    @Published var navigateToProfilesView = false
+
+    #if os(iOS)
+    @Published var activeProfileName: String = ProfileManager.shared.getActiveProfileName()
+    #endif
+
     @Published var extensionState: NEVPNStatus = .disconnected
     @Published var managementStatus: ClientState = .disconnected
     @Published var statusDetailsValid = false
@@ -93,8 +98,8 @@ class ViewModel: ObservableObject {
     @Published var setupKey: String = ""
     @Published var presharedKeySecure = true
     
-    @Published var fqdn = UserDefaults.standard.string(forKey: "fqdn") ?? ""
-    @Published var ip = UserDefaults.standard.string(forKey: "ip") ?? ""
+    @Published var fqdn = ""
+    @Published var ip = ""
     
     // Debug
     @Published var traceLogsEnabled: Bool {
@@ -129,6 +134,28 @@ class ViewModel: ObservableObject {
     var buttonLock = false
     let defaults = UserDefaults.standard
 
+    // MARK: - Per-profile connection info
+
+    #if os(iOS)
+    private let profileConnectionCache = ProfileConnectionCache()
+    #endif
+
+    /// While true the polling timer must not overwrite ip/fqdn/peers.
+    /// Set when switching profiles; cleared once the extension fully
+    /// disconnects and then reconnects to the new profile.
+    private var profileSwitchPending = false
+    private var previousExtensionState: NEVPNStatus = .disconnected
+
+    /// Loads cached ip/fqdn for the given profile into the published properties.
+    /// Shows empty strings if no data has been saved for that profile yet.
+    func loadConnectionInfoForProfile(_ profileName: String) {
+        #if os(iOS)
+        let entry = profileConnectionCache.entry(for: profileName)
+        ip   = entry?.ip   ?? ""
+        fqdn = entry?.fqdn ?? ""
+        #endif
+    }
+
     private var cancellables = Set<AnyCancellable>()
     private let networkMonitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "io.netbird.networkMonitor")
@@ -146,6 +173,15 @@ class ViewModel: ObservableObject {
         self.traceLogsEnabled = logLevel == "TRACE"
         self.peerViewModel = PeerViewModel()
         self.routeViewModel = RoutesViewModel(networkExtensionAdapter: networkExtensionAdapter)
+
+        // Load cached connection info for the active profile
+        #if os(iOS)
+        let activeProfile = ProfileManager.shared.getActiveProfileName()
+        let cache = ProfileConnectionCache()
+        let cached = cache.entry(for: activeProfile)
+        self.ip   = cached?.ip   ?? ""
+        self.fqdn = cached?.fqdn ?? ""
+        #endif
 
         // Don't load rosenpass settings during init - they trigger expensive SDK initialization.
         // These will be loaded lazily when the settings view is accessed.
@@ -227,6 +263,13 @@ class ViewModel: ObservableObject {
             self.logger.info("connect: Task started, calling networkExtensionAdapter.start()")
             await self.networkExtensionAdapter.start()
             self.logger.info("connect: networkExtensionAdapter.start() completed")
+            // If start() returned but VPN never launched (e.g. IPC failed to get login URL)
+            // and the browser login sheet is not showing, the tunnel won't start on its own.
+            // Reset the stuck "Connecting..." state so the user can try again.
+            if self.extensionState == .disconnected && !self.networkExtensionAdapter.showBrowser {
+                self.connectPressed = false
+                self.updateVPNDisplayState()
+            }
         }
     }
 
@@ -377,11 +420,21 @@ class ViewModel: ObservableObject {
             disconnectPressed = false
             newState = .connected
         case .connecting:
-            connectPressed = false
+            // Do NOT clear connectPressed here — iOS can emit .disconnecting right after
+            // .connecting during tunnel startup (cleanup of old instance). Keeping
+            // connectPressed=true lets the .disconnecting handler suppress that noise.
+            // connectPressed is cleared only on .connected or .disconnected.
             newState = .connecting
         case .disconnecting:
-            disconnectPressed = false
-            newState = .disconnecting
+            // Ignore transient .disconnecting emitted by iOS VPN framework during tunnel startup.
+            // When startVPNTunnel() is called, iOS briefly reports .disconnecting while cleaning
+            // up the previous tunnel instance — even though the user pressed Connect, not Disconnect.
+            if connectPressed {
+                newState = .connecting
+            } else {
+                disconnectPressed = false
+                newState = .disconnecting
+            }
         case .disconnected:
             // Extension confirmed disconnected — clear both flags,
             // unless a flag was JUST set (immediate feedback)
@@ -440,52 +493,57 @@ class ViewModel: ObservableObject {
         networkExtensionAdapter.startTimer { details in
             self.checkExtensionState()
             self.checkNetworkUnavailableFlag()
-            self.updateDetailsIfChanged(details)
-            self.updatePeersIfChanged(details)
+            self.checkLoginRequiredFlag()
+
+            let currentState = self.extensionState
+
+            // Detect reconnection after a profile switch:
+            // the guard lifts only once the extension has gone through a
+            // non-connected state and then comes back as .connected.
+            if self.profileSwitchPending {
+                if self.previousExtensionState != .connected && currentState == .connected {
+                    self.profileSwitchPending = false
+                }
+                self.previousExtensionState = currentState
+            }
+
+            if currentState == .disconnected && self.vpnDisplayState == .connected {
+                self.showAuthenticationRequired = true
+                self.updateVPNDisplayState()
+            }
+
+            // Only update ip/fqdn/peers when the extension is connected
+            // AND we are not mid-profile-switch (guard ensures we don't
+            // overwrite the new profile's cached data with the old tunnel's values).
+            if !self.profileSwitchPending && currentState == .connected {
+                let newFqdn = details.fqdn.isEmpty ? self.fqdn : details.fqdn
+                let newIp   = details.ip.isEmpty   ? self.ip   : details.ip
+                let changed = newFqdn != self.fqdn || newIp != self.ip
+                if changed {
+                    self.fqdn = newFqdn
+                    self.ip   = newIp
+                    #if os(iOS)
+                    let profile = ProfileManager.shared.getActiveProfileName()
+                    self.profileConnectionCache.save(ip: newIp, fqdn: newFqdn, for: profile)
+                    #endif
+                }
+
+                let sortedPeerInfo = details.peerInfo.sorted { $0.ip < $1.ip }
+                if sortedPeerInfo.count != self.peerViewModel.peerInfo.count || !sortedPeerInfo.elementsEqual(self.peerViewModel.peerInfo, by: { a, b in
+                    a.ip == b.ip && a.connStatus == b.connStatus && a.relayed == b.relayed && a.direct == b.direct && a.connStatusUpdate == b.connStatusUpdate && a.routes.count == b.routes.count
+                }) {
+                    print("Setting new peer info: \(sortedPeerInfo.count) Peers")
+                    self.peerViewModel.peerInfo = sortedPeerInfo
+                }
+            }
+
+            if details.managementStatus != self.managementStatus {
+                print("Status: \(details.managementStatus) - Extension: \(currentState)")
+                self.managementStatus = details.managementStatus
+                self.updateVPNDisplayState()
+            }
+
             self.statusDetailsValid = true
-        }
-    }
-
-    private func updateDetailsIfChanged(_ details: StatusDetails) {
-        let ipChanged = details.ip != ip
-        let fqdnChanged = details.fqdn != fqdn
-        let statusChanged = details.managementStatus != managementStatus
-
-        guard ipChanged || fqdnChanged || statusChanged else { return }
-
-        if ipChanged {
-            defaults.set(details.ip, forKey: "ip")
-            ip = details.ip
-        }
-        if fqdnChanged {
-            defaults.set(details.fqdn, forKey: "fqdn")
-            fqdn = details.fqdn
-        }
-        if statusChanged {
-            managementStatus = details.managementStatus
-            updateVPNDisplayState()
-        } else if ipChanged || fqdnChanged {
-            #if os(iOS)
-            updateWidgetState()
-            #endif
-        }
-    }
-
-    private func updatePeersIfChanged(_ details: StatusDetails) {
-        let sorted = details.peerInfo.sorted { $0.ip < $1.ip }
-        let current = peerViewModel.peerInfo
-
-        let changed = sorted.count != current.count || !sorted.elementsEqual(current) { a, b in
-            a.ip == b.ip
-                && a.connStatus == b.connStatus
-                && a.relayed == b.relayed
-                && a.direct == b.direct
-                && a.connStatusUpdate == b.connStatusUpdate
-                && a.routes.count == b.routes.count
-        }
-
-        if changed {
-            peerViewModel.peerInfo = sorted
         }
     }
     
@@ -493,9 +551,17 @@ class ViewModel: ObservableObject {
         networkExtensionAdapter.stopTimer()
     }
     
+    // Prevents overlapping getExtensionStatus calls from delivering out-of-order results.
+    // loadAllFromPreferences() is slow and variable; without this guard a stale .disconnecting
+    // completion can arrive after a newer .disconnected one, causing a spurious Disconnecting flash.
+    private var isCheckingExtensionState = false
+
     func checkExtensionState() {
+        guard !isCheckingExtensionState else { return }
+        isCheckingExtensionState = true
         networkExtensionAdapter.getExtensionStatus { status in
             DispatchQueue.main.async {
+                self.isCheckingExtensionState = false
                 self.applyExtensionStatus(status)
             }
         }
@@ -621,6 +687,24 @@ class ViewModel: ObservableObject {
         configProvider.reload()
         // Sync @Published properties with reloaded config values
         loadRosenpassSettings()
+    }
+
+    /// Switches connection display data to the given profile's cached values.
+    /// Call this when switching profiles so the new profile's last known info is shown immediately.
+    func switchConnectionInfo(to profileName: String) {
+        // Load cached data for the target profile so the UI shows it right away.
+        loadConnectionInfoForProfile(profileName)
+        peerViewModel.peerInfo = []
+        managementStatus = .disconnected
+        updateVPNDisplayState()
+        // Block polling from overwriting the new profile's data until the extension
+        // has fully disconnected and reconnected to the new profile.
+        // Seed previousExtensionState with the CURRENT extension state so the guard
+        // only fires on a genuine non-connected → connected transition.
+        // (Setting it to .disconnected would falsely trigger on the very next tick
+        // while the old tunnel is still connected.)
+        profileSwitchPending = true
+        previousExtensionState = extensionState
     }
     
     func setForcedRelayConnection(isEnabled: Bool) {
@@ -846,6 +930,12 @@ class ViewModel: ObservableObject {
 
         AppLogger.shared.log("Login required flag detected from extension")
         showAuthenticationRequired = true
+        connectPressed = false
+        updateVPNDisplayState()
+        // Temporarily disable On Demand to stop iOS from looping reconnect attempts
+        // while the user is not authenticated. It will be re-enabled automatically
+        // after a successful connection (see applyExtensionStatus).
+        networkExtensionAdapter.setOnDemandEnabled(false)
         #endif
     }
 }

@@ -3,16 +3,18 @@ name: TestFlight
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
     branches: [main]
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
   pull-requests: write
 
 concurrency:
-  group: testflight-${{ github.ref }}-${{ github.head_ref || github.actor_id }}
+  group: testflight-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -20,85 +22,220 @@ jobs:
     name: Validate trigger
     if: >
       github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      github.event_name == 'issue_comment'
     runs-on: ubuntu-latest
     outputs:
-      ref: ${{ steps.resolve.outputs.ref }}
-      should-build: ${{ steps.resolve.outputs.should-build }}
-      upload: ${{ steps.resolve.outputs.upload }}
-      netbird-ref: ${{ steps.resolve.outputs.netbird-ref }}
-      version: ${{ steps.resolve.outputs.version }}
-      build-number: ${{ steps.resolve.outputs.build-number }}
+      ref: ${{ steps.finalize.outputs.ref }}
+      should-build: ${{ steps.finalize.outputs.should-build }}
+      upload: ${{ steps.finalize.outputs.upload }}
+      netbird-ref: ${{ steps.finalize.outputs.netbird-ref }}
+      version: ${{ steps.finalize.outputs.version }}
+      build-number: ${{ steps.finalize.outputs.build-number }}
     steps:
-      - name: Resolve build ref and validate
-        id: resolve
+      - name: Resolve ref and check permissions
+        id: pre
         uses: actions/github-script@v7
         with:
           script: |
-            // Push to main or tag — always build and upload
-            if (context.eventName === 'push') {
+            core.setOutput('build-number', '${{ github.run_number }}');
+            core.setOutput('should-build', 'false');
+
+            function parseCommand(body) {
+              const line = body.split('\n').find(l => l.trim().startsWith('/testflight')) || '';
+              const versionMatch = line.match(/version=([0-9]+\.[0-9]+\.[0-9]+)/);
+              if (versionMatch) core.setOutput('version-override', versionMatch[1]);
+              const buildMatch = line.match(/build-number=([0-9]+)/);
+              if (buildMatch) core.setOutput('build-number', buildMatch[1]);
+              const netbirdMatch = line.match(/netbird-ref=([a-zA-Z0-9._\/-]+)/);
+              if (netbirdMatch) core.setOutput('netbird-ref', netbirdMatch[1]);
+            }
+
+            if (context.eventName === 'workflow_dispatch' || context.eventName === 'push') {
               core.setOutput('ref', context.sha);
               core.setOutput('should-build', 'true');
               core.setOutput('upload', 'true');
-
-              // Extract version from tag (v1.2.3 → 1.2.3)
-              const ref = context.ref;
-              if (ref.startsWith('refs/tags/v')) {
-                const version = ref.replace('refs/tags/v', '');
-                core.setOutput('version', version);
-                core.info(`Tag push, using version: ${version}`);
-              }
               return;
             }
 
-            // PR opened/updated — build if not from fork
             if (context.eventName === 'pull_request') {
-              const headRepo = context.payload.pull_request.head.repo.full_name;
-              const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
+              const body = context.payload.pull_request.body || '';
+              const hasCommand = body.split('\n').some(l => l.trim().startsWith('/testflight'));
+              if (!hasCommand) {
+                core.info('No /testflight in PR description — skipping');
+                return;
+              }
+              core.setOutput('ref', context.payload.pull_request.head.sha);
+              core.setOutput('should-build', 'true');
+              core.setOutput('upload', 'true');
 
-              if (headRepo !== baseRepo) {
-                core.info(`Skipping fork PR from ${headRepo}`);
-                core.setOutput('should-build', 'false');
+              parseCommand(body);
+              return;
+            }
+
+            if (context.eventName === 'issue_comment') {
+              if (!context.payload.issue.pull_request) {
+                core.info('Not a PR comment — skipping');
+                return;
+              }
+              const body = context.payload.comment.body || '';
+              const hasCommand = body.split('\n').some(l => l.trim().startsWith('/testflight'));
+              if (!hasCommand) {
+                core.info('No /testflight command — skipping');
                 return;
               }
 
-              core.setOutput('ref', context.payload.pull_request.head.sha);
-              core.setOutput('should-build', 'true');
-
-              // Parse /testflight line from PR description for upload flag and parameters
-              const body = context.payload.pull_request.body || '';
-              const hasTestflight = body.includes('/testflight');
-              core.setOutput('upload', hasTestflight ? 'true' : 'false');
-              core.info(`PR description ${hasTestflight ? 'contains' : 'does not contain'} /testflight, upload=${hasTestflight}`);
-
-              const lines = body.split('\n');
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed.startsWith('/testflight')) continue;
-
-                core.info(`Found /testflight line: ${trimmed}`);
-                const netbirdRefMatch = trimmed.match(/netbird-ref=(\S+)/);
-                if (netbirdRefMatch) {
-                  core.setOutput('netbird-ref', netbirdRefMatch[1]);
-                  core.info(`Using netbird-ref: ${netbirdRefMatch[1]}`);
-                }
-                const versionMatch = trimmed.match(/version=(\S+)/);
-                if (versionMatch) {
-                  core.setOutput('version', versionMatch[1]);
-                  core.info(`Using version: ${versionMatch[1]}`);
-                }
-                const buildNumberMatch = trimmed.match(/build-number=(\S+)/);
-                if (buildNumberMatch) {
-                  core.setOutput('build-number', buildNumberMatch[1]);
-                  core.info(`Using build-number: ${buildNumberMatch[1]}`);
-                }
-                break;
+              // Permission check
+              const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: context.payload.comment.user.login,
+              });
+              const level = perm.permission;
+              if (level !== 'admin' && level !== 'write') {
+                core.info(`User ${context.payload.comment.user.login} has '${level}' — skipping`);
+                return;
               }
+
+              // Get PR head SHA
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.issue.number,
+              });
+
+              // Block fork PRs — untrusted code must not run with privileged credentials
+              const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
+              if (pr.head.repo.full_name !== baseRepo) {
+                core.info(`PR is from fork ${pr.head.repo.full_name} — skipping`);
+                return;
+              }
+
+              core.setOutput('ref', pr.head.sha);
+              core.setOutput('should-build', 'true');
+              core.setOutput('upload', 'true');
+
+              parseCommand(body);
             }
 
+      - name: Checkout for version derivation
+        if: steps.pre.outputs.should-build == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pre.outputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+          sparse-checkout: .
+
+      - name: Derive version from git tags
+        if: steps.pre.outputs.should-build == 'true'
+        id: derive
+        run: |
+          LATEST_TAG=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LATEST_TAG" ]; then
+            echo "::error::No v* tags found — cannot derive version"
+            exit 1
+          elif ! echo "$LATEST_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '$LATEST_TAG' is not valid semver (expected vX.Y.Z)"
+            exit 1
+          fi
+          VERSION="${LATEST_TAG#v}"
+          MAJOR="${VERSION%%.*}"
+          REST="${VERSION#*.}"
+          MINOR="${REST%%.*}"
+          PATCH="${REST#*.}"
+          NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Tag: $LATEST_TAG → next: $NEXT"
+
+      - name: Fetch latest build number from App Store Connect
+        if: steps.pre.outputs.should-build == 'true'
+        id: asc-build
+        env:
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APP_ID: ${{ secrets.APP_STORE_APP_ID_IOS }}
+        run: |
+          VERSION="${{ steps.pre.outputs.version-override || steps.derive.outputs.version }}"
+
+          pip install cryptography --quiet
+
+          echo "$PRIVATE_KEY_BASE64" | base64 --decode > /tmp/AuthKey.p8
+          trap 'rm -f /tmp/AuthKey.p8' EXIT
+
+          JWT=$(python3 -c "import base64,json,time,os;from cryptography.hazmat.primitives import hashes,serialization;from cryptography.hazmat.primitives.asymmetric import ec;from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature;key=serialization.load_pem_private_key(open('/tmp/AuthKey.p8','rb').read(),password=None);b64url=lambda d:base64.urlsafe_b64encode(d if isinstance(d,bytes) else d.encode()).rstrip(b'=').decode();now=int(time.time());h=b64url(json.dumps({'alg':'ES256','kid':os.environ['KEY_ID'],'typ':'JWT'},separators=(',',':')));p=b64url(json.dumps({'iss':os.environ['ISSUER_ID'],'exp':now+1200,'aud':'appstoreconnect-v1'},separators=(',',':')));msg=f'{h}.{p}'.encode();sig_der=key.sign(msg,ec.ECDSA(hashes.SHA256()));r,s=decode_dss_signature(sig_der);sig=b64url(r.to_bytes(32,'big')+s.to_bytes(32,'big'));print(f'{h}.{p}.{sig}')")
+
+          HTTP_STATUS=$(curl -sg \
+            -o /tmp/asc_response.json \
+            -w "%{http_code}" \
+            "https://api.appstoreconnect.apple.com/v1/builds?filter[app]=$APP_ID&filter[preReleaseVersion.version]=$VERSION&sort=-uploadedDate&limit=1" \
+            -H "Authorization: Bearer $JWT")
+
+          RESPONSE=$(cat /tmp/asc_response.json)
+          echo "HTTP status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "API error response:"
+            echo "$RESPONSE" | jq . || echo "$RESPONSE"
+            exit 1
+          fi
+
+          LATEST_BUILD=$(echo "$RESPONSE" | jq -r 'if (.data | length) > 0 and (.data[0].attributes.version != null) then .data[0].attributes.version else "none" end')
+
+          echo "latest-build=$LATEST_BUILD" >> "$GITHUB_OUTPUT"
+
+          echo "========================================="
+          echo "  App Store Connect — latest build info"
+          echo "  Version: $VERSION"
+          echo "  Latest uploaded build: $LATEST_BUILD"
+          echo "========================================="
+
+
+      - name: Finalize outputs
+        id: finalize
+        uses: actions/github-script@v7
+        env:
+          PRE_REF:            ${{ steps.pre.outputs.ref }}
+          PRE_SHOULD_BUILD:   ${{ steps.pre.outputs.should-build }}
+          PRE_UPLOAD:         ${{ steps.pre.outputs.upload }}
+          PRE_NETBIRD_REF:    ${{ steps.pre.outputs.netbird-ref }}
+          PRE_BUILD_NUMBER:   ${{ steps.pre.outputs.build-number }}
+          PRE_VERSION_OVERRIDE: ${{ steps.pre.outputs.version-override }}
+          DERIVE_VERSION:     ${{ steps.derive.outputs.version }}
+          ASC_LATEST_BUILD:   ${{ steps.asc-build.outputs.latest-build }}
+          GH_RUN_NUMBER:      ${{ github.run_number }}
+        with:
+          script: |
+            core.setOutput('ref',          process.env.PRE_REF);
+            core.setOutput('should-build', process.env.PRE_SHOULD_BUILD);
+            core.setOutput('upload',       process.env.PRE_UPLOAD);
+            core.setOutput('netbird-ref',  process.env.PRE_NETBIRD_REF);
+
+            const overrideBuild = process.env.PRE_BUILD_NUMBER || '';
+            const latestBuild   = process.env.ASC_LATEST_BUILD || '';
+            const runNumber     = process.env.GH_RUN_NUMBER    || '';
+            let buildNumber;
+            if (overrideBuild && overrideBuild !== runNumber) {
+              buildNumber = overrideBuild;
+            } else if (latestBuild && latestBuild !== 'none') {
+              const parsed = parseInt(latestBuild, 10);
+              buildNumber = !isNaN(parsed) ? String(parsed + 1) : '1';
+            } else {
+              buildNumber = '1';
+            }
+            core.info(`build-number: ${buildNumber} (latest=${latestBuild}, override=${overrideBuild})`);
+            core.setOutput('build-number', buildNumber);
+
+            const override = process.env.PRE_VERSION_OVERRIDE || '';
+            const derived  = process.env.DERIVE_VERSION       || '';
+            core.setOutput('version', override || derived);
+            core.info(`version: ${override || derived} (override=${override || 'none'}, derived=${derived})`);
+
   build:
-    name: Build and Upload
+    name: Build and Upload iOS
     needs: gate
     if: needs.gate.outputs.should-build == 'true'
     uses: ./.github/workflows/build-upload.yml
@@ -110,10 +247,24 @@ jobs:
       upload: ${{ needs.gate.outputs.upload == 'true' }}
     secrets: inherit
 
+  build-tvos:
+    name: Build and Upload tvOS
+    needs: gate
+    if: needs.gate.outputs.should-build == 'true'
+    uses: ./.github/workflows/build-upload-tvos.yml
+    with:
+      ref: ${{ needs.gate.outputs.ref }}
+      build-number: ${{ needs.gate.outputs.build-number }}
+      upload: ${{ needs.gate.outputs.upload == 'true' }}
+    secrets: inherit
+
   notify:
     name: Notify PR
-    needs: [gate, build]
-    if: always() && github.event_name == 'pull_request'
+    needs: [gate, build, build-tvos]
+    if: >
+      always() &&
+      (github.event_name == 'pull_request' || github.event_name == 'issue_comment') &&
+      needs.gate.outputs.should-build == 'true'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -122,31 +273,76 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const buildResult = '${{ needs.build.result }}';
-            const ref = '${{ needs.gate.outputs.ref }}';
-            const shortSha = ref.substring(0, 7);
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const iosResult   = '${{ needs.build.result }}';
+            const tvosResult  = '${{ needs.build-tvos.result }}';
+            const ref         = '${{ needs.gate.outputs.ref }}';
+            const shortSha    = ref.substring(0, 7);
+            const runUrl      = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const buildNumber = '${{ needs.gate.outputs.build-number }}';
+            const version     = '${{ needs.gate.outputs.version }}';
 
-            const prNumber = context.payload.pull_request.number;
+            const prNumber = context.eventName === 'pull_request'
+              ? context.payload.pull_request.number
+              : context.payload.issue.number;
 
-            const uploaded = '${{ needs.gate.outputs.upload }}' === 'true';
-            const version = '${{ needs.gate.outputs.version }}' || 'default';
-            const buildNumber = '${{ needs.gate.outputs.build-number }}' || '${{ github.run_number }}';
+            const iosOk    = iosResult  === 'success';
+            const tvosOk   = tvosResult === 'success';
+            const iosFail  = iosResult  === 'failure';
+            const tvosFail = tvosResult === 'failure';
 
             let body;
-            if (buildResult === 'success' && uploaded) {
-              body = `**TestFlight build uploaded** \`${version} (${buildNumber})\` for \`${shortSha}\`\n\nThe build has been submitted to App Store Connect and will be available in TestFlight shortly.\n\n[View workflow run](${runUrl})`;
-            } else if (buildResult === 'success') {
-              body = `**Build succeeded** for \`${shortSha}\` (no upload — add \`/testflight\` to PR description to upload)\n\n[View workflow run](${runUrl})`;
-            } else if (buildResult === 'skipped') {
-              return;
+            if (iosOk && tvosOk) {
+              body = `**TestFlight builds uploaded** \`${version} (${buildNumber})\` for \`${shortSha}\` — iOS + tvOS\n\n[View workflow run](${runUrl})`;
+            } else if ((iosFail || tvosFail)) {
+              const failed = [iosFail && 'iOS', tvosFail && 'tvOS'].filter(Boolean).join(', ');
+              body = `**Build failed** (${failed}) \`${version} (${buildNumber})\` for \`${shortSha}\`\n\n[View workflow run](${runUrl})`;
             } else {
-              body = `**Build failed** for \`${shortSha}\`\n\n[View workflow run](${runUrl})`;
+              return;
             }
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: prNumber,
-              body: body,
+              body,
+            });
+
+  notify-merge:
+    name: Comment on merge commit
+    needs: [gate, build, build-tvos]
+    if: >
+      always() &&
+      github.event_name == 'push' &&
+      needs.gate.outputs.should-build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Comment on commit
+        uses: actions/github-script@v7
+        env:
+          VERSION:      ${{ needs.gate.outputs.version }}
+          BUILD_NUMBER: ${{ needs.gate.outputs.build-number }}
+          IOS_RESULT:   ${{ needs.build.result }}
+          TVOS_RESULT:  ${{ needs.build-tvos.result }}
+        with:
+          script: |
+            const version     = process.env.VERSION;
+            const buildNumber = process.env.BUILD_NUMBER;
+            const iosResult   = process.env.IOS_RESULT;
+            const tvosResult  = process.env.TVOS_RESULT;
+            const runUrl      = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const iosOk   = iosResult  === 'success';
+            const tvosOk  = tvosResult === 'success';
+            const iosBadge  = iosOk  ? '✅' : '❌';
+            const tvosBadge = tvosOk ? '✅' : '❌';
+
+            const body = `**TestFlight** \`${version} (${buildNumber})\` — iOS ${iosBadge} tvOS ${tvosBadge}\n\n[View workflow run](${runUrl})`;
+
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body,
             });

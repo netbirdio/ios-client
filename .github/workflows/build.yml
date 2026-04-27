@@ -3,6 +3,8 @@ name: Build
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -118,6 +120,20 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             | xcpretty --color
 
+      - name: Build Widget Extension
+        working-directory: ios-client
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project NetBird.xcodeproj \
+            -scheme NetBirdWidgetExtensionExtension \
+            -destination 'generic/platform=iOS' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | xcpretty --color
+
   build_tvos:
     name: Build tvOS App
     runs-on: macos-15
@@ -196,7 +212,9 @@ jobs:
         run: |
           xcodebuild -resolvePackageDependencies \
             -project NetBird.xcodeproj \
-            -target "NetBird TV"
+            -scheme "NetBird TV" \
+            -destination 'generic/platform=tvOS' \
+            -derivedDataPath $RUNNER_TEMP/DerivedData-tvos
 
       - name: Build tvOS App
         working-directory: ios-client
@@ -204,9 +222,10 @@ jobs:
           set -o pipefail
           xcodebuild build \
             -project NetBird.xcodeproj \
-            -target "NetBird TV" \
+            -scheme "NetBird TV" \
             -destination 'generic/platform=tvOS' \
             -configuration Debug \
+            -derivedDataPath $RUNNER_TEMP/DerivedData-tvos \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -218,9 +237,10 @@ jobs:
           set -o pipefail
           xcodebuild build \
             -project NetBird.xcodeproj \
-            -target "NetBirdTVNetworkExtension" \
+            -scheme "NetBirdTVNetworkExtension" \
             -destination 'generic/platform=tvOS' \
             -configuration Debug \
+            -derivedDataPath $RUNNER_TEMP/DerivedData-tvos \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \

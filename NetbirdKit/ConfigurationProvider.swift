@@ -115,7 +115,14 @@ final class iOSConfigurationProvider: ConfigurationProvider {
     }
 
     func reload() {
-        // Recreate preferences to pick up new config file after server change
+        // Only recreate preferences if the config file exists.
+        // If the config was deleted by a logout, NetBirdSDKNewPreferences would create
+        // a new file with the default server URL (api.netbird.io), overwriting any
+        // saved custom server URL in netbird_server_url.
+        guard let configPath = Preferences.configFile(),
+              FileManager.default.fileExists(atPath: configPath) else {
+            return
+        }
         self.preferences = Preferences.newPreferences()
     }
 }
