@@ -39,13 +39,57 @@ struct iOSConnectionView: View {
                         Image(imageName)
                             .resizable(resizingMode: .stretch)
                             .aspectRatio(contentMode: DeviceType.isPad ? .fill : .fit)
+                            // Button overlaid directly on the image so both share the same
+                            // coordinate space — mirrors Android where btn_connect is a sibling
+                            // of bg_mask inside bg_mask_container.
+                            // vertical_bias=0.07: button top = 7% of (imageHeight - buttonHeight)
+                            // Portrait image ratio h/w = 488/360 = 1.357
+                            // offset = (Screen.width*1.357 - Screen.width*0.79) * 0.07 ≈ Screen.width * 0.04
+                            .overlay(alignment: .top) {
+                                let btnSize = Screen.width * (isLandscape ? 0.40 : 0.79)
+                                let imgH    = isLandscape
+                                    ? Screen.height * 0.81               // landscape: height-constrained
+                                    : Screen.width  * 1.357              // portrait: width-constrained
+                                let biasOffset = max(0, (imgH - btnSize) * 0.07)
+
+                                VStack(spacing: 0) {
+                                    Color.clear.frame(height: biasOffset)
+
+                                    Button(action: {
+                                        if !viewModel.buttonLock {
+                                            switch viewModel.vpnDisplayState {
+                                            case .disconnected:
+                                                viewModel.connect()
+                                            case .connecting, .connected:
+                                                viewModel.close()
+                                            case .disconnecting:
+                                                break
+                                            }
+                                        }
+                                    }) {
+                                        CustomLottieView(vpnState: $viewModel.vpnDisplayState)
+                                            .id(animationKey)
+                                            .frame(width: btnSize, height: btnSize)
+                                            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                                                self.animationKey = UUID()
+                                            }
+                                    }
+
+                                    Text(viewModel.extensionStateText)
+                                        .foregroundColor(Color("TextSecondary"))
+                                        .font(.system(size: 24, weight: .regular))
+                                        .padding(.top, 24)
+
+                                    Spacer()
+                                }
+                            }
                             .padding(.top, Screen.height * (DeviceType.isPad ? (isLandscape ? -0.15 : 0.36) : 0.19))
                             .padding(.leading, UIScreen.main.bounds.height * (isLandscape ? 0.04 : 0))
                             .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
                             .edgesIgnoringSafeArea(.bottom)
                     }
 
-                    // FQDN + IP + internet status
+                    // FQDN + IP
                     VStack {
                         ProfileBadge(profileName: viewModel.activeProfileName) {
                             viewModel.navigateToProfilesView = true
@@ -99,39 +143,6 @@ struct iOSConnectionView: View {
 
                         Spacer()
                     }
-
-                    // VPN button + status text
-                    VStack {
-                        Spacer()
-                        Button(action: {
-                            if !viewModel.buttonLock {
-                                switch viewModel.vpnDisplayState {
-                                case .disconnected:
-                                    viewModel.connect()
-                                case .connecting, .connected:
-                                    viewModel.close()
-                                case .disconnecting:
-                                    break
-                                }
-                            }
-                        }) {
-                            CustomLottieView(vpnState: $viewModel.vpnDisplayState)
-                                .id(animationKey)
-                                .frame(width: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79), height: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79))
-                                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                                    self.animationKey = UUID()
-                                }
-                        }
-                        .padding(.top, -UIScreen.main.bounds.height / 27)
-                        .padding(.bottom)
-
-                        Text(viewModel.extensionStateText)
-                            .foregroundColor(Color("TextSecondary"))
-                            .font(.system(size: 24, weight: .regular))
-
-                        Spacer()
-                    }
-                    .padding()
 
                     // Network warning banner – above tab bar
                     if viewModel.vpnDisplayState == .connected && !viewModel.isInternetConnected {
