@@ -84,6 +84,10 @@ public class NetworkExtensionAdapter: ObservableObject {
             // This must happen in the main app — not via IPC — because the extension
             // process may not be running yet when start() is called.
             restoreConfigIfMissing()
+
+            // Apply MDM managed configuration before login.
+            // MDM values override user-set preferences on every launch.
+            applyManagedConfig()
             #endif
             await loginIfRequired()
             logger.info("start: loginIfRequired() completed")
@@ -92,6 +96,21 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
         logger.info("start: EXIT")
     }
+
+    #if os(iOS)
+    /// Reads and applies MDM-managed app configuration if available.
+    /// MDM config is delivered via the com.apple.configuration.managed UserDefaults domain.
+    private func applyManagedConfig() {
+        guard let configPath = Preferences.configFile() else {
+            logger.warning("applyManagedConfig: config path unavailable")
+            return
+        }
+        let deviceName = Device.getName()
+        if ManagedConfigReader.applyIfAvailable(configPath: configPath, deviceName: deviceName) {
+            logger.info("applyManagedConfig: MDM config applied successfully")
+        }
+    }
+    #endif
 
     #if os(iOS)
     /// If the active profile's config file is missing (deleted after logout) but we have
