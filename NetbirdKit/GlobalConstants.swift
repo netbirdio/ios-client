@@ -28,4 +28,5 @@ struct GlobalConstants {
 
     static let configFileName = "netbird.cfg"
     static let stateFileName = "state.json"
+    static let serverURLFileName = "netbird_server_url"
 }

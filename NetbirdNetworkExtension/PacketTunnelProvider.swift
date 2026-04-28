@@ -7,6 +7,7 @@
 
 import NetworkExtension
 import Network
+import NetBirdSDK
 import os
 import UserNotifications
 
@@ -17,9 +18,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         return PacketTunnelProviderSettingsManager(with: self)
     }()
 
-    private lazy var adapter: NetBirdAdapter? = {
-        return NetBirdAdapter(with: self.tunnelManager)
-    }()
+    private var adapter: NetBirdAdapter?
 
     var pathMonitor: NWPathMonitor?
     let monitorQueue = DispatchQueue(label: "NetworkMonitor")
@@ -35,6 +34,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
         }
+
+        // Extract profile paths passed from the main app via startVPNTunnel(options:).
+        // If paths differ from what the current adapter was initialized with, recreate
+        // the adapter so it uses the correct profile's config and state files.
+        #if os(iOS)
+        let configPath = (options?["configPath"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let statePath  = (options?["statePath"]  as? String).flatMap { $0.isEmpty ? nil : $0 }
+        if adapter == nil || (configPath != nil && configPath != adapter?.initializedConfigPath) {
+            AppLogger.shared.log("PacketTunnelProvider: (re)creating adapter for configPath=\(configPath ?? "default")")
+            adapter = NetBirdAdapter(with: tunnelManager, configPath: configPath, statePath: statePath)
+        }
+        #else
+        if adapter == nil {
+            adapter = NetBirdAdapter(with: tunnelManager)
+        }
+        #endif
 
         monitorQueue.async { [weak self] in
             self?.currentNetworkType = nil
@@ -105,6 +120,44 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         switch string {
         case "Login":
+            login(completionHandler: completionHandler)
+        case let s where s.hasPrefix("Login:"):
+            // Format: "Login:<configPath>|<statePath>[|<managementURL>]"
+            let payload = String(s.dropFirst("Login:".count))
+            let parts = payload.components(separatedBy: "|")
+            if parts.count >= 2 {
+                let configPath    = parts[0]
+                let statePath     = parts[1]
+                let managementURL = parts.count >= 3 ? parts[2] : nil
+
+                // If the config file is missing (e.g. after logout) but we received
+                // the profile's management URL, write a minimal config in the Go SDK's
+                // url.URL nested-object format so the SDK uses the correct server instead
+                // of falling back to the default api.netbird.io.
+                var configRestored = false
+                if let url = managementURL, !url.isEmpty,
+                   !FileManager.default.fileExists(atPath: configPath),
+                   let parsedURL = URL(string: url) {
+                    let scheme = parsedURL.scheme ?? "https"
+                    var goHost = parsedURL.host ?? ""
+                    if let port = parsedURL.port { goHost += ":\(port)" }
+                    let path = parsedURL.path
+                    func jsonEscape(_ s: String) -> String {
+                        s.replacingOccurrences(of: "\\", with: "\\\\")
+                         .replacingOccurrences(of: "\"", with: "\\\"")
+                    }
+                    let minimalConfig = "{\"ManagementURL\":{\"Scheme\":\"\(jsonEscape(scheme))\",\"Host\":\"\(jsonEscape(goHost))\",\"Path\":\"\(jsonEscape(path))\"}}"
+                    AppLogger.shared.log("handleAppMessage: config missing, writing minimal config for URL \(url)")
+                    if (try? minimalConfig.write(toFile: configPath, atomically: true, encoding: .utf8)) != nil {
+                        configRestored = true
+                    }
+                }
+
+                if configPath != adapter?.initializedConfigPath || configRestored {
+                    AppLogger.shared.log("handleAppMessage: (re)creating adapter for \(configPath)")
+                    adapter = NetBirdAdapter(with: tunnelManager, configPath: configPath, statePath: statePath)
+                }
+            }
             login(completionHandler: completionHandler)
         case "Status":
             getStatus(completionHandler: completionHandler)
