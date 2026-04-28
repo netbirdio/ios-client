@@ -106,13 +106,6 @@ jobs:
                 pull_number: context.payload.issue.number,
               });
 
-              // Block fork PRs — untrusted code must not run with privileged credentials
-              const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
-              if (pr.head.repo.full_name !== baseRepo) {
-                core.info(`PR is from fork ${pr.head.repo.full_name} — skipping`);
-                return;
-              }
-
               core.setOutput('ref', pr.head.sha);
               core.setOutput('should-build', 'true');
               core.setOutput('upload', 'true');
