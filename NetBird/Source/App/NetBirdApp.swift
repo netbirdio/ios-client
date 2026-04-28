@@ -11,13 +11,19 @@
 import SwiftUI
 import FirebaseCore
 import Combine
+import UserNotifications
+import NetBirdSDK
 
 #if os(iOS)
 import FirebasePerformance
 #endif
 
 #if os(iOS)
-class AppDelegate: NSObject, UIApplicationDelegate {
+extension Notification.Name {
+    static let netbirdLoginNotificationTapped = Notification.Name("io.netbird.loginNotificationTapped")
+}
+
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
@@ -26,7 +32,39 @@ class AppDelegate: NSObject, UIApplicationDelegate {
            let options = FirebaseOptions(contentsOfFile: path) {
             FirebaseApp.configure(options: options)
         }
+
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if let error = error {
+                AppLogger.shared.log("Notification authorization error: \(error.localizedDescription)")
+            } else {
+                AppLogger.shared.log("Notification authorization granted: \(granted)")
+            }
+        }
+
         return true
+    }
+
+    // Show notification banner even when app is in foreground
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+
+    // Handle tap on notification — post event so the app navigates to auth flow
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if response.notification.request.identifier == GlobalConstants.notificationLoginRequired {
+            NotificationCenter.default.post(name: .netbirdLoginNotificationTapped, object: nil)
+        }
+        completionHandler()
     }
 }
 #endif
@@ -75,6 +113,9 @@ struct NetBirdApp: App {
                     }
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                         stopActivation(viewModel: viewModel)
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .netbirdLoginNotificationTapped)) { _ in
+                        viewModel.showAuthenticationRequired = true
                     }
                     #endif
                     #if os(tvOS)

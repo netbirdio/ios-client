@@ -83,6 +83,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
+        // Wire up login-required callback so ConnectionListener can signal it during
+        // an active session (e.g. token expires while VPN is running without On-Demand).
+        adapter.onLoginRequired = { [weak self] in
+            self?.signalLoginRequired()
+        }
+
         adapter.start(completionHandler: completionHandler)
     }
 
@@ -348,29 +354,30 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     private func sendLoginNotificationBestEffort() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            guard settings.authorizationStatus == .authorized else {
-                AppLogger.shared.log("Notifications not authorized, skipping extension notification attempt")
-                return
-            }
+        // Skip authorization check — in a Network Extension context,
+        // UNUserNotificationCenter reports the extension bundle's status
+        // (always .notDetermined), not the containing app's granted permission.
+        // Attempt delivery unconditionally and let the system reject if needed.
+        let content = UNMutableNotificationContent()
+        content.title = NSLocalizedString("notification_login_required_title", value: "VPN Disconnected", comment: "")
+        content.body = NSLocalizedString("notification_login_required_body", value: "Re-authentication required. Tap to log in and restore your VPN connection.", comment: "")
+        content.sound = .default
 
-            let content = UNMutableNotificationContent()
-            content.title = "NetBird"
-            content.body = "Login required. Please open the app to reconnect."
-            content.sound = .default
+        // Delayed so the main app process (if backgrounded) can cancel this pending request
+        // and deliver its own — prevents the duplicate that occurs when both paths fire.
+        // If the app is force-quit, the delay expires and this notification fires instead.
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: GlobalConstants.notificationLoginRequired,
+            content: content,
+            trigger: trigger
+        )
 
-            let request = UNNotificationRequest(
-                identifier: "netbird.login.required",
-                content: content,
-                trigger: nil
-            )
-
-            UNUserNotificationCenter.current().add(request) { error in
-                if let error = error {
-                    AppLogger.shared.log("Extension notification attempt failed (expected): \(error.localizedDescription)")
-                } else {
-                    AppLogger.shared.log("Extension notification attempt succeeded")
-                }
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                AppLogger.shared.log("Extension notification attempt failed: \(error.localizedDescription)")
+            } else {
+                AppLogger.shared.log("Extension notification scheduled with 3s delay")
             }
         }
     }

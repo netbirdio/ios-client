@@ -159,6 +159,9 @@ class ViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let networkMonitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "io.netbird.networkMonitor")
+    #if os(iOS)
+    private var vpnStatusObserver: NSObjectProtocol?
+    #endif
     
     @Published var peerViewModel: PeerViewModel
     @Published var routeViewModel: RoutesViewModel
@@ -197,6 +200,19 @@ class ViewModel: ObservableObject {
             }
         }
         networkMonitor.start(queue: monitorQueue)
+
+        #if os(iOS)
+        // Observe VPN status changes even in background to deliver reliable local notifications.
+        // UNUserNotificationCenter in NEPacketTunnelProvider is unreliable — sending from
+        // the main app process is the only way notifications are guaranteed to be delivered.
+        vpnStatusObserver = NotificationCenter.default.addObserver(
+            forName: .NEVPNStatusDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleVPNStatusChangeForNotification()
+        }
+        #endif
 
         $setupKey
             .removeDuplicates()
@@ -847,8 +863,62 @@ class ViewModel: ObservableObject {
         // tvOS: Network status is determined by extension state, not a shared flag
     }
 
+    /// Fires on every NEVPNStatusDidChange — runs in main app process, even when backgrounded.
+    /// Sends the notification from here because UNUserNotificationCenter in NEPacketTunnelProvider
+    /// does not reliably deliver notifications (known iOS limitation).
+    #if os(iOS)
+    private func handleVPNStatusChangeForNotification() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        guard userDefaults?.bool(forKey: GlobalConstants.keyLoginRequired) == true else { return }
+        // Only notify when genuinely backgrounded; .inactive is a transitional state (e.g. app
+        // opening after a notification tap) — scheduling there fires extra banners via willPresent.
+        guard UIApplication.shared.applicationState == .background else { return }
+
+        // Clear the flag immediately so repeated NEVPNStatusDidChange events (VPN passes through
+        // several states during disconnect) don't each schedule their own notification.
+        userDefaults?.set(false, forKey: GlobalConstants.keyLoginRequired)
+        userDefaults?.synchronize()
+
+        AppLogger.shared.log("VPN status changed with loginRequired flag — scheduling notification from main app")
+        scheduleLoginRequiredNotification()
+    }
+
+    private func scheduleLoginRequiredNotification() {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else {
+                AppLogger.shared.log("Notifications not authorized, skipping notification")
+                return
+            }
+
+            // Cancel the delayed best-effort notification scheduled by the extension
+            // so that only this one (from the main app process) is delivered.
+            center.removePendingNotificationRequests(withIdentifiers: [GlobalConstants.notificationLoginRequired])
+            center.removeDeliveredNotifications(withIdentifiers: [GlobalConstants.notificationLoginRequired])
+
+            let content = UNMutableNotificationContent()
+            content.title = NSLocalizedString("notification_login_required_title", value: "VPN Disconnected", comment: "")
+            content.body = NSLocalizedString("notification_login_required_body", value: "Re-authentication required. Tap to log in and restore your VPN connection.", comment: "")
+            content.sound = .default
+
+            let request = UNNotificationRequest(
+                identifier: GlobalConstants.notificationLoginRequired,
+                content: content,
+                trigger: nil
+            )
+            center.add(request) { error in
+                if let error {
+                    AppLogger.shared.log("Failed to schedule login notification: \(error.localizedDescription)")
+                } else {
+                    AppLogger.shared.log("Login notification scheduled from main app process")
+                }
+            }
+        }
+    }
+    #endif
+
     /// Checks shared app-group container for login required flag set by the network extension.
-    /// If set, schedules a local notification (if authorized) and shows the authentication UI.
+    /// Shows the authentication UI. Notification was already delivered via NEVPNStatusDidChange observer.
     /// iOS only — tvOS uses IPC via `checkLoginError` in TVAuthView.
     func checkLoginRequiredFlag() {
         #if os(iOS)
@@ -866,32 +936,6 @@ class ViewModel: ObservableObject {
         // while the user is not authenticated. It will be re-enabled automatically
         // after a successful connection (see applyExtensionStatus).
         networkExtensionAdapter.setOnDemandEnabled(false)
-        scheduleLoginRequiredNotification()
         #endif
     }
-
-    #if os(iOS)
-    private func scheduleLoginRequiredNotification() {
-        let center = UNUserNotificationCenter.current()
-        center.getNotificationSettings { settings in
-            guard settings.authorizationStatus == .authorized else { return }
-
-            let content = UNMutableNotificationContent()
-            content.title = "NetBird"
-            content.body = "Login required. Please open the app to reconnect."
-            content.sound = .default
-
-            let request = UNNotificationRequest(
-                identifier: "netbird.login.required",
-                content: content,
-                trigger: nil
-            )
-            center.add(request) { error in
-                if let error {
-                    AppLogger.shared.log("Failed to schedule login notification: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-    #endif
 }
