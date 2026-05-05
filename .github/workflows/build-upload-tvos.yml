@@ -220,7 +220,7 @@ jobs:
             CURRENT_PROJECT_VERSION=${{ steps.settings.outputs.build-number }}
 
       - name: Export and Upload to App Store Connect
-        if: inputs.upload
+        if: inputs.upload == true
         working-directory: ios-client
         env:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}

@@ -79,3 +79,12 @@ jobs:
       version: ${{ needs.prepare.outputs.version }}
       build-number: ${{ needs.fetch-build-number.outputs.build-number }}
     secrets: inherit
+
+  build-tvos:
+    name: Build and Upload tvOS Release
+    needs: [fetch-build-number]
+    uses: ./.github/workflows/build-upload-tvos.yml
+    with:
+      ref: ${{ github.ref }}
+      build-number: ${{ needs.fetch-build-number.outputs.build-number }}
+    secrets: inherit
