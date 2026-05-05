@@ -2,7 +2,7 @@ name: TestFlight
 
 on:
   push:
-    branches: [main]
+    branches: [main, fix-cicd-for-release-yml]
   pull_request:
     branches: [main]
     types: [opened, edited]
