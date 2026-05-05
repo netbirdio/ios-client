@@ -79,6 +79,12 @@ public class NetworkExtensionAdapter: ObservableObject {
             logger.info("start: calling configureManager()...")
             try await configureManager()
             logger.info("start: configureManager() completed, calling loginIfRequired()...")
+            #if os(iOS)
+            // Restore the config file before login if it was deleted (e.g. after logout).
+            // This must happen in the main app — not via IPC — because the extension
+            // process may not be running yet when start() is called.
+            restoreConfigIfMissing()
+            #endif
             await loginIfRequired()
             logger.info("start: loginIfRequired() completed")
         } catch {
@@ -87,18 +93,74 @@ public class NetworkExtensionAdapter: ObservableObject {
         logger.info("start: EXIT")
     }
 
+    #if os(iOS)
+    /// If the active profile's config file is missing (deleted after logout) but we have
+    /// a saved management URL, write a minimal config so the SDK uses the correct server
+    /// instead of falling back to the default api.netbird.io.
+    private func restoreConfigIfMissing() {
+        guard let configPath = Preferences.configFile() else { return }
+        guard !FileManager.default.fileExists(atPath: configPath) else { return }
+
+        let profileName = ProfileManager.shared.getActiveProfileName()
+        // Prefer the dedicated server URL file (survives logout) over the in-memory cache
+        let managementURL = ProfileManager.shared.savedServerURL(for: profileName)
+            ?? ProfileConnectionCache().managementURL(for: profileName)
+        guard let url = managementURL, !url.isEmpty else {
+            logger.info("restoreConfigIfMissing: no saved URL for '\(profileName)', will use default server")
+            return
+        }
+
+        logger.info("restoreConfigIfMissing: writing minimal config for '\(profileName)' with URL '\(url)'")
+        // The Go SDK serializes url.URL as a nested JSON object {Scheme, Host, Path, ...}.
+        // Writing ManagementURL as a plain string causes Go's json.Unmarshal to fail silently,
+        // leaving ManagementURL nil and falling back to the default api.netbird.io server.
+        // We must write the same nested-object format that the Go SDK expects.
+        guard let parsedURL = URL(string: url) else {
+            logger.error("restoreConfigIfMissing: could not parse URL '\(url)'")
+            return
+        }
+        let scheme = parsedURL.scheme ?? "https"
+        // Go's url.URL.Host includes the port (e.g. "my.server.io:443")
+        var goHost = parsedURL.host ?? ""
+        if let port = parsedURL.port { goHost += ":\(port)" }
+        let path = parsedURL.path
+
+        // Escape values for safe embedding in JSON
+        func jsonEscape(_ s: String) -> String {
+            s.replacingOccurrences(of: "\\", with: "\\\\")
+             .replacingOccurrences(of: "\"", with: "\\\"")
+        }
+
+        let minimalConfig = "{\"ManagementURL\":{\"Scheme\":\"\(jsonEscape(scheme))\",\"Host\":\"\(jsonEscape(goHost))\",\"Path\":\"\(jsonEscape(path))\"}}"
+        do {
+            try minimalConfig.write(toFile: configPath, atomically: true, encoding: .utf8)
+            logger.info("restoreConfigIfMissing: config written successfully (Scheme=\(scheme) Host=\(goHost) Path=\(path))")
+        } catch {
+            logger.error("restoreConfigIfMissing: failed to write config – \(error.localizedDescription)")
+        }
+    }
+    #endif
+
     private func configureManager() async throws {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
         if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
             self.vpnManager = manager
+            // Only write preferences when strictly necessary.
+            // Calling saveToPreferences() on an already-configured manager triggers
+            // NEVPNStatusDidChange notifications — including a transient .disconnecting —
+            // that the polling timer picks up, producing the wrong UI sequence:
+            // Connecting → Disconnecting → Connected.
+            if !manager.isEnabled {
+                manager.isEnabled = true
+                try await manager.saveToPreferences()
+                try await manager.loadFromPreferences()
+            }
         } else {
             let newManager = createNewManager()
             try await newManager.saveToPreferences()
+            try await newManager.loadFromPreferences()
             self.vpnManager = newManager
         }
-        self.vpnManager?.isEnabled = true
-        try await self.vpnManager?.saveToPreferences()
-        try await self.vpnManager?.loadFromPreferences()
         self.session = self.vpnManager?.connection as? NETunnelProviderSession
     }
 
@@ -160,6 +222,18 @@ public class NetworkExtensionAdapter: ObservableObject {
             // Note: For tvOS, config initialization happens in the extension's startTunnel
             // before the needsLogin check. The extension has permission to write to App Group.
             await performLogin()
+
+            #if os(iOS)
+            // If performLogin() didn't open the browser, the IPC failed because the extension
+            // is not running. Start the VPN connection anyway so the extension process starts,
+            // detects login required, signals the main app via UserDefaults, and stays alive
+            // long enough for the user to press Connect from the auth alert (which will retry
+            // IPC to a still-alive extension and succeed).
+            if !self.showBrowser {
+                logger.info("loginIfRequired: IPC failed (extension not running), starting VPN to launch extension")
+                startVPNConnection()
+            }
+            #endif
         } else {
             logger.info("loginIfRequired: login NOT required, calling startVPNConnection()")
             startVPNConnection()
@@ -337,13 +411,18 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
 
     private func performLogin() async {
-        let loginURLString = await withCheckedContinuation { continuation in
+        let loginURLString: String? = await withCheckedContinuation { continuation in
             self.login { urlString in
                 continuation.resume(returning: urlString)
             }
         }
 
-        self.loginURL = loginURLString
+        guard let url = loginURLString, !url.isEmpty else {
+            logger.error("performLogin: no login URL received from extension, aborting")
+            return
+        }
+
+        self.loginURL = url
         self.showBrowser = true
     }
 
@@ -351,7 +430,18 @@ public class NetworkExtensionAdapter: ObservableObject {
         logger.info("startVPNConnection: called")
         let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
         logger.info("startVPNConnection: logLevel = \(logLevel)")
-        let options: [String: NSObject] = ["logLevel": logLevel as NSObject]
+        var options: [String: NSObject] = ["logLevel": logLevel as NSObject]
+        #if os(iOS)
+        // Pass active profile paths so the extension can reinitialize the adapter
+        // if the profile changed while the extension process was still alive.
+        if let configPath = Preferences.configFile() {
+            options["configPath"] = configPath as NSObject
+        }
+        if let statePath = Preferences.stateFile() {
+            options["statePath"] = statePath as NSObject
+        }
+        logger.info("startVPNConnection: configPath=\(Preferences.configFile() ?? "nil")")
+        #endif
 
         guard let session = self.session else {
             logger.error("startVPNConnection: ERROR - session is nil!")
@@ -515,9 +605,10 @@ public class NetworkExtensionAdapter: ObservableObject {
         return vpnManager?.isOnDemandEnabled ?? false
     }
 
-    func login(completion: @escaping (String) -> Void) {
-        if self.session == nil {
+    func login(completion: @escaping (String?) -> Void) {
+        guard let session = self.session else {
             logger.error("login: No session available for login")
+            completion(nil)
             return
         }
 
@@ -526,44 +617,57 @@ public class NetworkExtensionAdapter: ObservableObject {
             #if os(tvOS)
             let messageString = "LoginTV"
             #else
-            let messageString = "Login"
+            // Include active profile paths so the extension can reinitialize
+            // its adapter for the correct profile before performing login.
+            // Also include the cached management URL so the extension can restore
+            // a missing config (e.g. after logout) and use the correct server.
+            // Format: "Login:<configPath>|<statePath>[|<managementURL>]"
+            var messageString = "Login"
+            if let configPath = Preferences.configFile(), let statePath = Preferences.stateFile() {
+                messageString = "Login:\(configPath)|\(statePath)"
+                let profileName = ProfileManager.shared.getActiveProfileName()
+                if let cachedURL = ProfileConnectionCache().managementURL(for: profileName),
+                   !cachedURL.isEmpty {
+                    messageString += "|\(cachedURL)"
+                }
+            }
             #endif
 
             if let messageData = messageString.data(using: .utf8) {
                 // Send the message to the network extension
-                try self.session!.sendProviderMessage(messageData) { response in
-                    if let response = response {
-                        #if os(tvOS)
-                        // For tvOS, decode DeviceAuthResponse struct
-                        do {
-                            let authResponse = try self.decoder.decode(DeviceAuthResponse.self, from: response)
-                            DispatchQueue.main.async {
-                                self.userCode = authResponse.userCode
-                            }
-                            completion(authResponse.url)
-                        } catch {
-                            print("login: Failed to decode DeviceAuthResponse - \(error)")
-                            // Fallback to plain string for backwards compatibility
-                            if let string = String(data: response, encoding: .utf8) {
-                                completion(string)
-                            }
-                        }
-                        #else
-                        if let string = String(data: response, encoding: .utf8) {
-                            completion(string)
-                        }
-                        #endif
+                try session.sendProviderMessage(messageData) { response in
+                    guard let response = response else {
+                        self.logger.error("login: No response from extension")
+                        completion(nil)
                         return
                     }
+                    #if os(tvOS)
+                    // For tvOS, decode DeviceAuthResponse struct
+                    do {
+                        let authResponse = try self.decoder.decode(DeviceAuthResponse.self, from: response)
+                        DispatchQueue.main.async {
+                            self.userCode = authResponse.userCode
+                        }
+                        completion(authResponse.url)
+                    } catch {
+                        print("login: Failed to decode DeviceAuthResponse - \(error)")
+                        // Fallback to plain string for backwards compatibility
+                        completion(String(data: response, encoding: .utf8))
+                    }
+                    #else
+                    completion(String(data: response, encoding: .utf8))
+                    #endif
                 }
             } else {
                 print("Error converting message to Data")
+                completion(nil)
             }
         } catch {
             print("error when performing network extension action")
+            completion(nil)
         }
     }
-    
+
     /// Check if login is complete by asking the Network Extension directly
     /// This is more reliable than isLoginRequired() because it queries the same SDK client
     /// that is actually performing the login
@@ -879,9 +983,15 @@ public class NetworkExtensionAdapter: ObservableObject {
                 let managers = try await NETunnelProviderManager.loadAllFromPreferences()
                 if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
                     completion(manager.connection.status)
+                } else {
+                    // No VPN manager exists yet (e.g. first connect before the iOS permission
+                    // dialog completes). Must still call completion so that isCheckingExtensionState
+                    // is reset to false; otherwise checkExtensionState() is permanently blocked.
+                    completion(.disconnected)
                 }
             } catch {
                 print("Error loading from preferences: \(error)")
+                completion(.disconnected)
             }
         }
     }

@@ -14,6 +14,24 @@ struct iOSSettingsView: View {
 
     var body: some View {
         List {
+            Section {
+                NavigationLink {
+                    ProfilesListView()
+                } label: {
+                    HStack {
+                        Image(systemName: "person.2.fill")
+                            .foregroundColor(.accentColor)
+                            .frame(width: 24)
+                        Text("Profiles")
+                            .foregroundColor(Color("TextPrimary"))
+                        Spacer()
+                        Text(viewModel.activeProfileName)
+                            .foregroundColor(Color("TextSecondary"))
+                            .font(.system(size: 14))
+                    }
+                }
+            }
+
             Section(header: Text("Connection")) {
                     Button {
                         viewModel.showChangeServerAlert = true

@@ -212,7 +212,9 @@ jobs:
         run: |
           xcodebuild -resolvePackageDependencies \
             -project NetBird.xcodeproj \
-            -target "NetBird TV"
+            -scheme "NetBird TV" \
+            -destination 'generic/platform=tvOS' \
+            -derivedDataPath $RUNNER_TEMP/DerivedData-tvos
 
       - name: Build tvOS App
         working-directory: ios-client
@@ -220,9 +222,10 @@ jobs:
           set -o pipefail
           xcodebuild build \
             -project NetBird.xcodeproj \
-            -target "NetBird TV" \
+            -scheme "NetBird TV" \
             -destination 'generic/platform=tvOS' \
             -configuration Debug \
+            -derivedDataPath $RUNNER_TEMP/DerivedData-tvos \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -234,9 +237,10 @@ jobs:
           set -o pipefail
           xcodebuild build \
             -project NetBird.xcodeproj \
-            -target "NetBirdTVNetworkExtension" \
+            -scheme "NetBirdTVNetworkExtension" \
             -destination 'generic/platform=tvOS' \
             -configuration Debug \
+            -derivedDataPath $RUNNER_TEMP/DerivedData-tvos \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \

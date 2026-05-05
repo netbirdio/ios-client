@@ -252,7 +252,11 @@ public class NetBirdAdapter {
     /// - Parameter packetTunnelProvider: an instance of `NEPacketTunnelProvider`. Internally stored
     ///   as a weak reference.
     /// - Returns: nil if the NetBird SDK client could not be initialized.
-    init?(with tunnelManager: PacketTunnelProviderSettingsManager) {
+    /// The config path this adapter was initialized with (iOS only).
+    /// Used to detect profile switches and force adapter reinitialization.
+    private(set) var initializedConfigPath: String?
+
+    init?(with tunnelManager: PacketTunnelProviderSettingsManager, configPath: String? = nil, statePath: String? = nil) {
         self.tunnelManager = tunnelManager
         self.networkChangeListener = NetworkChangeListener(with: tunnelManager)
         self.dnsManager = DNSManager(with: tunnelManager)
@@ -287,15 +291,18 @@ public class NetBirdAdapter {
             adapterLogger.info("init: tvOS - no config found, client initialized without config")
         }
         #else
-        guard let configPath = Preferences.configFile(), let statePath = Preferences.stateFile() else {
+        let resolvedConfigPath = configPath ?? Preferences.configFile()
+        let resolvedStatePath = statePath ?? Preferences.stateFile()
+        guard let resolvedConfigPath = resolvedConfigPath, let resolvedStatePath = resolvedStatePath else {
             adapterLogger.error("init: App group container unavailable - check entitlements")
             return nil
         }
-        guard let client = NetBirdSDKNewClient(configPath, statePath, deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
-            adapterLogger.error("init: Failed to create NetBird SDK client with configPath=\(configPath), statePath=\(statePath)")
+        guard let client = NetBirdSDKNewClient(resolvedConfigPath, resolvedStatePath, deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
+            adapterLogger.error("init: Failed to create NetBird SDK client with configPath=\(resolvedConfigPath), statePath=\(resolvedStatePath)")
             return nil
         }
         self.client = client
+        self.initializedConfigPath = resolvedConfigPath
         #endif
     }
     
