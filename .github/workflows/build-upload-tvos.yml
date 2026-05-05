@@ -7,6 +7,11 @@ on:
         required: true
         type: string
         description: 'Git ref to checkout and build'
+      version:
+        required: false
+        type: string
+        default: ''
+        description: 'Marketing version override (e.g. from git tag)'
       build-number:
         required: false
         type: string
@@ -133,6 +138,13 @@ jobs:
           fi
           echo "build-number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
 
+          VERSION="${{ inputs.version }}"
+          if [ -n "$VERSION" ]; then
+            echo "version-args=MARKETING_VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "version-args=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install provisioning profiles
         env:
           PROFILE_TV_APP_BASE64: ${{ secrets.PROVISIONING_PROFILE_TV_APP_BASE64 }}
@@ -217,7 +229,8 @@ jobs:
             -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8" \
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER_ID" \
-            CURRENT_PROJECT_VERSION=${{ steps.settings.outputs.build-number }}
+            CURRENT_PROJECT_VERSION=${{ steps.settings.outputs.build-number }} \
+            ${{ steps.settings.outputs.version-args }}
 
       - name: Export and Upload to App Store Connect
         if: inputs.upload == true
