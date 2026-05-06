@@ -98,58 +98,23 @@ struct RouteCard: View {
     }
 
     private var statusIndicatorColor: Color {
-        let decision = computeStatusIndicator()
-        logIndicatorDecision(decision)
-        return decision.color
-    }
+        guard route.selected else { return Color.gray.opacity(0.5) }
 
-    private struct IndicatorDecision {
-        let color: Color
-        let label: String
-        let reason: String
-    }
-
-    private func computeStatusIndicator() -> IndicatorDecision {
-        guard route.selected else {
-            return IndicatorDecision(color: Color.gray.opacity(0.5), label: "GRAY", reason: "not selected")
-        }
-
-        let connectedPeers = peerViewModel.peerInfo.filter { $0.connStatus == "Connected" }
-        guard !connectedPeers.isEmpty else {
-            let peerStatusSummary = peerViewModel.peerInfo
-                .map { "\($0.fqdn)=\($0.connStatus)" }
-                .joined(separator: ",")
-            return IndicatorDecision(color: Color.yellow, label: "YELLOW",
-                                     reason: "no Connected peer (peers=[\(peerStatusSummary)])")
-        }
-
-        let connectedPeerRoutes = connectedPeers.flatMap { $0.routes }
+        let connectedPeerRoutes = peerViewModel.peerInfo
+            .filter { $0.connStatus == "Connected" }
+            .flatMap { $0.routes }
 
         if let network = route.network, connectedPeerRoutes.contains(network) {
-            return IndicatorDecision(color: Color.green, label: "GREEN",
-                                     reason: "match \(network) in peer routes")
+            return Color.green
         }
 
         let resolvedIPs = (route.domains ?? []).flatMap { $0.resolvedIPs }
-        if !resolvedIPs.isEmpty,
-           let hit = resolvedIPs.first(where: { connectedPeerRoutes.contains($0) }) {
-            return IndicatorDecision(color: Color.green, label: "GREEN",
-                                     reason: "resolved IP \(hit) in peer routes")
+        if resolvedIPs.contains(where: connectedPeerRoutes.contains) {
+            return Color.green
         }
 
-        return IndicatorDecision(color: Color.yellow, label: "YELLOW",
-                                 reason: "no overlap (network=\(route.network ?? "nil") resolvedIPs=\(resolvedIPs) peerRoutes=\(connectedPeerRoutes))")
+        return Color.yellow
     }
-
-    private func logIndicatorDecision(_ decision: IndicatorDecision) {
-        let key = "\(decision.label)|\(decision.reason)"
-        if RouteCard.lastLoggedReasons[route.id] == key { return }
-        RouteCard.lastLoggedReasons[route.id] = key
-
-        AppLogger.shared.log("[RouteCard] \(route.name) -> \(decision.label): \(decision.reason)")
-    }
-
-    private static var lastLoggedReasons: [UUID: String] = [:]
 
     private var routeDisplayText: String {
         if let domains = route.domains, !domains.isEmpty {
