@@ -98,67 +98,74 @@ struct RouteCard: View {
     }
 
     private var statusIndicatorColor: Color {
-        let tag = "[RouteCard:\(route.name)]"
+        let decision = computeStatusIndicator()
+        logIndicatorDecision(decision)
+        return decision.color
+    }
 
+    private struct IndicatorDecision {
+        let color: Color
+        let label: String
+        let reason: String
+    }
+
+    private func computeStatusIndicator() -> IndicatorDecision {
         guard route.selected else {
-            NSLog("%@ -> GRAY: route not selected", tag)
-            return Color.gray.opacity(0.5)
+            return IndicatorDecision(color: Color.gray.opacity(0.5), label: "GRAY", reason: "not selected")
         }
 
-        let allPeers = peerViewModel.peerInfo
-        let peerStatuses = allPeers.map { "\($0.fqdn)=\($0.connStatus)" }
-        NSLog("%@ selected=true network=%@ totalPeers=%d peerStatuses=%@",
-              tag,
-              route.network ?? "nil",
-              allPeers.count,
-              "\(peerStatuses)")
+        let connectedPeers = peerViewModel.peerInfo.filter { $0.connStatus == "Connected" }
+        let peerStatusSummary = peerViewModel.peerInfo
+            .map { "\($0.fqdn)=\($0.connStatus)" }
+            .joined(separator: ",")
 
-        let connectedPeers = allPeers.filter { $0.connStatus == "Connected" }
-        NSLog("%@ connectedPeerCount=%d", tag, connectedPeers.count)
-        if connectedPeers.isEmpty {
-            NSLog("%@ -> YELLOW: selected but no peer with connStatus==\"Connected\" (peers=%@)", tag, "\(peerStatuses)")
-            return Color.yellow
+        guard !connectedPeers.isEmpty else {
+            return IndicatorDecision(color: Color.yellow, label: "YELLOW",
+                                     reason: "no Connected peer (peers=[\(peerStatusSummary)])")
         }
 
         let connectedPeerRoutes = connectedPeers.flatMap { $0.routes }
-        NSLog("%@ connectedPeerRoutes=%@", tag, "\(connectedPeerRoutes)")
-
         let isDynamic = (route.network ?? "") == "invalid Prefix"
-        NSLog("%@ isDynamic=%@", tag, isDynamic ? "true" : "false")
 
         if !isDynamic, let network = route.network {
-            let staticMatch = connectedPeerRoutes.contains(network)
-            NSLog("%@ static check: peer.routes contains \"%@\" -> %@", tag, network, staticMatch ? "YES" : "NO")
-            if staticMatch {
-                NSLog("%@ -> GREEN: static route matched on connected peer", tag)
-                return Color.green
+            if connectedPeerRoutes.contains(network) {
+                return IndicatorDecision(color: Color.green, label: "GREEN",
+                                         reason: "static match \(network) in peer routes")
             }
+            return IndicatorDecision(color: Color.yellow, label: "YELLOW",
+                                     reason: "static \(network) not in peer routes \(connectedPeerRoutes)")
         }
 
-        let domainList = route.domains?.map { $0.domain } ?? []
+        let domains = route.domains?.map { $0.domain } ?? []
         let resolvedIPs = (route.domains ?? []).flatMap { $0.resolvedIPs }
-        NSLog("%@ domains=%@ resolvedIPs=%@", tag, "\(domainList)", "\(resolvedIPs)")
 
-        if resolvedIPs.isEmpty {
-            NSLog("%@ -> YELLOW: dynamic route has no resolvedIPs (bridge returned empty list for domains=%@)", tag, "\(domainList)")
-            return Color.yellow
+        guard !resolvedIPs.isEmpty else {
+            return IndicatorDecision(color: Color.yellow, label: "YELLOW",
+                                     reason: "dynamic route, bridge returned empty resolvedIPs for domains=\(domains)")
         }
 
-        let connectedPeerRouteAddresses = connectedPeerRoutes.map {
+        let strippedPeerAddrs = connectedPeerRoutes.map {
             $0.split(separator: "/").first.map(String.init) ?? $0
         }
-        NSLog("%@ peerRoutes (CIDR-stripped)=%@", tag, "\(connectedPeerRouteAddresses)")
 
-        let dynamicMatch = resolvedIPs.first(where: { connectedPeerRouteAddresses.contains($0) })
-        if let hit = dynamicMatch {
-            NSLog("%@ -> GREEN: dynamic route IP \"%@\" matched a connected peer route", tag, hit)
-            return Color.green
+        if let hit = resolvedIPs.first(where: { strippedPeerAddrs.contains($0) }) {
+            return IndicatorDecision(color: Color.green, label: "GREEN",
+                                     reason: "dynamic match \(hit) in stripped peer routes \(strippedPeerAddrs)")
         }
 
-        NSLog("%@ -> YELLOW: dynamic route has resolvedIPs=%@ but none match connectedPeerRouteAddresses=%@",
-              tag, "\(resolvedIPs)", "\(connectedPeerRouteAddresses)")
-        return Color.yellow
+        return IndicatorDecision(color: Color.yellow, label: "YELLOW",
+                                 reason: "dynamic resolvedIPs=\(resolvedIPs) do not intersect peerRoutes=\(strippedPeerAddrs) (domains=\(domains))")
     }
+
+    private func logIndicatorDecision(_ decision: IndicatorDecision) {
+        let key = "\(decision.label)|\(decision.reason)"
+        if RouteCard.lastLoggedReasons[route.id] == key { return }
+        RouteCard.lastLoggedReasons[route.id] = key
+
+        AppLogger.shared.log("[RouteCard] \(route.name) -> \(decision.label): \(decision.reason)")
+    }
+
+    private static var lastLoggedReasons: [UUID: String] = [:]
 
     private var routeDisplayText: String {
         if route.network == "invalid Prefix" {
