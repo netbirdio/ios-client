@@ -115,46 +115,30 @@ struct RouteCard: View {
         }
 
         let connectedPeers = peerViewModel.peerInfo.filter { $0.connStatus == "Connected" }
-        let peerStatusSummary = peerViewModel.peerInfo
-            .map { "\($0.fqdn)=\($0.connStatus)" }
-            .joined(separator: ",")
-
         guard !connectedPeers.isEmpty else {
+            let peerStatusSummary = peerViewModel.peerInfo
+                .map { "\($0.fqdn)=\($0.connStatus)" }
+                .joined(separator: ",")
             return IndicatorDecision(color: Color.yellow, label: "YELLOW",
                                      reason: "no Connected peer (peers=[\(peerStatusSummary)])")
         }
 
         let connectedPeerRoutes = connectedPeers.flatMap { $0.routes }
-        let isDynamic = (route.network ?? "") == "invalid Prefix"
 
-        if !isDynamic, let network = route.network {
-            if connectedPeerRoutes.contains(network) {
-                return IndicatorDecision(color: Color.green, label: "GREEN",
-                                         reason: "static match \(network) in peer routes")
-            }
-            return IndicatorDecision(color: Color.yellow, label: "YELLOW",
-                                     reason: "static \(network) not in peer routes \(connectedPeerRoutes)")
-        }
-
-        let domains = route.domains?.map { $0.domain } ?? []
-        let resolvedIPs = (route.domains ?? []).flatMap { $0.resolvedIPs }
-
-        guard !resolvedIPs.isEmpty else {
-            return IndicatorDecision(color: Color.yellow, label: "YELLOW",
-                                     reason: "dynamic route, bridge returned empty resolvedIPs for domains=\(domains)")
-        }
-
-        let strippedPeerAddrs = connectedPeerRoutes.map {
-            $0.split(separator: "/").first.map(String.init) ?? $0
-        }
-
-        if let hit = resolvedIPs.first(where: { strippedPeerAddrs.contains($0) }) {
+        if let network = route.network, connectedPeerRoutes.contains(network) {
             return IndicatorDecision(color: Color.green, label: "GREEN",
-                                     reason: "dynamic match \(hit) in stripped peer routes \(strippedPeerAddrs)")
+                                     reason: "match \(network) in peer routes")
+        }
+
+        let resolvedIPs = (route.domains ?? []).flatMap { $0.resolvedIPs }
+        if !resolvedIPs.isEmpty,
+           let hit = resolvedIPs.first(where: { connectedPeerRoutes.contains($0) }) {
+            return IndicatorDecision(color: Color.green, label: "GREEN",
+                                     reason: "resolved IP \(hit) in peer routes")
         }
 
         return IndicatorDecision(color: Color.yellow, label: "YELLOW",
-                                 reason: "dynamic resolvedIPs=\(resolvedIPs) do not intersect peerRoutes=\(strippedPeerAddrs) (domains=\(domains))")
+                                 reason: "no overlap (network=\(route.network ?? "nil") resolvedIPs=\(resolvedIPs) peerRoutes=\(connectedPeerRoutes))")
     }
 
     private func logIndicatorDecision(_ decision: IndicatorDecision) {
@@ -168,11 +152,11 @@ struct RouteCard: View {
     private static var lastLoggedReasons: [UUID: String] = [:]
 
     private var routeDisplayText: String {
-        if route.network == "invalid Prefix" {
-            if let domains = route.domains, domains.count > 2 {
+        if let domains = route.domains, !domains.isEmpty {
+            if domains.count > 2 {
                 return "\(domains.count) Domains"
             }
-            return route.domains?.map { $0.domain }.joined(separator: ", ") ?? ""
+            return domains.map { $0.domain }.joined(separator: ", ")
         }
         return route.network ?? "Unknown"
     }
@@ -220,11 +204,9 @@ struct RouteTooltipView: View {
     @ViewBuilder
     func detailInfo() -> some View {
         Group {
-            if route.network == "invalid Prefix" {
-                if let domains = route.domains {
-                    ForEach(domains, id: \.self) { domain in
-                        detailRow(label: domain.domain, value: domain.resolvedIPs.joined(separator: ", "))
-                    }
+            if let domains = route.domains, !domains.isEmpty {
+                ForEach(domains, id: \.self) { domain in
+                    detailRow(label: domain.domain, value: domain.resolvedIPs.joined(separator: ", "))
                 }
             } else {
                 detailRow(label: "Network", value: route.network ?? "")
