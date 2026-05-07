@@ -21,11 +21,83 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
+  fetch-build-number:
+    name: Fetch build number from App Store Connect
+    needs: prepare
+    runs-on: ubuntu-latest
+    outputs:
+      build-number:      ${{ steps.asc.outputs.build-number }}
+      build-number-tvos: ${{ steps.asc.outputs.build-number-tvos }}
+    steps:
+      - name: Get latest build and increment
+        id: asc
+        env:
+          ISSUER_ID:          ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          KEY_ID:             ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APP_ID_IOS:         ${{ secrets.APP_STORE_APP_ID_IOS }}
+          APP_ID_TVOS:        ${{ secrets.APP_STORE_APP_ID_TVOS }}
+          VERSION:            ${{ needs.prepare.outputs.version }}
+        run: |
+          pip install cryptography --quiet
+
+          echo "$PRIVATE_KEY_BASE64" | base64 --decode > /tmp/AuthKey.p8
+          trap 'rm -f /tmp/AuthKey.p8' EXIT
+
+          JWT=$(python3 -c "import base64,json,time,os;from cryptography.hazmat.primitives import hashes,serialization;from cryptography.hazmat.primitives.asymmetric import ec;from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature;key=serialization.load_pem_private_key(open('/tmp/AuthKey.p8','rb').read(),password=None);b64url=lambda d:base64.urlsafe_b64encode(d if isinstance(d,bytes) else d.encode()).rstrip(b'=').decode();now=int(time.time());h=b64url(json.dumps({'alg':'ES256','kid':os.environ['KEY_ID'],'typ':'JWT'},separators=(',',':')));p=b64url(json.dumps({'iss':os.environ['ISSUER_ID'],'exp':now+1200,'aud':'appstoreconnect-v1'},separators=(',',':')));msg=f'{h}.{p}'.encode();sig_der=key.sign(msg,ec.ECDSA(hashes.SHA256()));r,s=decode_dss_signature(sig_der);sig=b64url(r.to_bytes(32,'big')+s.to_bytes(32,'big'));print(f'{h}.{p}.{sig}')")
+
+          fetch_latest() {
+            local APP_ID=$1
+            local RESP STATUS
+            STATUS=$(curl -sg \
+              -o /tmp/asc_response.json \
+              -w "%{http_code}" \
+              "https://api.appstoreconnect.apple.com/v1/builds?filter[app]=$APP_ID&filter[preReleaseVersion.version]=$VERSION&sort=-uploadedDate&limit=1" \
+              -H "Authorization: Bearer $JWT")
+            RESP=$(cat /tmp/asc_response.json)
+            if [ "$STATUS" != "200" ]; then
+              echo "API error (app=$APP_ID):" && echo "$RESP" | jq . || echo "$RESP"
+              exit 1
+            fi
+            echo "$RESP" | jq -r 'if (.data | length) > 0 and (.data[0].attributes.version != null) then .data[0].attributes.version else "none" end'
+          }
+
+          next_build() {
+            local LATEST=$1
+            if [ "$LATEST" = "none" ]; then echo "1"
+            else python3 -c "v='$LATEST'; print(int(v)+1) if v.isdigit() else '1'"
+            fi
+          }
+
+          LATEST_IOS=$(fetch_latest "$APP_ID_IOS")
+          LATEST_TVOS=$(fetch_latest "$APP_ID_TVOS")
+          NEXT_IOS=$(next_build "$LATEST_IOS")
+          NEXT_TVOS=$(next_build "$LATEST_TVOS")
+
+          echo "========================================="
+          echo "  iOS  latest=$LATEST_IOS  next=$NEXT_IOS"
+          echo "  tvOS latest=$LATEST_TVOS  next=$NEXT_TVOS"
+          echo "========================================="
+
+          echo "build-number=$NEXT_IOS"           >> "$GITHUB_OUTPUT"
+          echo "build-number-tvos=$NEXT_TVOS"     >> "$GITHUB_OUTPUT"
+
   build:
     name: Build and Upload Release
-    needs: prepare
+    needs: [prepare, fetch-build-number]
     uses: ./.github/workflows/build-upload.yml
     with:
       ref: ${{ github.ref }}
       version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.fetch-build-number.outputs.build-number }}
+    secrets: inherit
+
+  build-tvos:
+    name: Build and Upload tvOS Release
+    needs: [prepare, fetch-build-number]
+    uses: ./.github/workflows/build-upload-tvos.yml
+    with:
+      ref: ${{ github.ref }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.fetch-build-number.outputs.build-number-tvos }}
     secrets: inherit

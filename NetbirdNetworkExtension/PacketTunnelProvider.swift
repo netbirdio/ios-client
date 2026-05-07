@@ -476,7 +476,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 let domains = (0..<(route.domains?.size() ?? 0)).compactMap { domainIndex -> DomainDetails? in
                     guard let domain = route.domains?.get(domainIndex) else { return nil }
-                    return DomainDetails(domain: domain.domain, resolvedips: domain.resolvedIPs)
+                    let resolvedIPsRef = domain.getResolvedIPs()
+                    let resolvedIPs: [String] = (0..<(resolvedIPsRef?.size() ?? 0)).map { ipIndex in
+                        resolvedIPsRef?.get(ipIndex) ?? ""
+                    }.filter { !$0.isEmpty }
+                    return DomainDetails(domain: domain.domain, resolvedIPs: resolvedIPs)
                 }
 
                 return RoutesSelectionInfo(

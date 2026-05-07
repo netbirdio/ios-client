@@ -59,12 +59,12 @@ extension RoutesSelectionInfo: Equatable {
 
 struct DomainDetails: Codable, Hashable {
     let domain: String
-    let resolvedips: String?
+    let resolvedIPs: [String]
 }
 
 extension DomainDetails: Equatable {
     static func == (lhs: DomainDetails, rhs: DomainDetails) -> Bool {
         return lhs.domain == rhs.domain &&
-        lhs.resolvedips == rhs.resolvedips
+        lhs.resolvedIPs == rhs.resolvedIPs
     }
 }
