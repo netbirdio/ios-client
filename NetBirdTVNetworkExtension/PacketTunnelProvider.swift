@@ -610,7 +610,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         do {
             let routeSelectionDetailsMessage = try adapter.client.getRoutesSelectionDetails()
 
-            let routeSelectionInfo: [RoutesSelectionInfo] = (0..<routeSelectionDetailsMessage.size()).compactMap { index in
+            let routeSelectionInfo: [RoutesSelectionInfo] = (0..<routeSelectionDetailsMessage.size()).compactMap { index -> RoutesSelectionInfo? in
                 guard let route = routeSelectionDetailsMessage.get(index) else { return nil }
 
                 let domains = (0..<(route.domains?.size() ?? 0)).compactMap { domainIndex -> DomainDetails? in
