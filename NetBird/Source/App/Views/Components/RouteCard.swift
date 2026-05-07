@@ -98,20 +98,30 @@ struct RouteCard: View {
     }
 
     private var statusIndicatorColor: Color {
-        if route.selected && peerViewModel.peerInfo.contains(where: { info in
-            info.connStatus == "Connected" && (info.routes.contains(route.network ?? "") || route.domains?.contains(where: { $0.domain.contains(route.network ?? "") }) == true)
-        }) {
+        guard route.selected else { return Color.gray.opacity(0.5) }
+
+        let connectedPeerRoutes = peerViewModel.peerInfo
+            .filter { $0.connStatus == "Connected" }
+            .flatMap { $0.routes }
+
+        if let network = route.network, connectedPeerRoutes.contains(network) {
             return Color.green
         }
-        return route.selected ? Color.yellow : Color.gray.opacity(0.5)
+
+        let resolvedIPs = (route.domains ?? []).flatMap { $0.resolvedIPs }
+        if resolvedIPs.contains(where: connectedPeerRoutes.contains) {
+            return Color.green
+        }
+
+        return Color.yellow
     }
 
     private var routeDisplayText: String {
-        if route.network == "invalid Prefix" {
-            if let domains = route.domains, domains.count > 2 {
+        if let domains = route.domains, !domains.isEmpty {
+            if domains.count > 2 {
                 return "\(domains.count) Domains"
             }
-            return route.domains?.map { $0.domain }.joined(separator: ", ") ?? ""
+            return domains.map { $0.domain }.joined(separator: ", ")
         }
         return route.network ?? "Unknown"
     }
@@ -159,11 +169,9 @@ struct RouteTooltipView: View {
     @ViewBuilder
     func detailInfo() -> some View {
         Group {
-            if route.network == "invalid Prefix" {
-                if let domains = route.domains {
-                    ForEach(domains, id: \.self) { domain in
-                        detailRow(label: domain.domain, value: domain.resolvedips ?? "")
-                    }
+            if let domains = route.domains, !domains.isEmpty {
+                ForEach(domains, id: \.self) { domain in
+                    detailRow(label: domain.domain, value: domain.resolvedIPs.joined(separator: ", "))
                 }
             } else {
                 detailRow(label: "Network", value: route.network ?? "")

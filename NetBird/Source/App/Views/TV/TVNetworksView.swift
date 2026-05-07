@@ -177,11 +177,11 @@ struct TVNetworkCard: View {
     }
 
     private var routeDisplayText: String {
-        if route.network == "invalid Prefix" {
-            if let domains = route.domains, domains.count > 2 {
+        if let domains = route.domains, !domains.isEmpty {
+            if domains.count > 2 {
                 return "\(domains.count) Domains"
             }
-            return route.domains?.map { $0.domain }.joined(separator: ", ") ?? ""
+            return domains.map { $0.domain }.joined(separator: ", ")
         }
         return route.network ?? ""
     }
