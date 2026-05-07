@@ -693,10 +693,13 @@ class ViewModel: ObservableObject {
     }
     
     func setDisableIPv6(disabled: Bool) {
+        let previous = self.disableIPv6
         self.disableIPv6 = disabled
         configProvider.disableIPv6 = disabled
         if !configProvider.commit() {
             print("Failed to update IPv6 settings")
+            self.disableIPv6 = previous
+            configProvider.disableIPv6 = previous
         }
     }
 

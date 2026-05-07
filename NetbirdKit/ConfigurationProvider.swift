@@ -235,11 +235,6 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
             return
         }
 
-        guard dict[field] != nil else {
-            AppLogger.shared.log("ConfigurationProvider: Field '\(field)' not found in config JSON")
-            return
-        }
-
         dict[field] = value
 
         guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),

@@ -30,11 +30,12 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
     private var tunnelManager: PacketTunnelProviderSettingsManager
     
     var interfaceIP: String?
-    
+    var interfaceIPv6: String?
+
     init(with tunnelManager: PacketTunnelProviderSettingsManager) {
         self.tunnelManager = tunnelManager
     }
-    
+
     func setInterfaceIP(_ p0: String?) {
         guard let validIP = p0, !validIP.isEmpty else {
             return
@@ -48,6 +49,7 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
         guard let validIPv6 = p0, !validIPv6.isEmpty else {
             return
         }
+        self.interfaceIPv6 = validIPv6
         self.tunnelManager.setInterfaceIPv6(interfaceIPv6: validIPv6)
     }
     
@@ -82,6 +84,9 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
         if let interfaceIP = self.interfaceIP, let interfaceRoute = createIPv4RouteFromCIDR(cidr: interfaceIP) {
             v4Routes.append(interfaceRoute)
         }
+        if let interfaceIPv6 = self.interfaceIPv6, let interfaceRoute = createIPv6RouteFromCIDR(cidr: interfaceIPv6) {
+            v6Routes.append(interfaceRoute)
+        }
         return (v4Routes, v6Routes, containsDefault)
     }
     
@@ -109,22 +114,17 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
 }
 
 func detectIPAddressType(_ address: String) -> IPAddressType {
-    let ipv4Pattern = "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$"
-    let ipv6Pattern = "^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}(\\/\\d{1,3})?$"
+    let bare = address.split(separator: "/").first.map(String.init) ?? address
 
-    let ipv4Regex = try! NSRegularExpression(pattern: ipv4Pattern, options: [])
-    let ipv6Regex = try! NSRegularExpression(pattern: ipv6Pattern, options: [])
-
-    let ipv4Matches = ipv4Regex.numberOfMatches(in: address, options: [], range: NSRange(location: 0, length: address.utf16.count))
-    let ipv6Matches = ipv6Regex.numberOfMatches(in: address, options: [], range: NSRange(location: 0, length: address.utf16.count))
-
-    if ipv4Matches > 0 {
+    var v4 = in_addr()
+    if bare.withCString({ inet_pton(AF_INET, $0, &v4) }) == 1 {
         return .ipv4
-    } else if ipv6Matches > 0 {
-        return .ipv6
-    } else {
-        return .invalid
     }
+    var v6 = in6_addr()
+    if bare.withCString({ inet_pton(AF_INET6, $0, &v6) }) == 1 {
+        return .ipv6
+    }
+    return .invalid
 }
 
 func extractIPAddressAndSubnet(from cidr: String) -> (String, String)? {

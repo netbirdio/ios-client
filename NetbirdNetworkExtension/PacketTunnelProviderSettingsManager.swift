@@ -115,11 +115,13 @@ class PacketTunnelProviderSettingsManager {
                     v6Routes = [NEIPv6Route(destinationAddress: "::", networkPrefixLength: 0)]
                 }
 
-                let ipv6Settings = NEIPv6Settings(addresses: v6Addresses, networkPrefixLengths: v6PrefixLengths)
-                if !v6Routes.isEmpty {
-                    ipv6Settings.includedRoutes = v6Routes
+                if !v6Addresses.isEmpty {
+                    let ipv6Settings = NEIPv6Settings(addresses: v6Addresses, networkPrefixLengths: v6PrefixLengths)
+                    if !v6Routes.isEmpty {
+                        ipv6Settings.includedRoutes = v6Routes
+                    }
+                    tunnelNetworkSettings.ipv6Settings = ipv6Settings
                 }
-                tunnelNetworkSettings.ipv6Settings = ipv6Settings
                 
                 tunnelNetworkSettings.mtu = 1280
                 
@@ -137,7 +139,8 @@ class PacketTunnelProviderSettingsManager {
     private func extractIPv6AddressAndPrefix(from cidr: String) -> (String, Int)? {
         let parts = cidr.split(separator: "/")
         guard parts.count == 2,
-              let prefix = Int(parts[1]) else {
+              let prefix = Int(parts[1]),
+              (0...128).contains(prefix) else {
             return nil
         }
         return (String(parts[0]), prefix)
