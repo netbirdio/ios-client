@@ -247,9 +247,14 @@ class ViewModel: ObservableObject {
             self.logger.info("connect: Task started, calling networkExtensionAdapter.start()")
             await self.networkExtensionAdapter.start()
             self.logger.info("connect: networkExtensionAdapter.start() completed")
-            // If start() returned but VPN never launched (e.g. IPC failed to get login URL)
-            // and the browser login sheet is not showing, the tunnel won't start on its own.
-            // Reset the stuck "Connecting..." state so the user can try again.
+            // start() returns as soon as startVPNTunnel() is called — the tunnel process
+            // hasn't launched yet and extensionState is still .disconnected at this point.
+            // Wait long enough for the tunnel to start and for the polling cycle to pick up
+            // the new NEVPNStatus before deciding whether the launch genuinely failed.
+            try? await Task.sleep(nanoseconds: 8_000_000_000) // 8 seconds
+            // If after the wait the state is still disconnected and no browser login sheet
+            // is visible, the tunnel failed to start (e.g. IPC error). Reset the stuck
+            // "Connecting..." state so the user can try again.
             if self.extensionState == .disconnected && !self.networkExtensionAdapter.showBrowser {
                 self.connectPressed = false
                 self.updateVPNDisplayState()
