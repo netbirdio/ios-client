@@ -7,7 +7,7 @@ struct VPNControlProvider: ControlValueProvider {
     var previewValue: Bool { false }
 
     func currentValue() async throws -> Bool {
-        let managers = try await NETunnelProviderManager.loadAllFromPreferences()
+        let managers = (try? await NETunnelProviderManager.loadAllFromPreferences()) ?? []
         return managers.first?.connection.status == .connected
     }
 }
