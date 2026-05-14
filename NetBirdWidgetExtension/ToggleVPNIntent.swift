@@ -31,7 +31,7 @@ struct ToggleVPNIntent: AppIntent {
             let status = manager.connection.status
             if status == .disconnected || status == .invalid {
                 defaults?.set(WidgetVPNStatus.connecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
-                WidgetCenter.shared.reloadAllTimelines()
+                defaults?.set(Date().timeIntervalSince1970, forKey: WidgetConstants.keyTransitionStartTime)
                 let session = manager.connection as? NETunnelProviderSession
                 try session?.startVPNTunnel()
             }
@@ -39,12 +39,14 @@ struct ToggleVPNIntent: AppIntent {
             let status = manager.connection.status
             if status == .connected || status == .connecting {
                 defaults?.set(WidgetVPNStatus.disconnecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
-                WidgetCenter.shared.reloadAllTimelines()
+                defaults?.set(Date().timeIntervalSince1970, forKey: WidgetConstants.keyTransitionStartTime)
                 manager.connection.stopVPNTunnel()
             }
         }
 
-        await VPNIntentHelpers.waitForStableState(manager: manager)
+        // Return immediately so the widget re-renders the transitioning state right away.
+        // VPNStatusProvider polls every 2 s while transitioning and clears the state once NE stabilises.
+        WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }
 }

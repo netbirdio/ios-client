@@ -110,6 +110,12 @@ struct NetBirdApp: App {
             guard isAppActive, !Task.isCancelled else { return }
 
             if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
+                // Clear stale button-press flags before applying the fresh NE state.
+                // These flags are only valid for the brief gap between a button tap and
+                // the corresponding NE state change; any external change (widget action,
+                // On Demand trigger) makes them stale when returning to the foreground.
+                viewModel.connectPressed = false
+                viewModel.disconnectPressed = false
                 viewModel.extensionState = initialStatus
                 viewModel.updateVPNDisplayState()
             }

@@ -15,4 +15,10 @@ enum WidgetConstants {
     static let pollInterval: TimeInterval = 0.3
     static let pollTimeout: TimeInterval = 5.0
     static let timelineRefreshMinutes = 5
+
+    static let keyTransitionStartTime = "netbird.widget.transitionStartTime"
+    static let transitionPollInterval: TimeInterval = 2.0
+    // How long to prefer the persisted transitioning state over NE snap-back.
+    // After this window, NE status is always the source of truth.
+    static let snapbackWindow: TimeInterval = 3.0
 }

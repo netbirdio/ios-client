@@ -10,6 +10,7 @@ import Network
 import NetBirdSDK
 import os
 import UserNotifications
+import WidgetKit
 
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
@@ -71,6 +72,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         if adapter.needsLogin() {
             signalLoginRequired()
+            // Clear any transitioning widget state so the login button appears immediately
+            // instead of waiting for the snap-back window to expire.
+            updateWidgetStatus("disconnected")
             // Return the error immediately so iOS tears down the tunnel interface at once.
             // A deferred completionHandler keeps the tunnel interface alive (black-hole state)
             // and intercepts all network traffic — including ASWebAuthenticationSession requests
@@ -83,7 +87,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        adapter.start(completionHandler: completionHandler)
+        adapter.start { [weak self] error in
+            completionHandler(error)
+            if error == nil {
+                self?.updateWidgetStatus("connected")
+            } else {
+                self?.updateWidgetStatus("disconnected")
+            }
+        }
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
@@ -100,14 +111,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         adapter?.stop()
         guard let pathMonitor = self.pathMonitor else {
             AppLogger.shared.log("pathMonitor is nil; nothing to cancel.")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                self?.updateWidgetStatus("disconnected")
                 completionHandler()
             }
             return
         }
         pathMonitor.cancel()
         self.pathMonitor = nil
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.updateWidgetStatus("disconnected")
             completionHandler()
         }
     }
@@ -529,6 +542,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func wake() {
+    }
+
+    /// Writes the resolved VPN status to shared UserDefaults and triggers a widget reload.
+    /// Called from start/stop completion so the widget reflects the real tunnel state
+    /// without waiting for the widget's own polling cycle.
+    private func updateWidgetStatus(_ status: String) {
+        let defaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        defaults?.set(status, forKey: GlobalConstants.keyWidgetVPNStatus)
+        WidgetCenter.shared.reloadAllTimelines()
+        AppLogger.shared.log("updateWidgetStatus: \(status)")
     }
 
     func setTunnelSettings(tunnelNetworkSettings: NEPacketTunnelNetworkSettings) {

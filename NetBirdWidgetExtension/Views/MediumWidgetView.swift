@@ -53,11 +53,12 @@ struct MediumWidgetView: View {
     }
 
     private var transitionIndicator: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             ProgressView()
             Text(entry.status.displayText)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.orange)
+                .multilineTextAlignment(.center)
         }
     }
 

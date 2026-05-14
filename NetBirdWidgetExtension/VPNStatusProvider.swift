@@ -20,12 +20,16 @@ struct VPNStatusProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<VPNStatusEntry>) -> Void) {
         loadEntry { entry in
-            let nextUpdate = Calendar.current.date(
-                byAdding: .minute,
-                value: WidgetConstants.timelineRefreshMinutes,
-                to: entry.date
-            ) ?? entry.date.addingTimeInterval(300)
-
+            let nextUpdate: Date
+            if entry.status.isTransitioning {
+                nextUpdate = entry.date.addingTimeInterval(WidgetConstants.transitionPollInterval)
+            } else {
+                nextUpdate = Calendar.current.date(
+                    byAdding: .minute,
+                    value: WidgetConstants.timelineRefreshMinutes,
+                    to: entry.date
+                ) ?? entry.date.addingTimeInterval(300)
+            }
             completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
         }
     }
@@ -45,13 +49,23 @@ struct VPNStatusProvider: TimelineProvider {
 
             if let manager {
                 let neStatus = WidgetVPNStatus(neStatus: manager.connection.status)
-                // Prefer a persisted transition state (.connecting/.disconnecting) when NE
-                // still reports the old stable state — this avoids the brief snap-back
-                // right after a widget-triggered toggle rewrites keyVPNStatus.
-                let usePersistedTransition = persisted.isTransitioning && neStatus.isStable &&
+
+                // Use the persisted transitioning state only within the snap-back window —
+                // the brief period right after a tap when NE still reports the old stable state.
+                // Outside this window NE is always the source of truth, preventing stuck states.
+                let startTime = defaults?.double(forKey: WidgetConstants.keyTransitionStartTime) ?? 0
+                let inSnapbackWindow = Date().timeIntervalSince1970 - startTime < WidgetConstants.snapbackWindow
+                let usePersistedTransition = inSnapbackWindow &&
+                    persisted.isTransitioning && neStatus.isStable &&
                     !(persisted == .connecting && neStatus == .connected) &&
                     !(persisted == .disconnecting && neStatus == .disconnected)
+
                 status = usePersistedTransition ? persisted : neStatus
+
+                // Keep the persisted key in sync with the resolved stable state.
+                if !usePersistedTransition && persisted.isTransitioning {
+                    defaults?.set(neStatus.rawValue, forKey: WidgetConstants.keyVPNStatus)
+                }
             } else {
                 status = persisted
             }

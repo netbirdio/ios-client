@@ -11,12 +11,14 @@ struct WidgetActionButton<TransitionContent: View, Label: View>: View {
     let label: (_ isConnected: Bool) -> Label
 
     var body: some View {
-        if entry.status.isTransitioning {
-            transitionContent()
-        } else if entry.needsAppSetup && !entry.isConnected {
+        if entry.needsAppSetup && !entry.isConnected {
+            // Login required or VPN not configured — open the app regardless of
+            // any transitioning state so the user is never stuck on a spinner.
             openAppLink {
                 label(false)
             }
+        } else if entry.status.isTransitioning {
+            transitionContent()
         } else {
             Button(intent: ToggleVPNIntent(action: entry.isConnected ? "disconnect" : "connect")) {
                 label(entry.isConnected)
