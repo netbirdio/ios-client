@@ -10,15 +10,11 @@ struct NetBirdVPNControl: ControlWidget {
         StaticControlConfiguration(
             kind: Self.kind,
             provider: VPNControlProvider()
-        ) { isConnected in
-            ControlWidgetToggle(
-                "NetBird VPN",
-                isOn: isConnected,
-                action: ToggleVPNControlIntent(value: !isConnected)
-            ) { isOn in
+        ) { state in
+            ControlWidgetButton(action: VPNControlIntent()) {
                 Label(
-                    isOn ? "Connected" : "Disconnected",
-                    systemImage: isOn ? "shield.fill" : "shield.slash"
+                    state.isActive ? "Connected" : "Disconnected",
+                    systemImage: state.isActive ? "shield.fill" : "shield.slash"
                 )
             }
         }

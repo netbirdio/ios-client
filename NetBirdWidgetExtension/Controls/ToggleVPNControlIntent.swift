@@ -3,49 +3,57 @@ import NetworkExtension
 import WidgetKit
 
 @available(iOS 18.0, *)
-struct ToggleVPNControlIntent: SetValueIntent {
+struct VPNControlIntent: AppIntent {
     static var title: LocalizedStringResource = "Toggle NetBird VPN"
     static var openAppWhenRun: Bool = false
 
-    /// Set to `true` to connect, `false` to disconnect.
-    /// The system fills this in before calling `perform()`.
-    @Parameter(title: "Connected")
-    var value: Bool
-
-    init() { self.value = false }
-    init(value: Bool) { self.value = value }
-
     func perform() async throws -> some IntentResult {
-        guard let manager = try await VPNIntentHelpers.loadManager() else {
-            await ControlCenter.shared.reloadControls(ofKind: NetBirdVPNControl.kind)
+        let defaults = VPNIntentHelpers.defaults
+        let loginRequired = defaults?.bool(forKey: WidgetConstants.keyLoginRequired) ?? false
+
+        guard !loginRequired else {
+            await reload()
             return .result()
         }
 
-        if value {
-            guard !VPNIntentHelpers.isLoginRequired else {
-                await ControlCenter.shared.reloadControls(ofKind: NetBirdVPNControl.kind)
-                return .result()
-            }
-            let status = manager.connection.status
-            if status == .disconnected || status == .invalid {
-                VPNIntentHelpers.defaults?.set(WidgetVPNStatus.connecting.rawValue,
-                                               forKey: WidgetConstants.keyVPNStatus)
-                WidgetCenter.shared.reloadAllTimelines()
-                let session = manager.connection as? NETunnelProviderSession
-                try session?.startVPNTunnel()
-            }
-        } else {
-            let status = manager.connection.status
-            if status == .connected || status == .connecting {
-                VPNIntentHelpers.defaults?.set(WidgetVPNStatus.disconnecting.rawValue,
-                                               forKey: WidgetConstants.keyVPNStatus)
-                WidgetCenter.shared.reloadAllTimelines()
-                manager.connection.stopVPNTunnel()
-            }
+        guard let first = await loadManager() else {
+            await reload()
+            return .result()
         }
 
-        await VPNIntentHelpers.waitForStableState(manager: manager)
-        await ControlCenter.shared.reloadControls(ofKind: NetBirdVPNControl.kind)
+        let status = first.connection.status
+
+        switch status {
+        case .disconnected, .invalid:
+            defaults?.set(WidgetVPNStatus.connecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
+            WidgetCenter.shared.reloadAllTimelines()
+            let session = first.connection as? NETunnelProviderSession
+            try? session?.startVPNTunnel()
+        case .connected, .connecting:
+            defaults?.set(WidgetVPNStatus.disconnecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
+            WidgetCenter.shared.reloadAllTimelines()
+            first.connection.stopVPNTunnel()
+        default:
+            break
+        }
+
+        await reload()
         return .result()
+    }
+
+    private func loadManager() async -> NETunnelProviderManager? {
+        await withCheckedContinuation { continuation in
+            NETunnelProviderManager.loadAllFromPreferences { managers, error in
+                guard error == nil else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: managers?.first)
+            }
+        }
+    }
+
+    private func reload() async {
+        await ControlCenter.shared.reloadControls(ofKind: NetBirdVPNControl.kind)
     }
 }
