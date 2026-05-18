@@ -17,8 +17,16 @@ enum WidgetConstants {
     static let timelineRefreshMinutes = 5
 
     static let keyTransitionStartTime = "netbird.widget.transitionStartTime"
-    static let transitionPollInterval: TimeInterval = 2.0
-    // How long to prefer the persisted transitioning state over NE snap-back.
-    // After this window, NE status is always the source of truth.
-    static let snapbackWindow: TimeInterval = 3.0
+    // Fallback poll interval while the VPN is transitioning.
+    // The primary update mechanism is a push from PacketTunnelProvider via
+    // WidgetCenter.reloadAllTimelines(). This poll is a safety net only, so keep
+    // it conservative to avoid exhausting the ~40-70 daily WidgetKit refresh budget.
+    static let transitionPollInterval: TimeInterval = 5.0
+    // How long to show the persisted transitioning state while NE still reports the
+    // old stable state. 8 s covers the typical delay between startVPNTunnel() and
+    // NE first reporting .connecting. After this window NE is always authoritative.
+    static let snapbackWindow: TimeInterval = 8.0
+    // Hard upper bound on a transitioning state. If the widget is still showing
+    // "Connecting…"/"Disconnecting…" after this many seconds, force NE as truth.
+    static let transitionMaxDuration: TimeInterval = 60.0
 }

@@ -36,8 +36,13 @@ struct ToggleVPNIntent: AppIntent {
                 try session?.startVPNTunnel()
             }
         } else {
-            let status = manager.connection.status
-            if status == .connected || status == .connecting {
+            let neStatus = manager.connection.status
+            let persistedRaw = defaults?.string(forKey: WidgetConstants.keyVPNStatus) ?? "disconnected"
+            let persisted = WidgetVPNStatus(rawValue: persistedRaw) ?? .disconnected
+            // NE status can be stale on first widget process start; use persisted state as fallback.
+            let shouldDisconnect = neStatus == .connected || neStatus == .connecting
+                || persisted == .connected || persisted == .connecting
+            if shouldDisconnect {
                 defaults?.set(WidgetVPNStatus.disconnecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
                 defaults?.set(Date().timeIntervalSince1970, forKey: WidgetConstants.keyTransitionStartTime)
                 manager.connection.stopVPNTunnel()

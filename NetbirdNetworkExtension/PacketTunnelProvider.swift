@@ -319,6 +319,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             if self?.adapter?.needsLogin() == true {
                 AppLogger.shared.log("restartClient: login required — signaling main app, skipping restart")
                 self?.signalLoginRequired()
+                self?.updateWidgetStatus("disconnected")
                 self?.monitorQueue.async {
                     self?.adapter?.isRestarting = false
                     self?.isRestartInProgress = false
@@ -328,7 +329,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             }
 
             AppLogger.shared.log("restartClient: starting client")
-            self?.adapter?.start { error in
+            self?.adapter?.start { [weak self] error in
                 // Cancel timeout whether start succeeds or not
                 timeoutWorkItem.cancel()
 
@@ -339,8 +340,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 if let error = error {
                     AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
+                    self?.updateWidgetStatus("disconnected")
                 } else {
                     AppLogger.shared.log("restartClient: start completed successfully")
+                    self?.updateWidgetStatus("connected")
                 }
             }
         }
@@ -550,8 +553,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private func updateWidgetStatus(_ status: String) {
         let defaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         defaults?.set(status, forKey: GlobalConstants.keyWidgetVPNStatus)
-        WidgetCenter.shared.reloadAllTimelines()
         AppLogger.shared.log("updateWidgetStatus: \(status)")
+        // For "connected", delay the reload by 1 s so the NE connection status has time
+        // to propagate from the tunnel process to the widget extension process before
+        // VPNStatusProvider queries NETunnelProviderManager.loadAllFromPreferences().
+        // Without this delay the widget briefly shows "Disconnected / Connect" right
+        // after a successful connect, then stays wrong until the next 5-minute poll.
+        let delay: TimeInterval = (status == "connected") ? 1.0 : 0.0
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     func setTunnelSettings(tunnelNetworkSettings: NEPacketTunnelNetworkSettings) {

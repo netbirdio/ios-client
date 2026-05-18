@@ -43,31 +43,61 @@ struct VPNStatusProvider: TimelineProvider {
         NETunnelProviderManager.loadAllFromPreferences { managers, error in
             let manager = (error == nil) ? managers?.first : nil
             let status: WidgetVPNStatus
+            var effectiveLoginRequired = loginRequired
 
             let persistedRaw = defaults?.string(forKey: WidgetConstants.keyVPNStatus) ?? "disconnected"
             let persisted = WidgetVPNStatus(rawValue: persistedRaw) ?? .disconnected
+            let startTime = defaults?.double(forKey: WidgetConstants.keyTransitionStartTime) ?? 0
+            let elapsed = Date().timeIntervalSince1970 - startTime
+            let snapbackExpired = elapsed > WidgetConstants.snapbackWindow
 
             if let manager {
                 let neStatus = WidgetVPNStatus(neStatus: manager.connection.status)
 
-                // Use the persisted transitioning state only within the snap-back window —
-                // the brief period right after a tap when NE still reports the old stable state.
-                // Outside this window NE is always the source of truth, preventing stuck states.
-                let startTime = defaults?.double(forKey: WidgetConstants.keyTransitionStartTime) ?? 0
-                let inSnapbackWindow = Date().timeIntervalSince1970 - startTime < WidgetConstants.snapbackWindow
-                let usePersistedTransition = inSnapbackWindow &&
-                    persisted.isTransitioning && neStatus.isStable &&
-                    !(persisted == .connecting && neStatus == .connected) &&
-                    !(persisted == .disconnecting && neStatus == .disconnected)
+                if persisted.isTransitioning && !snapbackExpired {
+                    // NE caught up: it reports the same direction as our command (or the
+                    // final settled state), or it moved in the opposite direction.
+                    // In both cases NE has a definitive answer — trust it immediately.
+                    let neResolved =
+                        (persisted == .connecting  && (neStatus == .connecting  || neStatus == .connected))    ||
+                        (persisted == .disconnecting && (neStatus == .disconnecting || neStatus == .disconnected)) ||
+                        (persisted == .connecting  && neStatus == .disconnecting) ||
+                        (persisted == .disconnecting && neStatus == .connecting)
 
-                status = usePersistedTransition ? persisted : neStatus
+                    if neResolved {
+                        status = neStatus
+                        defaults?.set(neStatus.rawValue, forKey: WidgetConstants.keyVPNStatus)
+                    } else {
+                        // NE still shows the old stable state — keep persisted transitioning
+                        // state so the widget doesn't flicker back to stable prematurely.
+                        status = persisted
+                    }
+                } else {
+                    // Snap-back window expired (or persisted is already stable).
+                    // NE is always the source of truth from here on.
+                    status = neStatus
+                    if persisted.isTransitioning {
+                        defaults?.set(neStatus.rawValue, forKey: WidgetConstants.keyVPNStatus)
+                    }
+                }
 
-                // Keep the persisted key in sync with the resolved stable state.
-                if !usePersistedTransition && persisted.isTransitioning {
-                    defaults?.set(neStatus.rawValue, forKey: WidgetConstants.keyVPNStatus)
+                // Safety net: if NE reports connected the login-required flag must be stale.
+                // PacketTunnelProvider also clears it in updateWidgetStatus("connected"), but
+                // clearing here too ensures the widget self-heals even if that push was missed.
+                if neStatus == .connected && loginRequired {
+                    defaults?.set(false, forKey: WidgetConstants.keyLoginRequired)
+                    effectiveLoginRequired = false
                 }
             } else {
-                status = persisted
+                // No NE manager (profile not configured, or NE error).
+                // Fall back to persisted state; if transitioning and snap-back expired,
+                // reset to disconnected so the widget never gets permanently stuck.
+                if persisted.isTransitioning && snapbackExpired {
+                    status = .disconnected
+                    defaults?.set(WidgetVPNStatus.disconnected.rawValue, forKey: WidgetConstants.keyVPNStatus)
+                } else {
+                    status = persisted
+                }
             }
 
             let entry = VPNStatusEntry(
@@ -75,8 +105,8 @@ struct VPNStatusProvider: TimelineProvider {
                 status: status,
                 ip: ip,
                 fqdn: fqdn,
-                needsAppSetup: manager == nil || loginRequired,
-                loginRequired: loginRequired
+                needsAppSetup: manager == nil || effectiveLoginRequired,
+                loginRequired: effectiveLoginRequired
             )
             completion(entry)
         }

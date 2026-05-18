@@ -8,7 +8,11 @@ enum VPNIntentHelpers {
 
     static func loadManager() async throws -> NETunnelProviderManager? {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-        return managers.first
+        if let first = managers.first { return first }
+
+        // On first widget process startup NE preferences can return empty; retry once.
+        try await Task.sleep(nanoseconds: 300_000_000)
+        return try await NETunnelProviderManager.loadAllFromPreferences().first
     }
 
     static var defaults: UserDefaults? {

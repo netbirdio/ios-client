@@ -15,12 +15,12 @@ struct MediumWidgetView: View {
                 } label: { isConnected in
                     iconLabel(isConnected: isConnected)
                 }
-                .frame(width: 80)
+                .frame(width: 100)
             } else if let url = entry.fallbackDeepLink {
                 Link(destination: url) {
                     iconLabel(isConnected: entry.isConnected)
                 }
-                .frame(width: 80)
+                .frame(width: 100)
             }
         }
         .padding()
@@ -53,13 +53,20 @@ struct MediumWidgetView: View {
     }
 
     private var transitionIndicator: some View {
-        VStack(spacing: 6) {
+        HStack(spacing: 5) {
             ProgressView()
+                .scaleEffect(0.65)
+                .frame(width: 14, height: 14)
             Text(entry.status.displayText)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.orange)
-                .multilineTextAlignment(.center)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.85))
+        .cornerRadius(10)
     }
 
     private func iconLabel(isConnected: Bool) -> some View {
