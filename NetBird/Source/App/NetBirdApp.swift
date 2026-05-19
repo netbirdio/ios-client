@@ -14,6 +14,7 @@ import Combine
 
 #if os(iOS)
 import FirebasePerformance
+import WidgetKit
 #endif
 
 #if os(iOS)
@@ -118,6 +119,13 @@ struct NetBirdApp: App {
                 viewModel.disconnectPressed = false
                 viewModel.extensionState = initialStatus
                 viewModel.updateVPNDisplayState()
+            } else {
+                // No matching VPN profile found — still force a widget timeline refresh so
+                // the widget doesn't stay stuck on a transitioning state from a prior
+                // widget-initiated disconnect/connect while the app was closed.
+                #if os(iOS)
+                WidgetCenter.shared.reloadAllTimelines()
+                #endif
             }
 
             guard isAppActive, !Task.isCancelled else { return }

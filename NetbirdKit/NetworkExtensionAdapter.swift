@@ -434,13 +434,21 @@ public class NetworkExtensionAdapter: ObservableObject {
         #if os(iOS)
         // Pass active profile paths so the extension can reinitialize the adapter
         // if the profile changed while the extension process was still alive.
-        if let configPath = Preferences.configFile() {
+        let configPath = Preferences.configFile()
+        let statePath  = Preferences.stateFile()
+        if let configPath {
             options["configPath"] = configPath as NSObject
         }
-        if let statePath = Preferences.stateFile() {
+        if let statePath {
             options["statePath"] = statePath as NSObject
         }
-        logger.info("startVPNConnection: configPath=\(Preferences.configFile() ?? "nil")")
+        logger.info("startVPNConnection: configPath=\(configPath ?? "nil")")
+
+        // Persist the active paths to the shared app group so the widget intent
+        // can pass them to startVPNTunnel(options:) when the main app is not running.
+        let sharedDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        sharedDefaults?.set(configPath, forKey: GlobalConstants.keyWidgetActiveConfigPath)
+        sharedDefaults?.set(statePath,  forKey: GlobalConstants.keyWidgetActiveStatePath)
         #endif
 
         guard let session = self.session else {

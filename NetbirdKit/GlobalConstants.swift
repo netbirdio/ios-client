@@ -25,6 +25,10 @@ struct GlobalConstants {
     static let keyWidgetVPNStatus = "netbird.widget.vpnStatus"
     static let keyWidgetIP = "netbird.widget.ip"
     static let keyWidgetFQDN = "netbird.widget.fqdn"
+    // Active profile paths stored by the main app so the widget intent can
+    // start the tunnel without the main app running (mirrors WidgetConstants).
+    static let keyWidgetActiveConfigPath = "netbird.widget.activeConfigPath"
+    static let keyWidgetActiveStatePath  = "netbird.widget.activeStatePath"
 
     static let configFileName = "netbird.cfg"
     static let stateFileName = "state.json"

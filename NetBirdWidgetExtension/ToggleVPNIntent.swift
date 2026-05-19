@@ -33,7 +33,17 @@ struct ToggleVPNIntent: AppIntent {
                 defaults?.set(WidgetVPNStatus.connecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
                 defaults?.set(Date().timeIntervalSince1970, forKey: WidgetConstants.keyTransitionStartTime)
                 let session = manager.connection as? NETunnelProviderSession
-                try session?.startVPNTunnel()
+                // Pass the active profile paths so PacketTunnelProvider can find the
+                // config file when the main app is not running. The main app writes
+                // these to shared UserDefaults in NetworkExtensionAdapter.startVPNConnection().
+                var options: [String: NSObject] = [:]
+                if let p = defaults?.string(forKey: WidgetConstants.keyActiveConfigPath) {
+                    options["configPath"] = p as NSObject
+                }
+                if let p = defaults?.string(forKey: WidgetConstants.keyActiveStatePath) {
+                    options["statePath"] = p as NSObject
+                }
+                try session?.startVPNTunnel(options: options.isEmpty ? nil : options)
             }
         } else {
             let neStatus = manager.connection.status

@@ -20,17 +20,43 @@ struct VPNStatusProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<VPNStatusEntry>) -> Void) {
         loadEntry { entry in
-            let nextUpdate: Date
             if entry.status.isTransitioning {
-                nextUpdate = entry.date.addingTimeInterval(WidgetConstants.transitionPollInterval)
+                let pollDate = entry.date.addingTimeInterval(WidgetConstants.transitionPollInterval)
+
+                // Bake in a hard-deadline fallback entry so the widget exits the
+                // transitioning state even when reloadAllTimelines() from the NE
+                // process is suppressed (app closed). The fallback shows "Disconnected"
+                // — the safest assumption for both connect and disconnect transitions.
+                // If the real outcome differs, the next getTimeline call (via .after
+                // policy or an NE push when the app opens) will correct it.
+                let defaults = UserDefaults(suiteName: WidgetConstants.appGroupSuite)
+                let startTime = defaults?.double(forKey: WidgetConstants.keyTransitionStartTime) ?? 0
+                let deadlineBase = startTime > 0
+                    ? Date(timeIntervalSince1970: startTime)
+                    : entry.date
+                let deadline = deadlineBase.addingTimeInterval(WidgetConstants.transitionMaxDuration)
+
+                if deadline > pollDate {
+                    let fallback = VPNStatusEntry(
+                        date: deadline,
+                        status: .disconnected,
+                        ip: entry.ip,
+                        fqdn: entry.fqdn,
+                        needsAppSetup: entry.needsAppSetup,
+                        loginRequired: entry.loginRequired
+                    )
+                    completion(Timeline(entries: [entry, fallback], policy: .after(pollDate)))
+                } else {
+                    completion(Timeline(entries: [entry], policy: .after(pollDate)))
+                }
             } else {
-                nextUpdate = Calendar.current.date(
+                let nextUpdate = Calendar.current.date(
                     byAdding: .minute,
                     value: WidgetConstants.timelineRefreshMinutes,
                     to: entry.date
                 ) ?? entry.date.addingTimeInterval(300)
+                completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
             }
-            completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
         }
     }
 
@@ -39,6 +65,9 @@ struct VPNStatusProvider: TimelineProvider {
         let ip = defaults?.string(forKey: WidgetConstants.keyIP) ?? ""
         let fqdn = defaults?.string(forKey: WidgetConstants.keyFQDN) ?? ""
         let loginRequired = defaults?.bool(forKey: WidgetConstants.keyLoginRequired) ?? false
+        // true when the main app has stored active profile paths (set on every successful connect).
+        // If missing, the intent cannot start the tunnel without paths → show "open app" link instead.
+        let configPathStored = defaults?.string(forKey: WidgetConstants.keyActiveConfigPath) != nil
 
         NETunnelProviderManager.loadAllFromPreferences { managers, error in
             let manager = (error == nil) ? managers?.first : nil
@@ -51,10 +80,20 @@ struct VPNStatusProvider: TimelineProvider {
             let elapsed = Date().timeIntervalSince1970 - startTime
             let snapbackExpired = elapsed > WidgetConstants.snapbackWindow
 
+            // Hard upper bound: after transitionMaxDuration always trust NE (or force
+            // disconnected if no manager). This is the last-resort safety net for the
+            // case where reloadAllTimelines() from the NE process was silently dropped
+            // (app closed) and WidgetKit did not honour the .after(pollInterval) policy.
+            let hardExpired = elapsed > WidgetConstants.transitionMaxDuration
+
             if let manager {
                 let neStatus = WidgetVPNStatus(neStatus: manager.connection.status)
 
-                if persisted.isTransitioning && !snapbackExpired {
+                if persisted.isTransitioning && hardExpired {
+                    // Past the hard limit — force NE as truth regardless of snap-back.
+                    status = neStatus
+                    defaults?.set(neStatus.rawValue, forKey: WidgetConstants.keyVPNStatus)
+                } else if persisted.isTransitioning && !snapbackExpired {
                     // NE caught up: it reports the same direction as our command (or the
                     // final settled state), or it moved in the opposite direction.
                     // In both cases NE has a definitive answer — trust it immediately.
@@ -90,9 +129,9 @@ struct VPNStatusProvider: TimelineProvider {
                 }
             } else {
                 // No NE manager (profile not configured, or NE error).
-                // Fall back to persisted state; if transitioning and snap-back expired,
-                // reset to disconnected so the widget never gets permanently stuck.
-                if persisted.isTransitioning && snapbackExpired {
+                // Fall back to persisted state; if transitioning and snap-back or hard
+                // deadline expired, reset to disconnected so the widget never gets stuck.
+                if persisted.isTransitioning && (snapbackExpired || hardExpired) {
                     status = .disconnected
                     defaults?.set(WidgetVPNStatus.disconnected.rawValue, forKey: WidgetConstants.keyVPNStatus)
                 } else {
@@ -105,7 +144,7 @@ struct VPNStatusProvider: TimelineProvider {
                 status: status,
                 ip: ip,
                 fqdn: fqdn,
-                needsAppSetup: manager == nil || effectiveLoginRequired,
+                needsAppSetup: manager == nil || !configPathStored || effectiveLoginRequired,
                 loginRequired: effectiveLoginRequired
             )
             completion(entry)

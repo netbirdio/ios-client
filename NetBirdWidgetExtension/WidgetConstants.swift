@@ -11,6 +11,10 @@ enum WidgetConstants {
     static let keyIP = "netbird.widget.ip"
     static let keyFQDN = "netbird.widget.fqdn"
     static let keyLoginRequired = "netbird.loginRequired"
+    // Active profile paths written by the main app so the widget intent can pass
+    // them to startVPNTunnel(options:) without the main app being in-process.
+    static let keyActiveConfigPath = "netbird.widget.activeConfigPath"
+    static let keyActiveStatePath  = "netbird.widget.activeStatePath"
 
     static let pollInterval: TimeInterval = 0.3
     static let pollTimeout: TimeInterval = 5.0
@@ -26,7 +30,8 @@ enum WidgetConstants {
     // old stable state. 8 s covers the typical delay between startVPNTunnel() and
     // NE first reporting .connecting. After this window NE is always authoritative.
     static let snapbackWindow: TimeInterval = 8.0
-    // Hard upper bound on a transitioning state. If the widget is still showing
-    // "Connecting…"/"Disconnecting…" after this many seconds, force NE as truth.
-    static let transitionMaxDuration: TimeInterval = 60.0
+    // Hard upper bound on a transitioning state. A fallback timeline entry is baked
+    // in at this offset so the widget never shows "Connecting…"/"Disconnecting…" forever,
+    // even when the NE process cannot push reloadAllTimelines() (app closed).
+    static let transitionMaxDuration: TimeInterval = 15.0
 }

@@ -53,20 +53,15 @@ struct MediumWidgetView: View {
     }
 
     private var transitionIndicator: some View {
-        HStack(spacing: 5) {
-            ProgressView()
-                .scaleEffect(0.65)
-                .frame(width: 14, height: 14)
-            Text(entry.status.displayText)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .background(Color.orange.opacity(0.85))
-        .cornerRadius(10)
+        Text(entry.status.displayText)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(Color.orange.opacity(0.85))
+            .cornerRadius(10)
     }
 
     private func iconLabel(isConnected: Bool) -> some View {
