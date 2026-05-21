@@ -60,7 +60,8 @@ struct ToggleVPNIntent: AppIntent {
         }
 
         // Return immediately so the widget re-renders the transitioning state right away.
-        // VPNStatusProvider polls every 2 s while transitioning and clears the state once NE stabilises.
+        // VPNStatusProvider polls every transitionPollInterval (5 s) while transitioning
+        // and clears the state once NE stabilises.
         WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }

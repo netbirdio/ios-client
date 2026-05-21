@@ -109,18 +109,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         adapter?.isNetworkUnavailable = false
         setNetworkUnavailableFlag(false)
         adapter?.stop()
+        updateWidgetStatus("disconnected")
         guard let pathMonitor = self.pathMonitor else {
             AppLogger.shared.log("pathMonitor is nil; nothing to cancel.")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-                self?.updateWidgetStatus("disconnected")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 completionHandler()
             }
             return
         }
         pathMonitor.cancel()
         self.pathMonitor = nil
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.updateWidgetStatus("disconnected")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             completionHandler()
         }
     }

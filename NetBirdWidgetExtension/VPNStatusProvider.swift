@@ -77,14 +77,18 @@ struct VPNStatusProvider: TimelineProvider {
             let persistedRaw = defaults?.string(forKey: WidgetConstants.keyVPNStatus) ?? "disconnected"
             let persisted = WidgetVPNStatus(rawValue: persistedRaw) ?? .disconnected
             let startTime = defaults?.double(forKey: WidgetConstants.keyTransitionStartTime) ?? 0
-            let elapsed = Date().timeIntervalSince1970 - startTime
-            let snapbackExpired = elapsed > WidgetConstants.snapbackWindow
-
-            // Hard upper bound: after transitionMaxDuration always trust NE (or force
-            // disconnected if no manager). This is the last-resort safety net for the
-            // case where reloadAllTimelines() from the NE process was silently dropped
-            // (app closed) and WidgetKit did not honour the .after(pollInterval) policy.
-            let hardExpired = elapsed > WidgetConstants.transitionMaxDuration
+            // startTime == 0 means the key was never written; treat both windows as active
+            // (not expired) so snap-back protection is not bypassed on first load.
+            let snapbackExpired: Bool
+            let hardExpired: Bool
+            if startTime > 0 {
+                let elapsed = Date().timeIntervalSince1970 - startTime
+                snapbackExpired = elapsed > WidgetConstants.snapbackWindow
+                hardExpired     = elapsed > WidgetConstants.transitionMaxDuration
+            } else {
+                snapbackExpired = false
+                hardExpired     = false
+            }
 
             if let manager {
                 let neStatus = WidgetVPNStatus(neStatus: manager.connection.status)
