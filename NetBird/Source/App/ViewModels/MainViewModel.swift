@@ -115,6 +115,7 @@ class ViewModel: ObservableObject {
     }
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
+    @Published var disableIPv6 = false
     @Published var connectOnDemand = false
     @Published var showOnDemandAlert = false
     @Published var showOnDemandConflictAlert = false
@@ -691,6 +692,21 @@ class ViewModel: ObservableObject {
         previousExtensionState = extensionState
     }
     
+    func setDisableIPv6(disabled: Bool) {
+        let previous = self.disableIPv6
+        self.disableIPv6 = disabled
+        configProvider.disableIPv6 = disabled
+        if !configProvider.commit() {
+            print("Failed to update IPv6 settings")
+            self.disableIPv6 = previous
+            configProvider.disableIPv6 = previous
+        }
+    }
+
+    func loadIPv6Settings() {
+        self.disableIPv6 = configProvider.disableIPv6
+    }
+
     func setForcedRelayConnection(isEnabled: Bool) {
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         userDefaults?.set(isEnabled, forKey: GlobalConstants.keyForceRelayConnection)

@@ -10,6 +10,7 @@ import Combine
 
 struct StatusDetails: Codable {
     var ip: String
+    var ipv6: String?
     var fqdn: String
     var managementStatus: ClientState
     var peerInfo: [PeerInfo]
@@ -18,6 +19,7 @@ struct StatusDetails: Codable {
 extension StatusDetails: Equatable {
     static func == (lhs: StatusDetails, rhs: StatusDetails) -> Bool {
         return lhs.ip == rhs.ip &&
+               lhs.ipv6 == rhs.ipv6 &&
                lhs.fqdn == rhs.fqdn &&
                lhs.managementStatus == rhs.managementStatus &&
                lhs.peerInfo == rhs.peerInfo
@@ -27,6 +29,7 @@ extension StatusDetails: Equatable {
 class PeerInfo: ObservableObject, Codable, Identifiable {
     var id = UUID()
     var ip: String
+    var ipv6: String?
     var fqdn: String
     var localIceCandidateEndpoint: String
     var remoteIceCandidateEndpoint: String
@@ -45,11 +48,12 @@ class PeerInfo: ObservableObject, Codable, Identifiable {
     var routes: [String]
     var selected: Bool = false
     
-    init(ip: String, fqdn: String, localIceCandidateEndpoint: String, remoteIceCandidateEndpoint: String,
+    init(ip: String, ipv6: String? = nil, fqdn: String, localIceCandidateEndpoint: String, remoteIceCandidateEndpoint: String,
              localIceCandidateType: String, remoteIceCandidateType: String, pubKey: String, latency: String,
              bytesRx: Int64, bytesTx: Int64, connStatus: String, connStatusUpdate: String, direct: Bool,
          lastWireguardHandshake: String, relayed: Bool, rosenpassEnabled: Bool, routes: [String]) {
             self.ip = ip
+            self.ipv6 = ipv6
             self.fqdn = fqdn
             self.localIceCandidateEndpoint = localIceCandidateEndpoint
             self.remoteIceCandidateEndpoint = remoteIceCandidateEndpoint
@@ -73,6 +77,7 @@ extension PeerInfo: Equatable {
     static func == (lhs: PeerInfo, rhs: PeerInfo) -> Bool {
         return lhs.id == rhs.id &&
                lhs.ip == rhs.ip &&
+               lhs.ipv6 == rhs.ipv6 &&
                lhs.fqdn == rhs.fqdn &&
                lhs.localIceCandidateEndpoint == rhs.localIceCandidateEndpoint &&
                lhs.remoteIceCandidateEndpoint == rhs.remoteIceCandidateEndpoint &&
@@ -95,6 +100,7 @@ extension PeerInfo: Equatable {
 extension PeerInfo {
     func update(from newInfo: PeerInfo) {
         self.ip = newInfo.ip
+        self.ipv6 = newInfo.ipv6
         self.fqdn = newInfo.fqdn
         self.localIceCandidateEndpoint = newInfo.localIceCandidateEndpoint
         self.remoteIceCandidateEndpoint = newInfo.remoteIceCandidateEndpoint
