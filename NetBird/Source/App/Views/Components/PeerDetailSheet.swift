@@ -29,6 +29,10 @@ struct PeerDetailSheet: View {
         NavigationView {
             List {
                 Section {
+                    detailRow("IPv4", peer.ip)
+                    if let ipv6 = peer.ipv6, !ipv6.isEmpty {
+                        detailRow("IPv6", ipv6)
+                    }
                     detailRow("Status", peer.connStatus)
                     detailRow("Last status update", relativeDateText)
                     detailRow("Connection type", peer.relayed ? "Relayed" : "P2P")

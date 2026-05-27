@@ -417,6 +417,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
             let peerInfo = PeerInfo(
                 ip: peer.ip,
+                ipv6: peer.iPv6,
                 fqdn: peer.fqdn,
                 localIceCandidateEndpoint: peer.localIceCandidateEndpoint,
                 remoteIceCandidateEndpoint: peer.remoteIceCandidateEndpoint,
@@ -440,6 +441,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let clientState = adapter.clientState
         let statusDetails = StatusDetails(
             ip: statusDetailsMessage.getIP(),
+            ipv6: statusDetailsMessage.getIPv6(),
             fqdn: statusDetailsMessage.getFQDN(),
             managementStatus: clientState,
             peerInfo: peerInfoArray
@@ -469,7 +471,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         do {
             let routeSelectionDetailsMessage = try adapter.client.getRoutesSelectionDetails()
 
-            let routeSelectionInfo: [RoutesSelectionInfo] = (0..<routeSelectionDetailsMessage.size()).compactMap { index in
+            let routeSelectionInfo: [RoutesSelectionInfo] = (0..<routeSelectionDetailsMessage.size()).compactMap { index -> RoutesSelectionInfo? in
                 guard let route = routeSelectionDetailsMessage.get(index) else { return nil }
 
                 let domains = (0..<(route.domains?.size() ?? 0)).compactMap { domainIndex -> DomainDetails? in
