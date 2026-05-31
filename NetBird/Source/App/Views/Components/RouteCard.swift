@@ -104,8 +104,17 @@ struct RouteCard: View {
             .filter { $0.connStatus == "Connected" }
             .flatMap { $0.routes }
 
-        if let network = route.network, connectedPeerRoutes.contains(network) {
-            return Color.green
+        // route.network may be a single prefix ("172.16.254.0/24") or, for a merged
+        // exit node, several joined with ", " ("0.0.0.0/0, ::/0"). peer.routes holds
+        // each prefix as its own entry, so split and match any component instead of
+        // comparing the whole joined string (which never equals a single entry).
+        if let network = route.network {
+            let networkComponents = network
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+            if networkComponents.contains(where: connectedPeerRoutes.contains) {
+                return Color.green
+            }
         }
 
         let resolvedIPs = (route.domains ?? []).flatMap { $0.resolvedIPs }
