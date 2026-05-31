@@ -15,8 +15,7 @@ struct SmallWidgetView: View {
 
             if #available(iOS 17.0, *) {
                 WidgetActionButton(entry: entry) {
-                    ProgressView()
-                        .scaleEffect(0.7)
+                    transitionPill()
                 } label: { isConnected in
                     pillLabel(isConnected: isConnected)
                 }
@@ -27,6 +26,22 @@ struct SmallWidgetView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func transitionPill() -> some View {
+        HStack(spacing: 6) {
+            ProgressView()
+                .scaleEffect(0.65)
+                .frame(width: 14, height: 14)
+            Text(entry.status.displayText)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(Color.orange.opacity(0.85))
+        .cornerRadius(8)
     }
 
     private func pillLabel(isConnected: Bool) -> some View {
