@@ -100,14 +100,21 @@ struct RouteCard: View {
     private var statusIndicatorColor: Color {
         guard route.selected else { return Color.gray.opacity(0.5) }
 
+        // Prefer the connection status computed by the core, which correctly handles
+        // merged exit nodes (v4/v6 pair) and dynamic routes. Fall back to the legacy
+        // network-string matching only if the core didn't provide a status.
+        if let status = route.status, !status.isEmpty {
+            return status == "Connected" ? Color.green : Color.yellow
+        }
+
         let connectedPeerRoutes = peerViewModel.peerInfo
             .filter { $0.connStatus == "Connected" }
             .flatMap { $0.routes }
 
-        // route.network may be a single prefix ("172.16.254.0/24") or, for a merged
-        // exit node, several joined with ", " ("0.0.0.0/0, ::/0"). peer.routes holds
-        // each prefix as its own entry, so split and match any component instead of
-        // comparing the whole joined string (which never equals a single entry).
+        // Legacy fallback: route.network may be a single prefix ("172.16.254.0/24")
+        // or, for a merged exit node, several joined with ", " ("0.0.0.0/0, ::/0").
+        // peer.routes holds each prefix as its own entry, so split and match any
+        // component instead of comparing the whole joined string.
         if let network = route.network {
             let networkComponents = network
                 .split(separator: ",")

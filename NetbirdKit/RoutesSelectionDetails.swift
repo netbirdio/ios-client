@@ -33,17 +33,22 @@ class RoutesSelectionInfo: ObservableObject, Codable, Identifiable {
     var network: String?
     var domains: [DomainDetails]?
     var selected: Bool
+    // Connection status computed by the core ("Connected"/"Idle"), so the UI need
+    // not infer it from the (possibly comma-joined) network string. May be empty
+    // for older cores; callers fall back to the legacy network-matching logic then.
+    var status: String?
 
-    init(id: UUID = UUID(), name: String, network: String?, domains: [DomainDetails]?, selected: Bool) {
+    init(id: UUID = UUID(), name: String, network: String?, domains: [DomainDetails]?, selected: Bool, status: String? = nil) {
         self.id = id
         self.name = name
         self.network = network
         self.selected = selected
         self.domains = domains
+        self.status = status
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, network, domains, selected
+        case id, name, network, domains, selected, status
     }
 }
 
@@ -53,7 +58,8 @@ extension RoutesSelectionInfo: Equatable {
         lhs.name == rhs.name &&
         lhs.network == rhs.network &&
         lhs.domains == rhs.domains &&
-        lhs.selected == rhs.selected
+        lhs.selected == rhs.selected &&
+        lhs.status == rhs.status
     }
 }
 
