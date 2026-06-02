@@ -29,7 +29,7 @@ enum WidgetVPNStatus: String {
         switch self {
         case .connected: return .green
         case .connecting, .disconnecting: return .orange
-        case .disconnected: return .gray
+        case .disconnected: return .red
         }
     }
 

@@ -53,27 +53,31 @@ struct MediumWidgetView: View {
     }
 
     private var transitionIndicator: some View {
-        Text(entry.status.displayText)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(.white)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(Color.orange.opacity(0.85))
-            .cornerRadius(10)
+        ZStack {
+            Capsule()
+                .fill(Color.orange.opacity(0.85))
+            Circle()
+                .fill(Color.white.opacity(0.9))
+                .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
+                .padding(3)
+                .overlay(
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .tint(.orange)
+                )
+        }
+        .frame(width: 64, height: 36)
     }
 
     private func iconLabel(isConnected: Bool) -> some View {
-        let color: Color = isConnected ? .red : .green
-        return VStack(spacing: 4) {
-            Image(systemName: isConnected ? "stop.circle.fill" : "play.circle.fill")
-                .font(.system(size: 32))
-                .foregroundColor(color)
-
-            Text(isConnected ? "Disconnect" : "Connect")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(color)
+        ZStack(alignment: isConnected ? .trailing : .leading) {
+            Capsule()
+                .fill(isConnected ? Color.green : Color.red)
+            Circle()
+                .fill(Color.white)
+                .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+                .padding(3)
         }
+        .frame(width: 64, height: 36)
     }
 }
