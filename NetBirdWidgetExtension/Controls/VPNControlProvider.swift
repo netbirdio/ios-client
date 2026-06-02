@@ -4,13 +4,14 @@ import NetworkExtension
 struct VPNControlState: Equatable, Sendable {
     let isConfigured: Bool
     let isActive: Bool
+    let isConnecting: Bool
 }
 
 @available(iOS 18.0, *)
 struct VPNControlProvider: ControlValueProvider {
 
     var previewValue: VPNControlState {
-        VPNControlState(isConfigured: true, isActive: false)
+        VPNControlState(isConfigured: true, isActive: false, isConnecting: false)
     }
 
     func currentValue() async throws -> VPNControlState {
@@ -21,19 +22,16 @@ struct VPNControlProvider: ControlValueProvider {
 
         // No persisted status means app hasn't configured VPN yet
         guard persisted != nil, !loginRequired else {
-            return VPNControlState(isConfigured: false, isActive: false)
+            return VPNControlState(isConfigured: false, isActive: false, isConnecting: false)
         }
 
         // Try to get live status from NE; fall back to persisted value
         let neStatus = await loadNEStatus()
-        let isActive: Bool
-        if let live = neStatus {
-            isActive = live == .connected || live == .connecting
-        } else {
-            isActive = persisted == .connected || persisted == .connecting
-        }
+        let status = neStatus ?? persisted ?? .disconnected
+        let isConnecting = status == .connecting || status == .disconnecting
+        let isActive = status == .connected || status == .connecting
 
-        return VPNControlState(isConfigured: true, isActive: isActive)
+        return VPNControlState(isConfigured: true, isActive: isActive, isConnecting: isConnecting)
     }
 
     private func loadNEStatus() async -> WidgetVPNStatus? {
