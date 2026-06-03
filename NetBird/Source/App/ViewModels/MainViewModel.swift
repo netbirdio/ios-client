@@ -473,6 +473,9 @@ class ViewModel: ObservableObject {
         userDefaults?.set(ip, forKey: GlobalConstants.keyWidgetIP)
         userDefaults?.set(fqdn, forKey: GlobalConstants.keyWidgetFQDN)
         WidgetCenter.shared.reloadAllTimelines()
+        if #available(iOS 18.0, *) {
+            ControlCenter.shared.reloadControls(ofKind: "io.netbird.vpn.control")
+        }
     }
     #endif
 
