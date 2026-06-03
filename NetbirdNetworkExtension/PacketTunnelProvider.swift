@@ -87,6 +87,24 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
+        // Wire up the login-required callback so the connection listener can tear the
+        // tunnel down if the auth session expires mid-session (token expires while the
+        // VPN is running). On Android the kernel removes the VPN routes automatically
+        // when the Go engine closes the TUN fd; on iOS the utun interface is owned by
+        // the provider and outlives the Go engine, so without an explicit teardown it
+        // lingers with the default route and black-holes all traffic until the user
+        // opens the app. cancelTunnelWithError restores the default route immediately.
+        adapter.onLoginRequired = { [weak self] in
+            AppLogger.shared.log("onLoginRequired: session expired mid-tunnel — tearing down")
+            self?.signalLoginRequired()
+            self?.updateWidgetStatus("disconnected")
+            self?.cancelTunnelWithError(NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1001,
+                userInfo: [NSLocalizedDescriptionKey: "Login required."]
+            ))
+        }
+
         adapter.start { [weak self] error in
             completionHandler(error)
             if error == nil {
