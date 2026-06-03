@@ -882,6 +882,15 @@ class ViewModel: ObservableObject {
         userDefaults?.set(false, forKey: GlobalConstants.keyLoginRequired)
         userDefaults?.synchronize()
 
+        // Credentials are saved to UserDefaults only after a successful login.
+        // If they're absent, the user has never logged in (or explicitly logged out).
+        // In that case the extension's signalLoginRequired() is noise — the normal
+        // connect→browser flow handles first-time login, so skip the re-auth alert.
+        if !Preferences.hasConfigInUserDefaults() {
+            AppLogger.shared.log("Login required flag ignored — no saved credentials (first login or post-logout)")
+            return
+        }
+
         AppLogger.shared.log("Login required flag detected from extension")
         showAuthenticationRequired = true
         connectPressed = false

@@ -12,6 +12,29 @@ import Combine
 import NetBirdSDK
 import os
 
+// URL opener and error listener for main-app-side OAuth login.
+// Running login in the main app avoids the NE extension's client context being
+// cancelled (adapter.stop → client.stop kills the WaitToken goroutine before
+// the HTTP server can receive the OAuth callback).
+#if os(iOS)
+private class MainAppLoginURLOpener: NSObject, NetBirdSDKURLOpenerProtocol {
+    var onOpen: ((String, String) -> Void)?
+    var onSuccess: (() -> Void)?
+    func open(_ url: String?, userCode: String?) {
+        guard let url else { return }
+        onOpen?(url, userCode ?? "")
+    }
+    func onLoginSuccess() { onSuccess?() }
+}
+
+private class MainAppLoginErrListener: NSObject, NetBirdSDKErrListenerProtocol {
+    var onSuccessCallback: (() -> Void)?
+    var onErrorCallback: ((Error?) -> Void)?
+    func onError(_ err: Error?) { onErrorCallback?(err) }
+    func onSuccess() { onSuccessCallback?() }
+}
+#endif
+
 // SSO Listener for config initialization
 /// Used to check if SSO is supported and save initial config
 class ConfigSSOListener: NSObject, NetBirdSDKSSOListenerProtocol {
@@ -51,6 +74,9 @@ public class NetworkExtensionAdapter: ObservableObject {
 
     @Published var showBrowser = false
     @Published var loginURL: String?
+    #if os(iOS)
+    private var pendingAuth: NetBirdSDKAuth?
+    #endif
     @Published var userCode: String?
 
     private let fetchLock = NSLock()
@@ -357,7 +383,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         logger.info("isLoginRequired: tvOS - config found, checking with management server...")
 
         // Create a Client and load config from UserDefaults
-        guard let client = NetBirdSDKNewClient("", "", Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+        guard let client = NetBirdSDKNewClient("", "", NSTemporaryDirectory(), Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
             logger.error("isLoginRequired: tvOS - failed to create SDK client")
             return true
         }
@@ -395,7 +421,8 @@ public class NetworkExtensionAdapter: ObservableObject {
             }
         }
 
-        guard let client = NetBirdSDKNewClient(configPath, statePath, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+        let cacheDir = Preferences.cacheDirectory() ?? NSTemporaryDirectory()
+        guard let client = NetBirdSDKNewClient(configPath, statePath, cacheDir, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
             logger.debug("isLoginRequired: Failed to initialize client")
             return true
         }
@@ -411,17 +438,70 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
 
     private func performLogin() async {
+        #if os(iOS)
+        // Run the OAuth flow in the main-app process using NetBirdSDKAuth.
+        // The NE extension's client context is cancelled when adapter.stop() is called
+        // (after startTunnel fails with login-required), which kills the WaitToken
+        // goroutine before the HTTP server can receive the OAuth callback.
+        // Running it here keeps the HTTP server alive for the full browser session.
+        if let configPath = Preferences.configFile(), !configPath.isEmpty,
+           let auth = NetBirdSDKNewAuth(configPath, "", nil) {
+            self.pendingAuth = auth
+            let urlOpener = MainAppLoginURLOpener()
+            let errListener = MainAppLoginErrListener()
+
+            let receivedURL: String? = await withCheckedContinuation { continuation in
+                var resumed = false
+                let resume: (String?) -> Void = { url in
+                    guard !resumed else { return }
+                    resumed = true
+                    continuation.resume(returning: url)
+                }
+                urlOpener.onOpen = { [weak self] url, _ in
+                    DispatchQueue.main.async {
+                        self?.loginURL = url
+                        self?.showBrowser = true
+                    }
+                    resume(url)
+                }
+                urlOpener.onSuccess = { [weak self] in
+                    var err: NSError?
+                    let json = auth.getConfigJSON(&err)
+                    if err == nil, !json.isEmpty {
+                        _ = Preferences.saveConfigToUserDefaults(json)
+                        if let path = Preferences.configFile() {
+                            try? json.write(toFile: path, atomically: true, encoding: .utf8)
+                        }
+                    }
+                    self?.pendingAuth = nil
+                }
+                errListener.onSuccessCallback = { urlOpener.onSuccess?() }
+                errListener.onErrorCallback = { [weak self] _ in
+                    self?.pendingAuth = nil
+                    resume(nil)
+                }
+                auth.login(errListener, urlOpener: urlOpener, forceDeviceAuth: false)
+            }
+
+            if let url = receivedURL, !url.isEmpty {
+                logger.info("performLogin: auth started in main-app process")
+                return
+            }
+            logger.error("performLogin: main-app auth failed to get URL, falling back to IPC")
+            self.pendingAuth = nil
+        }
+        #endif
+
+        // Fallback: IPC to the NE extension (tvOS, or if main-app auth setup failed)
         let loginURLString: String? = await withCheckedContinuation { continuation in
             self.login { urlString in
                 continuation.resume(returning: urlString)
             }
         }
-
         guard let url = loginURLString, !url.isEmpty else {
             logger.error("performLogin: no login URL received from extension, aborting")
             return
         }
-
         self.loginURL = url
         self.showBrowser = true
     }
