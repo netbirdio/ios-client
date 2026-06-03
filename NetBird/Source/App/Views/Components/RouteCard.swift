@@ -11,7 +11,6 @@ struct RouteCard: View {
     @ObservedObject var route: RoutesSelectionInfo
     @Binding var selectedRouteId: UUID?
     @State var orientationTop: Bool
-    @ObservedObject var peerViewModel: PeerViewModel
     @ObservedObject var routeViewModel: RoutesViewModel
     
     @State private var tooltipSize: CGSize = .zero
@@ -100,20 +99,9 @@ struct RouteCard: View {
     private var statusIndicatorColor: Color {
         guard route.selected else { return Color.gray.opacity(0.5) }
 
-        let connectedPeerRoutes = peerViewModel.peerInfo
-            .filter { $0.connStatus == "Connected" }
-            .flatMap { $0.routes }
-
-        if let network = route.network, connectedPeerRoutes.contains(network) {
-            return Color.green
-        }
-
-        let resolvedIPs = (route.domains ?? []).flatMap { $0.resolvedIPs }
-        if resolvedIPs.contains(where: connectedPeerRoutes.contains) {
-            return Color.green
-        }
-
-        return Color.yellow
+        // Status is computed by the core, which correctly handles merged exit nodes
+        // (v4/v6 pair) and dynamic routes; the UI just reflects it.
+        return route.status == "Connected" ? Color.green : Color.yellow
     }
 
     private var routeDisplayText: String {

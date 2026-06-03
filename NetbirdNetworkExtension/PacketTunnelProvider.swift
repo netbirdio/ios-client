@@ -503,7 +503,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     name: route.id_,
                     network: route.network,
                     domains: domains,
-                    selected: route.selected
+                    selected: route.selected,
+                    status: route.status
                 )
             }
 
