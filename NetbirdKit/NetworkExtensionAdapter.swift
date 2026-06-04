@@ -99,8 +99,8 @@ public class NetworkExtensionAdapter: ObservableObject {
 
     #if os(iOS)
     /// Reads and applies MDM-managed app configuration if available.
-    /// MDM config is delivered via the com.apple.configuration.managed UserDefaults domain.
-    private func applyManagedConfig() {
+    /// MDM config is delivered via the com.apple.configuration.managed UserDefaults key.
+    public func applyManagedConfig() {
         guard let configPath = Preferences.configFile() else {
             logger.warning("applyManagedConfig: config path unavailable")
             return

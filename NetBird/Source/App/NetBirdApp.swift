@@ -109,6 +109,10 @@ struct NetBirdApp: App {
         activationTask = Task { @MainActor in
             guard isAppActive, !Task.isCancelled else { return }
 
+            #if os(iOS)
+            viewModel.networkExtensionAdapter.applyManagedConfig()
+            #endif
+
             if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
                 viewModel.extensionState = initialStatus
                 viewModel.updateVPNDisplayState()

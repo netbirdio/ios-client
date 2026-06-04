@@ -3,7 +3,7 @@
 //  NetBird
 //
 //  Reads MDM-managed app configuration pushed via Apple Managed App Configuration (AppConfig).
-//  Configuration is delivered through the com.apple.configuration.managed UserDefaults domain
+//  Configuration is delivered through the com.apple.configuration.managed UserDefaults key
 //  by MDM solutions such as Microsoft Intune, Jamf Pro, VMware Workspace ONE, or Mosyle.
 //
 //  Key names match those defined in the Go SDK's ManagedConfig constants.
@@ -16,8 +16,8 @@ import os
 /// Reads and applies MDM-managed app configuration from the Apple managed configuration domain.
 ///
 /// ## How it works
-/// - MDM pushes key-value pairs to the `com.apple.configuration.managed` UserDefaults domain
-/// - This reader checks that domain for NetBird-specific keys
+/// - MDM pushes key-value pairs to the `com.apple.configuration.managed` UserDefaults key
+/// - This reader checks that dictionary for NetBird-specific keys
 /// - Values are applied to the Go SDK's config file, overriding user preferences
 /// - Setup keys trigger silent device registration without user interaction
 ///
@@ -33,18 +33,40 @@ class ManagedConfigReader {
 
     private static let logger = Logger(subsystem: "io.netbird.app", category: "ManagedConfigReader")
 
-    /// The Apple-native MDM managed configuration domain
-    private static let managedDomain = "com.apple.configuration.managed"
+    /// The Apple-native MDM managed configuration key in UserDefaults.standard.
+    private static let managedConfigurationKey = "com.apple.configuration.managed"
+
+    private static func managedConfigurationDictionary() -> [String: Any]? {
+        if let dict = UserDefaults.standard.dictionary(forKey: managedConfigurationKey) {
+            return dict
+        }
+
+        if let value = UserDefaults.standard.object(forKey: managedConfigurationKey) {
+            logger.warning("ManagedConfigReader: managed configuration value has unsupported root type: \(String(describing: type(of: value)), privacy: .public)")
+        } else {
+            logger.debug("ManagedConfigReader: managed configuration dictionary not available")
+        }
+
+        return nil
+    }
+
+    private static func managedStringValue(from dict: [String: Any], key: String) -> String? {
+        guard let rawValue = dict[key] as? String else { return nil }
+        let trimmedValue = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if rawValue != trimmedValue {
+            logger.info("ManagedConfigReader: trimmed whitespace from MDM string value for key \(key, privacy: .public)")
+        }
+
+        return trimmedValue.isEmpty ? nil : trimmedValue
+    }
 
     /// Reads managed configuration from the MDM domain.
     /// Returns a populated ManagedConfig, or nil if no MDM config is available.
     static func read() -> NetBirdSDKManagedConfig? {
-        guard let managedDefaults = UserDefaults(suiteName: managedDomain) else {
-            logger.debug("ManagedConfigReader: managed defaults domain not available")
+        guard let dict = managedConfigurationDictionary() else {
             return nil
         }
-
-        let dict = managedDefaults.dictionaryRepresentation()
 
         // Check if any NetBird keys are present
         let managementUrlKey = NetBirdSDKGetManagedConfigKeyManagementURL()
@@ -60,23 +82,23 @@ class ManagedConfigReader {
             return nil
         }
 
-        if let managementUrl = dict[managementUrlKey] as? String, !managementUrl.isEmpty {
+        if let managementUrl = managedStringValue(from: dict, key: managementUrlKey) {
             config.setManagementURL(managementUrl)
             logger.info("ManagedConfigReader: management URL configured")
         }
 
-        if let setupKey = dict[setupKeyKey] as? String, !setupKey.isEmpty {
+        if let setupKey = managedStringValue(from: dict, key: setupKeyKey) {
             config.setSetupKey(setupKey)
             // Do not log the setup key value for security
             logger.info("ManagedConfigReader: setup key configured")
         }
 
-        if let adminUrl = dict[adminUrlKey] as? String, !adminUrl.isEmpty {
+        if let adminUrl = managedStringValue(from: dict, key: adminUrlKey) {
             config.setAdminURL(adminUrl)
             logger.info("ManagedConfigReader: admin URL configured")
         }
 
-        if let preSharedKey = dict[preSharedKeyKey] as? String, !preSharedKey.isEmpty {
+        if let preSharedKey = managedStringValue(from: dict, key: preSharedKeyKey) {
             config.setPreSharedKey(preSharedKey)
             logger.info("ManagedConfigReader: pre-shared key configured")
         }
@@ -131,13 +153,13 @@ class ManagedConfigReader {
         // If MDM provides a setup key, attempt silent registration.
         // Pass the MDM management URL so NewAuth connects to the correct server.
         if config.hasSetupKey() {
-            let mgmtUrl = config.getManagementURL() ?? ""
+            let mgmtUrl = config.getManagementURL()
             do {
                 guard let auth = NetBirdSDKNewAuth(configPath, mgmtUrl, nil) else {
                     logger.warning("ManagedConfigReader: failed to create Auth for setup key login")
                     return true
                 }
-                try auth.loginWithSetupKeySync(config.getSetupKey(), deviceName: deviceName)
+                try auth.login(withSetupKeySync: config.getSetupKey(), deviceName: deviceName)
                 logger.info("ManagedConfigReader: silent setup key registration completed")
             } catch {
                 // Setup key login may fail if already registered or key expired.
