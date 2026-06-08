@@ -357,7 +357,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         logger.info("isLoginRequired: tvOS - config found, checking with management server...")
 
         // Create a Client and load config from UserDefaults
-        guard let client = NetBirdSDKNewClient("", "", Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+        guard let client = NetBirdSDKNewClient("", "", Preferences.cacheDirectory(), Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
             logger.error("isLoginRequired: tvOS - failed to create SDK client")
             return true
         }
@@ -395,7 +395,7 @@ public class NetworkExtensionAdapter: ObservableObject {
             }
         }
 
-        guard let client = NetBirdSDKNewClient(configPath, statePath, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+        guard let client = NetBirdSDKNewClient(configPath, statePath, Preferences.cacheDirectory(), Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
             logger.debug("isLoginRequired: Failed to initialize client")
             return true
         }
@@ -835,6 +835,34 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
     
+    func uploadDebugBundle(anonymize: Bool, completion: @escaping (Result<String, Error>) -> Void) {
+        guard let session = self.session else {
+            completion(.failure(NSError(domain: "NetBird", code: -1, userInfo: [NSLocalizedDescriptionKey: "VPN session not available. Connect first."])))
+            return
+        }
+        let message = "DebugBundle:\(anonymize ? "true" : "false")"
+        guard let messageData = message.data(using: .utf8) else {
+            completion(.failure(NSError(domain: "NetBird", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to encode message"])))
+            return
+        }
+        do {
+            try session.sendProviderMessage(messageData) { response in
+                guard let data = response, let text = String(data: data, encoding: .utf8) else {
+                    completion(.failure(NSError(domain: "NetBird", code: -3, userInfo: [NSLocalizedDescriptionKey: "No response from extension"])))
+                    return
+                }
+                if text.hasPrefix("error:") {
+                    let msg = String(text.dropFirst("error:".count))
+                    completion(.failure(NSError(domain: "NetBird", code: -4, userInfo: [NSLocalizedDescriptionKey: msg])))
+                } else {
+                    completion(.success(text))
+                }
+            }
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
     func fetchData(completion: @escaping (StatusDetails) -> Void) {
         guard !isFetchingStatus else {
             return
