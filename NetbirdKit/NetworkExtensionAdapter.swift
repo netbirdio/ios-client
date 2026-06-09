@@ -198,18 +198,30 @@ public class NetworkExtensionAdapter: ObservableObject {
     public func loadCurrentConnectionState() async -> NEVPNStatus? {
         do {
             let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-            if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
-                self.vpnManager = manager
-                self.session = manager.connection as? NETunnelProviderSession
-                let status = manager.connection.status
-                logger.info("loadCurrentConnectionState: Found existing manager, session established, status: \(status.rawValue)")
-                return status
-            } else {
+            guard let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) else {
                 logger.info("loadCurrentConnectionState: No existing manager found")
                 return nil
             }
+            self.vpnManager = manager
+            self.session = manager.connection as? NETunnelProviderSession
+            var status = manager.connection.status
+            // The cached NE status can be stale (.disconnected) immediately after app launch
+            // even when the VPN is actually connected. Reload from preferences once more to
+            // get the daemon-fresh status; this matches what the widget extension sees via the
+            // callback-based loadAllFromPreferences API.
+            if status == .disconnected || status == .invalid {
+                try? await Task.sleep(nanoseconds: 200_000_000) // 200 ms
+                let refreshed = try await NETunnelProviderManager.loadAllFromPreferences()
+                if let fresh = refreshed.first(where: { $0.localizedDescription == self.extensionName }) {
+                    status = fresh.connection.status
+                    self.vpnManager = fresh
+                    self.session = fresh.connection as? NETunnelProviderSession
+                }
+            }
+            logger.info("loadCurrentConnectionState: status=\(status.rawValue)")
+            return status
         } catch {
-            logger.error("loadCurrentConnectionState: Error loading managers: \(error.localizedDescription)")
+            logger.error("loadCurrentConnectionState: Error: \(error.localizedDescription)")
             return nil
         }
     }
@@ -383,7 +395,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         logger.info("isLoginRequired: tvOS - config found, checking with management server...")
 
         // Create a Client and load config from UserDefaults
-        guard let client = NetBirdSDKNewClient("", "", NSTemporaryDirectory(), Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+        guard let client = NetBirdSDKNewClient("", "", "", Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
             logger.error("isLoginRequired: tvOS - failed to create SDK client")
             return true
         }
@@ -421,8 +433,7 @@ public class NetworkExtensionAdapter: ObservableObject {
             }
         }
 
-        let cacheDir = Preferences.cacheDirectory() ?? NSTemporaryDirectory()
-        guard let client = NetBirdSDKNewClient(configPath, statePath, cacheDir, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+        guard let client = NetBirdSDKNewClient(configPath, statePath, Preferences.cacheDirectory() ?? "", Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
             logger.debug("isLoginRequired: Failed to initialize client")
             return true
         }

@@ -27,11 +27,11 @@ enum WidgetConstants {
     // it conservative to avoid exhausting the ~40-70 daily WidgetKit refresh budget.
     static let transitionPollInterval: TimeInterval = 5.0
     // How long to show the persisted transitioning state while NE still reports the
-    // old stable state. Equals transitionMaxDuration so we never prematurely snap to
-    // "Disconnected" just because NE is slow to start after startVPNTunnel().
-    static let snapbackWindow: TimeInterval = 20.0
+    // old stable state. 8 s covers the typical delay between startVPNTunnel() and
+    // NE first reporting .connecting. After this window NE is always authoritative.
+    static let snapbackWindow: TimeInterval = 8.0
     // Hard upper bound on a transitioning state. A fallback timeline entry is baked
     // in at this offset so the widget never shows "Connecting…"/"Disconnecting…" forever,
     // even when the NE process cannot push reloadAllTimelines() (app closed).
-    static let transitionMaxDuration: TimeInterval = 20.0
+    static let transitionMaxDuration: TimeInterval = 15.0
 }

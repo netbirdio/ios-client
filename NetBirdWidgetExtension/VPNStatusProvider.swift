@@ -50,23 +50,12 @@ struct VPNStatusProvider: TimelineProvider {
                     completion(Timeline(entries: [entry], policy: .after(pollDate)))
                 }
             } else {
-                // If a transition started recently, keep polling until well past the hard
-                // deadline so the widget recovers to "Connected" even when reloadAllTimelines()
-                // from the NE process is delayed or suppressed after a successful connect.
-                let defaults = UserDefaults(suiteName: WidgetConstants.appGroupSuite)
-                let startTime = defaults?.double(forKey: WidgetConstants.keyTransitionStartTime) ?? 0
-                let elapsed = startTime > 0 ? Date().timeIntervalSince1970 - startTime : Double.infinity
-                if elapsed < WidgetConstants.transitionMaxDuration + WidgetConstants.transitionPollInterval {
-                    let pollDate = entry.date.addingTimeInterval(WidgetConstants.transitionPollInterval)
-                    completion(Timeline(entries: [entry], policy: .after(pollDate)))
-                } else {
-                    let nextUpdate = Calendar.current.date(
-                        byAdding: .minute,
-                        value: WidgetConstants.timelineRefreshMinutes,
-                        to: entry.date
-                    ) ?? entry.date.addingTimeInterval(300)
-                    completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
-                }
+                let nextUpdate = Calendar.current.date(
+                    byAdding: .minute,
+                    value: WidgetConstants.timelineRefreshMinutes,
+                    to: entry.date
+                ) ?? entry.date.addingTimeInterval(300)
+                completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
             }
         }
     }
@@ -114,7 +103,7 @@ struct VPNStatusProvider: TimelineProvider {
                     // In both cases NE has a definitive answer — trust it immediately.
                     let neResolved =
                         (persisted == .connecting  && (neStatus == .connecting  || neStatus == .connected))    ||
-                        (persisted == .disconnecting && (neStatus == .disconnecting || neStatus == .disconnected || neStatus == .connected)) ||
+                        (persisted == .disconnecting && (neStatus == .disconnecting || neStatus == .disconnected)) ||
                         (persisted == .connecting  && neStatus == .disconnecting) ||
                         (persisted == .disconnecting && neStatus == .connecting)
 

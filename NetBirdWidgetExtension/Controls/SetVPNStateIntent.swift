@@ -19,14 +19,20 @@ struct SetVPNStateIntent: SetValueIntent {
             return .result()
         }
 
+        // Write the transitioning state immediately before the async loadManager call
+        // so the Control Center updates without waiting for loadAllFromPreferences.
+        let transitioning: WidgetVPNStatus = value ? .connecting : .disconnecting
+        defaults?.set(transitioning.rawValue, forKey: WidgetConstants.keyVPNStatus)
+        WidgetCenter.shared.reloadAllTimelines()
+
         guard let manager = await loadManager() else {
+            defaults?.set(WidgetVPNStatus.disconnected.rawValue, forKey: WidgetConstants.keyVPNStatus)
+            WidgetCenter.shared.reloadAllTimelines()
             await reload()
             return .result()
         }
 
         if value {
-            defaults?.set(WidgetVPNStatus.connecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
-            WidgetCenter.shared.reloadAllTimelines()
             guard let session = manager.connection as? NETunnelProviderSession else {
                 defaults?.set(WidgetVPNStatus.disconnected.rawValue, forKey: WidgetConstants.keyVPNStatus)
                 WidgetCenter.shared.reloadAllTimelines()
@@ -40,8 +46,6 @@ struct SetVPNStateIntent: SetValueIntent {
                 WidgetCenter.shared.reloadAllTimelines()
             }
         } else {
-            defaults?.set(WidgetVPNStatus.disconnecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
-            WidgetCenter.shared.reloadAllTimelines()
             manager.connection.stopVPNTunnel()
         }
 

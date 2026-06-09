@@ -16,7 +16,19 @@ struct VPNControlIntent: AppIntent {
             return .result()
         }
 
+        // Determine the expected transitioning state from the current persisted status
+        // and write it immediately before the async loadManager call so the Control
+        // Center updates without waiting for loadAllFromPreferences to return.
+        let currentRaw = defaults?.string(forKey: WidgetConstants.keyVPNStatus) ?? "disconnected"
+        let current = WidgetVPNStatus(rawValue: currentRaw) ?? .disconnected
+        let optimisticState: WidgetVPNStatus = (current == .connected || current == .connecting)
+            ? .disconnecting : .connecting
+        defaults?.set(optimisticState.rawValue, forKey: WidgetConstants.keyVPNStatus)
+        WidgetCenter.shared.reloadAllTimelines()
+
         guard let first = await loadManager() else {
+            defaults?.set(WidgetVPNStatus.disconnected.rawValue, forKey: WidgetConstants.keyVPNStatus)
+            WidgetCenter.shared.reloadAllTimelines()
             await reload()
             return .result()
         }
@@ -25,8 +37,6 @@ struct VPNControlIntent: AppIntent {
 
         switch status {
         case .disconnected, .invalid:
-            defaults?.set(WidgetVPNStatus.connecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
-            WidgetCenter.shared.reloadAllTimelines()
             guard let session = first.connection as? NETunnelProviderSession else {
                 defaults?.set(WidgetVPNStatus.disconnected.rawValue, forKey: WidgetConstants.keyVPNStatus)
                 WidgetCenter.shared.reloadAllTimelines()
@@ -39,8 +49,6 @@ struct VPNControlIntent: AppIntent {
                 WidgetCenter.shared.reloadAllTimelines()
             }
         case .connected, .connecting:
-            defaults?.set(WidgetVPNStatus.disconnecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
-            WidgetCenter.shared.reloadAllTimelines()
             first.connection.stopVPNTunnel()
         default:
             break
