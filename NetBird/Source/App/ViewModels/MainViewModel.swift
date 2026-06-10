@@ -964,11 +964,9 @@ class ViewModel: ObservableObject {
             return .error(message: "Configuration not available")
         }
         let cacheDir = Preferences.cacheDirectory()
-        guard let client = NetBirdSDKNewClient(configPath, statePath, cacheDir, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+        let logPath = AppLogger.getGoLogFileURL()?.path ?? ""
+        guard let client = NetBirdSDKNewClient(configPath, statePath, cacheDir, logPath, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
             return .error(message: "Failed to initialize client")
-        }
-        if let logPath = AppLogger.getGoLogFileURL()?.path {
-            client.setLogPath(logPath)
         }
         var sdkError: NSError?
         let key = client.debugBundle(anonymize, error: &sdkError)

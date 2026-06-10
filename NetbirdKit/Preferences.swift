@@ -98,8 +98,12 @@ class Preferences {
         #else
         if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
             let cacheURL = groupURL.appendingPathComponent("Library/Caches/netbird-debug")
-            try? fileManager.createDirectory(at: cacheURL, withIntermediateDirectories: true)
-            return cacheURL.path
+            do {
+                try fileManager.createDirectory(at: cacheURL, withIntermediateDirectories: true)
+                return cacheURL.path
+            } catch {
+                return fileManager.temporaryDirectory.path
+            }
         }
         return fileManager.temporaryDirectory.path
         #endif

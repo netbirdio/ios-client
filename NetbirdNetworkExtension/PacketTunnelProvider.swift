@@ -555,9 +555,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
         DispatchQueue.global(qos: .utility).async {
-            if let groupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app") {
-                adapter.client.setLogPath(groupURL.appendingPathComponent("logfile.log").path)
-            }
             var error: NSError?
             let key = adapter.client.debugBundle(anonymize, error: &error)
             if let error = error {
