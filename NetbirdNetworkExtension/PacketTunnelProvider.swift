@@ -183,6 +183,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let id = String(s.dropFirst("Deselect-".count))
             deselectRoute(id: id)
             completionHandler("true".data(using: .utf8))
+        case let s where s.hasPrefix("DebugBundle:"):
+            let anonymize = s.dropFirst("DebugBundle:".count) == "true"
+            debugBundle(anonymize: anonymize, completionHandler: completionHandler)
         default:
             AppLogger.shared.log("Unknown message: \(string)")
             completionHandler(nil)
@@ -543,6 +546,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             try adapter.client.deselectRoute(id)
         } catch {
             AppLogger.shared.log("Failed to deselect route: \(error.localizedDescription)")
+        }
+    }
+
+    func debugBundle(anonymize: Bool, completionHandler: @escaping (Data?) -> Void) {
+        guard let adapter = adapter else {
+            completionHandler("error:adapter not available".data(using: .utf8))
+            return
+        }
+        DispatchQueue.global(qos: .utility).async {
+            var error: NSError?
+            let key = adapter.client.debugBundle(anonymize, error: &error)
+            if let error = error {
+                completionHandler("error:\(error.localizedDescription)".data(using: .utf8))
+            } else {
+                completionHandler(key.data(using: .utf8))
+            }
         }
     }
 

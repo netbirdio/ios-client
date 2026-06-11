@@ -89,6 +89,26 @@ class Preferences {
         #endif
     }
 
+    /// Returns a writable directory for debug bundle ZIP generation.
+    /// iOS: App Group container's Caches subdir. tvOS: system temp dir.
+    static func cacheDirectory() -> String {
+        let fileManager = FileManager.default
+        #if os(tvOS)
+        return fileManager.temporaryDirectory.path
+        #else
+        if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
+            let cacheURL = groupURL.appendingPathComponent("Library/Caches/netbird-debug")
+            do {
+                try fileManager.createDirectory(at: cacheURL, withIntermediateDirectories: true)
+                return cacheURL.path
+            } catch {
+                return fileManager.temporaryDirectory.path
+            }
+        }
+        return fileManager.temporaryDirectory.path
+        #endif
+    }
+
     // MARK: - App-Local UserDefaults Storage
     //
     // These methods store config in the App Group UserDefaults for the MAIN APP's

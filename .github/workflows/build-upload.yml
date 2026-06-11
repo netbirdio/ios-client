@@ -53,7 +53,8 @@ jobs:
         if: inputs.netbird-ref != ''
         working-directory: ios-client/netbird-core
         run: |
-          git fetch origin ${{ inputs.netbird-ref }}
+          git remote add fork https://github.com/evgeniyChepelev/netbird.git 2>/dev/null || true
+          git fetch fork ${{ inputs.netbird-ref }} 2>/dev/null || git fetch origin ${{ inputs.netbird-ref }}
           git checkout FETCH_HEAD
 
       - name: Fetch netbird tags

@@ -70,6 +70,18 @@ struct iOSSettingsView: View {
                                 .foregroundColor(Color("TextPrimary"))
                         }
                     }
+
+                    NavigationLink {
+                        TroubleshootView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "stethoscope")
+                                .foregroundColor(.accentColor)
+                                .frame(width: 24)
+                            Text("Troubleshoot")
+                                .foregroundColor(Color("TextPrimary"))
+                        }
+                    }
                 }
 
                 Section(header: Text("Information")) {
