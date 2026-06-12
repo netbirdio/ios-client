@@ -42,5 +42,8 @@ struct SmallWidgetView: View {
                 .padding(3)
         }
         .frame(width: 54, height: 30)
+        .accessibilityLabel(isConnected ? "Disconnect VPN" : "Connect VPN")
+        .accessibilityValue(isConnected ? "On" : "Off")
+        .accessibilityAddTraits(.isButton)
     }
 }

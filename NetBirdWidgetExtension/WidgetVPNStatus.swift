@@ -56,6 +56,9 @@ struct VPNStatusEntry: TimelineEntry {
     let fqdn: String
     let needsAppSetup: Bool
     let loginRequired: Bool
+    /// True when NE was mid-transition at load time (shown status is stale).
+    /// Used by the timeline provider to schedule a short-interval refresh.
+    var neWasTransitioning: Bool = false
 
     var isConnected: Bool { status == .connected }
 

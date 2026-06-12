@@ -57,5 +57,8 @@ struct MediumWidgetView: View {
                 .padding(3)
         }
         .frame(width: 64, height: 36)
+        .accessibilityLabel(isConnected ? "Disconnect VPN" : "Connect VPN")
+        .accessibilityValue(isConnected ? "On" : "Off")
+        .accessibilityAddTraits(.isButton)
     }
 }

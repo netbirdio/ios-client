@@ -19,5 +19,8 @@ enum WidgetConstants {
     static let pollInterval: TimeInterval = 0.3
     static let pollTimeout: TimeInterval = 5.0
     static let timelineRefreshMinutes = 5
+    // Short refresh used when NE was mid-transition at load time so the widget
+    // recovers to the correct stable state as soon as NE settles.
+    static let transitionPollInterval: TimeInterval = 5.0
 
 }

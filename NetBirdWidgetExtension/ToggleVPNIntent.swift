@@ -29,16 +29,9 @@ struct ToggleVPNIntent: AppIntent {
                 return .result()
             }
             let status = manager.connection.status
-            if status == .disconnected || status == .invalid {
-                let session = manager.connection as? NETunnelProviderSession
-                var options: [String: NSObject] = [:]
-                if let p = defaults?.string(forKey: WidgetConstants.keyActiveConfigPath) {
-                    options["configPath"] = p as NSObject
-                }
-                if let p = defaults?.string(forKey: WidgetConstants.keyActiveStatePath) {
-                    options["statePath"] = p as NSObject
-                }
-                try session?.startVPNTunnel(options: options.isEmpty ? nil : options)
+            if status == .disconnected || status == .invalid,
+               let session = manager.connection as? NETunnelProviderSession {
+                try VPNIntentHelpers.startTunnel(session: session)
             }
         } else {
             let neStatus = manager.connection.status

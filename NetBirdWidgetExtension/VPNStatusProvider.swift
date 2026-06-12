@@ -20,11 +20,18 @@ struct VPNStatusProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<VPNStatusEntry>) -> Void) {
         loadEntry { entry in
-            let nextUpdate = Calendar.current.date(
-                byAdding: .minute,
-                value: WidgetConstants.timelineRefreshMinutes,
-                to: entry.date
-            ) ?? entry.date.addingTimeInterval(300)
+            let nextUpdate: Date
+            if entry.neWasTransitioning {
+                // NE was mid-transition; poll frequently so the widget recovers
+                // to the correct stable state as soon as NE settles.
+                nextUpdate = entry.date.addingTimeInterval(WidgetConstants.transitionPollInterval)
+            } else {
+                nextUpdate = Calendar.current.date(
+                    byAdding: .minute,
+                    value: WidgetConstants.timelineRefreshMinutes,
+                    to: entry.date
+                ) ?? entry.date.addingTimeInterval(300)
+            }
             completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
         }
     }
@@ -40,6 +47,7 @@ struct VPNStatusProvider: TimelineProvider {
             let manager = (error == nil) ? managers?.first : nil
             let status: WidgetVPNStatus
             var effectiveLoginRequired = loginRequired
+            var neWasTransitioning = false
 
             if let manager = manager {
                 let neStatus = WidgetVPNStatus(neStatus: manager.connection.status)
@@ -52,6 +60,7 @@ struct VPNStatusProvider: TimelineProvider {
                     let persistedRaw = defaults?.string(forKey: WidgetConstants.keyVPNStatus) ?? "disconnected"
                     let persisted = WidgetVPNStatus(rawValue: persistedRaw) ?? .disconnected
                     status = persisted.isStable ? persisted : .disconnected
+                    neWasTransitioning = true
                 }
                 if neStatus == .connected && loginRequired {
                     defaults?.set(false, forKey: WidgetConstants.keyLoginRequired)
@@ -70,7 +79,8 @@ struct VPNStatusProvider: TimelineProvider {
                 ip: ip,
                 fqdn: fqdn,
                 needsAppSetup: manager == nil || !configPathStored || effectiveLoginRequired,
-                loginRequired: effectiveLoginRequired
+                loginRequired: effectiveLoginRequired,
+                neWasTransitioning: neWasTransitioning
             ))
         }
     }

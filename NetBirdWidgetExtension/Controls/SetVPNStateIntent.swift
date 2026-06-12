@@ -29,7 +29,7 @@ struct SetVPNStateIntent: SetValueIntent {
                 await reload()
                 return .result()
             }
-            try? session.startVPNTunnel()
+            try VPNIntentHelpers.startTunnel(session: session)
         } else {
             manager.connection.stopVPNTunnel()
         }
