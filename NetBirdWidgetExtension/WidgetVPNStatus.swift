@@ -32,7 +32,7 @@ enum WidgetVPNStatus: String {
 
     var statusColor: Color {
         switch self {
-        case .connected: return .netbirdOrange
+        case .connected: return .green
         case .connecting, .disconnecting: return .netbirdOrange
         case .disconnected: return Color(.systemGray3)
         }

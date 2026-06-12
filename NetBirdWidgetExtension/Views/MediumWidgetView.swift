@@ -5,9 +5,14 @@ struct MediumWidgetView: View {
     let entry: VPNStatusEntry
 
     var body: some View {
-        HStack(spacing: 0) {
-            statusInfo
-                .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(spacing: 12) {
+            Image("logo-onboarding")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 56, height: 56)
+
+            connectionInfo
+                .frame(maxWidth: .infinity)
 
             if #available(iOS 17.0, *) {
                 WidgetActionButton(entry: entry) {
@@ -15,30 +20,23 @@ struct MediumWidgetView: View {
                 } label: { isConnected in
                     iconLabel(isConnected: isConnected)
                 }
-                .frame(width: 80)
             } else if let url = entry.fallbackDeepLink {
                 Link(destination: url) {
                     iconLabel(isConnected: entry.isConnected)
                 }
-                .frame(width: 80)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
     }
 
-    private var statusInfo: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Image("logo-onboarding")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 56, height: 56)
-
+    private var connectionInfo: some View {
+        VStack(alignment: .center, spacing: 4) {
             StatusIndicator(status: entry.status, fontSize: 16)
 
             if entry.isConnected && !entry.ip.isEmpty {
                 Text(entry.ip)
-                    .font(.system(size: 14, design: .monospaced))
+                    .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }
