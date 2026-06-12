@@ -268,7 +268,7 @@ public class NetBirdAdapter {
         #if os(tvOS)
         // On tvOS, the filesystem is blocked for the App Group container.
         // Create the client with empty paths and load config from local storage instead.
-        guard let client = NetBirdSDKNewClient("", "", "", "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
+        guard let client = NetBirdSDKNewClient("", "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
             adapterLogger.error("init: tvOS - Failed to create NetBird SDK client")
             return nil
         }
@@ -297,9 +297,7 @@ public class NetBirdAdapter {
             adapterLogger.error("init: App group container unavailable - check entitlements")
             return nil
         }
-        let cacheDir = Preferences.cacheDirectory() ?? ""
-        let logFilePath = Preferences.logFilePath() ?? ""
-        guard let client = NetBirdSDKNewClient(resolvedConfigPath, resolvedStatePath, cacheDir, logFilePath, deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
+        guard let client = NetBirdSDKNewClient(resolvedConfigPath, resolvedStatePath, deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
             adapterLogger.error("init: Failed to create NetBird SDK client with configPath=\(resolvedConfigPath), statePath=\(resolvedStatePath)")
             return nil
         }
