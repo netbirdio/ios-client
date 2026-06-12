@@ -564,7 +564,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // to propagate from the tunnel process to the widget extension process before
         // VPNStatusProvider queries NETunnelProviderManager.loadAllFromPreferences().
         // Without this delay the widget briefly shows "Disconnected / Connect" right
-        // after a successful connect, then stays wrong until the next 5-minute poll.
+        // after a successful connect, then stays wrong until the next poll.
         let delay: TimeInterval = (status == "connected") ? 1.0 : 0.0
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             WidgetCenter.shared.reloadAllTimelines()

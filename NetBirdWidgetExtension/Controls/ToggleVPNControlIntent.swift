@@ -25,27 +25,15 @@ struct VPNControlIntent: AppIntent {
 
         switch status {
         case .disconnected, .invalid:
-            defaults?.set(WidgetVPNStatus.connecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
-            WidgetCenter.shared.reloadAllTimelines()
-            guard let session = first.connection as? NETunnelProviderSession else {
-                defaults?.set(WidgetVPNStatus.disconnected.rawValue, forKey: WidgetConstants.keyVPNStatus)
-                WidgetCenter.shared.reloadAllTimelines()
-                break
-            }
-            do {
-                try session.startVPNTunnel()
-            } catch {
-                defaults?.set(WidgetVPNStatus.disconnected.rawValue, forKey: WidgetConstants.keyVPNStatus)
-                WidgetCenter.shared.reloadAllTimelines()
-            }
+            guard let session = first.connection as? NETunnelProviderSession else { break }
+            try VPNIntentHelpers.startTunnel(session: session)
         case .connected, .connecting:
-            defaults?.set(WidgetVPNStatus.disconnecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
-            WidgetCenter.shared.reloadAllTimelines()
             first.connection.stopVPNTunnel()
         default:
             break
         }
 
+        await VPNIntentHelpers.waitForStableState(manager: first)
         await reload()
         return .result()
     }
