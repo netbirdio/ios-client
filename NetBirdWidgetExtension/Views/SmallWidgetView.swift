@@ -6,10 +6,10 @@ struct SmallWidgetView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Image("netbird-logo-menu")
+            Image("logo-onboarding")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 75, height: 75)
+                .frame(width: 65, height: 65)
 
             StatusIndicator(status: entry.status)
 
@@ -29,26 +29,13 @@ struct SmallWidgetView: View {
     }
 
     private func transitionPill() -> some View {
-        ZStack {
-            Capsule()
-                .fill(Color.orange.opacity(0.85))
-            Circle()
-                .fill(Color.white.opacity(0.9))
-                .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
-                .padding(3)
-                .overlay(
-                    ProgressView()
-                        .scaleEffect(0.45)
-                        .tint(.orange)
-                )
-        }
-        .frame(width: 54, height: 30)
+        pillLabel(isConnected: false)
     }
 
     private func pillLabel(isConnected: Bool) -> some View {
         ZStack(alignment: isConnected ? .trailing : .leading) {
             Capsule()
-                .fill(isConnected ? Color.green : Color.red)
+                .fill(isConnected ? Color.netbirdOrange : Color(.systemGray3))
             Circle()
                 .fill(Color.white)
                 .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)

@@ -96,6 +96,13 @@ class Preferences {
             .path
     }
 
+    static func logFilePath() -> String? {
+        return FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)?
+            .appendingPathComponent("logfile.log")
+            .path
+    }
+
     // MARK: - App-Local UserDefaults Storage
     //
     // These methods store config in the App Group UserDefaults for the MAIN APP's

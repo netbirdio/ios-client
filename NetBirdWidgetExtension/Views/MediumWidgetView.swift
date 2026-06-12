@@ -15,64 +15,44 @@ struct MediumWidgetView: View {
                 } label: { isConnected in
                     iconLabel(isConnected: isConnected)
                 }
-                .frame(width: 100)
+                .frame(width: 80)
             } else if let url = entry.fallbackDeepLink {
                 Link(destination: url) {
                     iconLabel(isConnected: entry.isConnected)
                 }
-                .frame(width: 100)
+                .frame(width: 80)
             }
         }
-        .padding()
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 
     private var statusInfo: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Image("netbird-logo-menu")
+            Image("logo-onboarding")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 75, height: 75)
+                .frame(width: 56, height: 56)
 
-            StatusIndicator(status: entry.status, fontSize: 14)
+            StatusIndicator(status: entry.status, fontSize: 16)
 
             if entry.isConnected && !entry.ip.isEmpty {
                 Text(entry.ip)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
-            }
-
-            if entry.isConnected && !entry.fqdn.isEmpty {
-                Text(entry.fqdn)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
             }
         }
     }
 
     private var transitionIndicator: some View {
-        ZStack {
-            Capsule()
-                .fill(Color.orange.opacity(0.85))
-            Circle()
-                .fill(Color.white.opacity(0.9))
-                .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
-                .padding(3)
-                .overlay(
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .tint(.orange)
-                )
-        }
-        .frame(width: 64, height: 36)
+        iconLabel(isConnected: false)
     }
 
     private func iconLabel(isConnected: Bool) -> some View {
         ZStack(alignment: isConnected ? .trailing : .leading) {
             Capsule()
-                .fill(isConnected ? Color.green : Color.red)
+                .fill(isConnected ? Color.netbirdOrange : Color(.systemGray3))
             Circle()
                 .fill(Color.white)
                 .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)

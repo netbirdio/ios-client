@@ -2,6 +2,11 @@ import SwiftUI
 import NetworkExtension
 import WidgetKit
 
+extension Color {
+    // NetBird brand orange (#F68330) — matches the app's AccentColor asset.
+    static let netbirdOrange = Color(red: 0.965, green: 0.514, blue: 0.188)
+}
+
 enum WidgetVPNStatus: String {
     case connected
     case connecting
@@ -27,9 +32,9 @@ enum WidgetVPNStatus: String {
 
     var statusColor: Color {
         switch self {
-        case .connected: return .green
-        case .connecting, .disconnecting: return .orange
-        case .disconnected: return .red
+        case .connected: return .netbirdOrange
+        case .connecting, .disconnecting: return .netbirdOrange
+        case .disconnected: return Color(.systemGray3)
         }
     }
 

@@ -30,12 +30,7 @@ struct ToggleVPNIntent: AppIntent {
             }
             let status = manager.connection.status
             if status == .disconnected || status == .invalid {
-                defaults?.set(WidgetVPNStatus.connecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
-                defaults?.set(Date().timeIntervalSince1970, forKey: WidgetConstants.keyTransitionStartTime)
                 let session = manager.connection as? NETunnelProviderSession
-                // Pass the active profile paths so PacketTunnelProvider can find the
-                // config file when the main app is not running. The main app writes
-                // these to shared UserDefaults in NetworkExtensionAdapter.startVPNConnection().
                 var options: [String: NSObject] = [:]
                 if let p = defaults?.string(forKey: WidgetConstants.keyActiveConfigPath) {
                     options["configPath"] = p as NSObject
@@ -49,20 +44,14 @@ struct ToggleVPNIntent: AppIntent {
             let neStatus = manager.connection.status
             let persistedRaw = defaults?.string(forKey: WidgetConstants.keyVPNStatus) ?? "disconnected"
             let persisted = WidgetVPNStatus(rawValue: persistedRaw) ?? .disconnected
-            // NE status can be stale on first widget process start; use persisted state as fallback.
             let shouldDisconnect = neStatus == .connected || neStatus == .connecting
                 || persisted == .connected || persisted == .connecting
             if shouldDisconnect {
-                defaults?.set(WidgetVPNStatus.disconnecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
-                defaults?.set(Date().timeIntervalSince1970, forKey: WidgetConstants.keyTransitionStartTime)
                 manager.connection.stopVPNTunnel()
             }
         }
 
-        // Return immediately so the widget re-renders the transitioning state right away.
-        // VPNStatusProvider polls every transitionPollInterval (5 s) while transitioning
-        // and clears the state once NE stabilises.
-        WidgetCenter.shared.reloadAllTimelines()
+        await VPNIntentHelpers.waitForStableState(manager: manager)
         return .result()
     }
 }
