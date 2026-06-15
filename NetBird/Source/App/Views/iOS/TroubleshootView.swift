@@ -44,6 +44,9 @@ struct TroubleshootView: View {
         } message: {
             Text("The upload key has been copied to clipboard.")
         }
+        .onDisappear {
+            viewModel.debugBundleUploadState = .idle
+        }
     }
 
     @ViewBuilder
@@ -87,7 +90,7 @@ struct TroubleshootView: View {
                 Label("Share key", systemImage: "square.and.arrow.up")
             }
 
-            Button("Upload again") {
+            Button("Create new bundle") {
                 viewModel.debugBundleUploadState = .idle
             }
             .foregroundColor(.accentColor)
