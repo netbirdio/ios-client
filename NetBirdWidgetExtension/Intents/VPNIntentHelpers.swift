@@ -23,6 +23,22 @@ enum VPNIntentHelpers {
         defaults?.bool(forKey: WidgetConstants.keyLoginRequired) ?? false
     }
 
+    /// Starts the VPN tunnel with the active profile paths so PacketTunnelProvider
+    /// can locate the correct config file even when the main app is not running.
+    /// Returns an error if startVPNTunnel fails (callers should handle/log it).
+    @discardableResult
+    static func startTunnel(session: NETunnelProviderSession) throws -> Bool {
+        var options: [String: NSObject] = [:]
+        if let configPath = defaults?.string(forKey: WidgetConstants.keyActiveConfigPath) {
+            options["configPath"] = configPath as NSObject
+        }
+        if let statePath = defaults?.string(forKey: WidgetConstants.keyActiveStatePath) {
+            options["statePath"] = statePath as NSObject
+        }
+        try session.startVPNTunnel(options: options.isEmpty ? nil : options)
+        return true
+    }
+
     @discardableResult
     static func waitForStableState(manager: NETunnelProviderManager) async -> WidgetVPNStatus {
         let deadline = Date().addingTimeInterval(WidgetConstants.pollTimeout)

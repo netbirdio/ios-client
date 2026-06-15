@@ -5,9 +5,14 @@ struct MediumWidgetView: View {
     let entry: VPNStatusEntry
 
     var body: some View {
-        HStack(spacing: 0) {
-            statusInfo
-                .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(spacing: 12) {
+            Image("logo-onboarding")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 56, height: 56)
+
+            connectionInfo
+                .frame(maxWidth: .infinity)
 
             if #available(iOS 17.0, *) {
                 WidgetActionButton(entry: entry) {
@@ -15,65 +20,45 @@ struct MediumWidgetView: View {
                 } label: { isConnected in
                     iconLabel(isConnected: isConnected)
                 }
-                .frame(width: 100)
             } else if let url = entry.fallbackDeepLink {
                 Link(destination: url) {
                     iconLabel(isConnected: entry.isConnected)
                 }
-                .frame(width: 100)
             }
         }
-        .padding()
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 
-    private var statusInfo: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Image("netbird-logo-menu")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 75, height: 75)
-
-            StatusIndicator(status: entry.status, fontSize: 14)
+    private var connectionInfo: some View {
+        VStack(alignment: .center, spacing: 4) {
+            StatusIndicator(status: entry.status, fontSize: 16)
 
             if entry.isConnected && !entry.ip.isEmpty {
                 Text(entry.ip)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
-            }
-
-            if entry.isConnected && !entry.fqdn.isEmpty {
-                Text(entry.fqdn)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
             }
         }
     }
 
     private var transitionIndicator: some View {
-        Text(entry.status.displayText)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(.white)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(Color.orange.opacity(0.85))
-            .cornerRadius(10)
+        iconLabel(isConnected: false)
     }
 
     private func iconLabel(isConnected: Bool) -> some View {
-        let color: Color = isConnected ? .red : .green
-        return VStack(spacing: 4) {
-            Image(systemName: isConnected ? "stop.circle.fill" : "play.circle.fill")
-                .font(.system(size: 32))
-                .foregroundColor(color)
-
-            Text(isConnected ? "Disconnect" : "Connect")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(color)
+        ZStack(alignment: isConnected ? .trailing : .leading) {
+            Capsule()
+                .fill(isConnected ? Color.netbirdOrange : Color(.systemGray3))
+            Circle()
+                .fill(Color.white)
+                .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+                .padding(3)
         }
+        .frame(width: 64, height: 36)
+        .accessibilityLabel(isConnected ? "Disconnect VPN" : "Connect VPN")
+        .accessibilityValue(isConnected ? "On" : "Off")
+        .accessibilityAddTraits(.isButton)
     }
 }
