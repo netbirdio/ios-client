@@ -101,6 +101,7 @@
 		505119112AE03F68003027D3 /* FirebaseAnalyticsSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 505119102AE03F68003027D3 /* FirebaseAnalyticsSwift */; };
 		505119132AE03F68003027D3 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 505119122AE03F68003027D3 /* FirebaseAppCheck */; };
 		506331FB2AF52AB900BC8F0E /* CustomLottieView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 506331FA2AF52AB900BC8F0E /* CustomLottieView.swift */; };
+		A1B2C3D42F4A000100000001 /* VPNToggleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D32F4A000100000001 /* VPNToggleView.swift */; };
 		506331FE2AF53CFF00BC8F0E /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 506331FD2AF53CFF00BC8F0E /* Lottie */; };
 		506332002AF9197700BC8F0E /* button-full2-dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 506331FF2AF9197700BC8F0E /* button-full2-dark.json */; };
 		506332022AF9415500BC8F0E /* CustomTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 506332012AF9415500BC8F0E /* CustomTextField.swift */; };
@@ -307,6 +308,7 @@
 		505118CC2AD96ECA003027D3 /* module.modulemap */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
 		505118CD2AD96ECA003027D3 /* x25519.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = x25519.h; sourceTree = "<group>"; };
 		506331FA2AF52AB900BC8F0E /* CustomLottieView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomLottieView.swift; sourceTree = "<group>"; };
+		A1B2C3D32F4A000100000001 /* VPNToggleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNToggleView.swift; sourceTree = "<group>"; };
 		506331FF2AF9197700BC8F0E /* button-full2-dark.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "button-full2-dark.json"; sourceTree = "<group>"; };
 		506332012AF9415500BC8F0E /* CustomTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTextField.swift; sourceTree = "<group>"; };
 		50733EE9CE10FEDDA61600B8 /* NetBirdTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NetBirdTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -655,6 +657,7 @@
 				E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */,
 				E1C0D0002F72000100000001 /* AppButton.swift */,
 				E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */,
+				A1B2C3D32F4A000100000001 /* VPNToggleView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -1119,6 +1122,7 @@
 				E1A0B0012F5E000100000001 /* EmptyTabPlaceholder.swift in Sources */,
 				E1C0D0012F72000100000001 /* AppButton.swift in Sources */,
 				E1B0C0012F60000100000001 /* NetworkWarningBanner.swift in Sources */,
+				A1B2C3D42F4A000100000001 /* VPNToggleView.swift in Sources */,
 				50BB17412C30239400518BCA /* RouteCard.swift in Sources */,
 				50216D932ACB2488009574C9 /* NetworkExtensionAdapter.swift in Sources */,
 				55B5E81B2F39158200852AA7 /* InternetStatusView.swift in Sources */,

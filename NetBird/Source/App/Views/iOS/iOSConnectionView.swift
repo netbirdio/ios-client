@@ -2,196 +2,182 @@
 //  iOSConnectionView.swift
 //  NetBird
 //
-//  Connection tab: VPN button, FQDN/IP display, status indicator.
+//  Connection tab: VPN toggle, FQDN/IP display, status indicator.
 //
 
 import SwiftUI
-import Lottie
 import NetworkExtension
 
 #if os(iOS)
 
 struct iOSConnectionView: View {
     @EnvironmentObject var viewModel: ViewModel
-    @State private var animationKey: UUID = UUID()
     @State private var fqdnCopied = false
     @State private var ipCopied = false
 
+    // Small badge above the toggle: "SECURED" / "NOT SECURED" / hidden during transitions
+    private var statusLabel: String {
+        switch viewModel.vpnDisplayState {
+        case .connected:    return "SECURED"
+        case .disconnected: return "NOT SECURED"
+        case .connecting, .disconnecting: return ""
+        }
+    }
+
+    private var statusLabelColor: Color {
+        switch viewModel.vpnDisplayState {
+        case .connected:    return .orange
+        case .disconnected: return Color(white: 0.5)
+        case .connecting, .disconnecting: return .clear
+        }
+    }
+
+    // One-liner below the main status title
+    private var subtitle: String {
+        switch viewModel.vpnDisplayState {
+        case .connected:    return "You are on the NetBird network"
+        case .disconnected: return "You are not on the NetBird network"
+        case .connecting, .disconnecting: return ""
+        }
+    }
+
     var body: some View {
-        GeometryReader { geometry in
-            let isLandscape = geometry.size.width > geometry.size.height
-            let imageName = isLandscape ? "bg-bottom-landscape" : "bg-bottom"
+        ZStack {
+            if viewModel.statusDetailsValid {
+                Color("BgMenu")
+                    .ignoresSafeArea()
 
-            ZStack {
-                
-                if viewModel.statusDetailsValid {
-                    // Background layers
-                    VStack {
-                        Color("BgSecondary")
-                            .frame(height: UIScreen.main.bounds.height * 4/5)
-                            .ignoresSafeArea(.all)
-                        Color("BgPrimary")
-                            .frame(height: UIScreen.main.bounds.height * 1/5)
-                            .ignoresSafeArea(.all)
+                VStack(spacing: 0) {
+                    // Profile selector
+                    ProfileBadge(profileName: viewModel.activeProfileName) {
+                        viewModel.navigateToProfilesView = true
                     }
+                    .padding(.top, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
 
-                    VStack {
-                        Image(imageName)
-                            .resizable(resizingMode: .stretch)
-                            .aspectRatio(contentMode: DeviceType.isPad ? .fill : .fit)
-                            // Button overlaid directly on the image so both share the same
-                            // coordinate space — mirrors Android where btn_connect is a sibling
-                            // of bg_mask inside bg_mask_container.
-                            // vertical_bias=0.07: button top = 7% of (imageHeight - buttonHeight)
-                            // Portrait image ratio h/w = 488/360 = 1.357
-                            // offset = (Screen.width*1.357 - Screen.width*0.79) * 0.07 ≈ Screen.width * 0.04
-                            .overlay(alignment: .top) {
-                                let btnSize = Screen.width * (isLandscape ? 0.40 : 0.79)
-                                let imgH    = isLandscape
-                                    ? Screen.height * 0.81               // landscape: height-constrained
-                                    : Screen.width  * 1.357              // portrait: width-constrained
-                                let biasOffset = max(0, (imgH - btnSize) * 0.07)
+                    Spacer()
 
-                                VStack(spacing: 0) {
-                                    Color.clear.frame(height: biasOffset)
+                    // Toggle + status text + device info — all in one centered block
+                    VStack(spacing: 16) {
+                        // Status badge (fixed height so layout stays stable during transitions)
+                        Text(statusLabel)
+                            .font(.system(size: 13, weight: .semibold))
+                            .tracking(1.5)
+                            .foregroundColor(statusLabelColor)
+                            .frame(height: 18)
+                            .animation(.easeInOut(duration: 0.25), value: statusLabel)
 
-                                    Button(action: {
-                                        if !viewModel.buttonLock {
-                                            switch viewModel.vpnDisplayState {
-                                            case .disconnected:
-                                                viewModel.connect()
-                                            case .connecting, .connected:
-                                                viewModel.close()
-                                            case .disconnecting:
-                                                break
-                                            }
-                                        }
-                                    }) {
-                                        CustomLottieView(vpnState: $viewModel.vpnDisplayState)
-                                            .id(animationKey)
-                                            .frame(width: btnSize, height: btnSize)
-                                            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                                                self.animationKey = UUID()
-                                            }
+                        VPNToggleView(
+                            vpnState: viewModel.vpnDisplayState,
+                            isLocked: viewModel.buttonLock,
+                            onConnect: { viewModel.connect() },
+                            onDisconnect: { viewModel.close() }
+                        )
+
+                        Text(viewModel.extensionStateText)
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(Color("TextPrimary"))
+
+                        // Fixed height prevents layout jump when subtitle appears/disappears
+                        Text(subtitle)
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundColor(Color("TextSecondary"))
+                            .opacity(subtitle.isEmpty ? 0 : 1)
+                            .frame(height: 20)
+                            .animation(.easeInOut(duration: 0.25), value: subtitle)
+
+                        // FQDN + IP with tap-to-copy
+                        VStack(spacing: 6) {
+                            Text(fqdnCopied ? "Copied" : viewModel.fqdn)
+                                .foregroundColor(Color("TextPrimary"))
+                                .font(.system(size: 20, weight: .regular))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                                .opacity(fqdnCopied ? 0.7 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: fqdnCopied)
+                                .padding(.horizontal, 16)
+                                .onTapGesture {
+                                    guard !viewModel.fqdn.isEmpty else { return }
+                                    UIPasteboard.general.string = viewModel.fqdn
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    withAnimation(.smooth) { fqdnCopied = true }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                                        withAnimation(.smooth) { fqdnCopied = false }
                                     }
-
-                                    Text(viewModel.extensionStateText)
-                                        .foregroundColor(Color("TextSecondary"))
-                                        .font(.system(size: 24, weight: .regular))
-                                        .padding(.top, 24)
-
-                                    Spacer()
                                 }
-                            }
-                            .padding(.top, Screen.height * (DeviceType.isPad ? (isLandscape ? -0.15 : 0.36) : 0.19))
-                            .padding(.leading, UIScreen.main.bounds.height * (isLandscape ? 0.04 : 0))
-                            .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
-                            .edgesIgnoringSafeArea(.bottom)
-                    }
 
-                    // FQDN + IP
-                    VStack {
-                        ProfileBadge(profileName: viewModel.activeProfileName) {
-                            viewModel.navigateToProfilesView = true
+                            Text(ipCopied ? "Copied" : viewModel.ip)
+                                .foregroundColor(Color("TextPrimary"))
+                                .font(.system(size: 20, weight: .regular))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                                .opacity(ipCopied ? 0.7 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: ipCopied)
+                                .onTapGesture {
+                                    guard !viewModel.ip.isEmpty else { return }
+                                    UIPasteboard.general.string = viewModel.ip
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    withAnimation(.smooth) { ipCopied = true }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                                        withAnimation(.smooth) { ipCopied = false }
+                                    }
+                                }
                         }
                         .padding(.top, 8)
-
-                        Text(fqdnCopied ? "Copied" : viewModel.fqdn)
-                            .foregroundColor(Color("TextPrimary"))
-                            .font(.system(size: 20, weight: .regular))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                            .opacity(fqdnCopied ? 0.7 : 1.0)
-                            .animation(.easeInOut(duration: 0.2), value: fqdnCopied)
-                            .padding(.horizontal, 16)
-                            .padding(.top, Screen.height * (DeviceType.isPad ? 0.09 : 0.13))
-                            .padding(.bottom, 5)
-                            .onTapGesture {
-                                guard !viewModel.fqdn.isEmpty else { return }
-                                UIPasteboard.general.string = viewModel.fqdn
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                withAnimation(.smooth) {
-                                    fqdnCopied = true
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                    withAnimation(.smooth) {
-                                        fqdnCopied = false
-                                    }
-                                }
-                            }
-
-                        Text(ipCopied ? "Copied" : viewModel.ip)
-                            .foregroundColor(Color("TextPrimary"))
-                            .font(.system(size: 20, weight: .regular))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                            .opacity(ipCopied ? 0.7 : 1.0)
-                            .animation(.easeInOut(duration: 0.2), value: ipCopied)
-                            .onTapGesture {
-                                guard !viewModel.ip.isEmpty else { return }
-                                UIPasteboard.general.string = viewModel.ip
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                withAnimation(.smooth) {
-                                    ipCopied = true
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                    withAnimation(.smooth) {
-                                        ipCopied = false
-                                    }
-                                }
-                            }
-
-                        Spacer()
                     }
 
-                    // Network warning banner – above tab bar
-                    if viewModel.vpnDisplayState == .connected && !viewModel.isInternetConnected {
+                    Spacer()
+                }
+
+                // Network warning shown above tab bar when connected but offline
+                if viewModel.vpnDisplayState == .connected && !viewModel.isInternetConnected {
+                    GeometryReader { geo in
                         VStack {
                             Spacer()
                             NetworkWarningBanner()
-                                .padding(.bottom, geometry.safeAreaInsets.bottom + 80)
+                                .padding(.bottom, geo.safeAreaInsets.bottom + 80)
                         }
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        .animation(.easeInOut(duration: 0.3), value: viewModel.isInternetConnected)
                     }
-
-                    // Hidden NavigationLink for ProfilesView
-                    NavigationLink("", destination: ProfilesListView(), isActive: $viewModel.navigateToProfilesView)
-                        .hidden()
-
-                    // Hidden NavigationLink for ServerView
-                    NavigationLink("", destination: ServerView(), isActive: $viewModel.navigateToServerView)
-                        .hidden()
-                        .onChange(of: viewModel.navigateToServerView) { newValue in
-                            if !newValue {
-                                viewModel.startPollingDetails()
-                            }
-                        }
-
-                } else {
-                    // Loading placeholder
-                    ZStack {
-                        Color("BgPrimary")
-                            .ignoresSafeArea()
-                        Image("netbird-logo-menu")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 200)
-                    }
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .animation(.easeInOut(duration: 0.3), value: viewModel.isInternetConnected)
                 }
 
-                // Safari login view — shown regardless of statusDetailsValid
-                if viewModel.networkExtensionAdapter.showBrowser,
-                   let loginURLString = viewModel.networkExtensionAdapter.loginURL,
-                   let loginURL = URL(string: loginURLString)
-                {
-                    SafariView(isPresented: $viewModel.networkExtensionAdapter.showBrowser,
-                               url: loginURL,
-                               didFinish: {
+                NavigationLink("", destination: ProfilesListView(), isActive: $viewModel.navigateToProfilesView)
+                    .hidden()
+
+                NavigationLink("", destination: ServerView(), isActive: $viewModel.navigateToServerView)
+                    .hidden()
+                    .onChange(of: viewModel.navigateToServerView) { newValue in
+                        if !newValue {
+                            viewModel.startPollingDetails()
+                        }
+                    }
+
+            } else {
+                // Loading placeholder while extension state is unknown
+                ZStack {
+                    Color("BgMenu").ignoresSafeArea()
+                    Image("netbird-logo-menu")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 200)
+                }
+            }
+
+            // Safari-based login flow
+            if viewModel.networkExtensionAdapter.showBrowser,
+               let loginURLString = viewModel.networkExtensionAdapter.loginURL,
+               let loginURL = URL(string: loginURLString)
+            {
+                SafariView(
+                    isPresented: $viewModel.networkExtensionAdapter.showBrowser,
+                    url: loginURL,
+                    didFinish: {
                         print("Finish login")
                         viewModel.networkExtensionAdapter.startVPNConnection()
-                    })
-                }
+                    }
+                )
             }
         }
         .navigationBarTitleDisplayMode(.inline)
