@@ -15,6 +15,7 @@ import os
 import Combine
 import NetBirdSDK
 import UserNotifications
+import UIKit
 #if os(iOS)
 import WidgetKit
 #endif
@@ -90,6 +91,7 @@ class ViewModel: ObservableObject {
     @Published var vpnDisplayState: VPNDisplayState = .disconnected
     var connectPressed = false
     var disconnectPressed = false
+
     
     @Published var rosenpassEnabled = false
     @Published var rosenpassPermissive = false
@@ -198,6 +200,7 @@ class ViewModel: ObservableObject {
             }
         }
         networkMonitor.start(queue: monitorQueue)
+
 
         $setupKey
             .removeDuplicates()
@@ -397,7 +400,7 @@ class ViewModel: ObservableObject {
         performClose()
     }
 
-    func updateVPNDisplayState() {
+    func updateVPNDisplayState(priorExtensionState: NEVPNStatus? = nil) {
         let newState: VPNDisplayState
 
         // Extension state is the source of truth.
@@ -419,7 +422,10 @@ class ViewModel: ObservableObject {
             // Ignore transient .disconnecting emitted by iOS VPN framework during tunnel startup.
             // When startVPNTunnel() is called, iOS briefly reports .disconnecting while cleaning
             // up the previous tunnel instance — even though the user pressed Connect, not Disconnect.
-            if connectPressed {
+            // connectPressed handles this for app-initiated connects.
+            // priorExtensionState handles widget-initiated connects where connectPressed is never set.
+            let wasConnecting = priorExtensionState == .connecting
+            if connectPressed || wasConnecting {
                 newState = .connecting
             } else {
                 disconnectPressed = false
@@ -564,8 +570,9 @@ class ViewModel: ObservableObject {
         let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .disconnecting]
         guard knownStatuses.contains(status), extensionState != status else { return }
 
+        let priorState = extensionState
         extensionState = status
-        updateVPNDisplayState()
+        updateVPNDisplayState(priorExtensionState: priorState)
 
         if status == .connected {
             routeViewModel.getRoutes()
