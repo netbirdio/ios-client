@@ -101,9 +101,9 @@ struct iOSConnectionView: View {
                                     guard !viewModel.fqdn.isEmpty else { return }
                                     UIPasteboard.general.string = viewModel.fqdn
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                    withAnimation(.smooth) { fqdnCopied = true }
+                                    withAnimation(.easeInOut(duration: 0.2)) { fqdnCopied = true }
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                        withAnimation(.smooth) { fqdnCopied = false }
+                                        withAnimation(.easeInOut(duration: 0.2)) { fqdnCopied = false }
                                     }
                                 }
 
@@ -118,9 +118,9 @@ struct iOSConnectionView: View {
                                     guard !viewModel.ip.isEmpty else { return }
                                     UIPasteboard.general.string = viewModel.ip
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                    withAnimation(.smooth) { ipCopied = true }
+                                    withAnimation(.easeInOut(duration: 0.2)) { ipCopied = true }
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                        withAnimation(.smooth) { ipCopied = false }
+                                        withAnimation(.easeInOut(duration: 0.2)) { ipCopied = false }
                                     }
                                 }
                         }
