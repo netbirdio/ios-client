@@ -20,8 +20,13 @@ enum IPAddressType {
 class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
     func onNetworkChanged(_ p0: String?) {
         let routesString = p0 ?? ""
+        // [DEBUG exit-node-off] Raw route list the core pushes. On exit-node OFF this
+        // should NOT contain 0.0.0.0/0 or ::/0. If it doesn't but traffic still goes
+        // into the tunnel, the bug is downstream (createTunnelSettings/state), not here.
+        AppLogger.shared.log("[DEBUG exit-node-off] onNetworkChanged: raw=\"\(routesString)\"")
         let (v4Routes, v6Routes, containsDefault) = parseRoutesToNESettings(routesString: routesString)
         if v4Routes.isEmpty && v6Routes.isEmpty && self.interfaceIP == nil {
+            AppLogger.shared.log("[DEBUG exit-node-off] onNetworkChanged: empty routes and no interfaceIP -> skipping setRoutes")
             return
         }
         self.tunnelManager.setRoutes(v4Routes: v4Routes, v6Routes: v6Routes, containsDefault: containsDefault)
@@ -87,6 +92,11 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
         if let interfaceIPv6 = self.interfaceIPv6, let interfaceRoute = createIPv6RouteFromCIDR(cidr: interfaceIPv6) {
             v6Routes.append(interfaceRoute)
         }
+        // [DEBUG exit-node-off] Final parsed routes (core routes + the interface
+        // address route appended above). This is what gets handed to setRoutes.
+        let v4Desc = v4Routes.map { "\($0.destinationAddress)/\($0.destinationSubnetMask)" }.joined(separator: " ")
+        let v6Desc = v6Routes.map { "\($0.destinationAddress)/\($0.destinationNetworkPrefixLength)" }.joined(separator: " ")
+        AppLogger.shared.log("[DEBUG exit-node-off] parseRoutesToNESettings: containsDefault=\(containsDefault) v4=[\(v4Desc)] v6=[\(v6Desc)]")
         return (v4Routes, v6Routes, containsDefault)
     }
     

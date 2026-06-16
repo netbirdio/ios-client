@@ -31,6 +31,14 @@ class PacketTunnelProviderSettingsManager {
     }
 
     func setRoutes(v4Routes: [NEIPv4Route], v6Routes: [NEIPv6Route], containsDefault: Bool) {
+            // [DEBUG exit-node-off] Log exactly what the core asks us to install.
+            // Compare this against the "createTunnelSettings" line to see whether the
+            // default route is correctly dropped from includedRoutes when the exit
+            // node is turned off.
+            let v4Desc = v4Routes.map { "\($0.destinationAddress)/\($0.destinationSubnetMask)" }.joined(separator: " ")
+            let v6Desc = v6Routes.map { "\($0.destinationAddress)/\($0.destinationNetworkPrefixLength)" }.joined(separator: " ")
+            AppLogger.shared.log("[DEBUG exit-node-off] setRoutes: containsDefault=\(containsDefault) v4(\(v4Routes.count))=[\(v4Desc)] v6(\(v6Routes.count))=[\(v6Desc)]")
+
             self.needFallbackNS = containsDefault
             self.containsDefaultRoute = containsDefault
             self.ipv4Routes = v4Routes
@@ -64,10 +72,15 @@ class PacketTunnelProviderSettingsManager {
     }
     
     func setInterfaceIP(interfaceIP: String) {
+        // [DEBUG exit-node-off] Track interface address changes. interfaceIPv6 is
+        // never cleared once set (see NetworkChangeListener), so a stale v6 address
+        // surviving a profile switch would show up by comparing these lines.
+        AppLogger.shared.log("[DEBUG exit-node-off] setInterfaceIP: \(interfaceIP) (prev=\(self.interfaceIP ?? "nil"))")
         self.interfaceIP = interfaceIP
     }
 
     func setInterfaceIPv6(interfaceIPv6: String) {
+        AppLogger.shared.log("[DEBUG exit-node-off] setInterfaceIPv6: \(interfaceIPv6) (prev=\(self.interfaceIPv6 ?? "nil"))")
         self.interfaceIPv6 = interfaceIPv6
     }
 
@@ -124,15 +137,32 @@ class PacketTunnelProviderSettingsManager {
                 }
                 
                 tunnelNetworkSettings.mtu = 1280
-                
+
                 if self.dnsSettings != nil {
                     tunnelNetworkSettings.dnsSettings = self.dnsSettings
                 }
-                
+
+                // [DEBUG exit-node-off] This is the single most important line for
+                // the "exit node off -> no connectivity" bug: it shows the exact
+                // includedRoutes that iOS will install. If a v4 0.0.0.0/0 (or a v6
+                // ::/0 that isn't the intended blackhole) is still present here while
+                // the exit node is OFF, all internet traffic is funneled into the
+                // tunnel with no way out (black hole). Cross-check with the core's
+                // "Calling remove for key 0.0.0.0/0" in client.log.
+                let v4Included = (ipv4Settings.includedRoutes ?? []).map { "\($0.destinationAddress)/\($0.destinationSubnetMask)" }.joined(separator: " ")
+                let v6Included = v6Routes.map { "\($0.destinationAddress)/\($0.destinationNetworkPrefixLength)" }.joined(separator: " ")
+                let v6AddrDesc = zip(v6Addresses, v6PrefixLengths).map { "\($0)/\($1)" }.joined(separator: " ")
+                let matchDomains = (self.dnsSettings?.matchDomains ?? []).map { $0.isEmpty ? "<root \"\">" : $0 }.joined(separator: ",")
+                let dnsServers = (self.dnsSettings?.servers ?? []).joined(separator: ",")
+                AppLogger.shared.log("[DEBUG exit-node-off] createTunnelSettings: containsDefaultRoute=\(self.containsDefaultRoute) v4addr=\(ipAddress)/\(subnetMask) v4Included=[\(v4Included)] v6addr=[\(v6AddrDesc)] v6Included=[\(v6Included)] dnsServers=[\(dnsServers)] matchDomains=[\(matchDomains)]")
+
                 return tunnelNetworkSettings
             }
         }
 
+        // [DEBUG exit-node-off] interfaceIP missing or unparseable -> settings not
+        // updated, the previous (possibly default-routed) settings stay in effect.
+        AppLogger.shared.log("[DEBUG exit-node-off] createTunnelSettings: returning nil (interfaceIP=\(self.interfaceIP ?? "nil")), tunnel settings NOT updated")
         return nil
     }
 
