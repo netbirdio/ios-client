@@ -90,8 +90,8 @@ struct iOSConnectionView: View {
                         // FQDN + IP with tap-to-copy
                         VStack(spacing: 6) {
                             Text(fqdnCopied ? "Copied" : viewModel.fqdn)
-                                .foregroundColor(Color("TextPrimary"))
-                                .font(.system(size: 20, weight: .regular))
+                                .foregroundColor(Color("TextSecondary"))
+                                .font(.system(size: 15, weight: .regular))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.5)
                                 .opacity(fqdnCopied ? 0.7 : 1.0)
@@ -108,8 +108,8 @@ struct iOSConnectionView: View {
                                 }
 
                             Text(ipCopied ? "Copied" : viewModel.ip)
-                                .foregroundColor(Color("TextPrimary"))
-                                .font(.system(size: 20, weight: .regular))
+                                .foregroundColor(Color("TextSecondary"))
+                                .font(.system(size: 15, weight: .regular))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.5)
                                 .opacity(ipCopied ? 0.7 : 1.0)
