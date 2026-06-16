@@ -59,6 +59,7 @@
 		44F3E3992EE2F90900C87FEC /* libresolv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 44DCF5B82EDF4D900026078E /* libresolv.tbd */; };
 		44F3E39B2EE2F9FA00C87FEC /* TVAuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44F3E39A2EE2F9FA00C87FEC /* TVAuthView.swift */; };
 		4849965EC2515950756C8F10 /* VPNOnDemandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CD257EF78F038560FF3112D /* VPNOnDemandView.swift */; };
+		BB001A012F99000000000001 /* TroubleshootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB001A002F99000000000001 /* TroubleshootView.swift */; };
 		50003BBC2AFBCA6B00E5EB6B /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = 50003BBB2AFBCA6B00E5EB6B /* FirebasePerformance */; };
 		50003BBE2AFBCA7900E5EB6B /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = 50003BBD2AFBCA7900E5EB6B /* FirebasePerformance */; };
 		50003BC42AFBD7D500E5EB6B /* PacketTunnelProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50245A562A80431C0034792B /* PacketTunnelProvider.swift */; };
@@ -343,6 +344,7 @@
 		91FA1F06D3375864C74EAB3B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		978FC46F2EEDF167002D0EB8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		9CD257EF78F038560FF3112D /* VPNOnDemandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNOnDemandView.swift; sourceTree = "<group>"; };
+		BB001A002F99000000000001 /* TroubleshootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TroubleshootView.swift; sourceTree = "<group>"; };
 		A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationProvider.swift; sourceTree = "<group>"; };
 		A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiOnDemandPolicy.swift; sourceTree = "<group>"; };
 		A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellularOnDemandPolicy.swift; sourceTree = "<group>"; };
@@ -694,6 +696,7 @@
 				AA0002032F22000200000001 /* AddProfileSheet.swift */,
 				9CD257EF78F038560FF3112D /* VPNOnDemandView.swift */,
 				5BFDF94163AF4C32A44DB3CD /* FirstLaunchView.swift */,
+				BB001A002F99000000000001 /* TroubleshootView.swift */,
 			);
 			name = iOS;
 			path = Views/iOS;
@@ -1162,6 +1165,7 @@
 				AA0002082F22000200000001 /* AddProfileViewModel.swift in Sources */,
 				4849965EC2515950756C8F10 /* VPNOnDemandView.swift in Sources */,
 				F2DCB2437ECA42C3AEC3C895 /* FirstLaunchView.swift in Sources */,
+				BB001A012F99000000000001 /* TroubleshootView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
