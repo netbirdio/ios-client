@@ -507,7 +507,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let routeSelectionInfo: [RoutesSelectionInfo] = (0..<routeSelectionDetailsMessage.size()).compactMap { index -> RoutesSelectionInfo? in
                 guard let route = routeSelectionDetailsMessage.get(index) else { return nil }
 
-                let domains = (0..<(route.domains?.size() ?? 0)).compactMap { domainIndex -> DomainDetails? in
+                let domainCount = route.domains.map { $0.size() } ?? 0
+                let domains = (0..<domainCount).compactMap { domainIndex -> DomainDetails? in
                     guard let domain = route.domains?.get(domainIndex) else { return nil }
                     let resolvedIPsRef = domain.getResolvedIPs()
                     let resolvedIPs: [String] = (0..<(resolvedIPsRef?.size() ?? 0)).map { ipIndex in
@@ -581,7 +582,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // to propagate from the tunnel process to the widget extension process before
         // VPNStatusProvider queries NETunnelProviderManager.loadAllFromPreferences().
         // Without this delay the widget briefly shows "Disconnected / Connect" right
-        // after a successful connect, then stays wrong until the next 5-minute poll.
+        // after a successful connect, then stays wrong until the next poll.
         let delay: TimeInterval = (status == "connected") ? 1.0 : 0.0
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             WidgetCenter.shared.reloadAllTimelines()
