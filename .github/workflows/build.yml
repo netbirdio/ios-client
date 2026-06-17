@@ -158,8 +158,10 @@ jobs:
           go-version-file: 'ios-client/netbird-core/go.mod'
           cache-dependency-path: ios-client/netbird-core/go.sum
 
-      - name: Install gomobile-netbird
-        run: GOPROXY=direct go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@latest
+      - name: Install gomobile-netbird (tvOS fork)
+        run: |
+          GOPROXY=direct go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@v0.0.0-20260129172842-a56582c0e7c9
+          GOPROXY=direct go install github.com/netbirdio/gomobile-tvos-fork/cmd/gobind-netbird@v0.0.0-20260129172842-a56582c0e7c9
 
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client

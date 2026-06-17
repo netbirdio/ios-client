@@ -6,17 +6,16 @@ struct SmallWidgetView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Image("netbird-logo-menu")
+            Image("logo-onboarding")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 75, height: 75)
+                .frame(width: 65, height: 65)
 
             StatusIndicator(status: entry.status)
 
             if #available(iOS 17.0, *) {
                 WidgetActionButton(entry: entry) {
-                    ProgressView()
-                        .scaleEffect(0.7)
+                    transitionPill()
                 } label: { isConnected in
                     pillLabel(isConnected: isConnected)
                 }
@@ -29,13 +28,22 @@ struct SmallWidgetView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private func transitionPill() -> some View {
+        pillLabel(isConnected: false)
+    }
+
     private func pillLabel(isConnected: Bool) -> some View {
-        Text(isConnected ? "Disconnect" : "Connect")
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(isConnected ? Color.red : Color.green)
-            .cornerRadius(8)
+        ZStack(alignment: isConnected ? .trailing : .leading) {
+            Capsule()
+                .fill(isConnected ? Color.netbirdOrange : Color(.systemGray3))
+            Circle()
+                .fill(Color.white)
+                .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+                .padding(3)
+        }
+        .frame(width: 54, height: 30)
+        .accessibilityLabel(isConnected ? "Disconnect VPN" : "Connect VPN")
+        .accessibilityValue(isConnected ? "On" : "Off")
+        .accessibilityAddTraits(.isButton)
     }
 }

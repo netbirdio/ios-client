@@ -70,6 +70,21 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         let isNetworkUnavailableFlag = adapter.isNetworkUnavailable
         adapter.isRestarting = false
 
+        // Session expiry takes priority over the keep-alive-on-network-loss logic below.
+        // If the last management error was an auth failure there is nothing to reconnect
+        // to, so we must NOT linger in .connecting — that keeps the now-dead tunnel
+        // interface up with the VPN's default route and black-holes ALL traffic until the
+        // user manually intervenes (independent of On-Demand). Mark disconnected and let
+        // the provider tear the tunnel down so traffic returns to the physical interface.
+        // Uses the network-free cached check — safe to call during teardown.
+        if !wasRestarting && adapter.needsLoginCached() {
+            adapter.clientState = .disconnected
+            AppLogger.shared.log("onDisconnected: login required — signalling teardown")
+            adapter.onLoginRequired?()
+            adapter.notifyStopCompleted()
+            return
+        }
+
         // Check both the flag AND actual network status
         // This handles race condition where Go SDK fires onDisconnected before our handler sets the flag
         let networkAvailable = isNetworkAvailable()

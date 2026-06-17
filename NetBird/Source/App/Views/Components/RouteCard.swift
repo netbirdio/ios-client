@@ -11,7 +11,6 @@ struct RouteCard: View {
     @ObservedObject var route: RoutesSelectionInfo
     @Binding var selectedRouteId: UUID?
     @State var orientationTop: Bool
-    @ObservedObject var peerViewModel: PeerViewModel
     @ObservedObject var routeViewModel: RoutesViewModel
     
     @State private var tooltipSize: CGSize = .zero
@@ -98,20 +97,19 @@ struct RouteCard: View {
     }
 
     private var statusIndicatorColor: Color {
-        if route.selected && peerViewModel.peerInfo.contains(where: { info in
-            info.connStatus == "Connected" && (info.routes.contains(route.network ?? "") || route.domains?.contains(where: { $0.domain.contains(route.network ?? "") }) == true)
-        }) {
-            return Color.green
-        }
-        return route.selected ? Color.yellow : Color.gray.opacity(0.5)
+        guard route.selected else { return Color.gray.opacity(0.5) }
+
+        // Status is computed by the core, which correctly handles merged exit nodes
+        // (v4/v6 pair) and dynamic routes; the UI just reflects it.
+        return route.status == "Connected" ? Color.green : Color.yellow
     }
 
     private var routeDisplayText: String {
-        if route.network == "invalid Prefix" {
-            if let domains = route.domains, domains.count > 2 {
+        if let domains = route.domains, !domains.isEmpty {
+            if domains.count > 2 {
                 return "\(domains.count) Domains"
             }
-            return route.domains?.map { $0.domain }.joined(separator: ", ") ?? ""
+            return domains.map { $0.domain }.joined(separator: ", ")
         }
         return route.network ?? "Unknown"
     }
@@ -159,11 +157,9 @@ struct RouteTooltipView: View {
     @ViewBuilder
     func detailInfo() -> some View {
         Group {
-            if route.network == "invalid Prefix" {
-                if let domains = route.domains {
-                    ForEach(domains, id: \.self) { domain in
-                        detailRow(label: domain.domain, value: domain.resolvedips ?? "")
-                    }
+            if let domains = route.domains, !domains.isEmpty {
+                ForEach(domains, id: \.self) { domain in
+                    detailRow(label: domain.domain, value: domain.resolvedIPs.joined(separator: ", "))
                 }
             } else {
                 detailRow(label: "Network", value: route.network ?? "")

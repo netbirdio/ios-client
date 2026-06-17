@@ -33,17 +33,23 @@ class RoutesSelectionInfo: ObservableObject, Codable, Identifiable {
     var network: String?
     var domains: [DomainDetails]?
     var selected: Bool
+    // Connection status computed by the core ("Connected"/"Idle"). UI consumers read
+    // it directly (e.g. RouteCard.statusIndicatorColor uses route.status); there is no
+    // network-string fallback. A nil/empty value from an older core is treated as
+    // not-connected, so a selected route shows the yellow ("unknown") indicator.
+    var status: String?
 
-    init(id: UUID = UUID(), name: String, network: String?, domains: [DomainDetails]?, selected: Bool) {
+    init(id: UUID = UUID(), name: String, network: String?, domains: [DomainDetails]?, selected: Bool, status: String? = nil) {
         self.id = id
         self.name = name
         self.network = network
         self.selected = selected
         self.domains = domains
+        self.status = status
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, network, domains, selected
+        case id, name, network, domains, selected, status
     }
 }
 
@@ -53,18 +59,19 @@ extension RoutesSelectionInfo: Equatable {
         lhs.name == rhs.name &&
         lhs.network == rhs.network &&
         lhs.domains == rhs.domains &&
-        lhs.selected == rhs.selected
+        lhs.selected == rhs.selected &&
+        lhs.status == rhs.status
     }
 }
 
 struct DomainDetails: Codable, Hashable {
     let domain: String
-    let resolvedips: String?
+    let resolvedIPs: [String]
 }
 
 extension DomainDetails: Equatable {
     static func == (lhs: DomainDetails, rhs: DomainDetails) -> Bool {
         return lhs.domain == rhs.domain &&
-        lhs.resolvedips == rhs.resolvedips
+        lhs.resolvedIPs == rhs.resolvedIPs
     }
 }

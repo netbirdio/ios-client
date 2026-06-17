@@ -16,6 +16,7 @@ import NetBirdSDK
 
 #if os(iOS)
 import FirebasePerformance
+import WidgetKit
 #endif
 
 #if os(iOS)
@@ -151,8 +152,21 @@ struct NetBirdApp: App {
             guard isAppActive, !Task.isCancelled else { return }
 
             if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
+                // Clear stale button-press flags before applying the fresh NE state.
+                // These flags are only valid for the brief gap between a button tap and
+                // the corresponding NE state change; any external change (widget action,
+                // On Demand trigger) makes them stale when returning to the foreground.
+                viewModel.connectPressed = false
+                viewModel.disconnectPressed = false
                 viewModel.extensionState = initialStatus
                 viewModel.updateVPNDisplayState()
+            } else {
+                // No matching VPN profile found — still force a widget timeline refresh so
+                // the widget doesn't stay stuck on a transitioning state from a prior
+                // widget-initiated disconnect/connect while the app was closed.
+                #if os(iOS)
+                WidgetCenter.shared.reloadAllTimelines()
+                #endif
             }
 
             guard isAppActive, !Task.isCancelled else { return }

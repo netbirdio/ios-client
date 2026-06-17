@@ -15,6 +15,7 @@ import os
 import Combine
 import NetBirdSDK
 import UserNotifications
+import UIKit
 #if os(iOS)
 import WidgetKit
 #endif
@@ -90,6 +91,7 @@ class ViewModel: ObservableObject {
     @Published var vpnDisplayState: VPNDisplayState = .disconnected
     var connectPressed = false
     var disconnectPressed = false
+
     
     @Published var rosenpassEnabled = false
     @Published var rosenpassPermissive = false
@@ -113,8 +115,24 @@ class ViewModel: ObservableObject {
             UserDefaults.standard.synchronize()
         }
     }
+
+    // Troubleshoot / Debug Bundle
+    enum DebugBundleUploadState {
+        case idle
+        case uploading
+        case done(key: String)
+        case error(message: String)
+    }
+
+    @Published var anonymizeDebugBundle: Bool {
+        didSet {
+            UserDefaults.standard.set(anonymizeDebugBundle, forKey: "netbird.anonymizeDebugBundle")
+        }
+    }
+    @Published var debugBundleUploadState: DebugBundleUploadState = .idle
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
+    @Published var disableIPv6 = false
     @Published var connectOnDemand = false
     @Published var showOnDemandAlert = false
     @Published var showOnDemandConflictAlert = false
@@ -171,6 +189,7 @@ class ViewModel: ObservableObject {
         self.networkExtensionAdapter = networkExtensionAdapter
         let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
         self.traceLogsEnabled = logLevel == "TRACE"
+        self.anonymizeDebugBundle = UserDefaults.standard.bool(forKey: "netbird.anonymizeDebugBundle")
         self.peerViewModel = PeerViewModel()
         self.routeViewModel = RoutesViewModel(networkExtensionAdapter: networkExtensionAdapter)
 
@@ -263,9 +282,14 @@ class ViewModel: ObservableObject {
             self.logger.info("connect: Task started, calling networkExtensionAdapter.start()")
             await self.networkExtensionAdapter.start()
             self.logger.info("connect: networkExtensionAdapter.start() completed")
-            // If start() returned but VPN never launched (e.g. IPC failed to get login URL)
-            // and the browser login sheet is not showing, the tunnel won't start on its own.
-            // Reset the stuck "Connecting..." state so the user can try again.
+            // start() returns as soon as startVPNTunnel() is called — the tunnel process
+            // hasn't launched yet and extensionState is still .disconnected at this point.
+            // Wait long enough for the tunnel to start and for the polling cycle to pick up
+            // the new NEVPNStatus before deciding whether the launch genuinely failed.
+            try? await Task.sleep(nanoseconds: 8_000_000_000) // 8 seconds
+            // If after the wait the state is still disconnected and no browser login sheet
+            // is visible, the tunnel failed to start (e.g. IPC error). Reset the stuck
+            // "Connecting..." state so the user can try again.
             if self.extensionState == .disconnected && !self.networkExtensionAdapter.showBrowser {
                 self.connectPressed = false
                 self.updateVPNDisplayState()
@@ -407,7 +431,7 @@ class ViewModel: ObservableObject {
         performClose()
     }
 
-    func updateVPNDisplayState() {
+    func updateVPNDisplayState(priorExtensionState: NEVPNStatus? = nil) {
         let newState: VPNDisplayState
 
         // Extension state is the source of truth.
@@ -429,7 +453,10 @@ class ViewModel: ObservableObject {
             // Ignore transient .disconnecting emitted by iOS VPN framework during tunnel startup.
             // When startVPNTunnel() is called, iOS briefly reports .disconnecting while cleaning
             // up the previous tunnel instance — even though the user pressed Connect, not Disconnect.
-            if connectPressed {
+            // connectPressed handles this for app-initiated connects.
+            // priorExtensionState handles widget-initiated connects where connectPressed is never set.
+            let wasConnecting = priorExtensionState == .connecting
+            if connectPressed || wasConnecting {
                 newState = .connecting
             } else {
                 disconnectPressed = false
@@ -483,6 +510,9 @@ class ViewModel: ObservableObject {
         userDefaults?.set(ip, forKey: GlobalConstants.keyWidgetIP)
         userDefaults?.set(fqdn, forKey: GlobalConstants.keyWidgetFQDN)
         WidgetCenter.shared.reloadAllTimelines()
+        if #available(iOS 18.0, *) {
+            ControlCenter.shared.reloadControls(ofKind: "io.netbird.vpn.control")
+        }
     }
     #endif
 
@@ -571,8 +601,9 @@ class ViewModel: ObservableObject {
         let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .disconnecting]
         guard knownStatuses.contains(status), extensionState != status else { return }
 
+        let priorState = extensionState
         extensionState = status
-        updateVPNDisplayState()
+        updateVPNDisplayState(priorExtensionState: priorState)
 
         if status == .connected {
             routeViewModel.getRoutes()
@@ -707,6 +738,21 @@ class ViewModel: ObservableObject {
         previousExtensionState = extensionState
     }
     
+    func setDisableIPv6(disabled: Bool) {
+        let previous = self.disableIPv6
+        self.disableIPv6 = disabled
+        configProvider.disableIPv6 = disabled
+        if !configProvider.commit() {
+            print("Failed to update IPv6 settings")
+            self.disableIPv6 = previous
+            configProvider.disableIPv6 = previous
+        }
+    }
+
+    func loadIPv6Settings() {
+        self.disableIPv6 = configProvider.disableIPv6
+    }
+
     func setForcedRelayConnection(isEnabled: Bool) {
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         userDefaults?.set(isEnabled, forKey: GlobalConstants.keyForceRelayConnection)
@@ -936,6 +982,50 @@ class ViewModel: ObservableObject {
         // while the user is not authenticated. It will be re-enabled automatically
         // after a successful connection (see applyExtensionStatus).
         networkExtensionAdapter.setOnDemandEnabled(false)
+        #endif
+    }
+
+    // MARK: - Debug Bundle
+
+    func uploadDebugBundle() {
+        if case .uploading = debugBundleUploadState { return }
+        debugBundleUploadState = .uploading
+        let anonymize = self.anonymizeDebugBundle
+
+        // Try IPC first (VPN running → live engine state).
+        // Fall back to direct call if extension is not reachable (VPN disconnected).
+        networkExtensionAdapter.uploadDebugBundle(anonymize: anonymize) { [weak self] result in
+            switch result {
+            case .success(let key):
+                DispatchQueue.main.async { self?.debugBundleUploadState = .done(key: key) }
+            case .failure:
+                Task.detached(priority: .utility) { [weak self] in
+                    let fallbackResult = Self.directDebugBundleUpload(anonymize: anonymize)
+                    await MainActor.run { self?.debugBundleUploadState = fallbackResult }
+                }
+            }
+        }
+    }
+
+    private static nonisolated func directDebugBundleUpload(anonymize: Bool) -> DebugBundleUploadState {
+        #if os(iOS)
+        guard let configPath = Preferences.configFile(),
+              let statePath = Preferences.stateFile() else {
+            return .error(message: "Configuration not available")
+        }
+        let cacheDir = Preferences.cacheDirectory()
+        let logPath = AppLogger.getGoLogFileURL()?.path ?? ""
+        guard let client = NetBirdSDKNewClient(configPath, statePath, cacheDir, logPath, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+            return .error(message: "Failed to initialize client")
+        }
+        var sdkError: NSError?
+        let key = client.debugBundle(anonymize, error: &sdkError)
+        if let sdkError {
+            return .error(message: sdkError.localizedDescription)
+        }
+        return .done(key: key)
+        #else
+        return .error(message: "Not supported on this platform")
         #endif
     }
 }

@@ -8,7 +8,11 @@ enum VPNIntentHelpers {
 
     static func loadManager() async throws -> NETunnelProviderManager? {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-        return managers.first
+        if let first = managers.first { return first }
+
+        // On first widget process startup NE preferences can return empty; retry once.
+        try await Task.sleep(nanoseconds: 300_000_000)
+        return try await NETunnelProviderManager.loadAllFromPreferences().first
     }
 
     static var defaults: UserDefaults? {
@@ -17,6 +21,22 @@ enum VPNIntentHelpers {
 
     static var isLoginRequired: Bool {
         defaults?.bool(forKey: WidgetConstants.keyLoginRequired) ?? false
+    }
+
+    /// Starts the VPN tunnel with the active profile paths so PacketTunnelProvider
+    /// can locate the correct config file even when the main app is not running.
+    /// Returns an error if startVPNTunnel fails (callers should handle/log it).
+    @discardableResult
+    static func startTunnel(session: NETunnelProviderSession) throws -> Bool {
+        var options: [String: NSObject] = [:]
+        if let configPath = defaults?.string(forKey: WidgetConstants.keyActiveConfigPath) {
+            options["configPath"] = configPath as NSObject
+        }
+        if let statePath = defaults?.string(forKey: WidgetConstants.keyActiveStatePath) {
+            options["statePath"] = statePath as NSObject
+        }
+        try session.startVPNTunnel(options: options.isEmpty ? nil : options)
+        return true
     }
 
     @discardableResult
