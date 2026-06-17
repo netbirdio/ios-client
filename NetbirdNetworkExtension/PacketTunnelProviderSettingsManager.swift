@@ -44,6 +44,7 @@ class PacketTunnelProviderSettingsManager {
             self.ipv4Routes = v4Routes
             self.ipv6Routes = v6Routes
             self.updateTunnel()
+            AppLogger.shared.log("[DEBUG exit-node-off] setRoutes: updateTunnel() called")
     }
 
     func setDNS(config: HostDNSConfig) {
@@ -69,8 +70,9 @@ class PacketTunnelProviderSettingsManager {
 
         self.dnsSettings = dnsSettings
         self.updateTunnel()
+        AppLogger.shared.log("[DEBUG exit-node-off] setDNS: server=\(config.serverIP) searchDomains=[\(searchDomains.joined(separator: ","))] updateTunnel() called")
     }
-    
+
     func setInterfaceIP(interfaceIP: String) {
         // [DEBUG exit-node-off] Track interface address changes. interfaceIPv6 is
         // never cleared once set (see NetworkChangeListener), so a stale v6 address

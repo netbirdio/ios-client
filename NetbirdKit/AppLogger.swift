@@ -88,7 +88,9 @@ public class AppLogger {
     public func log(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
         let fileName = (file as NSString).lastPathComponent
         let timestamp = iso8601Formatter.string(from: Date())
-        let logMessage = "[\(timestamp)] [\(fileName):\(line)] \(message)\n"
+        var tid: UInt64 = 0
+        pthread_threadid_np(nil, &tid)
+        let logMessage = "[\(timestamp)] [tid:\(tid)] [\(fileName):\(line)] \(message)\n"
 
         print(logMessage, terminator: "")
 
