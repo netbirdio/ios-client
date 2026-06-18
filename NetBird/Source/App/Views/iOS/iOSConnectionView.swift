@@ -35,11 +35,11 @@ struct iOSConnectionView: View {
                     Spacer()
 
                     // Logo + toggle + status text + device info — all in one centered block
-                    VStack(spacing: 16) {
+                    VStack(spacing: 24) {
                         Image("netbird-logo-menu")
                             .resizable()
                             .scaledToFit()
-                            .frame(height: 45)
+                            .frame(height: 44)
 
                         VPNToggleView(
                             vpnState: viewModel.vpnDisplayState,
@@ -47,17 +47,17 @@ struct iOSConnectionView: View {
                             onConnect: { viewModel.connect() },
                             onDisconnect: { viewModel.close() }
                         )
-                        .padding(.top, 4)
+                        .padding(.vertical, 12)
 
                         Text(viewModel.extensionStateText)
-                            .font(.custom("InterVariable", size: 28))
+                            .font(.custom("InterVariable", size: 15))
                             .fontWeight(.bold)
                             .foregroundColor(Color("TextPrimary"))
 
                         VStack(spacing: 5) {
                             Text(fqdnCopied ? "Copied" : viewModel.fqdn)
                                 .font(.custom("JetBrainsMono-Regular", size: 15))
-                                .foregroundColor(Color("TextSecondary"))
+                                .foregroundColor(Color("TextPrimary"))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.5)
                                 .opacity(fqdnCopied ? 0.7 : 1.0)
@@ -76,7 +76,7 @@ struct iOSConnectionView: View {
                                 HStack(spacing: 6) {
                                     Text(viewModel.ip)
                                         .font(.custom("JetBrainsMono-Regular", size: 15))
-                                        .foregroundColor(Color("TextPrimary"))
+                                        .foregroundColor(Color("TextSecondary"))
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.5)
                                     Image(systemName: "chevron.down")

@@ -22,15 +22,15 @@ struct VPNToggleView: View {
         optimisticIsOn != nil || vpnState == .connecting || vpnState == .disconnecting
     }
 
-    private let trackWidth: CGFloat = 120
-    private let trackHeight: CGFloat = 65
+    private let trackWidth: CGFloat = 104
+    private let trackHeight: CGFloat = 56
     private var thumbDiameter: CGFloat { trackHeight - 8 }
     private var thumbTravel: CGFloat { (trackWidth - thumbDiameter) / 2 - 4 }
 
     var body: some View {
         ZStack {
             Capsule()
-                .fill(isOn ? Color.orange : Color(white: 0.25))
+                .fill(isOn ? Color.orange : Color(uiColor: .systemGray4))
                 .opacity(pulseOpacity)
                 .frame(width: trackWidth, height: trackHeight)
                 .animation(.easeInOut(duration: 0.3), value: isOn)
