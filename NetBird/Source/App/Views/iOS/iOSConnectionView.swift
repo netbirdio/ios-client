@@ -13,33 +13,9 @@ import NetworkExtension
 struct iOSConnectionView: View {
     @EnvironmentObject var viewModel: ViewModel
     @State private var fqdnCopied = false
-    @State private var ipCopied = false
-
-    // Small badge above the toggle: "SECURED" / "NOT SECURED" / hidden during transitions
-    private var statusLabel: String {
-        switch viewModel.vpnDisplayState {
-        case .connected:    return "SECURED"
-        case .disconnected: return "NOT SECURED"
-        case .connecting, .disconnecting: return ""
-        }
-    }
-
-    private var statusLabelColor: Color {
-        switch viewModel.vpnDisplayState {
-        case .connected:    return .orange
-        case .disconnected: return Color(white: 0.5)
-        case .connecting, .disconnecting: return .clear
-        }
-    }
-
-    // One-liner below the main status title
-    private var subtitle: String {
-        switch viewModel.vpnDisplayState {
-        case .connected:    return "You are on the NetBird network"
-        case .disconnected: return "You are not on the NetBird network"
-        case .connecting, .disconnecting: return ""
-        }
-    }
+    @State private var ipv4Copied = false
+    @State private var ipv6Copied = false
+    @State private var showAddressDetails = false
 
     var body: some View {
         ZStack {
@@ -58,15 +34,12 @@ struct iOSConnectionView: View {
 
                     Spacer()
 
-                    // Toggle + status text + device info — all in one centered block
+                    // Logo + toggle + status text + device info — all in one centered block
                     VStack(spacing: 16) {
-                        // Status badge (fixed height so layout stays stable during transitions)
-                        Text(statusLabel)
-                            .font(.system(size: 13, weight: .semibold))
-                            .tracking(1.5)
-                            .foregroundColor(statusLabelColor)
-                            .frame(height: 18)
-                            .animation(.easeInOut(duration: 0.25), value: statusLabel)
+                        Image("netbird-logo-menu")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 45)
 
                         VPNToggleView(
                             vpnState: viewModel.vpnDisplayState,
@@ -74,57 +47,61 @@ struct iOSConnectionView: View {
                             onConnect: { viewModel.connect() },
                             onDisconnect: { viewModel.close() }
                         )
+                        .padding(.top, 4)
 
                         Text(viewModel.extensionStateText)
-                            .font(.system(size: 32, weight: .bold))
+                            .font(.custom("InterVariable", size: 28))
+                            .fontWeight(.bold)
                             .foregroundColor(Color("TextPrimary"))
 
-                        // Fixed height prevents layout jump when subtitle appears/disappears
-                        Text(subtitle)
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(Color("TextSecondary"))
-                            .opacity(subtitle.isEmpty ? 0 : 1)
-                            .frame(height: 20)
-                            .animation(.easeInOut(duration: 0.25), value: subtitle)
-
-                        // FQDN + IP with tap-to-copy
-                        VStack(spacing: 6) {
+                        VStack(spacing: 5) {
                             Text(fqdnCopied ? "Copied" : viewModel.fqdn)
+                                .font(.custom("JetBrainsMono-Regular", size: 15))
                                 .foregroundColor(Color("TextSecondary"))
-                                .font(.system(size: 15, weight: .regular))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.5)
                                 .opacity(fqdnCopied ? 0.7 : 1.0)
                                 .animation(.easeInOut(duration: 0.2), value: fqdnCopied)
                                 .padding(.horizontal, 16)
-                                .onTapGesture {
-                                    guard !viewModel.fqdn.isEmpty else { return }
-                                    UIPasteboard.general.string = viewModel.fqdn
-                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                    withAnimation(.easeInOut(duration: 0.2)) { fqdnCopied = true }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                        withAnimation(.easeInOut(duration: 0.2)) { fqdnCopied = false }
-                                    }
+                                .onTapGesture { copy(viewModel.fqdn, into: $fqdnCopied) }
+                            
+                            // Expandable IP details: tap to reveal IPv4 + IPv6 with copy actions.
+                            // The dropdown is an overlay (not part of the VStack flow) so it doesn't
+                            // change this block's height and shift the centered content above it.
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showAddressDetails.toggle()
                                 }
-
-                            Text(ipCopied ? "Copied" : viewModel.ip)
-                                .foregroundColor(Color("TextSecondary"))
-                                .font(.system(size: 15, weight: .regular))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.5)
-                                .opacity(ipCopied ? 0.7 : 1.0)
-                                .animation(.easeInOut(duration: 0.2), value: ipCopied)
-                                .onTapGesture {
-                                    guard !viewModel.ip.isEmpty else { return }
-                                    UIPasteboard.general.string = viewModel.ip
-                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                    withAnimation(.easeInOut(duration: 0.2)) { ipCopied = true }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                        withAnimation(.easeInOut(duration: 0.2)) { ipCopied = false }
-                                    }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text(viewModel.ip)
+                                        .font(.custom("JetBrainsMono-Regular", size: 15))
+                                        .foregroundColor(Color("TextPrimary"))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.5)
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(Color("TextSecondary"))
+                                        .rotationEffect(.degrees(showAddressDetails ? 0 : 180))
                                 }
+                            }
+                            .padding(.top, 4)
+                            .overlay(alignment: .top) {
+                                if showAddressDetails {
+                                    VStack(spacing: 0) {
+                                        addressRow(value: viewModel.ip, copied: $ipv4Copied)
+                                        Divider().background(Color("TextSecondary").opacity(0.2))
+                                        addressRow(value: viewModel.ipv6, copied: $ipv6Copied)
+                                    }
+                                    .frame(width: UIScreen.main.bounds.width - 92)
+                                    .background(Color("BgMenu"))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color("TextSecondary").opacity(0.2)))
+                                    .offset(y: 36)
+                                    .transition(.opacity)
+                                }
+                            }
                         }
-                        .padding(.top, 8)
                     }
 
                     Spacer()
@@ -182,6 +159,42 @@ struct iOSConnectionView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarHidden(true)
+    }
+
+    @ViewBuilder
+    private func addressRow(value: String, copied: Binding<Bool>) -> some View {
+        HStack {
+            Text(copied.wrappedValue ? "Copied" : (value.isEmpty ? "—" : value))
+                .font(.custom("JetBrainsMono-Regular", size: 14))
+                .foregroundColor(Color("TextPrimary"))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .opacity(copied.wrappedValue ? 0.7 : 1.0)
+                .animation(.easeInOut(duration: 0.2), value: copied.wrappedValue)
+
+            Spacer()
+
+            Button {
+                copy(value, into: copied)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color("TextSecondary"))
+            }
+            .disabled(value.isEmpty)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
+
+    private func copy(_ value: String, into flag: Binding<Bool>) {
+        guard !value.isEmpty else { return }
+        UIPasteboard.general.string = value
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(.easeInOut(duration: 0.2)) { flag.wrappedValue = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            withAnimation(.easeInOut(duration: 0.2)) { flag.wrappedValue = false }
+        }
     }
 }
 
