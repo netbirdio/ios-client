@@ -112,9 +112,10 @@ public class NetBirdAdapter {
         set { networkUnavailableLock.lock(); defer { networkUnavailableLock.unlock() }; _isNetworkUnavailable = newValue }
     }
 
-    /// Called when the SDK disconnects because the auth session expired (the last
+    /// Called when the SDK disconnects due to an expired or invalid auth token (the last
     /// management error was PermissionDenied/InvalidArgument). Set by PacketTunnelProvider
-    /// to tear the tunnel down so traffic returns to the physical interface.
+    /// to tear the tunnel down so traffic returns to the physical interface, and to
+    /// trigger flag + notification from the extension.
     var onLoginRequired: (() -> Void)?
 
     private let stopLock = NSLock()
