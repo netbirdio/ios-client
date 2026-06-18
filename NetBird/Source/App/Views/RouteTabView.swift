@@ -70,7 +70,7 @@ struct RouteListView: View {
     var body: some View {
         ScrollView {
             ForEach(Array(self.routeViewModel.filteredRoutes.enumerated()), id: \.element.id) { index, route in
-                RouteCard(route: route, selectedRouteId: $routeViewModel.selectedRouteId, orientationTop: index > 3, peerViewModel: peerViewModel, routeViewModel: routeViewModel)
+                RouteCard(route: route, selectedRouteId: $routeViewModel.selectedRouteId, orientationTop: index > 3, routeViewModel: routeViewModel)
                     .zIndex(routeViewModel.selectedRouteId == route.id ? 1 : 0)
                     .opacity(self.routeViewModel.tappedRoute == route ? 0.3 : 1.0)
             }

@@ -87,6 +87,24 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
+        // Wire up the login-required callback so the connection listener can tear the
+        // tunnel down if the auth session expires mid-session (token expires while the
+        // VPN is running). On Android the kernel removes the VPN routes automatically
+        // when the Go engine closes the TUN fd; on iOS the utun interface is owned by
+        // the provider and outlives the Go engine, so without an explicit teardown it
+        // lingers with the default route and black-holes all traffic until the user
+        // opens the app. cancelTunnelWithError restores the default route immediately.
+        adapter.onLoginRequired = { [weak self] in
+            AppLogger.shared.log("onLoginRequired: session expired mid-tunnel — tearing down")
+            self?.signalLoginRequired()
+            self?.updateWidgetStatus("disconnected")
+            self?.cancelTunnelWithError(NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1001,
+                userInfo: [NSLocalizedDescriptionKey: "Login required."]
+            ))
+        }
+
         adapter.start { [weak self] error in
             completionHandler(error)
             if error == nil {
@@ -183,6 +201,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let id = String(s.dropFirst("Deselect-".count))
             deselectRoute(id: id)
             completionHandler("true".data(using: .utf8))
+        case let s where s.hasPrefix("DebugBundle:"):
+            let anonymize = s.dropFirst("DebugBundle:".count) == "true"
+            debugBundle(anonymize: anonymize, completionHandler: completionHandler)
         default:
             AppLogger.shared.log("Unknown message: \(string)")
             completionHandler(nil)
@@ -503,7 +524,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     name: route.id_,
                     network: route.network,
                     domains: domains,
-                    selected: route.selected
+                    selected: route.selected,
+                    status: route.status
                 )
             }
 
@@ -543,6 +565,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             try adapter.client.deselectRoute(id)
         } catch {
             AppLogger.shared.log("Failed to deselect route: \(error.localizedDescription)")
+        }
+    }
+
+    func debugBundle(anonymize: Bool, completionHandler: @escaping (Data?) -> Void) {
+        guard let adapter = adapter else {
+            completionHandler("error:adapter not available".data(using: .utf8))
+            return
+        }
+        DispatchQueue.global(qos: .utility).async {
+            var error: NSError?
+            let key = adapter.client.debugBundle(anonymize, error: &error)
+            if let error = error {
+                completionHandler("error:\(error.localizedDescription)".data(using: .utf8))
+            } else {
+                completionHandler(key.data(using: .utf8))
+            }
         }
     }
 

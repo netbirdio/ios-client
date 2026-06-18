@@ -112,6 +112,11 @@ public class NetBirdAdapter {
         set { networkUnavailableLock.lock(); defer { networkUnavailableLock.unlock() }; _isNetworkUnavailable = newValue }
     }
 
+    /// Called when the SDK disconnects because the auth session expired (the last
+    /// management error was PermissionDenied/InvalidArgument). Set by PacketTunnelProvider
+    /// to tear the tunnel down so traffic returns to the physical interface.
+    var onLoginRequired: (() -> Void)?
+
     private let stopLock = NSLock()
 
     /// Tunnel device file descriptor.
@@ -268,7 +273,7 @@ public class NetBirdAdapter {
         #if os(tvOS)
         // On tvOS, the filesystem is blocked for the App Group container.
         // Create the client with empty paths and load config from local storage instead.
-        guard let client = NetBirdSDKNewClient("", "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
+        guard let client = NetBirdSDKNewClient("", "", Preferences.cacheDirectory(), "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
             adapterLogger.error("init: tvOS - Failed to create NetBird SDK client")
             return nil
         }
@@ -297,7 +302,8 @@ public class NetBirdAdapter {
             adapterLogger.error("init: App group container unavailable - check entitlements")
             return nil
         }
-        guard let client = NetBirdSDKNewClient(resolvedConfigPath, resolvedStatePath, deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
+        let logPath = AppLogger.getGoLogFileURL()?.path ?? ""
+        guard let client = NetBirdSDKNewClient(resolvedConfigPath, resolvedStatePath, Preferences.cacheDirectory(), logPath, deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
             adapterLogger.error("init: Failed to create NetBird SDK client with configPath=\(resolvedConfigPath), statePath=\(resolvedStatePath)")
             return nil
         }
@@ -363,6 +369,13 @@ public class NetBirdAdapter {
     
     public func needsLogin() -> Bool {
         return self.client.isLoginRequired()
+    }
+
+    /// Network-free login check backed by the SDK's in-memory status recorder.
+    /// Reflects whether the LAST management error was an auth failure. Safe to call
+    /// during teardown (onDisconnected) where a blocking network call must be avoided.
+    public func needsLoginCached() -> Bool {
+        return self.client.isLoginRequiredCached()
     }
 
     /// Legacy synchronous login - returns URL string directly

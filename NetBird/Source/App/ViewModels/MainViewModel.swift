@@ -116,6 +116,21 @@ class ViewModel: ObservableObject {
             UserDefaults.standard.synchronize()
         }
     }
+
+    // Troubleshoot / Debug Bundle
+    enum DebugBundleUploadState {
+        case idle
+        case uploading
+        case done(key: String)
+        case error(message: String)
+    }
+
+    @Published var anonymizeDebugBundle: Bool {
+        didSet {
+            UserDefaults.standard.set(anonymizeDebugBundle, forKey: "netbird.anonymizeDebugBundle")
+        }
+    }
+    @Published var debugBundleUploadState: DebugBundleUploadState = .idle
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
     @Published var disableIPv6 = false
@@ -173,6 +188,7 @@ class ViewModel: ObservableObject {
         self.networkExtensionAdapter = networkExtensionAdapter
         let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
         self.traceLogsEnabled = logLevel == "TRACE"
+        self.anonymizeDebugBundle = UserDefaults.standard.bool(forKey: "netbird.anonymizeDebugBundle")
         self.peerViewModel = PeerViewModel()
         self.routeViewModel = RoutesViewModel(networkExtensionAdapter: networkExtensionAdapter)
 
@@ -931,4 +947,48 @@ class ViewModel: ObservableObject {
         }
     }
     #endif
+
+    // MARK: - Debug Bundle
+
+    func uploadDebugBundle() {
+        if case .uploading = debugBundleUploadState { return }
+        debugBundleUploadState = .uploading
+        let anonymize = self.anonymizeDebugBundle
+
+        // Try IPC first (VPN running → live engine state).
+        // Fall back to direct call if extension is not reachable (VPN disconnected).
+        networkExtensionAdapter.uploadDebugBundle(anonymize: anonymize) { [weak self] result in
+            switch result {
+            case .success(let key):
+                DispatchQueue.main.async { self?.debugBundleUploadState = .done(key: key) }
+            case .failure:
+                Task.detached(priority: .utility) { [weak self] in
+                    let fallbackResult = Self.directDebugBundleUpload(anonymize: anonymize)
+                    await MainActor.run { self?.debugBundleUploadState = fallbackResult }
+                }
+            }
+        }
+    }
+
+    private static nonisolated func directDebugBundleUpload(anonymize: Bool) -> DebugBundleUploadState {
+        #if os(iOS)
+        guard let configPath = Preferences.configFile(),
+              let statePath = Preferences.stateFile() else {
+            return .error(message: "Configuration not available")
+        }
+        let cacheDir = Preferences.cacheDirectory()
+        let logPath = AppLogger.getGoLogFileURL()?.path ?? ""
+        guard let client = NetBirdSDKNewClient(configPath, statePath, cacheDir, logPath, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+            return .error(message: "Failed to initialize client")
+        }
+        var sdkError: NSError?
+        let key = client.debugBundle(anonymize, error: &sdkError)
+        if let sdkError {
+            return .error(message: sdkError.localizedDescription)
+        }
+        return .done(key: key)
+        #else
+        return .error(message: "Not supported on this platform")
+        #endif
+    }
 }
