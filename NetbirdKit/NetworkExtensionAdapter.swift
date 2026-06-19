@@ -455,8 +455,18 @@ public class NetworkExtensionAdapter: ObservableObject {
         // (after startTunnel fails with login-required), which kills the WaitToken
         // goroutine before the HTTP server can receive the OAuth callback.
         // Running it here keeps the HTTP server alive for the full browser session.
+        // NetBirdSDKNewAuth does NOT read the config file at configPath — it only
+        // uses that path for writing the config back after login. The second argument
+        // is the management URL used to build the in-memory config; passing "" makes
+        // the Go SDK fall back to the default cloud server (api.netbird.io) and the
+        // login runs against — and is then written back to — the wrong server.
+        // Pass the active profile's real management URL so login targets the user's
+        // own server and the resulting config keeps it.
+        let activeProfile = ProfileManager.shared.getActiveProfileName()
+        let activeManagementURL = ProfileManager.shared.managementURL(for: activeProfile) ?? ""
+        logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfile, privacy: .public)'")
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
-           let auth = NetBirdSDKNewAuth(configPath, "", nil) {
+           let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
             self.pendingAuth = auth
             let urlOpener = MainAppLoginURLOpener()
             let errListener = MainAppLoginErrListener()
@@ -469,11 +479,18 @@ public class NetworkExtensionAdapter: ObservableObject {
                     continuation.resume(returning: url)
                 }
                 urlOpener.onOpen = { [weak self] url, _ in
+                    // Set showBrowser and resume the continuation in the SAME main-queue
+                    // block. onOpen is invoked from a background goroutine, so resuming
+                    // before showBrowser is committed lets loginIfRequired() observe
+                    // showBrowser == false and spuriously start the VPN — which launches
+                    // the extension, trips its needsLogin path, and pops the auth alert
+                    // in parallel with this browser login. Ordering them guarantees the
+                    // await caller sees showBrowser == true.
                     DispatchQueue.main.async {
                         self?.loginURL = url
                         self?.showBrowser = true
+                        resume(url)
                     }
-                    resume(url)
                 }
                 urlOpener.onSuccess = { [weak self] in
                     var err: NSError?
@@ -483,6 +500,13 @@ public class NetworkExtensionAdapter: ObservableObject {
                         if let path = Preferences.configFile() {
                             try? json.write(toFile: path, atomically: true, encoding: .utf8)
                         }
+                    }
+                    // Persist the management URL to the dedicated, logout-surviving file and
+                    // the shared UserDefaults so the user's own server cannot later fall back
+                    // to the default cloud server (e.g. when the config file is recreated).
+                    if !activeManagementURL.isEmpty {
+                        ProfileManager.shared.saveServerURL(activeManagementURL, for: activeProfile)
+                        Preferences.saveManagementURL(activeManagementURL)
                     }
                     self?.pendingAuth = nil
                 }

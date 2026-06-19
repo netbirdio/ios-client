@@ -169,6 +169,14 @@ class ServerViewModel : ObservableObject {
                             #if os(tvOS)
                             self?.saveConfigToUserDefaults(authenticator: authenticator)
                             Preferences.saveManagementURL(managementServerUrl)
+                            #else
+                            // The Go SDK already wrote the management URL into the active
+                            // profile's netbird.cfg. Also persist it to the dedicated,
+                            // logout-surviving server URL file and shared UserDefaults so
+                            // the chosen server cannot later fall back to the default cloud.
+                            let profile = ProfileManager.shared.getActiveProfileName()
+                            ProfileManager.shared.saveServerURL(managementServerUrl, for: profile)
+                            Preferences.saveManagementURL(managementServerUrl)
                             #endif
                             self?.isOperationSuccessful = true
                         } else {
