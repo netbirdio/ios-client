@@ -29,8 +29,7 @@ struct iOSConnectionView: View {
                         viewModel.navigateToProfilesView = true
                     }
                     .padding(.top, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, alignment: .center)
 
                     Spacer()
 
@@ -50,11 +49,11 @@ struct iOSConnectionView: View {
                         .padding(.vertical, 12)
 
                         Text(viewModel.extensionStateText)
-                            .font(.custom("InterVariable", size: 15))
+                            .font(.custom("InterVariable", size: 18))
                             .fontWeight(.bold)
                             .foregroundColor(Color("TextPrimary"))
 
-                        VStack(spacing: 5) {
+                        VStack(spacing: 15) {
                             Text(fqdnCopied ? "Copied" : viewModel.fqdn)
                                 .font(.custom("JetBrainsMono-Regular", size: 15))
                                 .foregroundColor(Color("TextPrimary"))
@@ -63,6 +62,7 @@ struct iOSConnectionView: View {
                                 .opacity(fqdnCopied ? 0.7 : 1.0)
                                 .animation(.easeInOut(duration: 0.2), value: fqdnCopied)
                                 .padding(.horizontal, 16)
+                                .contentShape(Rectangle().inset(by: -12))
                                 .onTapGesture { copy(viewModel.fqdn, into: $fqdnCopied) }
                             
                             // Expandable IP details: tap to reveal IPv4 + IPv6 with copy actions.
@@ -84,6 +84,7 @@ struct iOSConnectionView: View {
                                         .foregroundColor(Color("TextSecondary"))
                                         .rotationEffect(.degrees(showAddressDetails ? 0 : 180))
                                 }
+                                .contentShape(Rectangle().inset(by: -12))
                             }
                             .padding(.top, 4)
                             .overlay(alignment: .top) {
@@ -98,6 +99,7 @@ struct iOSConnectionView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 10))
                                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color("TextSecondary").opacity(0.2)))
                                     .offset(y: 36)
+                                    .padding(.top, 10)
                                     .transition(.opacity)
                                 }
                             }
@@ -180,6 +182,7 @@ struct iOSConnectionView: View {
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 14))
                     .foregroundColor(Color("TextSecondary"))
+                    .contentShape(Rectangle().inset(by: -10))
             }
             .disabled(value.isEmpty)
         }
