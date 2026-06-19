@@ -527,7 +527,9 @@ public class NetworkExtensionAdapter: ObservableObject {
                 }
                 errListener.onSuccessCallback = { urlOpener.onSuccess?() }
                 errListener.onErrorCallback = { [weak self] _ in
-                    self?.pendingAuth = nil
+                    // onError runs on a background goroutine; mutate pendingAuth on the
+                    // main queue to stay consistent with onSuccess and cancelLogin().
+                    DispatchQueue.main.async { self?.pendingAuth = nil }
                     resume(nil)
                 }
                 auth.login(errListener, urlOpener: urlOpener, forceDeviceAuth: false)
@@ -555,6 +557,21 @@ public class NetworkExtensionAdapter: ObservableObject {
         self.loginURL = url
         self.showBrowser = true
     }
+
+    #if os(iOS)
+    /// Aborts an in-progress interactive login (e.g. the user dismissed the OAuth
+    /// browser without completing it). Stopping the SDK auth cancels its context,
+    /// which unblocks the PKCE WaitToken and shuts down the loopback HTTP server so
+    /// the redirect port is freed immediately. Without this the next connect stalls
+    /// trying to bind the same port until the previous flow expires.
+    public func cancelLogin() {
+        logger.info("cancelLogin: aborting in-progress login")
+        pendingAuth?.stop()
+        pendingAuth = nil
+        loginSucceeded = false
+        showBrowser = false
+    }
+    #endif
 
     public func startVPNConnection() {
         logger.info("startVPNConnection: called")

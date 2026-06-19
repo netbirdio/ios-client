@@ -442,6 +442,9 @@ class ViewModel: ObservableObject {
         connectPressed = false
         showAuthenticationRequired = false
         #if os(iOS)
+        // Abort the SDK login so its PKCE loopback server is torn down and its port
+        // freed — otherwise the next connect stalls trying to bind the same port.
+        networkExtensionAdapter.cancelLogin()
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         userDefaults?.set(false, forKey: GlobalConstants.keyLoginRequired)
         userDefaults?.synchronize()
