@@ -16,6 +16,11 @@ import AuthenticationServices
 struct SafariView: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
     let url: URL
+    /// Called when the web auth session ends (success, user cancel, or error).
+    /// Note: with the NetBird PKCE loopback flow the completion fires with a nil
+    /// callbackURL even on success — the loopback redirect is consumed by the Go HTTP
+    /// server, not the auth session — so the caller must determine success from the
+    /// SDK's login callback, not from this handler.
     let didFinish: () -> Void
 
     func makeUIViewController(context: Context) -> UIViewController {

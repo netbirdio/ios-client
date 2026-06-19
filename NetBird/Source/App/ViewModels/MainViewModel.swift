@@ -434,6 +434,21 @@ class ViewModel: ObservableObject {
         }
     }
 
+    /// Called when the user dismisses the interactive login browser without completing
+    /// login. Resets the "Connecting…" state back to disconnected and clears any
+    /// login-required signalling so no spurious auth alert/notification is shown — the
+    /// user simply chose not to log in, which is not a failed active session.
+    func cancelPendingLogin() {
+        connectPressed = false
+        showAuthenticationRequired = false
+        #if os(iOS)
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(false, forKey: GlobalConstants.keyLoginRequired)
+        userDefaults?.synchronize()
+        #endif
+        updateVPNDisplayState()
+    }
+
     /// Disables On Demand and disconnects (user chose to prevent auto-reconnect).
     func closeWithOnDemandDisabled() {
         setConnectOnDemand(isEnabled: false)

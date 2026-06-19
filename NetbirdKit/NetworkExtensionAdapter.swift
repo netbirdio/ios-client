@@ -76,6 +76,13 @@ public class NetworkExtensionAdapter: ObservableObject {
     @Published var loginURL: String?
     #if os(iOS)
     private var pendingAuth: NetBirdSDKAuth?
+    /// Set to true by the SDK's onLoginSuccess callback (which fires once the Go PKCE
+    /// localhost server receives the OAuth callback). The browser-finished handler reads
+    /// this to tell a genuine login from the user dismissing the browser: the
+    /// ASWebAuthenticationSession completion fires with a nil callbackURL even on success
+    /// (the loopback redirect is consumed by the Go HTTP server, not the auth session),
+    /// so the SafariView callback alone cannot distinguish success from cancellation.
+    public private(set) var loginSucceeded = false
     #endif
     @Published var userCode: String?
 
@@ -468,6 +475,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
            let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
             self.pendingAuth = auth
+            self.loginSucceeded = false
             let urlOpener = MainAppLoginURLOpener()
             let errListener = MainAppLoginErrListener()
 
@@ -508,7 +516,14 @@ public class NetworkExtensionAdapter: ObservableObject {
                         ProfileManager.shared.saveServerURL(activeManagementURL, for: activeProfile)
                         Preferences.saveManagementURL(activeManagementURL)
                     }
-                    self?.pendingAuth = nil
+                    // onSuccess runs on a background goroutine. Mark success on the main
+                    // queue so the browser-finished handler (also main-queue) reliably
+                    // observes it and starts the VPN instead of treating the browser
+                    // dismissal as a cancellation.
+                    DispatchQueue.main.async {
+                        self?.loginSucceeded = true
+                        self?.pendingAuth = nil
+                    }
                 }
                 errListener.onSuccessCallback = { urlOpener.onSuccess?() }
                 errListener.onErrorCallback = { [weak self] _ in
