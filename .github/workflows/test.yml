@@ -82,7 +82,7 @@ jobs:
             <key>IS_SIGNIN_ENABLED</key>
             <false/>
             <key>GOOGLE_APP_ID</key>
-            <string>dummy</string>
+            <string>1:1234567890:ios:abcdef1234567890abcdef</string>
           </dict>
           </plist>
           EOF
