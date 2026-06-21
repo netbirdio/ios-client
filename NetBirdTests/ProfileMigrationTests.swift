@@ -95,6 +95,36 @@ final class ProfileMigrationTests: XCTestCase {
         return out
     }
 
+    // gomobile exposes the non-null path getters as value-returning calls with
+    // an explicit NSErrorPointer parameter (not throwing), so wrap them.
+    private func goConfigPath(_ pm: NetBirdSDKProfileManager, _ id: String) throws -> String {
+        var err: NSError?
+        let p = pm.getConfigPath(id, error: &err)
+        if let err { throw err }
+        return p
+    }
+
+    private func goStatePath(_ pm: NetBirdSDKProfileManager, _ id: String) throws -> String {
+        var err: NSError?
+        let p = pm.getStateFilePath(id, error: &err)
+        if let err { throw err }
+        return p
+    }
+
+    private func goActiveConfigPath(_ pm: NetBirdSDKProfileManager) throws -> String {
+        var err: NSError?
+        let p = pm.getActiveConfigPath(&err)
+        if let err { throw err }
+        return p
+    }
+
+    private func goActiveStatePath(_ pm: NetBirdSDKProfileManager) throws -> String {
+        var err: NSError?
+        let p = pm.getActiveStateFilePath(&err)
+        if let err { throw err }
+        return p
+    }
+
     // MARK: - Migration → Go readback
 
     func testDefaultStaysDefaultAtRootNotUUID() throws {
@@ -119,7 +149,7 @@ final class ProfileMigrationTests: XCTestCase {
 
         let active = try pm.getActiveProfile()
         XCTAssertEqual(active.id_, "default")
-        XCTAssertEqual(try pm.getActiveConfigPath(), path("netbird.cfg"))
+        XCTAssertEqual(try goActiveConfigPath(pm), path("netbird.cfg"))
     }
 
     func testNamedProfileMigratesToIdFileAndGoReadsItBack() throws {
@@ -148,8 +178,8 @@ final class ProfileMigrationTests: XCTestCase {
         XCTAssertFalse(profiles.first(where: { $0.id == "default" })?.active ?? true)
 
         XCTAssertEqual(try pm.getActiveProfile().id_, "work")
-        XCTAssertEqual(try pm.getActiveConfigPath(), workCfg)
-        XCTAssertEqual(try pm.getActiveStateFilePath(), path("profiles", "work.state.json"))
+        XCTAssertEqual(try goActiveConfigPath(pm), workCfg)
+        XCTAssertEqual(try goActiveStatePath(pm), path("profiles", "work.state.json"))
     }
 
     func testLoggedOutProfileStillListedWithServerURL() throws {
@@ -204,9 +234,9 @@ final class ProfileMigrationTests: XCTestCase {
 
         // The profile manager resolves the active profile's config/state paths —
         // exactly what Preferences.configFile()/stateFile() return on iOS.
-        let workConfig = try pm.getConfigPath("work")
-        let workState = try pm.getStateFilePath("work")
-        let defaultConfig = try pm.getConfigPath("default")
+        let workConfig = try goConfigPath(pm, "work")
+        let workState = try goStatePath(pm, "work")
+        let defaultConfig = try goConfigPath(pm, "default")
         let defaultBefore = try XCTUnwrap(FileManager.default.contents(atPath: defaultConfig))
 
         // Apply a settings change through NetBirdSDKPreferences (the settings stack).

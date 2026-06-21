@@ -116,7 +116,7 @@ class ProfileManager {
     /// Config file path for the active profile.
     func activeConfigPath() -> String? {
 #if os(iOS)
-        return try? go.getActiveConfigPath()
+        return goPath { go.getActiveConfigPath($0) }
 #else
         return Preferences.getFilePath(fileName: GlobalConstants.configFileName)
 #endif
@@ -125,7 +125,7 @@ class ProfileManager {
     /// State file path for the active profile.
     func activeStatePath() -> String? {
 #if os(iOS)
-        return try? go.getActiveStateFilePath()
+        return goPath { go.getActiveStateFilePath($0) }
 #else
         return Preferences.getFilePath(fileName: GlobalConstants.stateFileName)
 #endif
@@ -134,7 +134,7 @@ class ProfileManager {
     /// Config file path for a specific profile ID.
     func configPath(forID id: String) -> String? {
 #if os(iOS)
-        return try? go.getConfigPath(id)
+        return goPath { go.getConfigPath(id, error: $0) }
 #else
         return Preferences.getFilePath(fileName: GlobalConstants.configFileName)
 #endif
@@ -143,7 +143,7 @@ class ProfileManager {
     /// State file path for a specific profile ID.
     func statePath(forID id: String) -> String? {
 #if os(iOS)
-        return try? go.getStateFilePath(id)
+        return goPath { go.getStateFilePath(id, error: $0) }
 #else
         return Preferences.getFilePath(fileName: GlobalConstants.stateFileName)
 #endif
@@ -229,6 +229,19 @@ class ProfileManager {
     }
 
 #if os(iOS)
+    /// Wraps a gomobile path getter. gomobile exposes its non-null String
+    /// returns as a value plus an explicit NSErrorPointer parameter (not a
+    /// throwing call), returning "" and setting the error on failure.
+    private func goPath(_ call: (NSErrorPointer) -> String) -> String? {
+        var err: NSError?
+        let result = call(&err)
+        if let err {
+            AppLogger.shared.log("ProfileManager: path resolution failed: \(err.localizedDescription)")
+            return nil
+        }
+        return result.isEmpty ? nil : result
+    }
+
     /// Base directory for profile storage: the App Group shared container.
     private static func containerBasePath() -> String {
         let fm = FileManager.default
