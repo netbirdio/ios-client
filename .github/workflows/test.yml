@@ -2,10 +2,9 @@ name: Test
 
 on:
   workflow_dispatch:
-  # Disabled until test crash is resolved
-  # push:
-  #   branches: [main]
-  # pull_request:
+  push:
+    branches: [main]
+  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
