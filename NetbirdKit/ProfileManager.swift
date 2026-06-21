@@ -2,405 +2,247 @@
 //  ProfileManager.swift
 //  NetBird
 //
-//  Native Swift implementation of multi-profile management.
-//  Mirrors the Go ProfileManager logic: each profile is a subdirectory
-//  containing its own netbird.cfg and state.json files.
+//  Thin Swift wrapper over the Go (gomobile) profile manager.
+//  Profile identity is ID-based: the on-disk filename is the profile ID and
+//  the human-readable name lives inside the profile config. All profile state
+//  (which profile is active, config/state paths, add/remove/logout/rename) is
+//  owned by netbird-core's profilemanager.ServiceManager via NetBirdSDK — this
+//  is the same split Android uses, where the native side only drives the VPN
+//  lifecycle.
+//
+//  tvOS does not expose a multi-profile UI and routes its config through the
+//  container root (see Preferences), so on tvOS this type degrades to a single
+//  "default" profile and never touches the Go profile manager.
 //
 
 import Foundation
+import NetBirdSDK
 
 // MARK: - Profile Model
 
 struct Profile: Identifiable, Equatable {
+    /// On-disk filename stem. A 32-char hex string for profiles created after
+    /// the ID migration, or the legacy name for migrated profiles. The
+    /// reserved value "default" identifies the default profile.
+    let id: String
+    /// Human-readable display name.
     let name: String
     let isActive: Bool
 
-    var id: String { name }
+    var isDefault: Bool { id == ProfileManager.defaultProfileID }
 
     static func == (lhs: Profile, rhs: Profile) -> Bool {
-        lhs.name == rhs.name
+        lhs.id == rhs.id
     }
 }
 
 // MARK: - ProfileManager
 
-/// Manages multiple VPN profiles, each with its own config/state files.
-///
-/// Directory layout inside the App Group container:
-/// ```
-/// profiles/
-///   profiles.json          ← stores active profile name
-///   default/
-///     netbird.cfg
-///     state.json
-///   work/
-///     netbird.cfg
-///     state.json
-/// ```
-///
-/// The "default" profile always exists. Legacy (pre-profile) config files
-/// at the container root are migrated into `profiles/default/` on first use.
 class ProfileManager {
 
     static let shared = ProfileManager()
 
+    /// Reserved ID of the always-present default profile (matches
+    /// profilemanager.DefaultProfileName in netbird-core).
+    static let defaultProfileID = "default"
+
     private let fileManager = FileManager.default
-
-    /// Name validation: only letters, digits, underscore, hyphen (matches Go client).
-    private static let validNamePattern = "^[a-zA-Z0-9_-]+$"
-
-    private let defaultProfileName = "default"
-    private let profilesDirName = "profiles"
-    private let metaFileName = "profiles.json"
 
     // MARK: - Init
 
-    private init() {
-        ensureProfilesDirectory()
-        migrateIfNeeded()
-    }
+#if os(iOS)
+    private let go: NetBirdSDKProfileManager
 
-    // MARK: - Public API
+    private init() {
+        let configDir = ProfileManager.containerBasePath()
+        // The one-time migration from the legacy directory-per-name layout must
+        // run BEFORE the Go manager reads or creates anything.
+        ProfileLayoutMigration.runIfNeeded(configDir: configDir)
+        guard let manager = NetBirdSDKNewProfileManager(configDir) else {
+            preconditionFailure("Failed to create NetBirdSDKProfileManager at \(configDir)")
+        }
+        self.go = manager
+    }
+#else
+    private init() {}
+#endif
+
+    // MARK: - Public API (platform-shared signatures)
 
     /// Returns all profiles with their active status.
     func listProfiles() -> [Profile] {
-        let meta = readMeta()
-        let activeProfile = meta?.activeProfile.isEmpty == false ? meta!.activeProfile : defaultProfileName
-        let deletedSet = Set(meta?.deletedProfiles ?? [])
-
-        // Retry deletion of any directories still present after a previous attempt.
-        for name in deletedSet {
-            if let dir = profileDirectory(for: name), fileManager.fileExists(atPath: dir) {
-                try? fileManager.removeItem(atPath: dir)
-            }
-        }
-
-        guard let profilesDir = profilesDirectory() else { return [] }
-
+#if os(iOS)
         do {
-            let contents = try fileManager.contentsOfDirectory(atPath: profilesDir)
+            // gomobile maps (*ProfileArray, error) to a non-optional throwing call.
+            let array = try go.listProfiles()
             var profiles: [Profile] = []
-            for name in contents.sorted() {
-                guard !deletedSet.contains(name) else { continue }
-                let fullPath = (profilesDir as NSString).appendingPathComponent(name)
-                var isDir: ObjCBool = false
-                if fileManager.fileExists(atPath: fullPath, isDirectory: &isDir), isDir.boolValue {
-                    profiles.append(Profile(name: name, isActive: name == activeProfile))
+            for i in 0..<array.length() {
+                if let p = array.get(i) {
+                    profiles.append(Profile(id: p.id_, name: p.name, isActive: p.isActive))
                 }
             }
-            // Ensure default always appears even if directory listing is empty
-            if !profiles.contains(where: { $0.name == defaultProfileName }) {
-                profiles.insert(Profile(name: defaultProfileName, isActive: defaultProfileName == activeProfile), at: 0)
-            }
-            return profiles
+            return profiles.isEmpty ? [ProfileManager.fallbackDefault()] : profiles
         } catch {
-            AppLogger.shared.log("ProfileManager: Failed to list profiles: \(error)")
-            return [Profile(name: defaultProfileName, isActive: true)]
+            AppLogger.shared.log("ProfileManager.listProfiles failed: \(error)")
+            return [ProfileManager.fallbackDefault()]
         }
+#else
+        return [ProfileManager.fallbackDefault()]
+#endif
     }
 
-    /// Name of the currently active profile.
+    /// The currently active profile, or nil if it cannot be resolved.
+    func activeProfile() -> Profile? {
+#if os(iOS)
+        guard let p = try? go.getActiveProfile() else { return nil }
+        return Profile(id: p.id_, name: p.name, isActive: true)
+#else
+        return ProfileManager.fallbackDefault()
+#endif
+    }
+
+    /// Display name of the active profile (for UI). Falls back to "default".
     func getActiveProfileName() -> String {
-        guard let meta = readMeta() else { return defaultProfileName }
-        return meta.activeProfile.isEmpty ? defaultProfileName : meta.activeProfile
+        activeProfile()?.name ?? ProfileManager.defaultProfileID
     }
 
-    /// Adds a new profile. Throws if the name is invalid or already exists.
-    func addProfile(_ name: String) throws {
-        let sanitized = sanitizeName(name)
-        guard isValidName(sanitized) else {
-            throw ProfileError.invalidName(sanitized)
-        }
-        guard let dir = profileDirectory(for: sanitized) else {
-            throw ProfileError.containerUnavailable
-        }
-
-        // If the profile was previously deleted but SDK goroutines recreated its directory,
-        // remove the stale directory and tombstone so the profile can be created fresh.
-        var meta = readMeta() ?? ProfileMeta(activeProfile: defaultProfileName)
-        if meta.deletedProfiles.contains(sanitized) {
-            try? fileManager.removeItem(atPath: dir)
-            meta.deletedProfiles.removeAll { $0 == sanitized }
-            try? writeMeta(meta)
-        }
-
-        guard !fileManager.fileExists(atPath: dir) else {
-            throw ProfileError.alreadyExists(sanitized)
-        }
-        do {
-            try fileManager.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        } catch {
-            throw ProfileError.fileSystemError(error)
-        }
-    }
-
-    /// Switches the active profile. The caller must stop VPN before calling this.
-    func switchProfile(_ name: String) throws {
-        guard let dir = profileDirectory(for: name), fileManager.fileExists(atPath: dir) else {
-            throw ProfileError.notFound(name)
-        }
-        var meta = readMeta() ?? ProfileMeta(activeProfile: defaultProfileName)
-        meta.activeProfile = name
-        try writeMeta(meta)
-    }
-
-    /// Removes a profile. Cannot remove "default" or the currently active profile.
-    func removeProfile(_ name: String) throws {
-        guard name != defaultProfileName else {
-            throw ProfileError.cannotRemoveDefault
-        }
-        guard name != getActiveProfileName() else {
-            throw ProfileError.cannotRemoveActive
-        }
-        guard let dir = profileDirectory(for: name), fileManager.fileExists(atPath: dir) else {
-            throw ProfileError.notFound(name)
-        }
-
-        // Persist the tombstone BEFORE deleting the directory.
-        // The Go SDK may recreate the directory via background goroutines; the tombstone
-        // ensures the profile stays hidden in listProfiles() even if that happens.
-        var meta = readMeta() ?? ProfileMeta(activeProfile: defaultProfileName)
-        if !meta.deletedProfiles.contains(name) {
-            meta.deletedProfiles.append(name)
-            try writeMeta(meta)
-        }
-
-        try fileManager.removeItem(atPath: dir)
-        ProfileConnectionCache().remove(for: name)
-    }
-
-    /// Clears authentication data for a profile by removing its config and state files.
-    /// Both files must be removed: state.json holds runtime state,
-    /// netbird.cfg holds the auth tokens — removing only one is insufficient.
-    func logoutProfile(_ name: String) throws {
-        guard let dir = profileDirectory(for: name) else {
-            throw ProfileError.containerUnavailable
-        }
-        let statePath  = (dir as NSString).appendingPathComponent(GlobalConstants.stateFileName)
-        let configPath = (dir as NSString).appendingPathComponent(GlobalConstants.configFileName)
-
-        // Preserve the management URL for re-login, but clear stale connection data.
-        let cache = ProfileConnectionCache()
-        if let url = managementURL(for: name) {
-            cache.saveManagementURL(url, for: name)
-        }
-        cache.clearConnectionData(for: name)
-
-        if fileManager.fileExists(atPath: statePath) {
-            try fileManager.removeItem(atPath: statePath)
-        }
-        if fileManager.fileExists(atPath: configPath) {
-            try fileManager.removeItem(atPath: configPath)
-        }
+    /// ID of the active profile (for paths and the connection cache).
+    func getActiveProfileID() -> String {
+        activeProfile()?.id ?? ProfileManager.defaultProfileID
     }
 
     // MARK: - Path Accessors
 
     /// Config file path for the active profile.
     func activeConfigPath() -> String? {
-        guard let dir = profileDirectory(for: getActiveProfileName()) else { return nil }
-        return (dir as NSString).appendingPathComponent(GlobalConstants.configFileName)
+#if os(iOS)
+        return try? go.getActiveConfigPath()
+#else
+        return Preferences.getFilePath(fileName: GlobalConstants.configFileName)
+#endif
     }
 
     /// State file path for the active profile.
     func activeStatePath() -> String? {
-        guard let dir = profileDirectory(for: getActiveProfileName()) else { return nil }
-        return (dir as NSString).appendingPathComponent(GlobalConstants.stateFileName)
+#if os(iOS)
+        return try? go.getActiveStateFilePath()
+#else
+        return Preferences.getFilePath(fileName: GlobalConstants.stateFileName)
+#endif
     }
 
-    /// Config file path for a specific profile.
-    func configPath(for profile: String) -> String? {
-        guard let dir = profileDirectory(for: profile) else { return nil }
-        return (dir as NSString).appendingPathComponent(GlobalConstants.configFileName)
+    /// Config file path for a specific profile ID.
+    func configPath(forID id: String) -> String? {
+#if os(iOS)
+        return try? go.getConfigPath(id)
+#else
+        return Preferences.getFilePath(fileName: GlobalConstants.configFileName)
+#endif
     }
 
-    /// State file path for a specific profile.
-    func statePath(for profile: String) -> String? {
-        guard let dir = profileDirectory(for: profile) else { return nil }
-        return (dir as NSString).appendingPathComponent(GlobalConstants.stateFileName)
+    /// State file path for a specific profile ID.
+    func statePath(forID id: String) -> String? {
+#if os(iOS)
+        return try? go.getStateFilePath(id)
+#else
+        return Preferences.getFilePath(fileName: GlobalConstants.stateFileName)
+#endif
     }
 
-    /// Returns the management URL for a specific profile.
-    /// Reads from netbird.cfg first; falls back to the dedicated server URL file,
-    /// then ProfileConnectionCache as last resort.
-    func managementURL(for profile: String) -> String? {
-        if let cfgPath = configPath(for: profile),
+    // MARK: - Management URL
+
+    /// Returns the management URL for a profile. In the ID-based model the
+    /// config file survives logout (only the keys are cleared), so the URL is
+    /// read from the config first; the connection cache is a fallback.
+    func managementURL(forID id: String) -> String? {
+        if let cfgPath = configPath(forID: id),
            fileManager.fileExists(atPath: cfgPath),
-           let data = fileManager.contents(atPath: cfgPath),
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            // ManagementURL can be a string or a nested object with Scheme/Host/Path
-            var urlFromFile: String?
-            if let urlString = json["ManagementURL"] as? String {
-                urlFromFile = urlString
-            } else if let urlObj = json["ManagementURL"] as? [String: Any],
-                      let scheme = urlObj["Scheme"] as? String,
-                      let host = urlObj["Host"] as? String {
-                let path = urlObj["Path"] as? String ?? ""
-                urlFromFile = "\(scheme)://\(host)\(path)"
-            }
-            if let url = urlFromFile {
-                // Persist to dedicated file and cache so it survives logout
-                saveServerURL(url, for: profile)
-                ProfileConnectionCache().saveManagementURL(url, for: profile)
-                return url
-            }
-        }
-        // Config missing (e.g. after logout) — try dedicated server URL file first
-        if let url = savedServerURL(for: profile) {
+           let url = ProfileManager.readManagementURL(fromConfigAt: cfgPath) {
+            ProfileConnectionCache().saveManagementURL(url, forID: id)
             return url
         }
-        return ProfileConnectionCache().managementURL(for: profile)
+        return ProfileConnectionCache().managementURL(forID: id)
     }
 
-    /// Saves the management URL to a dedicated file inside the profile directory.
-    /// This file is NOT deleted by logoutProfile(), so it survives logout.
-    func saveServerURL(_ url: String, for profile: String) {
-        guard let dir = profileDirectory(for: profile) else { return }
-        let filePath = (dir as NSString).appendingPathComponent(GlobalConstants.serverURLFileName)
-        try? url.write(toFile: filePath, atomically: true, encoding: .utf8)
+#if os(iOS)
+    // MARK: - Mutating Operations (iOS only — profiles UI is iOS only)
+
+    /// Adds a new profile and returns it. The returned profile carries the
+    /// freshly generated ID, which callers must use for all follow-up
+    /// operations (the ID is NOT the display name).
+    @discardableResult
+    func addProfile(_ name: String) throws -> Profile {
+        // gomobile maps (*Profile, error) to a non-optional throwing call: a
+        // failure surfaces as a thrown error, not a nil return.
+        let p = try go.addProfile(name)
+        return Profile(id: p.id_, name: p.name, isActive: false)
     }
 
-    /// Reads the management URL from the dedicated server URL file.
-    func savedServerURL(for profile: String) -> String? {
-        guard let dir = profileDirectory(for: profile) else { return nil }
-        let filePath = (dir as NSString).appendingPathComponent(GlobalConstants.serverURLFileName)
-        guard fileManager.fileExists(atPath: filePath),
-              let url = try? String(contentsOfFile: filePath, encoding: .utf8),
-              !url.isEmpty else { return nil }
-        return url
+    /// Switches the active profile. The caller must stop the VPN before calling.
+    func switchProfile(id: String) throws {
+        try go.switchProfile(id)
     }
 
-    // MARK: - Private Helpers
-
-    private func containerURL() -> URL? {
-        fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)
+    /// Renames a profile's display name. The on-disk ID is unchanged.
+    func renameProfile(id: String, to newName: String) throws {
+        try go.renameProfile(id, newName: newName)
     }
 
-    private func profilesDirectory() -> String? {
-        guard let container = containerURL() else { return nil }
-        return container.appendingPathComponent(profilesDirName).path
+    /// Removes a profile. Cannot remove the default or the active profile.
+    func removeProfile(id: String) throws {
+        try go.removeProfile(id)
+        ProfileConnectionCache().remove(forID: id)
     }
 
-    private func profileDirectory(for name: String) -> String? {
-        guard let profilesDir = profilesDirectory() else { return nil }
-        return (profilesDir as NSString).appendingPathComponent(name)
+    /// Clears authentication for a profile, forcing re-login. The management
+    /// URL is preserved (it stays in the config).
+    func logoutProfile(id: String) throws {
+        try go.logoutProfile(id)
+        ProfileConnectionCache().clearConnectionData(forID: id)
+    }
+#endif
+
+    // MARK: - Helpers
+
+    private static func fallbackDefault() -> Profile {
+        Profile(id: defaultProfileID, name: defaultProfileID, isActive: true)
     }
 
-    private func metaFilePath() -> String? {
-        guard let profilesDir = profilesDirectory() else { return nil }
-        return (profilesDir as NSString).appendingPathComponent(metaFileName)
-    }
-
-    private func ensureProfilesDirectory() {
-        guard let profilesDir = profilesDirectory() else { return }
-        if !fileManager.fileExists(atPath: profilesDir) {
-            try? fileManager.createDirectory(atPath: profilesDir, withIntermediateDirectories: true)
+    /// Parses the management URL from a profile config file. The Go SDK may
+    /// serialize ManagementURL either as a plain string or as a nested object
+    /// with Scheme/Host/Path.
+    static func readManagementURL(fromConfigAt path: String) -> String? {
+        guard let data = FileManager.default.contents(atPath: path),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
         }
-        // Ensure default profile directory exists
-        guard let defaultDir = profileDirectory(for: defaultProfileName) else { return }
-        if !fileManager.fileExists(atPath: defaultDir) {
-            try? fileManager.createDirectory(atPath: defaultDir, withIntermediateDirectories: true)
+        if let urlString = json["ManagementURL"] as? String, !urlString.isEmpty {
+            return urlString
         }
+        if let urlObj = json["ManagementURL"] as? [String: Any],
+           let scheme = urlObj["Scheme"] as? String,
+           let host = urlObj["Host"] as? String {
+            let urlPath = urlObj["Path"] as? String ?? ""
+            return "\(scheme)://\(host)\(urlPath)"
+        }
+        return nil
     }
 
-    /// Migrates legacy config/state from the container root into profiles/default/.
-    private func migrateIfNeeded() {
-        guard let container = containerURL() else { return }
-        guard let defaultDir = profileDirectory(for: defaultProfileName) else { return }
-
-        let legacyConfig = container.appendingPathComponent(GlobalConstants.configFileName).path
-        let legacyState = container.appendingPathComponent(GlobalConstants.stateFileName).path
-        let newConfig = (defaultDir as NSString).appendingPathComponent(GlobalConstants.configFileName)
-        let newState = (defaultDir as NSString).appendingPathComponent(GlobalConstants.stateFileName)
-
-        // Only migrate if legacy files exist and new ones don't
-        if fileManager.fileExists(atPath: legacyConfig) && !fileManager.fileExists(atPath: newConfig) {
-            try? fileManager.copyItem(atPath: legacyConfig, toPath: newConfig)
-            AppLogger.shared.log("ProfileManager: Migrated legacy config to default profile")
+#if os(iOS)
+    /// Base directory for profile storage: the App Group shared container.
+    private static func containerBasePath() -> String {
+        let fm = FileManager.default
+        if let groupURL = fm.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
+            return groupURL.path
         }
-        if fileManager.fileExists(atPath: legacyState) && !fileManager.fileExists(atPath: newState) {
-            try? fileManager.copyItem(atPath: legacyState, toPath: newState)
-            AppLogger.shared.log("ProfileManager: Migrated legacy state to default profile")
-        }
-
-        // Set default as active if no meta exists
-        if readMeta() == nil {
-            try? writeMeta(ProfileMeta(activeProfile: defaultProfileName))
-        }
+        #if DEBUG
+        let baseURL = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fm.urls(for: .documentDirectory, in: .userDomainMask).first
+        return (baseURL ?? fm.temporaryDirectory).path
+        #else
+        AppLogger.shared.log("ERROR: App group '\(GlobalConstants.userPreferencesSuiteName)' unavailable; profiles degraded.")
+        return fm.temporaryDirectory.path
+        #endif
     }
-
-    private func isValidName(_ name: String) -> Bool {
-        !name.isEmpty && name.range(of: ProfileManager.validNamePattern, options: .regularExpression) != nil
-    }
-
-    private func sanitizeName(_ name: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-"))
-        return String(name.unicodeScalars.filter { allowed.contains($0) })
-    }
-
-    // MARK: - Meta File (profiles.json)
-
-    private struct ProfileMeta: Codable {
-        var activeProfile: String
-        /// Profiles pending deletion — kept as a tombstone so that directories
-        /// recreated by SDK background goroutines don't reappear in the list.
-        var deletedProfiles: [String]
-
-        init(activeProfile: String, deletedProfiles: [String] = []) {
-            self.activeProfile = activeProfile
-            self.deletedProfiles = deletedProfiles
-        }
-
-        /// Backward-compatible decode: old profiles.json files have no deletedProfiles field.
-        init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            activeProfile = try c.decode(String.self, forKey: .activeProfile)
-            deletedProfiles = (try? c.decode([String].self, forKey: .deletedProfiles)) ?? []
-        }
-    }
-
-    private func readMeta() -> ProfileMeta? {
-        guard let path = metaFilePath(),
-              let data = fileManager.contents(atPath: path) else { return nil }
-        return try? JSONDecoder().decode(ProfileMeta.self, from: data)
-    }
-
-    private func writeMeta(_ meta: ProfileMeta) throws {
-        guard let path = metaFilePath() else {
-            throw ProfileError.containerUnavailable
-        }
-        let data = try JSONEncoder().encode(meta)
-        try data.write(to: URL(fileURLWithPath: path), options: .atomic)
-    }
-}
-
-// MARK: - Errors
-
-enum ProfileError: LocalizedError {
-    case invalidName(String)
-    case alreadyExists(String)
-    case notFound(String)
-    case cannotRemoveDefault
-    case cannotRemoveActive
-    case containerUnavailable
-    case fileSystemError(Error)
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidName(let name):
-            return "Invalid profile name: '\(name)'. Only letters, numbers, underscores and hyphens are allowed."
-        case .alreadyExists(let name):
-            return "Profile '\(name)' already exists."
-        case .notFound(let name):
-            return "Profile '\(name)' not found."
-        case .cannotRemoveDefault:
-            return "Cannot remove the default profile."
-        case .cannotRemoveActive:
-            return "Cannot remove the active profile. Switch to another profile first."
-        case .containerUnavailable:
-            return "App group container is unavailable."
-        case .fileSystemError(let error):
-            return "File system error: \(error.localizedDescription)"
-        }
-    }
+#endif
 }

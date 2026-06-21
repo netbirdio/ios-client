@@ -16,7 +16,7 @@ struct ProfileConnectionEntry: Codable, Equatable {
 // MARK: - Cache
 
 /// Stores and retrieves last-known connection data (ip/fqdn/managementURL) per profile.
-/// Persisted as a JSON-encoded dictionary under a single UserDefaults key.
+/// Keyed by profile ID. Persisted as a JSON-encoded dictionary under a single UserDefaults key.
 struct ProfileConnectionCache {
 
     private static let storageKey = "netbird_profiles_connection_data"
@@ -28,48 +28,48 @@ struct ProfileConnectionCache {
 
     // MARK: - Read
 
-    func entry(for profile: String) -> ProfileConnectionEntry? {
-        return load()[profile]
+    func entry(forID id: String) -> ProfileConnectionEntry? {
+        return load()[id]
     }
 
-    func managementURL(for profile: String) -> String? {
-        return load()[profile]?.managementURL
+    func managementURL(forID id: String) -> String? {
+        return load()[id]?.managementURL
     }
 
     // MARK: - Write
 
-    func save(ip: String, fqdn: String, for profile: String) {
+    func save(ip: String, fqdn: String, forID id: String) {
         var all = load()
-        var entry = all[profile] ?? ProfileConnectionEntry(ip: "", fqdn: "", managementURL: nil)
+        var entry = all[id] ?? ProfileConnectionEntry(ip: "", fqdn: "", managementURL: nil)
         entry.ip = ip
         entry.fqdn = fqdn
-        all[profile] = entry
+        all[id] = entry
         persist(all)
     }
 
-    func saveManagementURL(_ url: String, for profile: String) {
+    func saveManagementURL(_ url: String, forID id: String) {
         var all = load()
-        var entry = all[profile] ?? ProfileConnectionEntry(ip: "", fqdn: "", managementURL: nil)
+        var entry = all[id] ?? ProfileConnectionEntry(ip: "", fqdn: "", managementURL: nil)
         entry.managementURL = url
-        all[profile] = entry
+        all[id] = entry
         persist(all)
     }
 
     /// Clears ip/fqdn for a profile after logout, preserving managementURL for re-login.
-    func clearConnectionData(for profile: String) {
+    func clearConnectionData(forID id: String) {
         var all = load()
-        guard var entry = all[profile] else { return }
+        guard var entry = all[id] else { return }
         entry.ip = ""
         entry.fqdn = ""
-        all[profile] = entry
+        all[id] = entry
         persist(all)
     }
 
     /// Removes all cached data for a deleted profile.
-    func remove(for profile: String) {
+    func remove(forID id: String) {
         var all = load()
-        guard all[profile] != nil else { return }
-        all.removeValue(forKey: profile)
+        guard all[id] != nil else { return }
+        all.removeValue(forKey: id)
         persist(all)
     }
 
