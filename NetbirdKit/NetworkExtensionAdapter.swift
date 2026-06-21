@@ -127,16 +127,15 @@ public class NetworkExtensionAdapter: ObservableObject {
         guard let configPath = Preferences.configFile() else { return }
         guard !FileManager.default.fileExists(atPath: configPath) else { return }
 
-        let profileName = ProfileManager.shared.getActiveProfileName()
-        // Prefer the dedicated server URL file (survives logout) over the in-memory cache
-        let managementURL = ProfileManager.shared.savedServerURL(for: profileName)
-            ?? ProfileConnectionCache().managementURL(for: profileName)
-        guard let url = managementURL, !url.isEmpty else {
-            logger.info("restoreConfigIfMissing: no saved URL for '\(profileName)', will use default server")
+        let activeID = ProfileManager.shared.getActiveProfileID()
+        // managementURL(forID:) reads the profile config first (which survives
+        // logout in the ID-based model) and falls back to the connection cache.
+        guard let url = ProfileManager.shared.managementURL(forID: activeID), !url.isEmpty else {
+            logger.info("restoreConfigIfMissing: no saved URL for '\(activeID)', will use default server")
             return
         }
 
-        logger.info("restoreConfigIfMissing: writing minimal config for '\(profileName)' with URL '\(url)'")
+        logger.info("restoreConfigIfMissing: writing minimal config for '\(activeID)' with URL '\(url)'")
         // The Go SDK serializes url.URL as a nested JSON object {Scheme, Host, Path, ...}.
         // Writing ManagementURL as a plain string causes Go's json.Unmarshal to fail silently,
         // leaving ManagementURL nil and falling back to the default api.netbird.io server.
@@ -724,8 +723,8 @@ public class NetworkExtensionAdapter: ObservableObject {
             var messageString = "Login"
             if let configPath = Preferences.configFile(), let statePath = Preferences.stateFile() {
                 messageString = "Login:\(configPath)|\(statePath)"
-                let profileName = ProfileManager.shared.getActiveProfileName()
-                if let cachedURL = ProfileConnectionCache().managementURL(for: profileName),
+                let activeID = ProfileManager.shared.getActiveProfileID()
+                if let cachedURL = ProfileConnectionCache().managementURL(forID: activeID),
                    !cachedURL.isEmpty {
                     messageString += "|\(cachedURL)"
                 }

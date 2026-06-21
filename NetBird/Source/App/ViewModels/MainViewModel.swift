@@ -166,9 +166,9 @@ class ViewModel: ObservableObject {
 
     /// Loads cached ip/fqdn for the given profile into the published properties.
     /// Shows empty strings if no data has been saved for that profile yet.
-    func loadConnectionInfoForProfile(_ profileName: String) {
+    func loadConnectionInfoForProfile(forID id: String) {
         #if os(iOS)
-        let entry = profileConnectionCache.entry(for: profileName)
+        let entry = profileConnectionCache.entry(forID: id)
         ip   = entry?.ip   ?? ""
         fqdn = entry?.fqdn ?? ""
         #endif
@@ -195,9 +195,9 @@ class ViewModel: ObservableObject {
 
         // Load cached connection info for the active profile
         #if os(iOS)
-        let activeProfile = ProfileManager.shared.getActiveProfileName()
+        let activeProfileID = ProfileManager.shared.getActiveProfileID()
         let cache = ProfileConnectionCache()
-        let cached = cache.entry(for: activeProfile)
+        let cached = cache.entry(forID: activeProfileID)
         self.ip   = cached?.ip   ?? ""
         self.fqdn = cached?.fqdn ?? ""
         #endif
@@ -553,8 +553,8 @@ class ViewModel: ObservableObject {
                     self.fqdn = newFqdn
                     self.ip   = newIp
                     #if os(iOS)
-                    let profile = ProfileManager.shared.getActiveProfileName()
-                    self.profileConnectionCache.save(ip: newIp, fqdn: newFqdn, for: profile)
+                    let activeID = ProfileManager.shared.getActiveProfileID()
+                    self.profileConnectionCache.save(ip: newIp, fqdn: newFqdn, forID: activeID)
                     #endif
                 }
 
@@ -722,9 +722,9 @@ class ViewModel: ObservableObject {
 
     /// Switches connection display data to the given profile's cached values.
     /// Call this when switching profiles so the new profile's last known info is shown immediately.
-    func switchConnectionInfo(to profileName: String) {
+    func switchConnectionInfo(toID id: String) {
         // Load cached data for the target profile so the UI shows it right away.
-        loadConnectionInfoForProfile(profileName)
+        loadConnectionInfoForProfile(forID: id)
         peerViewModel.peerInfo = []
         managementStatus = .disconnected
         updateVPNDisplayState()
