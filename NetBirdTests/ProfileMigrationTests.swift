@@ -48,7 +48,14 @@ final class ProfileMigrationTests: XCTestCase {
             .appendingPathComponent("profiles")
             .appending("/\(name)")
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        if let config {
+        if var config {
+            // The real legacy netbird.cfg is written by the Go SDK, which
+            // serializes Config.ManagementURL (a url.URL) as a nested object,
+            // not a plain string. Mirror that so the config round-trips through
+            // the Go Config unmarshaller (e.g. via NetBirdSDKPreferences).
+            if let urlString = config["ManagementURL"] as? String {
+                config["ManagementURL"] = Self.managementURLObject(urlString)
+            }
             let data = try JSONSerialization.data(withJSONObject: config)
             try data.write(to: URL(fileURLWithPath: (dir as NSString).appendingPathComponent("netbird.cfg")))
             // A plausible state file alongside the config.
@@ -58,6 +65,22 @@ final class ProfileMigrationTests: XCTestCase {
             try serverURL.write(toFile: (dir as NSString).appendingPathComponent("netbird_server_url"),
                                 atomically: true, encoding: .utf8)
         }
+    }
+
+    /// Builds the nested {Scheme, Host, Path} object the Go SDK writes for a
+    /// url.URL. Host includes the port (e.g. "host:443"). Mirrors the production
+    /// ProfileLayoutMigration.managementURLObject.
+    private static func managementURLObject(_ urlString: String) -> [String: Any] {
+        guard let parsed = URL(string: urlString) else {
+            return ["Scheme": "https", "Host": urlString, "Path": ""]
+        }
+        var host = parsed.host ?? ""
+        if let port = parsed.port { host += ":\(port)" }
+        return [
+            "Scheme": parsed.scheme ?? "https",
+            "Host": host,
+            "Path": parsed.path,
+        ]
     }
 
     private func writeLegacyMeta(active: String, deleted: [String] = []) throws {
