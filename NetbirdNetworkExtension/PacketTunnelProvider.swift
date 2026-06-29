@@ -44,6 +44,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let statePath  = (options?["statePath"]  as? String).flatMap { $0.isEmpty ? nil : $0 }
         if adapter == nil || (configPath != nil && configPath != adapter?.initializedConfigPath) {
             AppLogger.shared.log("PacketTunnelProvider: (re)creating adapter for configPath=\(configPath ?? "default")")
+            // Detach the outgoing adapter's Go callbacks before discarding it so a late
+            // callback from the old client can't reach into the tunnel manager once the
+            // new adapter has replaced it (EXC_BAD_ACCESS / 0x28 during profile switch).
+            adapter?.invalidateListeners()
             adapter = NetBirdAdapter(with: tunnelManager, configPath: configPath, statePath: statePath)
         }
         #else
@@ -185,6 +189,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 if configPath != adapter?.initializedConfigPath || configRestored {
                     AppLogger.shared.log("handleAppMessage: (re)creating adapter for \(configPath)")
+                    // Detach the outgoing adapter's Go callbacks before discarding it (see startTunnel).
+                    adapter?.invalidateListeners()
                     adapter = NetBirdAdapter(with: tunnelManager, configPath: configPath, statePath: statePath)
                 }
             }

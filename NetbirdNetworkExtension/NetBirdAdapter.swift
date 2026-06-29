@@ -539,6 +539,17 @@ public class NetBirdAdapter {
         }
     }
 
+    /// Permanently detach the listeners the Go engine holds for this adapter's client so
+    /// that any late callback fired while the old client spins down becomes a no-op instead
+    /// of dereferencing a torn-down tunnel manager/provider (EXC_BAD_ACCESS / 0x28).
+    /// Call this when the adapter is being DISCARDED (profile switch / replacement) — not
+    /// on a plain stop()/restart, where the same adapter is reused and must keep delivering
+    /// route/DNS callbacks afterwards. Safe to call multiple times.
+    func invalidateListeners() {
+        self.networkChangeListener.invalidate()
+        self.dnsManager.invalidate()
+    }
+
     public func stop(completionHandler: (() -> Void)? = nil) {
         stopLock.lock()
 
