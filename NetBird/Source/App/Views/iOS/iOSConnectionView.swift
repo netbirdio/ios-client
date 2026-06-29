@@ -144,7 +144,7 @@ struct iOSConnectionView: View {
                 }
             }
 
-            // Safari-based login flow
+            // Safari login view — shown regardless of statusDetailsValid
             if viewModel.networkExtensionAdapter.showBrowser,
                let loginURLString = viewModel.networkExtensionAdapter.loginURL,
                let loginURL = URL(string: loginURLString)
@@ -153,8 +153,16 @@ struct iOSConnectionView: View {
                     isPresented: $viewModel.networkExtensionAdapter.showBrowser,
                     url: loginURL,
                     didFinish: {
-                        print("Finish login")
-                        viewModel.networkExtensionAdapter.startVPNConnection()
+                        if viewModel.networkExtensionAdapter.loginSucceeded {
+                            print("Finish login")
+                            viewModel.networkExtensionAdapter.startVPNConnection()
+                        } else {
+                            // User closed the browser without completing login. Do NOT start
+                            // the VPN — that would launch the extension, trip its needs-login
+                            // path, and pop a spurious "Login required" alert/notification.
+                            print("Login cancelled by user")
+                            viewModel.cancelPendingLogin()
+                        }
                     }
                 )
             }

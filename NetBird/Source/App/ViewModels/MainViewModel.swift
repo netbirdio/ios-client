@@ -266,9 +266,18 @@ class ViewModel: ObservableObject {
         self.buttonLock = true
         // Reset networkUnavailable flag when user initiates connection
         self.networkUnavailable = false
+        // Dismiss any pending auth alert: the user is starting a fresh connect/login
+        // cycle, so a stale "authentication required" state is no longer relevant.
+        self.showAuthenticationRequired = false
         #if os(iOS)
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         userDefaults?.set(false, forKey: GlobalConstants.keyNetworkUnavailable)
+        // Clear any login-required flag left over from a previous session/extension run.
+        // Otherwise the polling timer's checkLoginRequiredFlag() fires immediately on
+        // connect and pops the "Login required" alert in parallel with the browser login
+        // flow that performLogin() is already starting. A genuinely required re-auth will
+        // be re-signalled by the extension *after* this connect attempt.
+        userDefaults?.set(false, forKey: GlobalConstants.keyLoginRequired)
         userDefaults?.synchronize()
         #endif
 
@@ -426,6 +435,24 @@ class ViewModel: ObservableObject {
             self.networkExtensionAdapter.stop()
             self.updateVPNDisplayState()
         }
+    }
+
+    /// Called when the user dismisses the interactive login browser without completing
+    /// login. Resets the "Connecting…" state back to disconnected and clears any
+    /// login-required signalling so no spurious auth alert/notification is shown — the
+    /// user simply chose not to log in, which is not a failed active session.
+    func cancelPendingLogin() {
+        connectPressed = false
+        showAuthenticationRequired = false
+        #if os(iOS)
+        // Abort the SDK login so its PKCE loopback server is torn down and its port
+        // freed — otherwise the next connect stalls trying to bind the same port.
+        networkExtensionAdapter.cancelLogin()
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(false, forKey: GlobalConstants.keyLoginRequired)
+        userDefaults?.synchronize()
+        #endif
+        updateVPNDisplayState()
     }
 
     /// Disables On Demand and disconnects (user chose to prevent auto-reconnect).
