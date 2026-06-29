@@ -102,6 +102,7 @@ class ViewModel: ObservableObject {
     
     @Published var fqdn = ""
     @Published var ip = ""
+    @Published var ipv6 = ""
     
     // Debug
     @Published var traceLogsEnabled: Bool {
@@ -169,8 +170,9 @@ class ViewModel: ObservableObject {
     func loadConnectionInfoForProfile(_ profileName: String) {
         #if os(iOS)
         let entry = profileConnectionCache.entry(for: profileName)
-        ip   = entry?.ip   ?? ""
-        fqdn = entry?.fqdn ?? ""
+        ip    = entry?.ip    ?? ""
+        fqdn  = entry?.fqdn  ?? ""
+        ipv6  = entry?.ipv6  ?? ""
         #endif
     }
 
@@ -198,8 +200,9 @@ class ViewModel: ObservableObject {
         let activeProfile = ProfileManager.shared.getActiveProfileName()
         let cache = ProfileConnectionCache()
         let cached = cache.entry(for: activeProfile)
-        self.ip   = cached?.ip   ?? ""
-        self.fqdn = cached?.fqdn ?? ""
+        self.ip    = cached?.ip    ?? ""
+        self.fqdn  = cached?.fqdn  ?? ""
+        self.ipv6  = cached?.ipv6  ?? ""
         #endif
 
         // Don't load rosenpass settings during init - they trigger expensive SDK initialization.
@@ -575,13 +578,15 @@ class ViewModel: ObservableObject {
             if !self.profileSwitchPending && currentState == .connected {
                 let newFqdn = details.fqdn.isEmpty ? self.fqdn : details.fqdn
                 let newIp   = details.ip.isEmpty   ? self.ip   : details.ip
-                let changed = newFqdn != self.fqdn || newIp != self.ip
+                let newIpv6 = details.ipv6 ?? self.ipv6
+                let changed = newFqdn != self.fqdn || newIp != self.ip || newIpv6 != self.ipv6
                 if changed {
                     self.fqdn = newFqdn
                     self.ip   = newIp
+                    self.ipv6 = newIpv6
                     #if os(iOS)
                     let profile = ProfileManager.shared.getActiveProfileName()
-                    self.profileConnectionCache.save(ip: newIp, fqdn: newFqdn, for: profile)
+                    self.profileConnectionCache.save(ip: newIp, fqdn: newFqdn, ipv6: newIpv6, for: profile)
                     #endif
                 }
 
@@ -643,6 +648,7 @@ class ViewModel: ObservableObject {
     func clearDetails() {
         self.ip = ""
         self.fqdn = ""
+        self.ipv6 = ""
         defaults.removeObject(forKey: "ip")
         defaults.removeObject(forKey: "fqdn")
 

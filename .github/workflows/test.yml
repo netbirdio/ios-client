@@ -2,10 +2,9 @@ name: Test
 
 on:
   workflow_dispatch:
-  # Disabled until test crash is resolved
-  # push:
-  #   branches: [main]
-  # pull_request:
+  push:
+    branches: [main]
+  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -83,7 +82,7 @@ jobs:
             <key>IS_SIGNIN_ENABLED</key>
             <false/>
             <key>GOOGLE_APP_ID</key>
-            <string>dummy</string>
+            <string>1:1234567890:ios:abcdef1234567890abcdef</string>
           </dict>
           </plist>
           EOF

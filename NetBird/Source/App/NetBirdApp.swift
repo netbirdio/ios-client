@@ -19,6 +19,25 @@ import FirebasePerformance
 import WidgetKit
 #endif
 
+/// True when the app was launched solely to host unit tests. XCTest sets this
+/// environment variable on the test host process.
+private var isRunningUnitTests: Bool {
+    ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+}
+
+/// Configures Firebase from the bundled GoogleService-Info.plist.
+///
+/// Skipped under unit tests: the CI test plist is a dummy and
+/// FirebaseApp.configure() raises an uncaught Objective-C exception on an
+/// invalid app ID, aborting the test host before the runner can connect.
+private func configureFirebaseIfNeeded() {
+    guard !isRunningUnitTests else { return }
+    if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+       let options = FirebaseOptions(contentsOfFile: path) {
+        FirebaseApp.configure(options: options)
+    }
+}
+
 #if os(iOS)
 extension Notification.Name {
     static let netbirdLoginNotificationTapped = Notification.Name("io.netbird.loginNotificationTapped")
@@ -29,10 +48,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-           let options = FirebaseOptions(contentsOfFile: path) {
-            FirebaseApp.configure(options: options)
-        }
+        configureFirebaseIfNeeded()
 
         let center = UNUserNotificationCenter.current()
         center.delegate = self
@@ -84,10 +100,7 @@ struct NetBirdApp: App {
     init() {
         // Configure Firebase on main thread as required by Firebase
         #if os(tvOS)
-        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-           let options = FirebaseOptions(contentsOfFile: path) {
-            FirebaseApp.configure(options: options)
-        }
+        configureFirebaseIfNeeded()
         #endif
     }
 

@@ -134,6 +134,12 @@
 		50E608132A7958B100BAF09B /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608122A7958B100BAF09B /* MainViewModel.swift */; };
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
+		558553FB2FE34921004FB58D /* jetbrains-mono-variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558553FA2FE34921004FB58D /* jetbrains-mono-variable.ttf */; };
+		558553FC2FE34921004FB58D /* inter-variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558553F92FE34921004FB58D /* inter-variable.ttf */; };
+		558553FD2FE34921004FB58D /* jetbrains-mono-variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558553FA2FE34921004FB58D /* jetbrains-mono-variable.ttf */; };
+		558553FE2FE34921004FB58D /* inter-variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558553F92FE34921004FB58D /* inter-variable.ttf */; };
+		558553FF2FE34921004FB58D /* jetbrains-mono-variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558553FA2FE34921004FB58D /* jetbrains-mono-variable.ttf */; };
+		558554002FE34921004FB58D /* inter-variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558553F92FE34921004FB58D /* inter-variable.ttf */; };
 		5573F6EE2F9F523D00E63A73 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5573F6ED2F9F523D00E63A73 /* GoogleService-Info.plist */; };
 		5573F6EF2F9F523D00E63A73 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5573F6ED2F9F523D00E63A73 /* GoogleService-Info.plist */; };
 		5573F6F02F9F523D00E63A73 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5573F6ED2F9F523D00E63A73 /* GoogleService-Info.plist */; };
@@ -152,6 +158,7 @@
 		978FC4742EEDF168002D0EB8 /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782BD2EDF284A00F9FA94 /* Platform.swift */; };
 		9B6C03E5ED4245A597C0FBE7 /* iOSConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */; };
 		9CC0E000AE3F165CA72FD465 /* AppLoggerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */; };
+		A1B2C3D42F4A000100000001 /* VPNToggleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D32F4A000100000001 /* VPNToggleView.swift */; };
 		A1B2C3D52EEDF501001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		A1B2C3D72EEDF503001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
@@ -338,6 +345,8 @@
 		50E608232A79966600BAF09B /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
 		53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedUserDefaultsTests.swift; sourceTree = "<group>"; };
+		558553F92FE34921004FB58D /* inter-variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "inter-variable.ttf"; sourceTree = "<group>"; };
+		558553FA2FE34921004FB58D /* jetbrains-mono-variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "jetbrains-mono-variable.ttf"; sourceTree = "<group>"; };
 		5573F6ED2F9F523D00E63A73 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		55B5E81A2F39158200852AA7 /* InternetStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InternetStatusView.swift; sourceTree = "<group>"; };
 		55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NetBirdWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -349,6 +358,7 @@
 		91FA1F06D3375864C74EAB3B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		978FC46F2EEDF167002D0EB8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		9CD257EF78F038560FF3112D /* VPNOnDemandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNOnDemandView.swift; sourceTree = "<group>"; };
+		A1B2C3D32F4A000100000001 /* VPNToggleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNToggleView.swift; sourceTree = "<group>"; };
 		BB001A002F99000000000001 /* TroubleshootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TroubleshootView.swift; sourceTree = "<group>"; };
 		A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationProvider.swift; sourceTree = "<group>"; };
 		A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiOnDemandPolicy.swift; sourceTree = "<group>"; };
@@ -583,6 +593,7 @@
 		50A891192A792A15007C48FC /* NetBird */ = {
 			isa = PBXGroup;
 			children = (
+				558553F82FE34913004FB58D /* Fonts */,
 				50245A3B2A7FD1CD0034792B /* Info.plist */,
 				50245A1B2A7BCF120034792B /* NetBird.entitlements */,
 				50E608082A79542D00BAF09B /* Source */,
@@ -663,6 +674,7 @@
 				E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */,
 				E1C0D0002F72000100000001 /* AppButton.swift */,
 				E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */,
+				A1B2C3D32F4A000100000001 /* VPNToggleView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -678,6 +690,15 @@
 				50E608012A7950C000BAF09B /* ViewModels */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		558553F82FE34913004FB58D /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				558553F92FE34921004FB58D /* inter-variable.ttf */,
+				558553FA2FE34921004FB58D /* jetbrains-mono-variable.ttf */,
+			);
+			path = Fonts;
 			sourceTree = "<group>";
 		};
 		651C942641826A7AA94ED369 /* NetBirdTests */ = {
@@ -916,6 +937,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				558553FB2FE34921004FB58D /* jetbrains-mono-variable.ttf in Resources */,
+				558553FC2FE34921004FB58D /* inter-variable.ttf in Resources */,
 				5573F6EE2F9F523D00E63A73 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -956,6 +979,8 @@
 				501B0DCD2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD12AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
 				501B0DDB2AE04DDE004BE7A7 /* button-connected.json in Resources */,
+				558553FD2FE34921004FB58D /* jetbrains-mono-variable.ttf in Resources */,
+				558553FE2FE34921004FB58D /* inter-variable.ttf in Resources */,
 				5573F6F02F9F523D00E63A73 /* GoogleService-Info.plist in Resources */,
 				501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
 				501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */,
@@ -966,6 +991,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				558553FF2FE34921004FB58D /* jetbrains-mono-variable.ttf in Resources */,
+				558554002FE34921004FB58D /* inter-variable.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1132,6 +1159,7 @@
 				E1A0B0012F5E000100000001 /* EmptyTabPlaceholder.swift in Sources */,
 				E1C0D0012F72000100000001 /* AppButton.swift in Sources */,
 				E1B0C0012F60000100000001 /* NetworkWarningBanner.swift in Sources */,
+				A1B2C3D42F4A000100000001 /* VPNToggleView.swift in Sources */,
 				50BB17412C30239400518BCA /* RouteCard.swift in Sources */,
 				50216D932ACB2488009574C9 /* NetworkExtensionAdapter.swift in Sources */,
 				55B5E81B2F39158200852AA7 /* InternetStatusView.swift in Sources */,
@@ -1232,7 +1260,7 @@
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1765,7 +1793,7 @@
 				DEVELOPMENT_TEAM = TA739QLA7A;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
