@@ -170,6 +170,10 @@
 		A1C3D5EE2F000008001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		A1C3D5EF2F000009001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		A1C3D5F02F00000A001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
+		BB1100012F30000100000001 /* ManagedConfigReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1100002F30000100000001 /* ManagedConfigReader.swift */; };
+		BB1100022F30000100000001 /* ManagedConfigReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1100002F30000100000001 /* ManagedConfigReader.swift */; };
+		BB1100032F30000100000001 /* ManagedConfigReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1100002F30000100000001 /* ManagedConfigReader.swift */; };
+		BB1100042F30000100000001 /* ManagedConfigReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1100002F30000100000001 /* ManagedConfigReader.swift */; };
 		AA0001012F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001022F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001032F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
@@ -371,6 +375,7 @@
 		AA0009002F22000900000001 /* ProfileConnectionCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileConnectionCache.swift; sourceTree = "<group>"; };
 		AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVGradientBackground.swift; sourceTree = "<group>"; };
 		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
+		BB1100002F30000100000001 /* ManagedConfigReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagedConfigReader.swift; sourceTree = "<group>"; };
 		BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPreSharedKeyButton.swift; sourceTree = "<group>"; };
 		C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSNetworksView.swift; sourceTree = "<group>"; };
 		CC5F6A012F4E5A0300D1E2F3 /* TVQRCodeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVQRCodeSheet.swift; sourceTree = "<group>"; };
@@ -614,6 +619,7 @@
 				AA0001002F22000100000001 /* ProfileManager.swift */,
 				AA0009002F22000900000001 /* ProfileConnectionCache.swift */,
 				A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */,
+				BB1100002F30000100000001 /* ManagedConfigReader.swift */,
 				50245A2D2A7BDC470034792B /* NetworkChangeListener.swift */,
 				50CD81612AD0595E00CF830B /* DNSManager.swift */,
 				50E608022A7950CB00BAF09B /* Device.swift */,
@@ -1088,6 +1094,7 @@
 				BB3D4E022F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift in Sources */,
 				CC5F6A022F4E5A0300D1E2F3 /* TVQRCodeSheet.swift in Sources */,
 				978FC4732EEDF167002D0EB8 /* AppLogger.swift in Sources */,
+				BB1100012F30000100000001 /* ManagedConfigReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1114,6 +1121,7 @@
 				44F3E3942EE2151100C87FEC /* ConnectionListener.swift in Sources */,
 				44F3E38C2EE214E300C87FEC /* NetBirdAdapter.swift in Sources */,
 				978FC4722EEDF167002D0EB8 /* AppLogger.swift in Sources */,
+				BB1100022F30000100000001 /* ManagedConfigReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1141,6 +1149,7 @@
 				505118CF2AD96ECA003027D3 /* x25519.c in Sources */,
 				F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */,
 				978FC4712EEDF167002D0EB8 /* AppLogger.swift in Sources */,
+				BB1100032F30000100000001 /* ManagedConfigReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1183,6 +1192,7 @@
 				AA0001042F22000100000001 /* ProfileManager.swift in Sources */,
 				AA0009042F22000900000001 /* ProfileConnectionCache.swift in Sources */,
 				A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */,
+				BB1100042F30000100000001 /* ManagedConfigReader.swift in Sources */,
 				50CD81B02AD5B94D00CF830B /* PeerCard.swift in Sources */,
 				B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */,
 				50003BCE2AFD405600E5EB6B /* ConnectionListener.swift in Sources */,
