@@ -62,21 +62,50 @@ class RoutesViewModel: ObservableObject {
     func selectRoute(route: RoutesSelectionInfo) {
         guard let index = self.routeInfo.firstIndex(where: { $0.id == route.id }) else { return }
 
+        self.routeInfo[index].selected = true
+
+        // Non-exit routes select independently.
+        guard route.isExitNode else {
+            sendSelectAndReconcile(route: route)
+            return
+        }
+
         // Exit nodes are mutually exclusive. Mirror the desktop behaviour: activating an
         // exit node deselects every other selected exit node, so 0.0.0.0/0 can't stay
         // pinned to the previously selected peer while the UI shows only the new one.
-        // Non-exit route selections are left untouched. Deselect the siblings first so
-        // the core drops the old exit node before adding the new one.
-        if route.isExitNode {
-            let siblings = routeInfo.filter { $0.id != route.id && $0.selected && $0.isExitNode }
-            for sibling in siblings {
-                deselectRoute(route: sibling)
+        // Non-exit route selections are left untouched. The siblings must be fully
+        // deselected in the core BEFORE the new node is added: selectRoutes/deselectRoutes
+        // are independent async round-trips, so firing the select without waiting lets it
+        // race the deselects and the core can drop the node we just added. Wait for every
+        // deselect to complete, then select.
+        let siblings = routeInfo.filter { $0.id != route.id && $0.selected && $0.isExitNode }
+        guard !siblings.isEmpty else {
+            sendSelectAndReconcile(route: route)
+            return
+        }
+
+        let group = DispatchGroup()
+        for sibling in siblings {
+            sibling.selected = false
+            group.enter()
+            networkExtensionAdapter.deselectRoutes(id: sibling.name) { _ in
+                group.leave()
             }
         }
 
-        self.routeInfo[index].selected = true
-        networkExtensionAdapter.selectRoutes(id: route.name) { _ in
-            print("selected route")
+        group.notify(queue: .main) { [weak self] in
+            self?.sendSelectAndReconcile(route: route)
+        }
+    }
+
+    // Sends the select for `route`, then reconciles the optimistic UI selection with the
+    // core's real state. Select/Deselect messages don't report the applied result (the
+    // extension swallows errors and always replies "true"), so re-read the truth via
+    // GetRoutes: if the core rejected the change the toggle reverts instead of leaving a
+    // stale optimistic selection in place.
+    private func sendSelectAndReconcile(route: RoutesSelectionInfo) {
+        networkExtensionAdapter.selectRoutes(id: route.name) { [weak self] _ in
+            self?.getRoutes()
         }
     }
     
