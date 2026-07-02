@@ -65,6 +65,14 @@ class PacketTunnelProviderSettingsManager {
     
     func setInterfaceIP(interfaceIP: String) {
         self.interfaceIP = interfaceIP
+        // A new engine session always pushes setInterfaceIP first, then setInterfaceIPv6
+        // only when the session actually has a v6 address. Drop any previous session's v6
+        // here so a v4-only session (IPv6 disabled or a v4-only profile) can't keep applying
+        // a stale interfaceIPv6 — which would send createTunnelSettings down the dual-stack
+        // branch and skip the ::/0 blackhole, leaking IPv6 past a selected exit node. This
+        // manager outlives individual engine sessions (it is owned by the extension process),
+        // so the reset has to happen at the session boundary rather than on teardown.
+        self.interfaceIPv6 = nil
     }
 
     func setInterfaceIPv6(interfaceIPv6: String) {

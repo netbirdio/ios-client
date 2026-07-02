@@ -72,6 +72,10 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
                 return
             }
             self.interfaceIP = validIP
+            // New engine session boundary: drop the previous session's v6 address. The
+            // engine re-announces it via setInterfaceIPv6 only when the session actually
+            // has one, so a v4-only session must not keep a stale value around.
+            self.interfaceIPv6 = nil
             tunnelManager.setInterfaceIP(interfaceIP: validIP)
         }
     }
