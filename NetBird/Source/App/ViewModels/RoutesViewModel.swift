@@ -61,8 +61,21 @@ class RoutesViewModel: ObservableObject {
     
     func selectRoute(route: RoutesSelectionInfo) {
         guard let index = self.routeInfo.firstIndex(where: { $0.id == route.id }) else { return }
+
+        // Exit nodes are mutually exclusive. Mirror the desktop behaviour: activating an
+        // exit node deselects every other selected exit node, so 0.0.0.0/0 can't stay
+        // pinned to the previously selected peer while the UI shows only the new one.
+        // Non-exit route selections are left untouched. Deselect the siblings first so
+        // the core drops the old exit node before adding the new one.
+        if route.isExitNode {
+            let siblings = routeInfo.filter { $0.id != route.id && $0.selected && $0.isExitNode }
+            for sibling in siblings {
+                deselectRoute(route: sibling)
+            }
+        }
+
         self.routeInfo[index].selected = true
-        networkExtensionAdapter.selectRoutes(id: route.name) { details in
+        networkExtensionAdapter.selectRoutes(id: route.name) { _ in
             print("selected route")
         }
     }
