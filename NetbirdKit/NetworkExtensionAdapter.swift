@@ -963,7 +963,13 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
 
     func deselectRoutes(id: String, completion: @escaping (RoutesSelectionDetails) -> Void) {
+        // Callers (e.g. RoutesViewModel.selectRoute) balance a DispatchGroup enter/leave
+        // around this call, so completion must fire on every exit path or the group hangs
+        // and the pending select is never sent.
+        let routes = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
+
         guard let session = self.session else {
+            completion(routes)
             return
         }
 
@@ -971,14 +977,15 @@ public class NetworkExtensionAdapter: ObservableObject {
         if let messageData = messageString.data(using: .utf8) {
             do {
                 try session.sendProviderMessage(messageData) { response in
-                    let routes = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
                     completion(routes)
                 }
             } catch {
                 print("Failed to send Provider message")
+                completion(routes)
             }
         } else {
             print("Error converting message to Data")
+            completion(routes)
         }
     }
     
