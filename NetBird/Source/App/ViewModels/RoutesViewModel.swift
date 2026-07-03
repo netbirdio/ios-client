@@ -86,6 +86,11 @@ class RoutesViewModel: ObservableObject {
 
         let group = DispatchGroup()
         for sibling in siblings {
+            // `selected` is a plain property on the ObservableObject (kept non-@Published so
+            // the class stays trivially Codable), so mutating it emits nothing on its own.
+            // Notify the observing RouteCard explicitly so the sibling's toggle flips off now
+            // instead of only after the getRoutes reconcile round-trip.
+            sibling.objectWillChange.send()
             sibling.selected = false
             group.enter()
             networkExtensionAdapter.deselectRoutes(id: sibling.name) { _ in
