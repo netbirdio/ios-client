@@ -107,15 +107,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 @main
 struct NetBirdApp: App {
     @StateObject private var viewModelLoader = ViewModelLoader()
+    #if os(iOS)
     @StateObject private var sshSessionStore = SSHSessionStore()
     @StateObject private var sshActiveSessionStore = SSHActiveSessionStore()
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    #endif
     @Environment(\.scenePhase) var scenePhase
     @State private var activationTask: Task<Void, Never>?
     @State private var pendingURL: URL?
-
-    #if os(iOS)
-    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    #endif
 
     init() {
         // Configure Firebase on main thread as required by Firebase
@@ -129,8 +128,10 @@ struct NetBirdApp: App {
             if let viewModel = viewModelLoader.viewModel {
                 MainView()
                     .environmentObject(viewModel)
+                    #if os(iOS)
                     .environmentObject(sshSessionStore)
                     .environmentObject(sshActiveSessionStore)
+                    #endif
                     #if os(iOS)
                     .onOpenURL { url in
                         handleWidgetURL(url, viewModel: viewModel)
