@@ -8,8 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		0C71C019350D42AB8F110336 /* iOSSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */; };
+		19270466922C3C7A04881706 /* SSHActiveSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081F6445497E913B0B424497 /* SSHActiveSessionStore.swift */; };
 		1C4E6A81CD33FF6D2DEFF8D5 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91FA1F06D3375864C74EAB3B /* Foundation.framework */; };
 		1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */; };
+		30FF9C7920F6D266D287C60A /* Terminal in Resources */ = {isa = PBXBuildFile; fileRef = 2C7C32B75979A07D28C5193D /* Terminal */; };
+		34DCB32C09E2442650FE30B9 /* ActiveSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DDC3F7D440E943BD9D175B8 /* ActiveSessionsView.swift */; };
 		36F90EF57603411B9916FDD6 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 		3A9A981B20EF47C1907CC877 /* TVServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8BCB110545747678AA5A9C2 /* TVServerView.swift */; };
 		441C5AFE2EDF0DD20055EEFC /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50245A532A80431B0034792B /* NetworkExtension.framework */; };
@@ -59,7 +62,6 @@
 		44F3E3992EE2F90900C87FEC /* libresolv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 44DCF5B82EDF4D900026078E /* libresolv.tbd */; };
 		44F3E39B2EE2F9FA00C87FEC /* TVAuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44F3E39A2EE2F9FA00C87FEC /* TVAuthView.swift */; };
 		4849965EC2515950756C8F10 /* VPNOnDemandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CD257EF78F038560FF3112D /* VPNOnDemandView.swift */; };
-		BB001A012F99000000000001 /* TroubleshootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB001A002F99000000000001 /* TroubleshootView.swift */; };
 		50003BBC2AFBCA6B00E5EB6B /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = 50003BBB2AFBCA6B00E5EB6B /* FirebasePerformance */; };
 		50003BBE2AFBCA7900E5EB6B /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = 50003BBD2AFBCA7900E5EB6B /* FirebasePerformance */; };
 		50003BC42AFBD7D500E5EB6B /* PacketTunnelProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50245A562A80431C0034792B /* PacketTunnelProvider.swift */; };
@@ -148,7 +150,10 @@
 		55D865852F70982000A2EFF8 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 55D865842F70982000A2EFF8 /* WidgetKit.framework */; };
 		55D865872F70982000A2EFF8 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 55D865862F70982000A2EFF8 /* SwiftUI.framework */; };
 		55D865982F70982100A2EFF8 /* NetBirdWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		6322AE9CFD7A43C9F3845712 /* SSHSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D69AE45BF52B532AE1693335 /* SSHSessionStore.swift */; };
+		6BF1213BA9CCD8F1A5C6E341 /* SavedSessionsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3AF60858344432AF484BBB /* SavedSessionsListView.swift */; };
 		71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */; };
+		7BD722208534FA904B8438E1 /* SSHSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B530BFC3D5396F11FD397A74 /* SSHSessionManager.swift */; };
 		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
 		962925F1DAA24D40B98D395B /* iOSPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42873052F9544A89B1408339 /* iOSPeersView.swift */; };
 		978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
@@ -170,6 +175,7 @@
 		A1C3D5EE2F000008001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		A1C3D5EF2F000009001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		A1C3D5F02F00000A001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
+		A21792DE8DFC5558086C32D9 /* SSHKeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FED26996C84673D2930F25A1 /* SSHKeychainStore.swift */; };
 		AA0001012F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001022F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001032F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
@@ -183,9 +189,15 @@
 		AA0009032F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
 		AA0009042F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
 		AA1B2C022F4E5A0100D1E2F3 /* TVGradientBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */; };
+		AAF26A40CFEE9CA52AFD9994 /* SavedSSHSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42FAFDA10444227993BE79E6 /* SavedSSHSession.swift */; };
 		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
+		B4C6A34FE3D10212F7CF8008 /* SSHIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA6A678602D6404CEF2DE8C5 /* SSHIPC.swift */; };
+		BB001A012F99000000000001 /* TroubleshootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB001A002F99000000000001 /* TroubleshootView.swift */; };
 		BB3D4E022F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */; };
+		C87263E8CAE2316576801195 /* SSHConnectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00ADEFCC1B21B0A9724EB89 /* SSHConnectSheet.swift */; };
+		CC2940DCA976B415673A3804 /* SSHSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81ABB4F0C072C848EF8F338F /* SSHSessionViewModel.swift */; };
 		CC5F6A022F4E5A0300D1E2F3 /* TVQRCodeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC5F6A012F4E5A0300D1E2F3 /* TVQRCodeSheet.swift */; };
+		D6DC1C017236D5FA4AC21EE3 /* SSHKeyboardAccessoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F48DE55DC12388C90EAB6BD /* SSHKeyboardAccessoryView.swift */; };
 		E1A0B0012F5E000100000001 /* EmptyTabPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */; };
 		E1B0C0012F60000100000001 /* NetworkWarningBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */; };
 		E1C0D0012F72000100000001 /* AppButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C0D0002F72000100000001 /* AppButton.swift */; };
@@ -195,6 +207,8 @@
 		F1B2920A2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */; };
 		F1B2920B2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */; };
 		F2DCB2437ECA42C3AEC3C895 /* FirstLaunchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BFDF94163AF4C32A44DB3CD /* FirstLaunchView.swift */; };
+		F6491406222BABA2C255A582 /* SSHTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0787606E78348571292F3BED /* SSHTerminalView.swift */; };
+		FF1349B3FD24FBF5354397BF /* SSHSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B530BFC3D5396F11FD397A74 /* SSHSessionManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -277,9 +291,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0787606E78348571292F3BED /* SSHTerminalView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHTerminalView.swift; sourceTree = "<group>"; };
+		081F6445497E913B0B424497 /* SSHActiveSessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHActiveSessionStore.swift; sourceTree = "<group>"; };
+		1F48DE55DC12388C90EAB6BD /* SSHKeyboardAccessoryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHKeyboardAccessoryView.swift; sourceTree = "<group>"; };
+		2C7C32B75979A07D28C5193D /* Terminal */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; path = Terminal; sourceTree = "<group>"; };
 		2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSSettingsView.swift; sourceTree = "<group>"; };
 		3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlobalConstantsTests.swift; sourceTree = "<group>"; };
 		42873052F9544A89B1408339 /* iOSPeersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSPeersView.swift; sourceTree = "<group>"; };
+		42FAFDA10444227993BE79E6 /* SavedSSHSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SavedSSHSession.swift; sourceTree = "<group>"; };
 		441C5AEE2EDF0DAE0055EEFC /* NetBird TV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "NetBird TV.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		441C5AFD2EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NetBirdTVNetworkExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		443782BD2EDF284A00F9FA94 /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
@@ -290,6 +309,7 @@
 		4483B26C2F19331A00BD9F66 /* TVColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVColors.swift; sourceTree = "<group>"; };
 		44DCF5B82EDF4D900026078E /* libresolv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libresolv.tbd; path = usr/lib/libresolv.tbd; sourceTree = SDKROOT; };
 		44F3E39A2EE2F9FA00C87FEC /* TVAuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVAuthView.swift; sourceTree = "<group>"; };
+		4DDC3F7D440E943BD9D175B8 /* ActiveSessionsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ActiveSessionsView.swift; sourceTree = "<group>"; };
 		50003BC82AFD2F0C00E5EB6B /* ConnectionListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionListener.swift; sourceTree = "<group>"; };
 		50003BCB2AFD3B0C00E5EB6B /* ClientState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientState.swift; sourceTree = "<group>"; };
 		501B0DC52AE04DDE004BE7A7 /* button-disconnecting.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "button-disconnecting.json"; sourceTree = "<group>"; };
@@ -353,6 +373,7 @@
 		55D865842F70982000A2EFF8 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		55D865862F70982000A2EFF8 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		5BFDF94163AF4C32A44DB3CD /* FirstLaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstLaunchView.swift; sourceTree = "<group>"; };
+		81ABB4F0C072C848EF8F338F /* SSHSessionViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHSessionViewModel.swift; sourceTree = "<group>"; };
 		8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppLoggerTests.swift; sourceTree = "<group>"; };
 		8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSConnectionView.swift; sourceTree = "<group>"; };
 		91FA1F06D3375864C74EAB3B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
@@ -371,9 +392,15 @@
 		AA0009002F22000900000001 /* ProfileConnectionCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileConnectionCache.swift; sourceTree = "<group>"; };
 		AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVGradientBackground.swift; sourceTree = "<group>"; };
 		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
+		B530BFC3D5396F11FD397A74 /* SSHSessionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHSessionManager.swift; sourceTree = "<group>"; };
+		BA6A678602D6404CEF2DE8C5 /* SSHIPC.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHIPC.swift; sourceTree = "<group>"; };
+		BB001A002F99000000000001 /* TroubleshootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TroubleshootView.swift; sourceTree = "<group>"; };
+		BB3AF60858344432AF484BBB /* SavedSessionsListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SavedSessionsListView.swift; sourceTree = "<group>"; };
 		BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPreSharedKeyButton.swift; sourceTree = "<group>"; };
+		C00ADEFCC1B21B0A9724EB89 /* SSHConnectSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHConnectSheet.swift; sourceTree = "<group>"; };
 		C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSNetworksView.swift; sourceTree = "<group>"; };
 		CC5F6A012F4E5A0300D1E2F3 /* TVQRCodeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVQRCodeSheet.swift; sourceTree = "<group>"; };
+		D69AE45BF52B532AE1693335 /* SSHSessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHSessionStore.swift; sourceTree = "<group>"; };
 		E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyTabPlaceholder.swift; sourceTree = "<group>"; };
 		E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkWarningBanner.swift; sourceTree = "<group>"; };
 		E1C0D0002F72000100000001 /* AppButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppButton.swift; sourceTree = "<group>"; };
@@ -381,17 +408,18 @@
 		F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvVarPackager.swift; sourceTree = "<group>"; };
 		F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalConstants.swift; sourceTree = "<group>"; };
 		F8BCB110545747678AA5A9C2 /* TVServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVServerView.swift; sourceTree = "<group>"; };
+		FED26996C84673D2930F25A1 /* SSHKeychainStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHKeychainStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		441C5B072EDF0DD20055EEFC /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		441C5B072EDF0DD20055EEFC /* Exceptions for "NetBirdTVNetworkExtension" folder in "NetBirdTVNetworkExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 441C5AFC2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */;
 		};
-		55D865992F70982100A2EFF8 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		55D865992F70982100A2EFF8 /* Exceptions for "NetBirdWidgetExtension" folder in "NetBirdWidgetExtensionExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -401,9 +429,41 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		441C5AEF2EDF0DAE0055EEFC /* NetBird TV */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "NetBird TV"; sourceTree = "<group>"; };
-		441C5AFF2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (441C5B072EDF0DD20055EEFC /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = NetBirdTVNetworkExtension; sourceTree = "<group>"; };
-		55D865882F70982000A2EFF8 /* NetBirdWidgetExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (55D865992F70982100A2EFF8 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = NetBirdWidgetExtension; sourceTree = "<group>"; };
+		441C5AEF2EDF0DAE0055EEFC /* NetBird TV */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = "NetBird TV";
+			sourceTree = "<group>";
+		};
+		441C5AFF2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				441C5B072EDF0DD20055EEFC /* Exceptions for "NetBirdTVNetworkExtension" folder in "NetBirdTVNetworkExtension" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = NetBirdTVNetworkExtension;
+			sourceTree = "<group>";
+		};
+		55D865882F70982000A2EFF8 /* NetBirdWidgetExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				55D865992F70982100A2EFF8 /* Exceptions for "NetBirdWidgetExtension" folder in "NetBirdWidgetExtensionExtension" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = NetBirdWidgetExtension;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -541,6 +601,7 @@
 				50245A582A80431C0034792B /* Info.plist */,
 				50245A592A80431C0034792B /* NetbirdNetworkExtension.entitlements */,
 				50CD814E2AD0355000CF830B /* PacketTunnelProviderSettingsManager.swift */,
+				B530BFC3D5396F11FD397A74 /* SSHSessionManager.swift */,
 			);
 			path = NetbirdNetworkExtension;
 			sourceTree = "<group>";
@@ -561,7 +622,6 @@
 		50A8910E2A792A15007C48FC = {
 			isa = PBXGroup;
 			children = (
-			5573F6ED2F9F523D00E63A73 /* GoogleService-Info.plist */,
 				50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */,
 				50245A0A2A7AA9390034792B /* NetBird-Bridging-Header.h */,
 				50A891192A792A15007C48FC /* NetBird */,
@@ -598,6 +658,7 @@
 				50245A1B2A7BCF120034792B /* NetBird.entitlements */,
 				50E608082A79542D00BAF09B /* Source */,
 				50A8911E2A792A16007C48FC /* Assets.xcassets */,
+				C76C5B84CD61000770A3F243 /* Resources */,
 			);
 			path = NetBird;
 			sourceTree = "<group>";
@@ -622,6 +683,10 @@
 				50003BC82AFD2F0C00E5EB6B /* ConnectionListener.swift */,
 				50003BCB2AFD3B0C00E5EB6B /* ClientState.swift */,
 				50C5D30E2BDD96CF003159BE /* RoutesSelectionDetails.swift */,
+				BA6A678602D6404CEF2DE8C5 /* SSHIPC.swift */,
+				42FAFDA10444227993BE79E6 /* SavedSSHSession.swift */,
+				FED26996C84673D2930F25A1 /* SSHKeychainStore.swift */,
+				D69AE45BF52B532AE1693335 /* SSHSessionStore.swift */,
 			);
 			path = NetbirdKit;
 			sourceTree = "<group>";
@@ -637,6 +702,7 @@
 				50CD84352AD82F9400CF830B /* ServerView.swift */,
 				509CCD6B2BE90D0E00B7C2D8 /* PeerTabView.swift */,
 				509CCD6D2BE90D2100B7C2D8 /* RouteTabView.swift */,
+				C62AD9493B38833DCF8DF092 /* SSH */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -649,6 +715,8 @@
 				50D402962BD9B89300D4AC5B /* PeerViewModel.swift */,
 				509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */,
 				AA0002042F22000200000001 /* AddProfileViewModel.swift */,
+				81ABB4F0C072C848EF8F338F /* SSHSessionViewModel.swift */,
+				081F6445497E913B0B424497 /* SSHActiveSessionStore.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -729,6 +797,26 @@
 			path = Views/iOS;
 			sourceTree = "<group>";
 		};
+		C62AD9493B38833DCF8DF092 /* SSH */ = {
+			isa = PBXGroup;
+			children = (
+				0787606E78348571292F3BED /* SSHTerminalView.swift */,
+				C00ADEFCC1B21B0A9724EB89 /* SSHConnectSheet.swift */,
+				BB3AF60858344432AF484BBB /* SavedSessionsListView.swift */,
+				1F48DE55DC12388C90EAB6BD /* SSHKeyboardAccessoryView.swift */,
+				4DDC3F7D440E943BD9D175B8 /* ActiveSessionsView.swift */,
+			);
+			path = SSH;
+			sourceTree = "<group>";
+		};
+		C76C5B84CD61000770A3F243 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				2C7C32B75979A07D28C5193D /* Terminal */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -776,8 +864,6 @@
 				441C5AFF2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */,
 			);
 			name = NetBirdTVNetworkExtension;
-			packageProductDependencies = (
-			);
 			productName = NetBirdTVNetworkExtension;
 			productReference = 441C5AFD2EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -852,8 +938,6 @@
 				55D865882F70982000A2EFF8 /* NetBirdWidgetExtension */,
 			);
 			name = NetBirdWidgetExtensionExtension;
-			packageProductDependencies = (
-			);
 			productName = NetBirdWidgetExtensionExtension;
 			productReference = 55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -947,7 +1031,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5573F6EF2F9F523D00E63A73 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -957,7 +1040,6 @@
 			files = (
 				501B0DCE2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD22AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
-				5573F6F12F9F523D00E63A73 /* GoogleService-Info.plist in Resources */,
 				501B0DDC2AE04DDE004BE7A7 /* button-connected.json in Resources */,
 				501B0DD62AE04DDE004BE7A7 /* button-start-connecting.json in Resources */,
 				501B0DDA2AE04DDE004BE7A7 /* button-full.json in Resources */,
@@ -984,6 +1066,7 @@
 				5573F6F02F9F523D00E63A73 /* GoogleService-Info.plist in Resources */,
 				501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
 				501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */,
+				30FF9C7920F6D266D287C60A /* Terminal in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1141,6 +1224,7 @@
 				505118CF2AD96ECA003027D3 /* x25519.c in Sources */,
 				F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */,
 				978FC4712EEDF167002D0EB8 /* AppLogger.swift in Sources */,
+				7BD722208534FA904B8438E1 /* SSHSessionManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1204,6 +1288,18 @@
 				4849965EC2515950756C8F10 /* VPNOnDemandView.swift in Sources */,
 				F2DCB2437ECA42C3AEC3C895 /* FirstLaunchView.swift in Sources */,
 				BB001A012F99000000000001 /* TroubleshootView.swift in Sources */,
+				B4C6A34FE3D10212F7CF8008 /* SSHIPC.swift in Sources */,
+				CC2940DCA976B415673A3804 /* SSHSessionViewModel.swift in Sources */,
+				F6491406222BABA2C255A582 /* SSHTerminalView.swift in Sources */,
+				FF1349B3FD24FBF5354397BF /* SSHSessionManager.swift in Sources */,
+				AAF26A40CFEE9CA52AFD9994 /* SavedSSHSession.swift in Sources */,
+				A21792DE8DFC5558086C32D9 /* SSHKeychainStore.swift in Sources */,
+				6322AE9CFD7A43C9F3845712 /* SSHSessionStore.swift in Sources */,
+				C87263E8CAE2316576801195 /* SSHConnectSheet.swift in Sources */,
+				6BF1213BA9CCD8F1A5C6E341 /* SavedSessionsListView.swift in Sources */,
+				D6DC1C017236D5FA4AC21EE3 /* SSHKeyboardAccessoryView.swift in Sources */,
+				34DCB32C09E2442650FE30B9 /* ActiveSessionsView.swift in Sources */,
+				19270466922C3C7A04881706 /* SSHActiveSessionStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

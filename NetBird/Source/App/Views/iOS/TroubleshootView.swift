@@ -9,9 +9,17 @@ import SwiftUI
 
 struct TroubleshootView: View {
     @EnvironmentObject var viewModel: ViewModel
+    @EnvironmentObject var activeSessionStore: SSHActiveSessionStore
     @State private var showShareSheet = false
     @State private var uploadKey = ""
     @State private var showCopiedAlert = false
+#if DEBUG
+    @State private var sshTestViewModel: SSHSessionViewModel?
+    @State private var sshHost = ""
+    @State private var sshPort = "22"
+    @State private var sshUser = ""
+    @State private var sshPassword = ""
+#endif
 
     var body: some View {
         Form {
@@ -26,6 +34,32 @@ struct TroubleshootView: View {
 
                 bundleActionContent
             }
+
+#if DEBUG
+            Section(header: Text("SSH (debug)"), footer: Text("Phase 1 manual test harness for the in-app SSH terminal. Not part of the shipped feature surface.")) {
+                TextField("Host", text: $sshHost)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("Port", text: $sshPort)
+                    .keyboardType(.numberPad)
+                TextField("User", text: $sshUser)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                SecureField("Password", text: $sshPassword)
+                Button("Connect") {
+                    let vm = SSHSessionViewModel(
+                        networkExtensionAdapter: viewModel.networkExtensionAdapter,
+                        host: sshHost,
+                        port: Int(sshPort) ?? 22,
+                        user: sshUser,
+                        password: sshPassword
+                    )
+                    activeSessionStore.add(vm)
+                    sshTestViewModel = vm
+                }
+                .disabled(sshHost.isEmpty || sshUser.isEmpty)
+            }
+#endif
         }
         .navigationTitle("Troubleshoot")
         .navigationBarTitleDisplayMode(.inline)
@@ -47,6 +81,11 @@ struct TroubleshootView: View {
         .onDisappear {
             viewModel.debugBundleUploadState = .idle
         }
+#if DEBUG
+        .fullScreenCover(item: $sshTestViewModel) { vm in
+            SSHTerminalView(viewModel: vm)
+        }
+#endif
     }
 
     @ViewBuilder

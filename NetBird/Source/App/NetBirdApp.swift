@@ -50,6 +50,24 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     ) -> Bool {
         configureFirebaseIfNeeded()
 
+        // Open the browser when the Network Extension needs JWT auth for SSH.
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            nil,
+            { _, _, _, _, _ in
+                DispatchQueue.main.async {
+                    guard
+                        let raw = UserDefaults(suiteName: "group.io.netbird.app")?.string(forKey: "io.netbird.ssh.jwtURL"),
+                        let url = URL(string: raw)
+                    else { return }
+                    UIApplication.shared.open(url)
+                }
+            },
+            "io.netbird.app.ssh.jwtRequired" as CFString,
+            nil,
+            .deliverImmediately
+        )
+
         let center = UNUserNotificationCenter.current()
         center.delegate = self
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
@@ -89,6 +107,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 @main
 struct NetBirdApp: App {
     @StateObject private var viewModelLoader = ViewModelLoader()
+    @StateObject private var sshSessionStore = SSHSessionStore()
+    @StateObject private var sshActiveSessionStore = SSHActiveSessionStore()
     @Environment(\.scenePhase) var scenePhase
     @State private var activationTask: Task<Void, Never>?
     @State private var pendingURL: URL?
@@ -109,6 +129,8 @@ struct NetBirdApp: App {
             if let viewModel = viewModelLoader.viewModel {
                 MainView()
                     .environmentObject(viewModel)
+                    .environmentObject(sshSessionStore)
+                    .environmentObject(sshActiveSessionStore)
                     #if os(iOS)
                     .onOpenURL { url in
                         handleWidgetURL(url, viewModel: viewModel)
