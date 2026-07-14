@@ -50,6 +50,24 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     ) -> Bool {
         configureFirebaseIfNeeded()
 
+        // Open the browser when the Network Extension needs JWT auth for SSH.
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            nil,
+            { _, _, _, _, _ in
+                DispatchQueue.main.async {
+                    guard
+                        let raw = UserDefaults(suiteName: "group.io.netbird.app")?.string(forKey: "io.netbird.ssh.jwtURL"),
+                        let url = URL(string: raw)
+                    else { return }
+                    UIApplication.shared.open(url)
+                }
+            },
+            "io.netbird.app.ssh.jwtRequired" as CFString,
+            nil,
+            .deliverImmediately
+        )
+
         let center = UNUserNotificationCenter.current()
         center.delegate = self
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
@@ -89,13 +107,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 @main
 struct NetBirdApp: App {
     @StateObject private var viewModelLoader = ViewModelLoader()
+    #if os(iOS)
+    @StateObject private var sshSessionStore = SSHSessionStore()
+    @StateObject private var sshActiveSessionStore = SSHActiveSessionStore()
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    #endif
     @Environment(\.scenePhase) var scenePhase
     @State private var activationTask: Task<Void, Never>?
     @State private var pendingURL: URL?
-
-    #if os(iOS)
-    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    #endif
 
     init() {
         // Configure Firebase on main thread as required by Firebase
@@ -109,6 +128,10 @@ struct NetBirdApp: App {
             if let viewModel = viewModelLoader.viewModel {
                 MainView()
                     .environmentObject(viewModel)
+                    #if os(iOS)
+                    .environmentObject(sshSessionStore)
+                    .environmentObject(sshActiveSessionStore)
+                    #endif
                     #if os(iOS)
                     .onOpenURL { url in
                         handleWidgetURL(url, viewModel: viewModel)
