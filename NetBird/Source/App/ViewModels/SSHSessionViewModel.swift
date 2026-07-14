@@ -59,14 +59,17 @@ final class SSHSessionViewModel: ObservableObject, Identifiable {
     /// - If already connected: replays buffered output and resizes the PTY.
     /// - Otherwise: starts the connection.
     func onTerminalReady(cols: Int, rows: Int) {
-        if case .connected = state {
+        switch state {
+        case .connected:
             resize(cols: cols, rows: rows)
             if !outputBuffer.isEmpty {
                 onOutput?(outputBuffer)
             }
-            return
+        case .connecting:
+            break // already in-flight, ignore re-entrant terminalReady
+        default:
+            start(cols: cols, rows: rows)
         }
-        start(cols: cols, rows: rows)
     }
 
     func start(cols: Int, rows: Int) {

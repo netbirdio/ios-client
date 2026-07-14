@@ -181,11 +181,8 @@ private struct SSHTerminalWebView: UIViewRepresentable {
         }
 
         private func setStatus(_ text: String, color: String) {
-            let escaped = text
-                .replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "'", with: "\\'")
             let ansiColor = color == "red" ? "\u{1b}[31m" : "\u{1b}[33m"
-            let js = "NBTerminal.write('\(Data((ansiColor + "\r\n" + escaped + "\r\n\u{1b}[0m").utf8).base64EncodedString())')"
+            let js = "NBTerminal.write('\(Data((ansiColor + "\r\n" + text + "\r\n\u{1b}[0m").utf8).base64EncodedString())')"
             webView?.evaluateJavaScript(js)
         }
     }

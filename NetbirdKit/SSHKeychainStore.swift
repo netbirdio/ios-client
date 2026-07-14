@@ -9,7 +9,8 @@ import Foundation
 enum SSHKeychainStore {
     private static let service = "io.netbird.ssh.passwords"
 
-    static func save(password: String, for sessionID: String) {
+    @discardableResult
+    static func save(password: String, for sessionID: String) -> Bool {
         let data = Data(password.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -17,11 +18,11 @@ enum SSHKeychainStore {
             kSecAttrAccount as String: sessionID,
         ]
         if SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess {
-            SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+            return SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary) == errSecSuccess
         } else {
             var add = query
             add[kSecValueData as String] = data
-            SecItemAdd(add as CFDictionary, nil)
+            return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
         }
     }
 

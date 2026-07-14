@@ -52,9 +52,8 @@ struct SavedSessionsListView: View {
                             }
                         }
                         .onDelete { offsets in
-                            offsets.forEach { i in
-                                sessionStore.delete(id: sessionStore.sessions[i].id)
-                            }
+                            let ids = offsets.map { sessionStore.sessions[$0].id }
+                            ids.forEach { sessionStore.delete(id: $0) }
                         }
                     }
                 }

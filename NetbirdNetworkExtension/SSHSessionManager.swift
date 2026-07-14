@@ -39,8 +39,10 @@ private final class SSHJWTURLOpener: NSObject, NetBirdSDKURLOpenerProtocol {
             "\u{1b}[0m"
         onTerminalOutput(Data(msg.utf8))
 
-        UserDefaults(suiteName: sshAppGroupID)?.set(url,  forKey: sshJWTURLDefaultsKey)
-        UserDefaults(suiteName: sshAppGroupID)?.set(code, forKey: sshJWTCodeDefaultsKey)
+        let defaults = UserDefaults(suiteName: sshAppGroupID)
+        defaults?.set(url,  forKey: sshJWTURLDefaultsKey)
+        defaults?.set(code, forKey: sshJWTCodeDefaultsKey)
+        defaults?.synchronize()
 
         CFNotificationCenterPostNotification(
             CFNotificationCenterGetDarwinNotifyCenter(),
@@ -122,6 +124,9 @@ final class SSHSession: NSObject, NetBirdSDKSSHTerminalListenerProtocol {
     /// last poll. Intended to be called from a background queue only.
     func poll(timeout: TimeInterval) -> SSHPollResult {
         _ = dataAvailable.wait(timeout: .now() + timeout)
+        // Drain any extra signals that accumulated while the buffer was being
+        // built up between polls, so the next wait() actually blocks.
+        while dataAvailable.wait(timeout: .now()) == .success {}
 
         lock.lock()
         defer { lock.unlock() }
