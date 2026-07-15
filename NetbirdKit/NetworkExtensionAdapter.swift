@@ -462,15 +462,31 @@ public class NetworkExtensionAdapter: ObservableObject {
         // (after startTunnel fails with login-required), which kills the WaitToken
         // goroutine before the HTTP server can receive the OAuth callback.
         // Running it here keeps the HTTP server alive for the full browser session.
-        // NetBirdSDKNewAuth does NOT read the config file at configPath — it only
-        // uses that path for writing the config back after login. The second argument
-        // is the management URL used to build the in-memory config; passing "" makes
-        // the Go SDK fall back to the default cloud server (api.netbird.io) and the
-        // login runs against — and is then written back to — the wrong server.
-        // Pass the active profile's real management URL so login targets the user's
-        // own server and the resulting config keeps it.
+        // NetBirdSDKNewAuth loads the existing config file at configPath when one is
+        // present, so an interactive re-login reuses the peer's persisted WireGuard
+        // private key (its identity) instead of generating a fresh one. A fresh key
+        // would register a brand-new peer on the management server on every re-auth
+        // (named after the fallback hostname). Only a first-time login with no config
+        // yet builds a new in-memory config from the URL argument.
+        // The second argument is the management URL: passing "" makes the Go SDK fall
+        // back to the default cloud server (api.netbird.io), so login would run against
+        // — and be written back to — the wrong server. Pass the active profile's real
+        // management URL so login targets the user's own server and the config keeps it.
         let activeProfile = ProfileManager.shared.getActiveProfileName()
-        let activeManagementURL = ProfileManager.shared.managementURL(for: activeProfile) ?? ""
+        // managementURL(for:) already recovers the URL from the config file, the
+        // logout-surviving server URL file, and the connection cache in turn. A nil
+        // result therefore means no server URL is persisted anywhere — which only
+        // happens on a genuine first-time login, where falling back to the default
+        // cloud server is correct. For a re-login the config file exists and its URL
+        // is preserved even when "" is passed (SDK's apply() only overrides the
+        // config URL when a non-empty one is provided). Log the nil case so a rare
+        // corrupted state (own-server profile that lost every URL source, which would
+        // silently fall back to the default cloud) is visible in diagnostics.
+        let resolvedURL = ProfileManager.shared.managementURL(for: activeProfile)
+        if resolvedURL == nil {
+            logger.warning("performLogin: no persisted management URL for '\(activeProfile, privacy: .public)' — login will use the default cloud server")
+        }
+        let activeManagementURL = resolvedURL ?? ""
         logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfile, privacy: .public)'")
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
            let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
@@ -532,7 +548,13 @@ public class NetworkExtensionAdapter: ObservableObject {
                     DispatchQueue.main.async { self?.pendingAuth = nil }
                     resume(nil)
                 }
-                auth.login(errListener, urlOpener: urlOpener, forceDeviceAuth: false)
+                // Pass the device name explicitly. The plain login() path uses an empty
+                // device name, which makes the management server register the peer under
+                // the machine hostname fallback instead of the user's device name
+                // (UIDevice.current.name). This only affects first-time registration —
+                // a re-login reuses the persisted config/identity — but that first peer
+                // would otherwise show up as "hostname".
+                auth.login(withDeviceName: errListener, urlOpener: urlOpener, forceDeviceAuth: false, deviceName: Device.getName())
             }
 
             if let url = receivedURL, !url.isEmpty {
