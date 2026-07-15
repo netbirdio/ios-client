@@ -462,13 +462,16 @@ public class NetworkExtensionAdapter: ObservableObject {
         // (after startTunnel fails with login-required), which kills the WaitToken
         // goroutine before the HTTP server can receive the OAuth callback.
         // Running it here keeps the HTTP server alive for the full browser session.
-        // NetBirdSDKNewAuth does NOT read the config file at configPath — it only
-        // uses that path for writing the config back after login. The second argument
-        // is the management URL used to build the in-memory config; passing "" makes
-        // the Go SDK fall back to the default cloud server (api.netbird.io) and the
-        // login runs against — and is then written back to — the wrong server.
-        // Pass the active profile's real management URL so login targets the user's
-        // own server and the resulting config keeps it.
+        // NetBirdSDKNewAuth loads the existing config file at configPath when one is
+        // present, so an interactive re-login reuses the peer's persisted WireGuard
+        // private key (its identity) instead of generating a fresh one. A fresh key
+        // would register a brand-new peer on the management server on every re-auth
+        // (named after the fallback hostname). Only a first-time login with no config
+        // yet builds a new in-memory config from the URL argument.
+        // The second argument is the management URL: passing "" makes the Go SDK fall
+        // back to the default cloud server (api.netbird.io), so login would run against
+        // — and be written back to — the wrong server. Pass the active profile's real
+        // management URL so login targets the user's own server and the config keeps it.
         let activeProfile = ProfileManager.shared.getActiveProfileName()
         let activeManagementURL = ProfileManager.shared.managementURL(for: activeProfile) ?? ""
         logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfile, privacy: .public)'")
