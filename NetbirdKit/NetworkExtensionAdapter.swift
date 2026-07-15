@@ -548,7 +548,13 @@ public class NetworkExtensionAdapter: ObservableObject {
                     DispatchQueue.main.async { self?.pendingAuth = nil }
                     resume(nil)
                 }
-                auth.login(errListener, urlOpener: urlOpener, forceDeviceAuth: false)
+                // Pass the device name explicitly. The plain login() path uses an empty
+                // device name, which makes the management server register the peer under
+                // the machine hostname fallback instead of the user's device name
+                // (UIDevice.current.name). This only affects first-time registration —
+                // a re-login reuses the persisted config/identity — but that first peer
+                // would otherwise show up as "hostname".
+                auth.login(withDeviceName: errListener, urlOpener: urlOpener, forceDeviceAuth: false, deviceName: Device.getName())
             }
 
             if let url = receivedURL, !url.isEmpty {
