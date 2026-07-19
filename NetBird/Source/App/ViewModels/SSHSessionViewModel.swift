@@ -36,6 +36,7 @@ final class SSHSessionViewModel: ObservableObject, Identifiable {
     private let networkExtensionAdapter: NetworkExtensionAdapter
     private var isPolling = false
     private var isUserInitiatedStop = false
+    private var connectionStarted = false
     private var lastCols = 80
     private var lastRows = 24
 
@@ -65,8 +66,8 @@ final class SSHSessionViewModel: ObservableObject, Identifiable {
             if !outputBuffer.isEmpty {
                 onOutput?(outputBuffer)
             }
-        case .connecting:
-            break // already in-flight, ignore re-entrant terminalReady
+        case .connecting where connectionStarted:
+            break // re-entrant terminalReady while IPC is in flight — ignore
         default:
             start(cols: cols, rows: rows)
         }
@@ -77,6 +78,7 @@ final class SSHSessionViewModel: ObservableObject, Identifiable {
         lastRows = rows
         isUserInitiatedStop = false
         canReconnect = false
+        connectionStarted = true
         state = .connecting
 
         if isNetBirdPeer {
