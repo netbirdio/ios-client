@@ -27,6 +27,35 @@ struct VPNToggleView: View {
     private var thumbDiameter: CGFloat { trackHeight - 8 }
     private var thumbTravel: CGFloat { (trackWidth - thumbDiameter) / 2 - 4 }
 
+    // VoiceOver: describe the current connection state as the toggle's value.
+    private var accessibilityValueText: String {
+        switch vpnState {
+        case .connected:
+            return NSLocalizedString("Connected", comment: "VoiceOver value for VPN toggle when connected")
+        case .connecting:
+            return NSLocalizedString("Connecting", comment: "VoiceOver value for VPN toggle while connecting")
+        case .disconnecting:
+            return NSLocalizedString("Disconnecting", comment: "VoiceOver value for VPN toggle while disconnecting")
+        case .disconnected:
+            return NSLocalizedString("Disconnected", comment: "VoiceOver value for VPN toggle when disconnected")
+        }
+    }
+
+    // Mirror the .onTapGesture logic so VoiceOver activation (double-tap) works.
+    private func toggle() {
+        guard !isLocked else { return }
+        switch vpnState {
+        case .disconnected:
+            optimisticIsOn = true
+            onConnect()
+        case .connected, .connecting:
+            optimisticIsOn = false
+            onDisconnect()
+        case .disconnecting:
+            break
+        }
+    }
+
     var body: some View {
         ZStack {
             Capsule()
@@ -44,17 +73,21 @@ struct VPNToggleView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            guard !isLocked else { return }
-            switch vpnState {
-            case .disconnected:
-                optimisticIsOn = true
-                onConnect()
-            case .connected, .connecting:
-                optimisticIsOn = false
-                onDisconnect()
-            case .disconnecting:
-                break
-            }
+            toggle()
+        }
+        // Accessibility: expose the custom shapes as a single toggle control so
+        // VoiceOver can focus, announce, and activate it.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(NSLocalizedString("VPN Connection", comment: "VoiceOver label for the main connect/disconnect toggle")))
+        .accessibilityValue(Text(accessibilityValueText))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+        .accessibilityHint(Text(isOn
+            ? NSLocalizedString("Disconnects the VPN", comment: "VoiceOver hint for VPN toggle when connected")
+            : NSLocalizedString("Connects the VPN", comment: "VoiceOver hint for VPN toggle when disconnected")))
+        .accessibilityRespondsToUserInteraction(!isLocked)
+        .accessibilityAction {
+            toggle()
         }
         // Clear optimistic as soon as the OS confirms any state change
         .onChange(of: vpnState) { _ in
