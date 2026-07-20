@@ -41,6 +41,20 @@ struct VPNToggleView: View {
         }
     }
 
+    // VoiceOver: describe the action activation performs. No hint while
+    // disconnecting, since the toggle is inert mid-teardown and announcing a
+    // connect action would be misleading.
+    private var accessibilityHintText: String {
+        switch vpnState {
+        case .disconnecting:
+            return ""
+        default:
+            return isOn
+                ? NSLocalizedString("Disconnects the VPN", comment: "VoiceOver hint for VPN toggle when connected")
+                : NSLocalizedString("Connects the VPN", comment: "VoiceOver hint for VPN toggle when disconnected")
+        }
+    }
+
     // Mirror the .onTapGesture logic so VoiceOver activation (double-tap) works.
     // Decide from the optimistic visual state (isOn) rather than vpnState, which
     // lags behind the OS: rapid taps would otherwise re-read a stale
@@ -84,9 +98,7 @@ struct VPNToggleView: View {
         .accessibilityValue(Text(accessibilityValueText))
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isOn ? .isSelected : [])
-        .accessibilityHint(Text(isOn
-            ? NSLocalizedString("Disconnects the VPN", comment: "VoiceOver hint for VPN toggle when connected")
-            : NSLocalizedString("Connects the VPN", comment: "VoiceOver hint for VPN toggle when disconnected")))
+        .accessibilityHint(Text(accessibilityHintText))
         .accessibilityRespondsToUserInteraction(!isLocked)
         .accessibilityAction {
             toggle()
