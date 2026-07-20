@@ -42,17 +42,19 @@ struct VPNToggleView: View {
     }
 
     // Mirror the .onTapGesture logic so VoiceOver activation (double-tap) works.
+    // Decide from the optimistic visual state (isOn) rather than vpnState, which
+    // lags behind the OS: rapid taps would otherwise re-read a stale
+    // .disconnected/.connected and fire duplicate onConnect/onDisconnect calls.
     private func toggle() {
         guard !isLocked else { return }
-        switch vpnState {
-        case .disconnected:
-            optimisticIsOn = true
-            onConnect()
-        case .connected, .connecting:
+        // Preserve the original behavior of ignoring taps mid-teardown.
+        guard vpnState != .disconnecting else { return }
+        if isOn {
             optimisticIsOn = false
             onDisconnect()
-        case .disconnecting:
-            break
+        } else {
+            optimisticIsOn = true
+            onConnect()
         }
     }
 
