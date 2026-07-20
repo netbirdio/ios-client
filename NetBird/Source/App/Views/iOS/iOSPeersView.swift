@@ -14,7 +14,6 @@ struct iOSPeersView: View {
     @EnvironmentObject var activeSessionStore: SSHActiveSessionStore
     @State private var showSavedSessions = false
     @State private var showActiveSessions = false
-    @State private var showNewSSH = false
 
     var body: some View {
         ZStack {
@@ -50,12 +49,6 @@ struct iOSPeersView: View {
                         Image(systemName: "bookmark")
                             .foregroundColor(Color("TextPrimary"))
                     }
-                    Button {
-                        showNewSSH = true
-                    } label: {
-                        Image(systemName: "plus.circle")
-                            .foregroundColor(Color("TextPrimary"))
-                    }
                 }
                 .padding(.horizontal)
                 .padding(.top, 16)
@@ -71,9 +64,6 @@ struct iOSPeersView: View {
         }
         .sheet(isPresented: $showSavedSessions) {
             SavedSessionsListView(networkExtensionAdapter: viewModel.networkExtensionAdapter)
-        }
-        .sheet(isPresented: $showNewSSH) {
-            SSHConnectSheet(networkExtensionAdapter: viewModel.networkExtensionAdapter)
         }
     }
 
