@@ -8,6 +8,31 @@ on:
     types: [opened, edited]
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Marketing version override (X.Y.Z)'
+        required: false
+        type: string
+      build-number:
+        description: 'Build number override'
+        required: false
+        type: string
+      netbird-ref:
+        description: 'Override netbird-core submodule ref'
+        required: false
+        type: string
+      ios-only:
+        description: 'Build iOS only (skip tvOS)'
+        required: false
+        type: boolean
+        default: false
+      deploy:
+        description: 'testflight = upload to App Store Connect, artifact = development-signed IPA as run artifact'
+        required: false
+        type: choice
+        options: [testflight, artifact]
+        default: testflight
 
 permissions:
   contents: read
@@ -30,6 +55,8 @@ jobs:
     outputs:
       ref: ${{ steps.finalize.outputs.ref }}
       should-build: ${{ steps.finalize.outputs.should-build }}
+      build-tvos: ${{ steps.finalize.outputs.build-tvos }}
+      deploy: ${{ steps.finalize.outputs.deploy }}
       upload: ${{ steps.finalize.outputs.upload }}
       netbird-ref: ${{ steps.finalize.outputs.netbird-ref }}
       version: ${{ steps.finalize.outputs.version }}
@@ -58,6 +85,19 @@ jobs:
               core.setOutput('ref', context.sha);
               core.setOutput('should-build', 'true');
               core.setOutput('upload', 'true');
+              if (context.eventName === 'workflow_dispatch') {
+                const inputs = context.payload.inputs || {};
+                if (inputs.version) core.setOutput('version-override', inputs.version);
+                if (inputs['build-number']) core.setOutput('build-number', inputs['build-number']);
+                if (inputs['netbird-ref']) core.setOutput('netbird-ref', inputs['netbird-ref']);
+                if (inputs['ios-only'] === true || inputs['ios-only'] === 'true') {
+                  core.setOutput('build-tvos', 'false');
+                }
+                if (inputs.deploy === 'artifact') {
+                  core.setOutput('deploy', 'artifact');
+                  core.setOutput('build-tvos', 'false');
+                }
+              }
               return;
             }
 
@@ -199,6 +239,8 @@ jobs:
         env:
           PRE_REF:            ${{ steps.pre.outputs.ref }}
           PRE_SHOULD_BUILD:   ${{ steps.pre.outputs.should-build }}
+          PRE_BUILD_TVOS:     ${{ steps.pre.outputs.build-tvos }}
+          PRE_DEPLOY:         ${{ steps.pre.outputs.deploy }}
           PRE_UPLOAD:         ${{ steps.pre.outputs.upload }}
           PRE_NETBIRD_REF:    ${{ steps.pre.outputs.netbird-ref }}
           PRE_BUILD_NUMBER:   ${{ steps.pre.outputs.build-number }}
@@ -211,6 +253,8 @@ jobs:
           script: |
             core.setOutput('ref',          process.env.PRE_REF);
             core.setOutput('should-build', process.env.PRE_SHOULD_BUILD);
+            core.setOutput('build-tvos',   process.env.PRE_BUILD_TVOS || 'true');
+            core.setOutput('deploy',       process.env.PRE_DEPLOY || 'testflight');
             core.setOutput('upload',       process.env.PRE_UPLOAD);
             core.setOutput('netbird-ref',  process.env.PRE_NETBIRD_REF);
 
@@ -258,12 +302,13 @@ jobs:
       version: ${{ needs.gate.outputs.version }}
       build-number: ${{ needs.gate.outputs.build-number }}
       upload: ${{ needs.gate.outputs.upload == 'true' }}
+      deploy: ${{ needs.gate.outputs.deploy }}
     secrets: inherit
 
   build-tvos:
     name: Build and Upload tvOS
     needs: gate
-    if: needs.gate.outputs.should-build == 'true'
+    if: needs.gate.outputs.should-build == 'true' && needs.gate.outputs.build-tvos == 'true'
     uses: ./.github/workflows/build-upload-tvos.yml
     with:
       ref: ${{ needs.gate.outputs.ref }}
