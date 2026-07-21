@@ -13,6 +13,7 @@
 		1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */; };
 		30FF9C7920F6D266D287C60A /* Terminal in Resources */ = {isa = PBXBuildFile; fileRef = 2C7C32B75979A07D28C5193D /* Terminal */; };
 		34DCB32C09E2442650FE30B9 /* ActiveSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DDC3F7D440E943BD9D175B8 /* ActiveSessionsView.swift */; };
+		EDA5F98A1D504292ACBA5070 /* iOSSSHView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 609FC285281B4A8F9E30113F /* iOSSSHView.swift */; };
 		36F90EF57603411B9916FDD6 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 		3A9A981B20EF47C1907CC877 /* TVServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8BCB110545747678AA5A9C2 /* TVServerView.swift */; };
 		441C5AFE2EDF0DD20055EEFC /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50245A532A80431B0034792B /* NetworkExtension.framework */; };
@@ -310,6 +311,7 @@
 		44DCF5B82EDF4D900026078E /* libresolv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libresolv.tbd; path = usr/lib/libresolv.tbd; sourceTree = SDKROOT; };
 		44F3E39A2EE2F9FA00C87FEC /* TVAuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVAuthView.swift; sourceTree = "<group>"; };
 		4DDC3F7D440E943BD9D175B8 /* ActiveSessionsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ActiveSessionsView.swift; sourceTree = "<group>"; };
+		609FC285281B4A8F9E30113F /* iOSSSHView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = iOSSSHView.swift; sourceTree = "<group>"; };
 		50003BC82AFD2F0C00E5EB6B /* ConnectionListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionListener.swift; sourceTree = "<group>"; };
 		50003BCB2AFD3B0C00E5EB6B /* ClientState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientState.swift; sourceTree = "<group>"; };
 		501B0DC52AE04DDE004BE7A7 /* button-disconnecting.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "button-disconnecting.json"; sourceTree = "<group>"; };
@@ -774,6 +776,7 @@
 				BB3AF60858344432AF484BBB /* SavedSessionsListView.swift */,
 				1F48DE55DC12388C90EAB6BD /* SSHKeyboardAccessoryView.swift */,
 				4DDC3F7D440E943BD9D175B8 /* ActiveSessionsView.swift */,
+				609FC285281B4A8F9E30113F /* iOSSSHView.swift */,
 			);
 			path = SSH;
 			sourceTree = "<group>";
@@ -1272,6 +1275,7 @@
 				D6DC1C017236D5FA4AC21EE3 /* SSHKeyboardAccessoryView.swift in Sources */,
 				34DCB32C09E2442650FE30B9 /* ActiveSessionsView.swift in Sources */,
 				19270466922C3C7A04881706 /* SSHActiveSessionStore.swift in Sources */,
+				EDA5F98A1D504292ACBA5070 /* iOSSSHView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

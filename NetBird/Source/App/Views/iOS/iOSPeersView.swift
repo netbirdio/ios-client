@@ -11,9 +11,6 @@ import SwiftUI
 
 struct iOSPeersView: View {
     @EnvironmentObject var viewModel: ViewModel
-    @EnvironmentObject var activeSessionStore: SSHActiveSessionStore
-    @State private var showSavedSessions = false
-    @State private var showActiveSessions = false
 
     var body: some View {
         ZStack {
@@ -29,26 +26,6 @@ struct iOSPeersView: View {
                         .font(.system(size: 18, weight: .regular))
                         .foregroundColor(Color("TextPrimary"))
                     Spacer()
-                    Button {
-                        showActiveSessions = true
-                    } label: {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "terminal")
-                                .foregroundColor(Color("TextPrimary"))
-                            if !activeSessionStore.sessions.isEmpty {
-                                Circle()
-                                    .fill(Color.green)
-                                    .frame(width: 8, height: 8)
-                                    .offset(x: 4, y: -4)
-                            }
-                        }
-                    }
-                    Button {
-                        showSavedSessions = true
-                    } label: {
-                        Image(systemName: "bookmark")
-                            .foregroundColor(Color("TextPrimary"))
-                    }
                 }
                 .padding(.horizontal)
                 .padding(.top, 16)
@@ -59,12 +36,6 @@ struct iOSPeersView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarHidden(true)
-        .sheet(isPresented: $showActiveSessions) {
-            ActiveSessionsView()
-        }
-        .sheet(isPresented: $showSavedSessions) {
-            SavedSessionsListView(networkExtensionAdapter: viewModel.networkExtensionAdapter)
-        }
     }
 
     private var connectedCount: String {
