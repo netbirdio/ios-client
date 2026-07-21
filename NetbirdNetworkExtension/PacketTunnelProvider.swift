@@ -26,16 +26,15 @@ private let stderrRedirectOnce: Void = {
     }
     let errLogURL = groupURL.appendingPathComponent("netbird.err")
 
-    // Cap growth across sessions: reset once it grows beyond 5 MB.
-    if let attrs = try? fileManager.attributesOfItem(atPath: errLogURL.path),
-       let size = attrs[.size] as? UInt64, size > 5 * 1024 * 1024 {
-        try? fileManager.removeItem(at: errLogURL)
-    }
-
-    // Surface a previous session's crash output before appending to it.
     if let attrs = try? fileManager.attributesOfItem(atPath: errLogURL.path),
        let size = attrs[.size] as? UInt64, size > 0 {
+        // Surface a previous session's crash output before appending to it.
         AppLogger.shared.log("stderr redirect: netbird.err has \(size) bytes from a previous session (possible crash dump)")
+        // Cap growth across sessions: reset once it grows beyond 5 MB.
+        if size > 5 * 1024 * 1024 {
+            AppLogger.shared.log("stderr redirect: netbird.err exceeds 5 MB cap, resetting")
+            try? fileManager.removeItem(at: errLogURL)
+        }
     }
 
     let fd = open(errLogURL.path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
