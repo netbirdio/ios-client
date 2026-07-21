@@ -12,8 +12,54 @@ import os
 import UserNotifications
 import WidgetKit
 
+/// One-time (per process) redirect of stderr (fd 2) into "netbird.err" in the app
+/// group container. The Go runtime writes panic messages and fatal-error goroutine
+/// dumps to fd 2, which an app extension otherwise discards — after a SIGABRT crash
+/// this file is the only place the panic reason can be recovered from.
+/// The file lives next to logfile.log, so the debug bundle generator picks it up
+/// automatically as "netbird.err" (see BundleGenerator.addLogfile in netbird-core).
+private let stderrRedirectOnce: Void = {
+    let fileManager = FileManager.default
+    guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) else {
+        AppLogger.shared.log("stderr redirect: app group container unavailable")
+        return
+    }
+    let errLogURL = groupURL.appendingPathComponent("netbird.err")
+
+    if let attrs = try? fileManager.attributesOfItem(atPath: errLogURL.path),
+       let size = attrs[.size] as? UInt64, size > 0 {
+        // Surface a previous session's crash output before appending to it.
+        AppLogger.shared.log("stderr redirect: netbird.err has \(size) bytes from a previous session (possible crash dump)")
+        // Cap growth across sessions: reset once it grows beyond 5 MB.
+        if size > 5 * 1024 * 1024 {
+            AppLogger.shared.log("stderr redirect: netbird.err exceeds 5 MB cap, resetting")
+            try? fileManager.removeItem(at: errLogURL)
+        }
+    }
+
+    let fd = open(errLogURL.path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
+    guard fd >= 0 else {
+        AppLogger.shared.log("stderr redirect: failed to open \(errLogURL.path), errno=\(errno)")
+        return
+    }
+    dup2(fd, STDERR_FILENO)
+    if fd != STDERR_FILENO {
+        close(fd)
+    }
+
+    let marker = "\n=== stderr redirect active pid=\(getpid()) at \(ISO8601DateFormatter().string(from: Date())) ===\n"
+    marker.withCString { _ = write(STDERR_FILENO, $0, strlen($0)) }
+    AppLogger.shared.log("stderr redirect: fd 2 -> netbird.err in app group container")
+}()
+
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
+
+    override init() {
+        // Must run before any Go SDK call so a Go panic during startup is captured too.
+        _ = stderrRedirectOnce
+        super.init()
+    }
 
     private lazy var tunnelManager: PacketTunnelProviderSettingsManager = {
         return PacketTunnelProviderSettingsManager(with: self)
