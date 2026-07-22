@@ -112,6 +112,7 @@
 		509CCD6A2BE908C000B7C2D8 /* RoutesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */; };
 		509CCD6C2BE90D0E00B7C2D8 /* PeerTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD6B2BE90D0E00B7C2D8 /* PeerTabView.swift */; };
 		509CCD6E2BE90D2100B7C2D8 /* RouteTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD6D2BE90D2100B7C2D8 /* RouteTabView.swift */; };
+		E1D0E0012F80000100000001 /* ExitNodeSummaryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D0E0002F80000100000001 /* ExitNodeSummaryRow.swift */; };
 		50A8911B2A792A15007C48FC /* NetBirdApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911A2A792A15007C48FC /* NetBirdApp.swift */; };
 		50A8911D2A792A15007C48FC /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911C2A792A15007C48FC /* MainView.swift */; };
 		50A8911F2A792A16007C48FC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 50A8911E2A792A16007C48FC /* Assets.xcassets */; };
@@ -326,6 +327,7 @@
 		509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutesViewModel.swift; sourceTree = "<group>"; };
 		509CCD6B2BE90D0E00B7C2D8 /* PeerTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerTabView.swift; sourceTree = "<group>"; };
 		509CCD6D2BE90D2100B7C2D8 /* RouteTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteTabView.swift; sourceTree = "<group>"; };
+		E1D0E0002F80000100000001 /* ExitNodeSummaryRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExitNodeSummaryRow.swift; sourceTree = "<group>"; };
 		50A891172A792A15007C48FC /* NetBird.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NetBird.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		50A8911A2A792A15007C48FC /* NetBirdApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetBirdApp.swift; sourceTree = "<group>"; };
 		50A8911C2A792A15007C48FC /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
@@ -637,6 +639,7 @@
 				50CD84352AD82F9400CF830B /* ServerView.swift */,
 				509CCD6B2BE90D0E00B7C2D8 /* PeerTabView.swift */,
 				509CCD6D2BE90D2100B7C2D8 /* RouteTabView.swift */,
+				E1D0E0002F80000100000001 /* ExitNodeSummaryRow.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -1156,6 +1159,7 @@
 				509CCD6A2BE908C000B7C2D8 /* RoutesViewModel.swift in Sources */,
 				50A8911B2A792A15007C48FC /* NetBirdApp.swift in Sources */,
 				509CCD6E2BE90D2100B7C2D8 /* RouteTabView.swift in Sources */,
+				E1D0E0012F80000100000001 /* ExitNodeSummaryRow.swift in Sources */,
 				E1A0B0012F5E000100000001 /* EmptyTabPlaceholder.swift in Sources */,
 				E1C0D0012F72000100000001 /* AppButton.swift in Sources */,
 				E1B0C0012F60000100000001 /* NetworkWarningBanner.swift in Sources */,
