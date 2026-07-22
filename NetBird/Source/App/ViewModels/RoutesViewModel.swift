@@ -45,6 +45,24 @@ class RoutesViewModel: ObservableObject {
             return routeNameMatch || networkMatch || domainMatch || isEmptyFilter
         }
     }
+
+    // Exit nodes (0.0.0.0/0 or ::/0 routes) get their own dedicated selector instead of
+    // appearing in the standard resources list.
+    var resourceRouteInfo: [RoutesSelectionInfo] {
+        routeInfo.filter { !$0.isExitNode }
+    }
+
+    var filteredResourceRoutes: [RoutesSelectionInfo] {
+        filteredRoutes.filter { !$0.isExitNode }
+    }
+
+    var exitNodes: [RoutesSelectionInfo] {
+        routeInfo.filter { $0.isExitNode }
+    }
+
+    var selectedExitNode: RoutesSelectionInfo? {
+        exitNodes.first { $0.selected }
+    }
     
     func toggleSelected(for routeId: UUID) {
             if let index = routeInfo.firstIndex(where: { $0.id == routeId }) {

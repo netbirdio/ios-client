@@ -54,12 +54,12 @@ struct iOSNetworksView: View {
 
     private var enabledCount: String {
         guard viewModel.vpnDisplayState == .connected else { return "0" }
-        return viewModel.routeViewModel.routeInfo.filter { $0.selected }.count.description
+        return viewModel.routeViewModel.resourceRouteInfo.filter { $0.selected }.count.description
     }
 
     private var totalCount: String {
         guard viewModel.vpnDisplayState == .connected else { return "0" }
-        return viewModel.routeViewModel.routeInfo.count.description
+        return viewModel.routeViewModel.resourceRouteInfo.count.description
     }
 }
 
