@@ -136,12 +136,21 @@ jobs:
               ref: process.env.TAG,
             });
 
-            await github.rest.repos.createCommitComment({
+            const existing = await github.paginate(github.rest.repos.listCommitComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               commit_sha: commit.sha,
-              body: line,
             });
+            if (existing.some(c => (c.body || '').includes(runUrl))) {
+              core.info('Commit already has a comment for this run — skipping');
+            } else {
+              await github.rest.repos.createCommitComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: commit.sha,
+                body: line,
+              });
+            }
 
             try {
               const { data: release } = await github.rest.repos.getReleaseByTag({
