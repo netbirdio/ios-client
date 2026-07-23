@@ -27,6 +27,51 @@ struct VPNToggleView: View {
     private var thumbDiameter: CGFloat { trackHeight - 8 }
     private var thumbTravel: CGFloat { (trackWidth - thumbDiameter) / 2 - 4 }
 
+    // VoiceOver: describe the current connection state as the toggle's value.
+    private var accessibilityValueText: String {
+        switch vpnState {
+        case .connected:
+            return NSLocalizedString("Connected", comment: "VoiceOver value for VPN toggle when connected")
+        case .connecting:
+            return NSLocalizedString("Connecting", comment: "VoiceOver value for VPN toggle while connecting")
+        case .disconnecting:
+            return NSLocalizedString("Disconnecting", comment: "VoiceOver value for VPN toggle while disconnecting")
+        case .disconnected:
+            return NSLocalizedString("Disconnected", comment: "VoiceOver value for VPN toggle when disconnected")
+        }
+    }
+
+    // VoiceOver: describe the action activation performs. No hint while
+    // disconnecting, since the toggle is inert mid-teardown and announcing a
+    // connect action would be misleading.
+    private var accessibilityHintText: String {
+        switch vpnState {
+        case .disconnecting:
+            return ""
+        default:
+            return isOn
+                ? NSLocalizedString("Disconnects the VPN", comment: "VoiceOver hint for VPN toggle when connected")
+                : NSLocalizedString("Connects the VPN", comment: "VoiceOver hint for VPN toggle when disconnected")
+        }
+    }
+
+    // Mirror the .onTapGesture logic so VoiceOver activation (double-tap) works.
+    // Decide from the optimistic visual state (isOn) rather than vpnState, which
+    // lags behind the OS: rapid taps would otherwise re-read a stale
+    // .disconnected/.connected and fire duplicate onConnect/onDisconnect calls.
+    private func toggle() {
+        guard !isLocked else { return }
+        // Preserve the original behavior of ignoring taps mid-teardown.
+        guard vpnState != .disconnecting else { return }
+        if isOn {
+            optimisticIsOn = false
+            onDisconnect()
+        } else {
+            optimisticIsOn = true
+            onConnect()
+        }
+    }
+
     var body: some View {
         ZStack {
             Capsule()
@@ -44,17 +89,19 @@ struct VPNToggleView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            guard !isLocked else { return }
-            switch vpnState {
-            case .disconnected:
-                optimisticIsOn = true
-                onConnect()
-            case .connected, .connecting:
-                optimisticIsOn = false
-                onDisconnect()
-            case .disconnecting:
-                break
-            }
+            toggle()
+        }
+        // Accessibility: expose the custom shapes as a single toggle control so
+        // VoiceOver can focus, announce, and activate it.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(NSLocalizedString("VPN Connection", comment: "VoiceOver label for the main connect/disconnect toggle")))
+        .accessibilityValue(Text(accessibilityValueText))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+        .accessibilityHint(Text(accessibilityHintText))
+        .accessibilityRespondsToUserInteraction(!isLocked)
+        .accessibilityAction {
+            toggle()
         }
         // Clear optimistic as soon as the OS confirms any state change
         .onChange(of: vpnState) { _ in
