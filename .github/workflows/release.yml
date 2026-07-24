@@ -101,3 +101,77 @@ jobs:
       version: ${{ needs.prepare.outputs.version }}
       build-number: ${{ needs.fetch-build-number.outputs.build-number-tvos }}
     secrets: inherit
+
+  notify:
+    name: Comment build numbers on tag
+    needs: [prepare, fetch-build-number, build, build-tvos]
+    if: always() && needs.fetch-build-number.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Comment on tagged commit and update release
+        uses: actions/github-script@v7
+        env:
+          VERSION:           ${{ needs.prepare.outputs.version }}
+          BUILD_NUMBER:      ${{ needs.fetch-build-number.outputs.build-number }}
+          BUILD_NUMBER_TVOS: ${{ needs.fetch-build-number.outputs.build-number-tvos }}
+          IOS_RESULT:        ${{ needs.build.result }}
+          TVOS_RESULT:       ${{ needs.build-tvos.result }}
+          TAG:               ${{ github.ref_name }}
+        with:
+          script: |
+            const version   = process.env.VERSION;
+            const iosBuild  = process.env.BUILD_NUMBER;
+            const tvosBuild = process.env.BUILD_NUMBER_TVOS;
+            const iosBadge  = process.env.IOS_RESULT  === 'success' ? '✅' : '❌';
+            const tvosBadge = process.env.TVOS_RESULT === 'success' ? '✅' : '❌';
+            const runUrl    = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const line      = `**TestFlight release** — iOS \`${version} (${iosBuild})\` ${iosBadge} · tvOS \`${version} (${tvosBuild})\` ${tvosBadge}\n\n[View workflow run](${runUrl})`;
+
+            // getCommit dereferences annotated tags; context.sha may point at the tag object
+            const { data: commit } = await github.rest.repos.getCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: process.env.TAG,
+            });
+
+            const existing = await github.paginate(github.rest.repos.listCommitComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: commit.sha,
+            });
+            if (existing.some(c => (c.body || '').includes(runUrl))) {
+              core.info('Commit already has a comment for this run — skipping');
+            } else {
+              await github.rest.repos.createCommitComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: commit.sha,
+                body: line,
+              });
+            }
+
+            try {
+              const { data: release } = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: process.env.TAG,
+              });
+              if ((release.body || '').includes(runUrl)) {
+                core.info('Release body already references this run — skipping append');
+              } else {
+                await github.rest.repos.updateRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: release.id,
+                  body: `${release.body || ''}\n\n---\n${line}`,
+                });
+              }
+            } catch (e) {
+              if (e.status === 404) {
+                core.info(`No GitHub release for tag ${process.env.TAG} — commit comment only`);
+              } else {
+                throw e;
+              }
+            }
