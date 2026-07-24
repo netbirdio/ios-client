@@ -26,20 +26,37 @@ jobs:
           path: ios-client
           submodules: recursive
 
+      - name: Get netbird-core commit
+        id: core-sha
+        working-directory: ios-client
+        run: echo "sha=$(git rev-parse HEAD:netbird-core)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache NetBirdSDK xcframework
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: ios-client/NetBirdSDK.xcframework
+          # gomobile/xcode segments must match the pinned versions in this job
+          key: netbirdsdk-ios-${{ steps.core-sha.outputs.sha }}-${{ hashFiles('ios-client/build-go-lib.sh') }}-gomobile-20251113184115-xcode-26.1.1
+
       - name: Fetch netbird tags
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
         working-directory: ios-client/netbird-core
         run: git fetch --tags
 
       - name: Setup Go
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
         uses: actions/setup-go@v5
         with:
           go-version-file: 'ios-client/netbird-core/go.mod'
           cache-dependency-path: ios-client/netbird-core/go.sum
 
       - name: Install gomobile
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
         run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
 
       - name: Build NetBirdSDK xcframework
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
         working-directory: ios-client
         run: ./build-go-lib.sh
 
@@ -148,22 +165,39 @@ jobs:
           path: ios-client
           submodules: recursive
 
+      - name: Get netbird-core commit
+        id: core-sha
+        working-directory: ios-client
+        run: echo "sha=$(git rev-parse HEAD:netbird-core)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache NetBirdSDK xcframework
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: ios-client/NetBirdSDK.xcframework
+          # gomobile/xcode segments must match the pinned versions in this job
+          key: netbirdsdk-tvos-${{ steps.core-sha.outputs.sha }}-${{ hashFiles('ios-client/build-go-lib.sh') }}-gomobile-fork-20260129172842-xcode-26.1.1
+
       - name: Fetch netbird tags
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
         working-directory: ios-client/netbird-core
         run: git fetch --tags
 
       - name: Setup Go
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
         uses: actions/setup-go@v5
         with:
           go-version-file: 'ios-client/netbird-core/go.mod'
           cache-dependency-path: ios-client/netbird-core/go.sum
 
       - name: Install gomobile-netbird (tvOS fork)
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
         run: |
           GOPROXY=direct go install github.com/netbirdio/gomobile-tvos-fork/cmd/gomobile-netbird@v0.0.0-20260129172842-a56582c0e7c9
           GOPROXY=direct go install github.com/netbirdio/gomobile-tvos-fork/cmd/gobind-netbird@v0.0.0-20260129172842-a56582c0e7c9
 
       - name: Build NetBirdSDK xcframework
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
         working-directory: ios-client
         run: ./build-go-lib.sh --tvos
 
