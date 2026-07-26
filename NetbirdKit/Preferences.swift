@@ -178,6 +178,38 @@ class Preferences {
         return sharedUserDefaults()?.string(forKey: managementURLKey)
     }
 
+    // MARK: - Per-Profile Login Web-Store Identifiers
+    //
+    // Every profile logs in through a WKWebView whose persistent
+    // WKWebsiteDataStore is keyed by a stable per-profile UUID (iOS 17+). That
+    // store keeps the IdP's trusted-device 2FA cookie between re-logins, while
+    // every profile stays fully isolated in its own cookie jar.
+
+    /// Stable identifier of the profile's persistent login web store, created on
+    /// first use.
+    static func webStoreIdentifier(for profile: String) -> UUID {
+        let defaults = sharedUserDefaults()
+        var map = defaults?.dictionary(forKey: GlobalConstants.keyProfileWebStoreIDs) as? [String: String] ?? [:]
+        if let existing = map[profile], let uuid = UUID(uuidString: existing) {
+            return uuid
+        }
+        let uuid = UUID()
+        map[profile] = uuid.uuidString
+        defaults?.set(map, forKey: GlobalConstants.keyProfileWebStoreIDs)
+        return uuid
+    }
+
+    /// Forgets the profile's web-store identifier, returning it so the caller can
+    /// delete the underlying WKWebsiteDataStore (WebKit is not linked here — this
+    /// file is also compiled into the network extension).
+    static func removeWebStoreIdentifier(for profile: String) -> UUID? {
+        let defaults = sharedUserDefaults()
+        var map = defaults?.dictionary(forKey: GlobalConstants.keyProfileWebStoreIDs) as? [String: String] ?? [:]
+        guard let existing = map.removeValue(forKey: profile) else { return nil }
+        defaults?.set(map, forKey: GlobalConstants.keyProfileWebStoreIDs)
+        return UUID(uuidString: existing)
+    }
+
     /// Restore config from UserDefaults to the config file path.
     /// iOS only - needed because the Go SDK reads from the file path.
     #if os(iOS)

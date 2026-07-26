@@ -77,12 +77,14 @@ public class NetworkExtensionAdapter: ObservableObject {
     #if os(iOS)
     private var pendingAuth: NetBirdSDKAuth?
     /// Set to true by the SDK's onLoginSuccess callback (which fires once the Go PKCE
-    /// localhost server receives the OAuth callback). The browser-finished handler reads
-    /// this to tell a genuine login from the user dismissing the browser: the
-    /// ASWebAuthenticationSession completion fires with a nil callbackURL even on success
-    /// (the loopback redirect is consumed by the Go HTTP server, not the auth session),
-    /// so the SafariView callback alone cannot distinguish success from cancellation.
+    /// flow completes the token exchange and management login). The browser-finished
+    /// handler reads this to tell a genuine login apart from the user cancelling the
+    /// browser — the browser itself cannot make that distinction.
     public private(set) var loginSucceeded = false
+    /// True while an automatic identity-reset retry is in flight (see the
+    /// ownership-conflict handling in performLogin's error callback). Guards
+    /// against retrying more than once per login attempt.
+    private var identityResetAttempted = false
     #endif
     @Published var userCode: String?
 
@@ -490,6 +492,9 @@ public class NetworkExtensionAdapter: ObservableObject {
         logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfile, privacy: .public)'")
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
            let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
+            // A stale flow from an abandoned attempt would keep the loopback port
+            // bound (and its WaitToken goroutine alive) — stop it first.
+            self.pendingAuth?.stop()
             self.pendingAuth = auth
             self.loginSucceeded = false
             let urlOpener = MainAppLoginURLOpener()
@@ -537,15 +542,54 @@ public class NetworkExtensionAdapter: ObservableObject {
                     // observes it and starts the VPN instead of treating the browser
                     // dismissal as a cancellation.
                     DispatchQueue.main.async {
-                        self?.loginSucceeded = true
-                        self?.pendingAuth = nil
+                        guard let self else { return }
+                        self.logger.info("performLogin: SDK login succeeded")
+                        self.identityResetAttempted = false
+                        self.loginSucceeded = true
+                        self.pendingAuth = nil
+                        // If the browser already auto-closed (its close grace ended
+                        // before the registration finished — typical for a first-time
+                        // profile login), the finished-handler deferred to us: start
+                        // the VPN now that the login is fully done. When the browser
+                        // is still open, its finished-handler starts the VPN instead.
+                        if !self.showBrowser {
+                            self.logger.info("performLogin: login completed after browser closed - starting VPN")
+                            self.startVPNConnection()
+                        }
                     }
                 }
                 errListener.onSuccessCallback = { urlOpener.onSuccess?() }
-                errListener.onErrorCallback = { [weak self] _ in
-                    // onError runs on a background goroutine; mutate pendingAuth on the
+                errListener.onErrorCallback = { [weak self] error in
+                    // Surface the reason in the logs — a login that dies AFTER the
+                    // browser part (token exchange or management login failing)
+                    // otherwise looks identical to "nothing happened".
+                    let message = error?.localizedDescription ?? "unknown login error"
+                    AppLogger.shared.log("performLogin: SDK login failed: \(message)")
+                    // onError runs on a background goroutine; mutate state on the
                     // main queue to stay consistent with onSuccess and cancelLogin().
-                    DispatchQueue.main.async { self?.pendingAuth = nil }
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else { return }
+                        self.logger.error("performLogin: SDK login failed: \(message, privacy: .public)")
+                        self.pendingAuth = nil
+                        // "peer is already registered by a different User or a Setup
+                        // Key": the profile's stored WireGuard key belongs to a peer
+                        // the just-authenticated account doesn't own, so every retry
+                        // with this identity is doomed. Self-heal: drop the profile's
+                        // local identity (config + state; the server URL survives) and
+                        // rerun the login once — the SDK then generates a fresh key
+                        // and registers a NEW peer under the correct account, leaving
+                        // the conflicting peer untouched. The retry's browser closes
+                        // by itself: the IdP session cookie from the just-completed
+                        // interactive login makes it a silent SSO redirect.
+                        if message.contains("registered by a different User"), !self.identityResetAttempted {
+                            self.identityResetAttempted = true
+                            let profile = ProfileManager.shared.getActiveProfileName()
+                            self.logger.warning("performLogin: peer identity conflicts with the logged-in account — resetting identity for '\(profile, privacy: .public)' and retrying login")
+                            AppLogger.shared.log("performLogin: resetting identity for '\(profile)' after ownership conflict; retrying login")
+                            try? ProfileManager.shared.logoutProfile(profile)
+                            Task { await self.performLogin() }
+                        }
+                    }
                     resume(nil)
                 }
                 // Pass the device name explicitly. The plain login() path uses an empty
@@ -591,6 +635,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         pendingAuth?.stop()
         pendingAuth = nil
         loginSucceeded = false
+        identityResetAttempted = false
         showBrowser = false
     }
     #endif

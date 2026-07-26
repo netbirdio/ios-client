@@ -16,6 +16,10 @@ struct iOSConnectionView: View {
     @State private var ipv4Copied = false
     @State private var ipv6Copied = false
     @State private var showAddressDetails = false
+    /// True once loginBrowserDidFinish ran for the current login-browser sheet.
+    /// Lets the sheet's onDismiss distinguish a swipe-down (nothing handled yet →
+    /// user cancel) from a dismissal that followed the Cancel button / auto-close.
+    @State private var loginBrowserCompletionHandled = false
 
     var body: some View {
         ZStack {
@@ -144,31 +148,70 @@ struct iOSConnectionView: View {
                 }
             }
 
-            // Safari login view — shown regardless of statusDetailsValid
-            if viewModel.networkExtensionAdapter.showBrowser,
-               let loginURLString = viewModel.networkExtensionAdapter.loginURL,
-               let loginURL = URL(string: loginURLString)
-            {
-                SafariView(
-                    isPresented: $viewModel.networkExtensionAdapter.showBrowser,
-                    url: loginURL,
-                    didFinish: {
-                        if viewModel.networkExtensionAdapter.loginSucceeded {
-                            print("Finish login")
-                            viewModel.networkExtensionAdapter.startVPNConnection()
-                        } else {
-                            // User closed the browser without completing login. Do NOT start
-                            // the VPN — that would launch the extension, trip its needs-login
-                            // path, and pop a spurious "Login required" alert/notification.
-                            print("Login cancelled by user")
-                            viewModel.cancelPendingLogin()
-                        }
-                    }
-                )
-            }
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarHidden(true)
+        // Login browser sheet — presented regardless of statusDetailsValid. One
+        // logic for every profile: persistent cookies scoped to the profile's own
+        // web store (the IdP's trusted-device 2FA cookie survives → no repeated
+        // OTP prompt) and auto-close after the OAuth loopback redirect. Profiles
+        // can never see each other's IdP sessions.
+        .sheet(
+            isPresented: $viewModel.networkExtensionAdapter.showBrowser,
+            onDismiss: {
+                // A swipe-down dismissal bypasses the browser's own callbacks —
+                // treat it as a user cancel so the pending login doesn't dangle.
+                // When the Cancel button or the auto-close already ran,
+                // loginBrowserDidFinish handled completion before the dismissal.
+                if !loginBrowserCompletionHandled {
+                    loginBrowserDidFinish(userCancelled: true)
+                }
+            }
+        ) {
+            if let loginURLString = viewModel.networkExtensionAdapter.loginURL,
+               let loginURL = URL(string: loginURLString)
+            {
+                ProfileLoginWebView(
+                    isPresented: $viewModel.networkExtensionAdapter.showBrowser,
+                    profileName: ProfileManager.shared.getActiveProfileName(),
+                    url: loginURL,
+                    didFinish: loginBrowserDidFinish
+                )
+                .onAppear { loginBrowserCompletionHandled = false }
+            }
+        }
+    }
+
+    /// Completion for the login browser.
+    private func loginBrowserDidFinish(userCancelled: Bool) {
+        loginBrowserCompletionHandled = true
+        let adapter = viewModel.networkExtensionAdapter
+        if userCancelled {
+            // Explicit Cancel tap. Do NOT start the VPN — that would launch the
+            // extension, trip its needs-login path, and pop a spurious
+            // "Login required" alert/notification.
+            print("Login cancelled by user")
+            viewModel.cancelPendingLogin()
+            return
+        }
+        if adapter.loginSucceeded {
+            print("Finish login")
+            adapter.startVPNConnection()
+            return
+        }
+        // The browser auto-closed after the loopback redirect, but the SDK hasn't
+        // reported success yet — a first-time profile registration can outlast the
+        // browser's close grace. The adapter starts the VPN itself when success
+        // arrives (see performLogin's onSuccess); here only arm a fallback reset
+        // for the case where the login errors out instead of succeeding.
+        print("Login still completing after browser closed - deferring to SDK result")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20) {
+            let adapter = viewModel.networkExtensionAdapter
+            if !adapter.loginSucceeded && !adapter.showBrowser {
+                print("Login did not complete after browser closed - resetting")
+                viewModel.cancelPendingLogin()
+            }
+        }
     }
 
     @ViewBuilder
