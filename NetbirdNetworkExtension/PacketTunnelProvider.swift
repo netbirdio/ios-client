@@ -120,7 +120,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        if adapter.needsLogin() {
+        // Skip this check when the main app has already established the login state (its own
+        // isLoginRequired() call, or a login it just completed) and said so via the start
+        // options. needsLogin() is a full Login RPC against the management server, so the
+        // unconditional check duplicated one the other process had just made. Starts the main
+        // app did not initiate (On Demand, widget intent) carry no flag and still verify here.
+        // Either way an expired session is caught by the engine: its own login fails with
+        // PermissionDenied, which drives onLoginRequired and tears the tunnel down.
+        #if os(iOS)
+        let loginVerifiedByApp = (options?[GlobalConstants.optionLoginVerified] as? NSNumber)?.boolValue ?? false
+        #else
+        let loginVerifiedByApp = false
+        #endif
+        if loginVerifiedByApp {
+            AppLogger.shared.log("startTunnel: login already verified by the main app, skipping needsLogin check")
+        }
+        if !loginVerifiedByApp, adapter.needsLogin() {
             signalLoginRequired()
             // Clear any transitioning widget state so the login button appears immediately
             // instead of waiting for the snap-back window to expire.
@@ -388,7 +403,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // Tokens may have expired during a network change (common with self-hosted servers
             // that have shorter token lifetimes). Check before restarting; if login is required
             // signal the main app so it can show the re-auth UI instead of silently failing.
-            if self?.adapter?.needsLogin() == true {
+            // The cached check reads the auth state the engine already recorded, so a network
+            // change no longer costs a Login RPC. An expiry the recorder has not seen yet is
+            // still caught one step later: the restarted engine's own login fails with
+            // PermissionDenied and drives onLoginRequired from the connection listener.
+            if self?.adapter?.needsLoginCached() == true {
                 AppLogger.shared.log("restartClient: login required — signaling main app, skipping restart")
                 self?.signalLoginRequired()
                 self?.updateWidgetStatus("disconnected")

@@ -100,8 +100,12 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
             AppLogger.shared.log("onDisconnected: state=disconnected, wasRestarting=\(wasRestarting)")
 
             // If session expired (not a network drop), signal login required so the user
-            // gets a notification. needsLogin() checks the management server error code.
-            if !wasRestarting && adapter.needsLogin() {
+            // gets a notification. Uses the network-free cached check: the blocking
+            // needsLogin() variant is a full Login RPC (retried with backoff for up to two
+            // minutes) on every ordinary disconnect, and it reports the same auth state the
+            // recorder already holds — the engine marks it from the management error before
+            // firing this callback.
+            if !wasRestarting && adapter.needsLoginCached() {
                 AppLogger.shared.log("onDisconnected: login required detected — signalling")
                 adapter.onLoginRequired?()
             }

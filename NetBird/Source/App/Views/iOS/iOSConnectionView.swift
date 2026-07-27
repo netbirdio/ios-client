@@ -155,7 +155,9 @@ struct iOSConnectionView: View {
                     didFinish: {
                         if viewModel.networkExtensionAdapter.loginSucceeded {
                             print("Finish login")
-                            viewModel.networkExtensionAdapter.startVPNConnection()
+                            // The SDK just completed the management login, so the extension
+                            // can skip its own needs-login check (one Login RPC) when it starts.
+                            viewModel.networkExtensionAdapter.startVPNConnection(loginVerified: true)
                         } else {
                             // User closed the browser without completing login. Do NOT start
                             // the VPN — that would launch the extension, trip its needs-login
