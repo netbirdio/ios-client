@@ -116,21 +116,12 @@ struct iOSSettingsView: View {
                 }
 
                 Section {
-                    VStack(spacing: 2) {
-                        HStack {
-                            Spacer()
-                            Text("Version \(appVersion)")
-                                .font(.system(size: 14))
-                                .foregroundColor(Color("TextSecondary"))
-                            Spacer()
-                        }
-                        HStack {
-                            Spacer()
-                            Text("Core \(goVersion)")
-                                .font(.system(size: 12))
-                                .foregroundColor(Color("TextSecondary"))
-                            Spacer()
-                        }
+                    HStack {
+                        Spacer()
+                        Text("Version: \(appVersion) (core \(goVersion))")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color("TextSecondary"))
+                        Spacer()
                     }
                 }
             }
