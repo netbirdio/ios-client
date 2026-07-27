@@ -99,10 +99,12 @@ private struct LoginWebViewRepresentable: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if !successURLSeen,
-               let urlString = navigationAction.request.url?.absoluteString,
-               Self.isSuccessURL(urlString) {
+               let url = navigationAction.request.url,
+               Self.isSuccessURL(url.absoluteString) {
                 successURLSeen = true
-                print("Url is: \(urlString)")
+                // Don't log the URL itself — its query carries the OAuth
+                // authorization code.
+                print("Login success redirect detected (host: \(url.host ?? "?"))")
             }
             // Always allow — the loopback redirect must reach the SDK's local HTTP
             // server, which is what actually receives the authorization code.
@@ -120,8 +122,14 @@ private struct LoginWebViewRepresentable: UIViewRepresentable {
             scheduleCloseIfNeeded()
         }
 
-        // If the loopback request fails instead (e.g. the flow was already torn
-        // down server-side), don't leave the user staring at a blank page.
+        // Post-success failures only (scheduleCloseIfNeeded guards on
+        // successURLSeen): if the loopback request fails AFTER the redirect was
+        // seen (e.g. the flow was already torn down server-side), close instead
+        // of leaving the user on a blank page. Failures BEFORE the redirect are
+        // deliberately ignored: WebKit reports benign NSURLErrorCancelled (-999)
+        // whenever one navigation supersedes another mid-redirect-chain, so
+        // reacting to pre-success failures would abort healthy logins. If the
+        // IdP genuinely fails to load, the user backs out via Cancel.
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             scheduleCloseIfNeeded()
         }

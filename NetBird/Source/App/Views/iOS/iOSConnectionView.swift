@@ -166,6 +166,10 @@ struct iOSConnectionView: View {
                 if !loginBrowserCompletionHandled {
                     loginBrowserDidFinish(userCancelled: true)
                 }
+                // Rearm here, not in the content's onAppear: every dismissal path
+                // ends in this handler, so the next presentation always starts
+                // unhandled even if the content branch never rendered.
+                loginBrowserCompletionHandled = false
             }
         ) {
             if let loginURLString = viewModel.networkExtensionAdapter.loginURL,
@@ -177,7 +181,14 @@ struct iOSConnectionView: View {
                     url: loginURL,
                     didFinish: loginBrowserDidFinish
                 )
-                .onAppear { loginBrowserCompletionHandled = false }
+            } else {
+                // Defensive: the adapter sets loginURL before showBrowser, so this
+                // should be unreachable. Dismiss immediately instead of showing a
+                // blank sheet; onDismiss then cancels the pending login.
+                Color.clear.onAppear {
+                    print("Login browser presented without a valid URL - dismissing")
+                    viewModel.networkExtensionAdapter.showBrowser = false
+                }
             }
         }
     }
@@ -205,9 +216,14 @@ struct iOSConnectionView: View {
         // arrives (see performLogin's onSuccess); here only arm a fallback reset
         // for the case where the login errors out instead of succeeding.
         print("Login still completing after browser closed - deferring to SDK result")
+        // Capture the attempt token so this timer can only act on the attempt it
+        // was armed for — a retry within the window would otherwise be killed by
+        // the stale timer once its own browser has closed.
+        let attemptToken = adapter.loginAttemptToken
         DispatchQueue.main.asyncAfter(deadline: .now() + 20) {
             let adapter = viewModel.networkExtensionAdapter
-            if !adapter.loginSucceeded && !adapter.showBrowser {
+            if adapter.loginAttemptToken == attemptToken,
+               !adapter.loginSucceeded, !adapter.showBrowser {
                 print("Login did not complete after browser closed - resetting")
                 viewModel.cancelPendingLogin()
             }

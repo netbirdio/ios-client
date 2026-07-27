@@ -85,6 +85,11 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// ownership-conflict handling in performLogin's error callback). Guards
     /// against retrying more than once per login attempt.
     private var identityResetAttempted = false
+    /// Incremented at every performLogin entry. Deferred actions armed for one
+    /// attempt (e.g. the view's post-dismissal fallback cancel) capture the
+    /// current value and compare before acting, so a stale timer can never
+    /// abort a newer attempt.
+    public private(set) var loginAttemptToken = 0
     #endif
     @Published var userCode: String?
 
@@ -496,9 +501,15 @@ public class NetworkExtensionAdapter: ObservableObject {
             // bound (and its WaitToken goroutine alive) — stop it first.
             self.pendingAuth?.stop()
             self.pendingAuth = auth
+            self.loginAttemptToken += 1
             self.loginSucceeded = false
             let urlOpener = MainAppLoginURLOpener()
             let errListener = MainAppLoginErrListener()
+            // Set (on the main queue) once the browser actually opened. Gates the
+            // ownership-conflict retry below: an error BEFORE the browser phase
+            // falls through to the IPC fallback, and running a retry concurrently
+            // with it would race two login flows.
+            var browserPhaseStarted = false
 
             let receivedURL: String? = await withCheckedContinuation { continuation in
                 var resumed = false
@@ -516,6 +527,7 @@ public class NetworkExtensionAdapter: ObservableObject {
                     // in parallel with this browser login. Ordering them guarantees the
                     // await caller sees showBrowser == true.
                     DispatchQueue.main.async {
+                        browserPhaseStarted = true
                         self?.loginURL = url
                         self?.showBrowser = true
                         resume(url)
@@ -581,13 +593,20 @@ public class NetworkExtensionAdapter: ObservableObject {
                         // the conflicting peer untouched. The retry's browser closes
                         // by itself: the IdP session cookie from the just-completed
                         // interactive login makes it a silent SSO redirect.
-                        if message.contains("registered by a different User"), !self.identityResetAttempted {
+                        if message.contains("registered by a different User"), !self.identityResetAttempted, browserPhaseStarted {
                             self.identityResetAttempted = true
                             let profile = ProfileManager.shared.getActiveProfileName()
-                            self.logger.warning("performLogin: peer identity conflicts with the logged-in account — resetting identity for '\(profile, privacy: .public)' and retrying login")
-                            AppLogger.shared.log("performLogin: resetting identity for '\(profile)' after ownership conflict; retrying login")
-                            try? ProfileManager.shared.logoutProfile(profile)
-                            Task { await self.performLogin() }
+                            do {
+                                try ProfileManager.shared.logoutProfile(profile)
+                                self.logger.warning("performLogin: peer identity conflicts with the logged-in account — resetting identity for '\(profile, privacy: .public)' and retrying login")
+                                AppLogger.shared.log("performLogin: resetting identity for '\(profile)' after ownership conflict; retrying login")
+                                Task { await self.performLogin() }
+                            } catch {
+                                // Retrying without a successful reset would present the
+                                // same conflicting identity again — log and stop instead.
+                                self.logger.error("performLogin: identity reset for '\(profile, privacy: .public)' failed: \(error.localizedDescription, privacy: .public)")
+                                AppLogger.shared.log("performLogin: identity reset for '\(profile)' failed: \(error.localizedDescription)")
+                            }
                         }
                     }
                     resume(nil)
