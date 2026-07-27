@@ -10,6 +10,7 @@
 
 import SwiftUI
 import UIKit
+import NetBirdSDK
 
 #if os(tvOS)
 
@@ -125,7 +126,7 @@ struct TVSettingsView: View {
                             TVSettingsInfoRow(
                                 icon: "info.circle.fill",
                                 title: "Version",
-                                subtitle: appVersion
+                                subtitle: "\(appVersion) (core \(goVersion))"
                             )
                         }
                     }
@@ -170,6 +171,12 @@ struct TVSettingsView: View {
     
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+
+    /// Version of the Go client baked into NetBirdSDK.xcframework at compile time.
+    private var goVersion: String {
+        let version = NetBirdSDKGoClientVersion()
+        return version.isEmpty ? "unknown" : version
     }
 }
 

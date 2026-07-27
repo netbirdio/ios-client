@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import NetBirdSDK
 
 struct AboutView: View {
     @EnvironmentObject var viewModel: ViewModel
@@ -20,9 +21,14 @@ struct AboutView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 120)
-                        Text("Version \(appVersion)")
-                            .font(.subheadline)
-                            .foregroundColor(Color("TextSecondary"))
+                        VStack(spacing: 4) {
+                            Text("Version \(appVersion)")
+                                .font(.subheadline)
+                                .foregroundColor(Color("TextSecondary"))
+                            Text("Core \(goVersion)")
+                                .font(.caption)
+                                .foregroundColor(Color("TextSecondary"))
+                        }
                     }
                     Spacer()
                 }
@@ -93,6 +99,12 @@ struct AboutView: View {
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+
+    /// Version of the Go client baked into NetBirdSDK.xcframework at compile time.
+    private var goVersion: String {
+        let version = NetBirdSDKGoClientVersion()
+        return version.isEmpty ? "unknown" : version
     }
 }
 
