@@ -359,6 +359,18 @@ struct TVVPNToggleView: View {
         .onChange(of: vpnState) { _ in
             optimisticIsOn = nil
         }
+        // Bounded fallback. A disconnect tap does not always move vpnState: when the
+        // extension is .connected or .connecting, updateVPNDisplayState() maps back to
+        // the same display state, so onChange never fires. That is fine while the OS
+        // reports the teardown a moment later — but if stop() is silently dropped, the
+        // override would hold the thumb in the wrong position and keep the pulse
+        // looping forever. Expire it so the UI falls back to the real state.
+        .task(id: optimisticIsOn) {
+            guard optimisticIsOn != nil else { return }
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard !Task.isCancelled else { return }
+            optimisticIsOn = nil
+        }
         // Drive the pulse loop with a cancellable async task keyed to transitioning state
         .task(id: isTransitioning) {
             guard isTransitioning else {
