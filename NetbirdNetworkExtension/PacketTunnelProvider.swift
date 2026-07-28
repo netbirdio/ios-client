@@ -74,8 +74,27 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var currentNetworkType: NWInterface.InterfaceType?
     private var wasStoppedDueToNoNetwork = false
     private var isRestartInProgress = false
-    
+
     private var networkChangeWorkItem: DispatchWorkItem?
+
+    /// Observer token for UserDefaults.didChangeNotification — used to
+    /// catch MDM managed-configuration pushes
+    /// (UserDefaults["com.apple.configuration.managed"]) and trigger an
+    /// engine restart so the new policy values flow through
+    /// Config.apply → applyMDMPolicy on the next Run.
+    private var mdmConfigObserver: NSObjectProtocol?
+
+    /// Last-observed snapshot of the managed-config dictionary. Used to
+    /// dedup UserDefaults.didChangeNotification, which fires on ANY
+    /// UserDefaults change — without dedup, every preference write
+    /// would trigger a spurious engine restart.
+    private var lastManagedConfigSnapshot: NSDictionary?
+
+    /// Flag preventing concurrent MDM restarts. The restartClient()
+    /// path already has its own isRestartInProgress guard; this is
+    /// purely to avoid re-entering mdmConfigChanged while a previous
+    /// restart is still in flight.
+    private var isMDMRestartScheduled = false
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
@@ -109,6 +128,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.adapter?.isNetworkUnavailable = false
             self?.startMonitoringNetworkChanges()
         }
+
+        // Register the MDM fetcher on the gomobile Client instance so
+        // every Run() that triggers Config.apply consults it via the
+        // Client-held mdm.Loader. Per-Client DI on the Go side — no
+        // process-wide state. Called every startTunnel; if the
+        // adapter was just recreated for a profile switch the fresh
+        // Client picks up the same fetcher.
+        adapter?.client.setMDMPolicyFetcher(MDMPolicyFetcher())
+        startObservingMDMConfigChanges()
 
         guard let adapter = adapter else {
             let error = NSError(
@@ -173,6 +201,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
         }
+        stopObservingMDMConfigChanges()
         // Reset network unavailable flag when tunnel stops
         adapter?.isNetworkUnavailable = false
         setNetworkUnavailableFlag(false)
@@ -669,6 +698,76 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
             AppLogger.shared.log("Routes set successfully.")
+        }
+    }
+
+    // MARK: - MDM managed-configuration observer
+
+    /// Subscribes to UserDefaults.didChangeNotification so changes to
+    /// the OS-pushed MDM managed-config dictionary
+    /// (UserDefaults["com.apple.configuration.managed"]) trigger an
+    /// engine restart. iOS does NOT fire a dedicated MDM notification
+    /// — the entire UserDefaults change channel is shared — so the
+    /// handler reads the current managed-config snapshot and compares
+    /// it against the last-observed one before restarting; otherwise
+    /// every unrelated UserDefaults write would cause a spurious
+    /// restart.
+    private func startObservingMDMConfigChanges() {
+        // Seed the snapshot so the first post-startup change is what
+        // triggers a restart, not the initial appearance.
+        lastManagedConfigSnapshot = UserDefaults.standard
+            .dictionary(forKey: MDMPolicyFetcher.managedConfigKey) as NSDictionary?
+
+        if mdmConfigObserver != nil {
+            return
+        }
+        mdmConfigObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleManagedConfigDidChangeIfRelevant()
+        }
+        AppLogger.shared.log("MDM: subscribed to managed-configuration changes")
+    }
+
+    private func stopObservingMDMConfigChanges() {
+        if let token = mdmConfigObserver {
+            NotificationCenter.default.removeObserver(token)
+            mdmConfigObserver = nil
+            AppLogger.shared.log("MDM: unsubscribed from managed-configuration changes")
+        }
+        lastManagedConfigSnapshot = nil
+        isMDMRestartScheduled = false
+    }
+
+    /// Called from the UserDefaults notification. Diff vs the last
+    /// snapshot; only on an actual managed-config change do we trigger
+    /// restartClient.
+    private func handleManagedConfigDidChangeIfRelevant() {
+        let current = UserDefaults.standard
+            .dictionary(forKey: MDMPolicyFetcher.managedConfigKey) as NSDictionary?
+
+        // Pointer-and-content equality via NSDictionary == handles
+        // nil-vs-nil, empty-vs-empty, and key/value diffs uniformly.
+        if current == lastManagedConfigSnapshot {
+            return
+        }
+        lastManagedConfigSnapshot = current
+
+        if isMDMRestartScheduled {
+            AppLogger.shared.log("MDM: change detected while a previous restart is in flight; new state will be picked up by that run")
+            return
+        }
+        isMDMRestartScheduled = true
+        AppLogger.shared.log("MDM: managed configuration changed; restarting client")
+        // Hand off to the existing restart pipeline. It already
+        // serialises against the network-change restart and drives
+        // the UI through ConnectionListener — exactly the flow we
+        // want for an MDM-triggered restart.
+        DispatchQueue.main.async { [weak self] in
+            self?.restartClient()
+            self?.isMDMRestartScheduled = false
         }
     }
 }
