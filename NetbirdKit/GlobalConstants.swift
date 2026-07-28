@@ -34,10 +34,11 @@ struct GlobalConstants {
     static let stateFileName = "state.json"
     static let serverURLFileName = "netbird_server_url"
 
-    // Map of profile name → UUID of the persistent WKWebsiteDataStore used by the
-    // login browser. Every profile (default included) has its own store, so IdP
-    // sessions never leak between profiles.
-    static let keyProfileWebStoreIDs = "netbird.profileWebStoreIDs"
+    // Profile whose account the login browser last authenticated. The system auth
+    // session shares one Safari cookie jar across all profiles, so a login for any
+    // other profile must force account selection instead of silently reusing that
+    // session.
+    static let keyLastAuthenticatedProfile = "netbird.lastAuthenticatedProfile"
 
     // Local notification identifiers
     static let notificationLoginRequired = "netbird.login.required"

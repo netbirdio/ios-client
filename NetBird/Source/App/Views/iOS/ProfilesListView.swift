@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import WebKit
 
 #if os(iOS)
 
@@ -187,18 +186,6 @@ struct ProfilesListView: View {
     private func removeProfile(_ profile: Profile) {
         do {
             try ProfileManager.shared.removeProfile(profile.name)
-            // Delete the profile's login web store (cookies incl. the IdP's
-            // trusted-device session) so a future profile with the same name
-            // cannot inherit it. Done here rather than in ProfileManager because
-            // WebKit is unavailable in the network-extension target.
-            if let storeID = Preferences.removeWebStoreIdentifier(for: profile.name),
-               #available(iOS 17.0, *) {
-                WKWebsiteDataStore.remove(forIdentifier: storeID) { error in
-                    if let error {
-                        AppLogger.shared.log("Failed to remove web store for profile '\(profile.name)': \(error.localizedDescription)")
-                    }
-                }
-            }
             loadProfiles()
         } catch {
             errorMessage = error.localizedDescription

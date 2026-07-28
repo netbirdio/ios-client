@@ -178,36 +178,31 @@ class Preferences {
         return sharedUserDefaults()?.string(forKey: managementURLKey)
     }
 
-    // MARK: - Per-Profile Login Web-Store Identifiers
+    // MARK: - Last Authenticated Profile
     //
-    // Every profile logs in through a WKWebView whose persistent
-    // WKWebsiteDataStore is keyed by a stable per-profile UUID (iOS 17+). That
-    // store keeps the IdP's trusted-device 2FA cookie between re-logins, while
-    // every profile stays fully isolated in its own cookie jar.
+    // The login browser (ASWebAuthenticationSession) shares Safari's cookie jar,
+    // which the app cannot scope per profile or clear. Recording which profile that
+    // jar was last authenticated for lets the adapter add prompt=select_account
+    // whenever a login targets a different profile, so the IdP re-asks which
+    // account to use instead of silently signing in the previous one.
 
-    /// Stable identifier of the profile's persistent login web store, created on
-    /// first use.
-    static func webStoreIdentifier(for profile: String) -> UUID {
-        let defaults = sharedUserDefaults()
-        var map = defaults?.dictionary(forKey: GlobalConstants.keyProfileWebStoreIDs) as? [String: String] ?? [:]
-        if let existing = map[profile], let uuid = UUID(uuidString: existing) {
-            return uuid
-        }
-        let uuid = UUID()
-        map[profile] = uuid.uuidString
-        defaults?.set(map, forKey: GlobalConstants.keyProfileWebStoreIDs)
-        return uuid
+    /// Records the profile the login browser last authenticated.
+    static func saveLastAuthenticatedProfile(_ name: String) {
+        sharedUserDefaults()?.set(name, forKey: GlobalConstants.keyLastAuthenticatedProfile)
     }
 
-    /// Forgets the profile's web-store identifier, returning it so the caller can
-    /// delete the underlying WKWebsiteDataStore (WebKit is not linked here — this
-    /// file is also compiled into the network extension).
-    static func removeWebStoreIdentifier(for profile: String) -> UUID? {
-        let defaults = sharedUserDefaults()
-        var map = defaults?.dictionary(forKey: GlobalConstants.keyProfileWebStoreIDs) as? [String: String] ?? [:]
-        guard let existing = map.removeValue(forKey: profile) else { return nil }
-        defaults?.set(map, forKey: GlobalConstants.keyProfileWebStoreIDs)
-        return UUID(uuidString: existing)
+    /// The profile the login browser last authenticated, or nil if none has yet.
+    static func loadLastAuthenticatedProfile() -> String? {
+        return sharedUserDefaults()?.string(forKey: GlobalConstants.keyLastAuthenticatedProfile)
+    }
+
+    /// Forgets the marker if it names `profile`. Called on logout and profile
+    /// removal so the next login re-asks which account to use.
+    static func clearLastAuthenticatedProfile(ifEquals profile: String) {
+        guard let defaults = sharedUserDefaults() else { return }
+        if defaults.string(forKey: GlobalConstants.keyLastAuthenticatedProfile) == profile {
+            defaults.removeObject(forKey: GlobalConstants.keyLastAuthenticatedProfile)
+        }
     }
 
     /// Restore config from UserDefaults to the config file path.

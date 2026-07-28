@@ -167,6 +167,7 @@ class ProfileManager {
 
         try fileManager.removeItem(atPath: dir)
         ProfileConnectionCache().remove(for: name)
+        Preferences.clearLastAuthenticatedProfile(ifEquals: name)
     }
 
     /// Clears authentication data for a profile by removing its config and state files.
@@ -185,6 +186,11 @@ class ProfileManager {
             cache.saveManagementURL(url, for: name)
         }
         cache.clearConnectionData(for: name)
+
+        // An explicit logout must not silently sign back in through the browser
+        // session this profile left behind: dropping the marker makes the next
+        // login force account selection.
+        Preferences.clearLastAuthenticatedProfile(ifEquals: name)
 
         if fileManager.fileExists(atPath: statePath) {
             try fileManager.removeItem(atPath: statePath)
