@@ -153,12 +153,21 @@ struct iOSConnectionView: View {
                 SafariView(
                     isPresented: $viewModel.networkExtensionAdapter.showBrowser,
                     url: loginURL,
+                    prefersEphemeralSession: viewModel.networkExtensionAdapter.useEphemeralBrowserSession,
                     didFinish: loginBrowserDidFinish
                 )
             }
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarHidden(true)
+        .alert("Login failed", isPresented: Binding(
+            get: { viewModel.networkExtensionAdapter.loginErrorMessage != nil },
+            set: { if !$0 { viewModel.networkExtensionAdapter.loginErrorMessage = nil } }
+        )) {
+            Button("OK") { viewModel.networkExtensionAdapter.loginErrorMessage = nil }
+        } message: {
+            Text(viewModel.networkExtensionAdapter.loginErrorMessage ?? "")
+        }
     }
 
     /// Resolves what the login browser's end means for the VPN.

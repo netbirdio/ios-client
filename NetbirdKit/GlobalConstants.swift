@@ -34,11 +34,16 @@ struct GlobalConstants {
     static let stateFileName = "state.json"
     static let serverURLFileName = "netbird_server_url"
 
-    // Profile whose account the login browser last authenticated. The system auth
-    // session shares one Safari cookie jar across all profiles, so a login for any
-    // other profile must force account selection instead of silently reusing that
-    // session.
+    // Profile the persistent login browser session belongs to. The system auth
+    // session has a single cookie store shared by all profiles, so this records
+    // whose SSO and trusted-device state is currently in it: that profile's
+    // re-logins reuse the session, any other profile's login starts a fresh one.
     static let keyLastAuthenticatedProfile = "netbird.lastAuthenticatedProfile"
+
+    // Set when the stored browser session must not be reused — after an explicit
+    // logout, where signing straight back in through the old session would defeat
+    // logging out. Cleared by the next completed login.
+    static let keyNeedsFreshBrowserSession = "netbird.needsFreshBrowserSession"
 
     // Local notification identifiers
     static let notificationLoginRequired = "netbird.login.required"

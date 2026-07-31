@@ -167,6 +167,11 @@ class ProfileManager {
 
         try fileManager.removeItem(atPath: dir)
         ProfileConnectionCache().remove(for: name)
+        // If the removed profile owned the stored browser session, nothing owns it
+        // now — the next login must start fresh rather than inherit that account.
+        if Preferences.loadLastAuthenticatedProfile() == name {
+            Preferences.setNeedsFreshBrowserSession()
+        }
         Preferences.clearLastAuthenticatedProfile(ifEquals: name)
     }
 
@@ -187,9 +192,10 @@ class ProfileManager {
         }
         cache.clearConnectionData(for: name)
 
-        // An explicit logout must not silently sign back in through the browser
-        // session this profile left behind: dropping the marker makes the next
-        // login force account selection.
+        // Logging out must actually log out: without this the next login would sign
+        // straight back in through the browser session this profile left behind, so
+        // require a fresh one and drop the ownership marker with it.
+        Preferences.setNeedsFreshBrowserSession()
         Preferences.clearLastAuthenticatedProfile(ifEquals: name)
 
         if fileManager.fileExists(atPath: statePath) {

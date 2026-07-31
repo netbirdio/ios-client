@@ -178,6 +178,24 @@ class Preferences {
         return sharedUserDefaults()?.string(forKey: managementURLKey)
     }
 
+    // MARK: - Fresh Browser Session
+
+    /// Whether the stored browser session must not be reused by the next login.
+    static func needsFreshBrowserSession() -> Bool {
+        return sharedUserDefaults()?.bool(forKey: GlobalConstants.keyNeedsFreshBrowserSession) ?? false
+    }
+
+    /// Requires the next login to start a fresh browser session. Set on logout, so
+    /// signing back in cannot silently reuse the session that was just logged out of.
+    static func setNeedsFreshBrowserSession() {
+        sharedUserDefaults()?.set(true, forKey: GlobalConstants.keyNeedsFreshBrowserSession)
+    }
+
+    /// Clears the requirement once a login has run with a fresh session.
+    static func clearNeedsFreshBrowserSession() {
+        sharedUserDefaults()?.removeObject(forKey: GlobalConstants.keyNeedsFreshBrowserSession)
+    }
+
     // MARK: - Last Authenticated Profile
     //
     // The login browser (ASWebAuthenticationSession) shares Safari's cookie jar,

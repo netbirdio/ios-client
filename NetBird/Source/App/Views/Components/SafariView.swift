@@ -43,6 +43,11 @@ enum LoginBrowserOutcome {
 struct SafariView: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
     let url: URL
+    /// True starts the session with an empty cookie jar. Set for profiles whose
+    /// account conflicts with the one the shared session holds — the only reliable
+    /// way to reach a different account when the IdP ignores both login_hint and
+    /// prompt=select_account.
+    let prefersEphemeralSession: Bool
     let didFinish: (LoginBrowserOutcome) -> Void
 
     func makeUIViewController(context: Context) -> UIViewController {
@@ -129,7 +134,7 @@ struct SafariView: UIViewControllerRepresentable {
             // cookie survives between logins and the second factor is not re-prompted
             // on every re-login. Cross-profile isolation is enforced by the
             // prompt=select_account the adapter adds when the profile changes.
-            session.prefersEphemeralWebBrowserSession = false
+            session.prefersEphemeralWebBrowserSession = parent.prefersEphemeralSession
             session.presentationContextProvider = self
             self.session = session
             session.start()

@@ -83,8 +83,12 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// the same whether the user cancelled or closed the SDK's success page — so
     /// every "did the login work" decision reads this flag.
     public private(set) var loginSucceeded = false
-    /// Guards the ownership-conflict self-heal so it retries at most once per login.
-    private var identityResetAttempted = false
+    /// Whether the pending login must start from a fresh browser session rather
+    /// than the stored one. Decided per login by the policy in performLogin.
+    @Published public private(set) var useEphemeralBrowserSession = false
+    /// Reason the last login failed, surfaced to the user. Nil when there is nothing
+    /// to report.
+    @Published public var loginErrorMessage: String?
     /// Incremented on every performLogin entry. Deferred work armed for one attempt
     /// captures the value and compares before acting, so a stale timer can never
     /// abort a newer attempt.
@@ -497,15 +501,27 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
         let activeManagementURL = resolvedURL ?? ""
         logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfile, privacy: .public)'")
-        // The system auth session shares one Safari cookie jar across every profile,
-        // and the app cannot scope or clear it. So when this login targets a profile
-        // other than the one that jar was last authenticated for, force the IdP to
-        // ask which account to use rather than silently reusing the live session.
-        let lastAuthenticated = Preferences.loadLastAuthenticatedProfile()
-        let needsAccountSelection = lastAuthenticated != activeProfile
-        if needsAccountSelection {
-            logger.info("performLogin: profile changed (last authenticated: \(lastAuthenticated ?? "none", privacy: .public)) — forcing account selection")
-        }
+        // Browser session policy. The system auth session has a single cookie store,
+        // shared by every profile, that the app can neither scope nor clear — the
+        // only control it offers is whether a session starts from that store or from
+        // an empty one. Reusing it is what keeps the IdP's SSO session and its
+        // trusted-device cookie alive, so a re-login does not re-prompt for the
+        // second factor. Starting empty is the only way to keep one profile's
+        // account out of another's login.
+        //
+        // So the stored session is reused for a plain re-login, and a fresh one is
+        // started in exactly the three cases where reuse would be wrong:
+        //   - switching profiles, and the first login of a new profile: the stored
+        //     session belongs to a different profile (sessionOwner != activeProfile);
+        //   - after logging out: signing straight back in through the session that
+        //     was just logged out of would make the logout meaningless.
+        // A nil owner means nothing has claimed the store yet, i.e. the first login
+        // on this install — nothing to inherit, so it may claim it.
+        let sessionOwner = Preferences.loadLastAuthenticatedProfile()
+        let ownsStoredSession = sessionOwner == nil || sessionOwner == activeProfile
+        let useEphemeralSession = Preferences.needsFreshBrowserSession() || !ownsStoredSession
+        logger.info("performLogin: '\(activeProfile, privacy: .public)' — \(useEphemeralSession ? "fresh" : "stored", privacy: .public) browser session (owner: \(sessionOwner ?? "none", privacy: .public))")
+        AppLogger.shared.log("performLogin: '\(activeProfile)' uses a \(useEphemeralSession ? "fresh" : "stored") browser session")
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
            let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
             // A stale flow from an abandoned attempt would keep its loopback port
@@ -536,11 +552,11 @@ public class NetworkExtensionAdapter: ObservableObject {
                     // the extension, trips its needsLogin path, and pops the auth alert
                     // in parallel with this browser login. Ordering them guarantees the
                     // await caller sees showBrowser == true.
-                    let browserURL = needsAccountSelection
-                        ? Self.urlForcingAccountSelection(url)
-                        : url
+                    let browserURL = url
                     DispatchQueue.main.async {
                         browserPhaseStarted = true
+                        self?.useEphemeralBrowserSession = useEphemeralSession
+                        self?.loginErrorMessage = nil
                         self?.pendingAuthorizeURL = browserURL
                         self?.loginURL = browserURL
                         self?.showBrowser = true
@@ -563,10 +579,19 @@ public class NetworkExtensionAdapter: ObservableObject {
                         ProfileManager.shared.saveServerURL(activeManagementURL, for: activeProfile)
                         Preferences.saveManagementURL(activeManagementURL)
                     }
-                    // This profile's account now owns the shared browser session —
-                    // record it so its own re-logins stay silent while a login for
-                    // any other profile forces account selection.
-                    Preferences.saveLastAuthenticatedProfile(activeProfile)
+                    // An ephemeral login leaves no cookies behind, so the shared
+                    // session still holds whichever account was there — only a
+                    // shared-session login may claim it.
+                    // This login just put its account's SSO and trusted-device state
+                    // into the shared browser store, so the profile now owns it and
+                    // its re-logins may reuse it. A fresh session leaves nothing
+                    // behind, so it cannot take ownership — claiming from one would
+                    // send this profile's next login into a store still holding
+                    // another profile's account.
+                    if !useEphemeralSession {
+                        Preferences.saveLastAuthenticatedProfile(activeProfile)
+                    }
+                    Preferences.clearNeedsFreshBrowserSession()
                     AppLogger.shared.log("performLogin: SDK login succeeded for '\(activeProfile)'")
                     // onSuccess runs on a background goroutine. Mark success on the main
                     // queue so the browser-finished handler (also main-queue) reliably
@@ -578,7 +603,6 @@ public class NetworkExtensionAdapter: ObservableObject {
                         guard !self.loginSucceeded else { return }
                         self.logger.info("performLogin: SDK login succeeded")
                         self.loginSucceeded = true
-                        self.identityResetAttempted = false
                         self.pendingAuth = nil
                         self.pendingAuthorizeURL = nil
                         // If the browser is already gone, the view's completion handler
@@ -605,30 +629,25 @@ public class NetworkExtensionAdapter: ObservableObject {
                         self.logger.error("performLogin: SDK login failed: \(message, privacy: .public)")
                         self.pendingAuth = nil
                         self.pendingAuthorizeURL = nil
+                        guard browserPhaseStarted else { return }
                         // "peer is already registered by a different User or a Setup
-                        // Key": the profile's stored WireGuard key belongs to a peer the
-                        // just-authenticated account does not own, so every retry with
-                        // this identity is refused. Self-heal once: drop the profile's
-                        // local identity (config + state; the server URL survives) and
-                        // rerun the login, which generates a fresh key and registers a
-                        // new peer under the correct account.
-                        if message.contains("registered by a different User"),
-                           !self.identityResetAttempted,
-                           browserPhaseStarted {
-                            self.identityResetAttempted = true
-                            let profile = ProfileManager.shared.getActiveProfileName()
-                            do {
-                                try ProfileManager.shared.logoutProfile(profile)
-                                self.logger.warning("performLogin: peer identity conflicts with the logged-in account — resetting identity for '\(profile, privacy: .public)' and retrying")
-                                AppLogger.shared.log("performLogin: resetting identity for '\(profile)' after ownership conflict; retrying login")
-                                Task { await self.performLogin() }
-                            } catch {
-                                // Retrying without a successful reset would present the
-                                // same conflicting identity again — stop and report.
-                                self.logger.error("performLogin: identity reset for '\(profile, privacy: .public)' failed: \(error.localizedDescription, privacy: .public)")
-                                AppLogger.shared.log("performLogin: identity reset for '\(profile)' failed: \(error.localizedDescription)")
-                            }
+                        // Key" means the account that signed in does not own this
+                        // profile's peer. Report it rather than "repairing" it: the
+                        // app cannot tell a stale local key from a login under the
+                        // wrong account, and deleting the profile's identity to fix
+                        // the latter destroys a working registration and can
+                        // re-register the peer under the wrong account. Removing an
+                        // identity stays an explicit user action — Profiles → Log out.
+                        if message.contains("registered by a different User") {
+                            self.loginErrorMessage = """
+                                This profile belongs to a different NetBird account. \
+                                Sign in with the account that owns it, or log the \
+                                profile out (Profiles → Log out) to register it again.
+                                """
+                        } else {
+                            self.loginErrorMessage = message
                         }
+                        self.showBrowser = false
                     }
                     resume(nil)
                 }
@@ -661,40 +680,18 @@ public class NetworkExtensionAdapter: ObservableObject {
             return
         }
         #if os(iOS)
-        // Same shared-cookie-jar reasoning as the main-app path above.
-        let fallbackURL = Preferences.loadLastAuthenticatedProfile() == ProfileManager.shared.getActiveProfileName()
-            ? url
-            : Self.urlForcingAccountSelection(url)
-        self.pendingAuthorizeURL = fallbackURL
-        self.loginURL = fallbackURL
-        #else
-        self.loginURL = url
+        // Same session policy as the main-app path above. This path cannot observe
+        // login success, so it never claims the stored session — which also means it
+        // must not reuse one it does not already own.
+        let fallbackOwner = Preferences.loadLastAuthenticatedProfile()
+        let fallbackProfile = ProfileManager.shared.getActiveProfileName()
+        self.useEphemeralBrowserSession = Preferences.needsFreshBrowserSession()
+            || (fallbackOwner != nil && fallbackOwner != fallbackProfile)
+        self.pendingAuthorizeURL = url
         #endif
+        self.loginURL = url
         self.showBrowser = true
     }
-
-    #if os(iOS)
-    /// Returns `urlString` with an OIDC `prompt` that makes the IdP ask which account
-    /// to use, so a login for one profile cannot silently inherit the browser session
-    /// another profile left in the shared cookie jar. An existing `prompt=login` is
-    /// left alone — re-authentication is already stronger than account selection.
-    static func urlForcingAccountSelection(_ urlString: String) -> String {
-        guard var components = URLComponents(string: urlString) else { return urlString }
-        var items = components.queryItems ?? []
-        if let index = items.firstIndex(where: { $0.name == "prompt" }) {
-            let existing = items[index].value ?? ""
-            let values = existing.split(separator: " ").map(String.init)
-            guard !values.contains("login"), !values.contains("select_account") else {
-                return urlString
-            }
-            items[index] = URLQueryItem(name: "prompt", value: (values + ["select_account"]).joined(separator: " "))
-        } else {
-            items.append(URLQueryItem(name: "prompt", value: "select_account"))
-        }
-        components.queryItems = items
-        return components.string ?? urlString
-    }
-    #endif
 
     #if os(iOS)
     /// Aborts an in-progress interactive login (e.g. the user dismissed the OAuth
@@ -708,7 +705,6 @@ public class NetworkExtensionAdapter: ObservableObject {
         pendingAuth = nil
         pendingAuthorizeURL = nil
         loginSucceeded = false
-        identityResetAttempted = false
         showBrowser = false
     }
 
