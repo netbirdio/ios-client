@@ -786,6 +786,11 @@ public class NetworkExtensionAdapter: ObservableObject {
             return
         }
         let connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
+        // Both the connection's state updates and the timeout below run here. A
+        // serial queue is what makes `settled` safe: on a concurrent queue the
+        // watchdog could run alongside a state update, and the check-then-set would
+        // let both through — cancelling twice and reporting the result twice.
+        let queue = DispatchQueue(label: "io.netbird.loopback-probe")
         var settled = false
         let settle: (Bool) -> Void = { listening in
             guard !settled else { return }
@@ -807,8 +812,8 @@ public class NetworkExtensionAdapter: ObservableObject {
                 break
             }
         }
-        connection.start(queue: DispatchQueue.global(qos: .userInitiated))
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 2) { settle(false) }
+        connection.start(queue: queue)
+        queue.asyncAfter(deadline: .now() + 2) { settle(false) }
     }
     #endif
 

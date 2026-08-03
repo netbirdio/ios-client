@@ -109,12 +109,23 @@ struct SafariView: UIViewControllerRepresentable {
                 }
             }
 
-            // The SDK's PKCE flow redirects to http://localhost:<port>. Declaring
-            // "http" as the callback scheme covers the case where the session
-            // intercepts that navigation; when it instead lets the browser follow
-            // the redirect, the SDK's local server receives the code directly and
-            // this session ends via .closed once the user dismisses the success page.
-            // Either path is handled — see the completion handler above.
+            // The SDK's PKCE flow uses a loopback redirect (RFC 8252 §7.3): the
+            // authorization code arrives at an HTTP server the SDK runs on
+            // 127.0.0.1. That server is the primary path and needs no interception —
+            // the browser simply follows the redirect to it, and this session then
+            // ends via .closed when the user dismisses the SDK's success page.
+            //
+            // A session must still declare a callback, and "http" is the closest
+            // match for that redirect. Should the session capture the navigation
+            // instead of letting the browser follow it, the completion handler
+            // replays the URL to the same local server, so the code still arrives.
+            // Neither path leaves the flow hanging: resolveLoginAfterBrowserClose
+            // probes the loopback listener and resolves the login either way.
+            //
+            // Apple intends this API for custom schemes or (iOS 17.4+) HTTPS
+            // host/path callbacks. Moving to either would mean the management server
+            // issuing a different redirect URI — a core/server change, not one the
+            // app can make on its own.
             let session: ASWebAuthenticationSession
             if #available(iOS 17.4, *) {
                 session = ASWebAuthenticationSession(
