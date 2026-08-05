@@ -85,18 +85,6 @@ final class SSHSession: NSObject, NetBirdSDKSSHTerminalListenerProtocol {
         }
     }
 
-    /// Connects using NetBird JWT auth (no detection, no password). Use for peers
-    /// with SSH enabled in the NetBird dashboard.
-    func connectNetBirdPeer(host: String, port: Int, user: String, cols: Int, rows: Int) -> String? {
-        do {
-            try sshClient.connectNetBirdPeer(host, port: port, user: user)
-            try sshClient.startSession(cols, rows: rows)
-            return nil
-        } catch {
-            return error.localizedDescription
-        }
-    }
-
     func write(_ data: Data) -> String? {
         do {
             try sshClient.write(data)
@@ -194,23 +182,6 @@ final class SSHSessionManager {
         lock.unlock()
 
         if let error = session.connect(host: host, port: port, user: user, password: password, cols: cols, rows: rows) {
-            lock.lock()
-            sessions.removeValue(forKey: sessionID)
-            lock.unlock()
-            return error
-        }
-        return nil
-    }
-
-    func connectNetBirdPeer(sessionID: String, nbClient: NetBirdSDKClient, host: String, port: Int, user: String, cols: Int, rows: Int) -> String? {
-        guard let session = SSHSession(nbClient: nbClient) else {
-            return "failed to create SSH client"
-        }
-        lock.lock()
-        sessions[sessionID] = session
-        lock.unlock()
-
-        if let error = session.connectNetBirdPeer(host: host, port: port, user: user, cols: cols, rows: rows) {
             lock.lock()
             sessions.removeValue(forKey: sessionID)
             lock.unlock()

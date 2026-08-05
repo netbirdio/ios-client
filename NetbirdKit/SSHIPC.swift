@@ -13,16 +13,9 @@ import NetworkExtension
 
 extension NetworkExtensionAdapter {
 
-    /// For NetBird peers with SSH enabled in the dashboard — uses JWT auth, no detection, no password.
-    func sshConnectNetBirdPeer(sessionID: String, host: String, port: Int, user: String, cols: Int, rows: Int, completion: @escaping (String?) -> Void) {
-        guard let session = self.session else {
-            completion("VPN session not available")
-            return
-        }
-        let message = "SSHConnectNetBird:\(sessionID)|\(host)|\(port)|\(user)|\(cols)|\(rows)"
-        sendSimpleMessage(message, session: session, completion: completion)
-    }
-
+    /// Single connect path for every target, peer or not: the SDK detects the
+    /// server type and picks the auth method, so the JWT is only ever offered
+    /// to a verified NetBird SSH service. Password may be empty.
     func sshConnect(sessionID: String, host: String, port: Int, user: String, password: String, cols: Int, rows: Int, completion: @escaping (String?) -> Void) {
         guard let session = self.session else {
             completion("VPN session not available")

@@ -9,8 +9,12 @@ import SwiftUI
 
 struct SSHConnectSheet: View {
     let networkExtensionAdapter: NetworkExtensionAdapter
-    /// true  → launched from a NetBird peer: host is fixed, password hidden, NetBird auth hint shown.
-    /// false → standalone: all fields editable, password visible.
+    /// true  → launched from a NetBird peer: host is fixed, NetBird auth hint shown.
+    /// false → standalone: all fields editable.
+    ///
+    /// The password field is offered either way. A peer whose NetBird SSH is
+    /// disabled is just an ordinary sshd, and hiding the field was what forced
+    /// those peers down the JWT path and into a pointless OAuth round trip.
     let isPeerContext: Bool
     let peerName: String?
 
@@ -101,9 +105,9 @@ struct SSHConnectSheet: View {
             TextField("Username", text: $user)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-            SecureField("Password (leave empty if NetBird SSH is enabled)", text: $password)
+            SecureField("Password (only needed for regular SSH)", text: $password)
         } footer: {
-            Text("Leave password empty to use NetBird SSH (requires SSH to be enabled for this peer **and** your account added to SSH access in the NetBird dashboard). Otherwise enter a password for regular SSH.")
+            Text("If NetBird SSH is enabled for this peer and your account has SSH access in the dashboard, it is used automatically and the password is ignored. If the peer runs a regular SSH server, the password is used.")
                 .font(.footnote)
                 .foregroundColor(.secondary)
         }
@@ -157,8 +161,7 @@ struct SSHConnectSheet: View {
             host: host,
             port: Int(port) ?? 22,
             user: user,
-            password: password,
-            isNetBirdPeer: isPeerContext && password.isEmpty
+            password: password
         )
         activeSessionStore.add(vm)
         activeViewModel = vm

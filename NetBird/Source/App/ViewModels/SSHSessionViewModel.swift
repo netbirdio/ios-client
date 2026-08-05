@@ -25,8 +25,6 @@ final class SSHSessionViewModel: ObservableObject, Identifiable {
     let port: Int
     let user: String
     let password: String
-    /// When true, uses `ConnectNetBirdPeer` (JWT, no detection) instead of `Connect`.
-    let isNetBirdPeer: Bool
 
     @Published private(set) var state: SSHConnectionState = .connecting
     @Published private(set) var canReconnect = false
@@ -47,13 +45,12 @@ final class SSHSessionViewModel: ObservableObject, Identifiable {
     private var outputBuffer = Data()
     private let outputBufferMaxSize = 128 * 1024
 
-    init(networkExtensionAdapter: NetworkExtensionAdapter, host: String, port: Int, user: String, password: String, isNetBirdPeer: Bool = false) {
+    init(networkExtensionAdapter: NetworkExtensionAdapter, host: String, port: Int, user: String, password: String) {
         self.networkExtensionAdapter = networkExtensionAdapter
         self.host = host
         self.port = port
         self.user = user
         self.password = password
-        self.isNetBirdPeer = isNetBirdPeer
     }
 
     /// Called by the terminal view when xterm.js signals it is ready.
@@ -80,22 +77,6 @@ final class SSHSessionViewModel: ObservableObject, Identifiable {
         canReconnect = false
         connectionStarted = true
         state = .connecting
-
-        if isNetBirdPeer {
-            networkExtensionAdapter.sshConnectNetBirdPeer(sessionID: sessionID, host: host, port: port, user: user, cols: cols, rows: rows) { [weak self] error in
-                Task { @MainActor in
-                    guard let self else { return }
-                    if let error {
-                        self.state = .failed(message: error)
-                        self.canReconnect = true
-                        return
-                    }
-                    self.state = .connected
-                    self.beginPolling()
-                }
-            }
-            return
-        }
 
         networkExtensionAdapter.sshConnect(sessionID: sessionID, host: host, port: port, user: user, password: password, cols: cols, rows: rows) { [weak self] error in
             Task { @MainActor in

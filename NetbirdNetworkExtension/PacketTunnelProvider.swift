@@ -212,8 +212,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case let s where s.hasPrefix("DebugBundle:"):
             let anonymize = s.dropFirst("DebugBundle:".count) == "true"
             debugBundle(anonymize: anonymize, completionHandler: completionHandler)
-        case let s where s.hasPrefix("SSHConnectNetBird:"):
-            handleSSHConnectNetBird(String(s.dropFirst("SSHConnectNetBird:".count)), completionHandler: completionHandler)
         case let s where s.hasPrefix("SSHConnect:"):
             handleSSHConnect(String(s.dropFirst("SSHConnect:".count)), completionHandler: completionHandler)
         case let s where s.hasPrefix("SSHWrite:"):
@@ -594,32 +592,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     // MARK: SSH
 
     /// Format: "<sessionID>|<host>|<port>|<user>|<base64 password>|<cols>|<rows>"
-    /// Format: "<sessionID>|<host>|<port>|<user>|<cols>|<rows>"
-    /// Uses NetBird JWT auth (no detection, no password). For NetBird peers with SSH enabled.
-    func handleSSHConnectNetBird(_ payload: String, completionHandler: @escaping (Data?) -> Void) {
-        let parts = payload.components(separatedBy: "|")
-        guard parts.count == 6,
-              let port = Int(parts[2]),
-              let cols = Int(parts[4]),
-              let rows = Int(parts[5]) else {
-            completionHandler("error:malformed SSHConnectNetBird payload".data(using: .utf8))
-            return
-        }
-        guard let nbClient = adapter?.client else {
-            completionHandler("error:netbird client not running".data(using: .utf8))
-            return
-        }
-        let sessionID = parts[0]
-        let host = parts[1]
-        let user = parts[3]
-
-        sshQueue.async { [weak self] in
-            let error = self?.sshSessionManager.connectNetBirdPeer(sessionID: sessionID, nbClient: nbClient, host: host, port: port, user: user, cols: cols, rows: rows)
-            let response = error.map { "error:\($0)" } ?? "ok"
-            completionHandler(response.data(using: .utf8))
-        }
-    }
-
     func handleSSHConnect(_ payload: String, completionHandler: @escaping (Data?) -> Void) {
         let parts = payload.components(separatedBy: "|")
         guard parts.count == 7,
