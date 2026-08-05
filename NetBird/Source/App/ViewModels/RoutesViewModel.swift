@@ -64,12 +64,47 @@ class RoutesViewModel: ObservableObject {
         exitNodes.first { $0.selected }
     }
     
+    /// Applies a choice made in the single-selection exit node UI. Passing `nil` is the
+    /// "None" entry: it clears the active exit node so traffic falls back to the default
+    /// path. Selecting a node is delegated to `selectRoute`, which handles the mutual
+    /// exclusion between exit nodes.
+    func setExitNode(_ exitNode: RoutesSelectionInfo?) {
+        // `selected` is a plain property on a reference type stored in a @Published array,
+        // so mutating it publishes nothing on its own. Announce the change by hand or the
+        // selector keeps showing the old value until the getRoutes round-trip lands.
+        guard let exitNode else {
+            guard let current = selectedExitNode else { return }
+            objectWillChange.send()
+            current.objectWillChange.send()
+            current.selected = false
+            // Reconcile afterwards for the same reason sendSelectAndReconcile does: the
+            // extension always replies "true", so only a fresh GetRoutes proves the core
+            // actually dropped the node.
+            networkExtensionAdapter.deselectRoutes(id: current.name) { [weak self] _ in
+                self?.getRoutes()
+            }
+            return
+        }
+
+        guard !exitNode.selected else { return }
+        objectWillChange.send()
+        selectRoute(route: exitNode)
+    }
+
+    /// Drops every cached route. Called when the tunnel goes down: the network map is only
+    /// readable through the extension, so keeping stale entries would leave the exit node
+    /// selector offering nodes that can no longer be applied.
+    func clearRoutes() {
+        guard !routeInfo.isEmpty else { return }
+        routeInfo = []
+    }
+
     func toggleSelected(for routeId: UUID) {
             if let index = routeInfo.firstIndex(where: { $0.id == routeId }) {
                 routeInfo[index].selected.toggle()
             }
         }
-    
+
     func getRoutes() {
         networkExtensionAdapter.getRoutes { details in
             self.routeInfo = details.routeSelectionInfo
