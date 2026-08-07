@@ -30,6 +30,13 @@ struct GlobalConstants {
     static let keyWidgetActiveConfigPath = "netbird.widget.activeConfigPath"
     static let keyWidgetActiveStatePath  = "netbird.widget.activeStatePath"
 
+    /// startVPNTunnel(options:) key. Set by the main app when it has just verified the
+    /// login state itself (its own isLoginRequired() check, or a login it just completed),
+    /// letting the extension skip its duplicate check — each such check is a full Login RPC
+    /// against the management server. Absent for starts the main app did not initiate
+    /// (On Demand, widget intent), where the extension must still verify.
+    static let optionLoginVerified = "loginVerified"
+
     static let configFileName = "netbird.cfg"
     static let stateFileName = "state.json"
     static let serverURLFileName = "netbird_server_url"
