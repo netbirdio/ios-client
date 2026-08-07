@@ -1,4 +1,3 @@
 [submodule "netbird-core"]
 	path = netbird-core
-	url = https://github.com/evgeniyChepelev/netbird.git
-	branch = fix/ios-redundant-login-rpcs
+	url = https://github.com/netbirdio/netbird.git
