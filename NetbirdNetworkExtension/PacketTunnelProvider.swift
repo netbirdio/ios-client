@@ -431,6 +431,23 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 if let error = error {
                     AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
+                    // If the start failed because the session expired, the connection
+                    // listener may have suppressed its login-required signalling: it skips
+                    // both checks while isRestarting is still true, which happens when the
+                    // stop phase never fired onDisconnected (engine already dead) and the
+                    // stop completion arrived via the 15s fallback instead. Re-check the
+                    // recorder here — the engine marks it with PermissionDenied before
+                    // Run() returns — and signal + tear down so the dead tunnel doesn't
+                    // linger and black-hole traffic.
+                    if self?.adapter?.needsLoginCached() == true {
+                        AppLogger.shared.log("restartClient: start failed due to expired login — signaling and tearing down")
+                        self?.signalLoginRequired()
+                        self?.cancelTunnelWithError(NSError(
+                            domain: "io.netbird.NetbirdNetworkExtension",
+                            code: 1001,
+                            userInfo: [NSLocalizedDescriptionKey: "Login required."]
+                        ))
+                    }
                     self?.updateWidgetStatus("disconnected")
                 } else {
                     AppLogger.shared.log("restartClient: start completed successfully")
