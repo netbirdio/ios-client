@@ -53,9 +53,13 @@ class RoutesViewModel: ObservableObject {
         }
     
     func getRoutes() {
-        networkExtensionAdapter.getRoutes { details in
-            self.routeInfo = details.routeSelectionInfo
-            print("Route count: \(details.routeSelectionInfo.count)")
+        // sendProviderMessage completions are not guaranteed on the main queue;
+        // hop before mutating @Published routeInfo so all reconcile call sites are safe.
+        networkExtensionAdapter.getRoutes { [weak self] details in
+            DispatchQueue.main.async {
+                self?.routeInfo = details.routeSelectionInfo
+                print("Route count: \(details.routeSelectionInfo.count)")
+            }
         }
     }
     
