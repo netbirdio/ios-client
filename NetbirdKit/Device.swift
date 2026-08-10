@@ -26,14 +26,12 @@ class Device {
 
     #if os(tvOS)
     /// Generate a unique device name for tvOS
-    /// The name is persisted so it remains consistent across app launches
+    /// The name is persisted so it remains consistent across app launches.
     private static func generateTVDeviceName() -> String {
         let key = "netbird_device_name"
-        let appGroup = GlobalConstants.userPreferencesSuiteName
 
         // Return cached name if it exists
-        if let defaults = UserDefaults(suiteName: appGroup),
-           let cachedName = defaults.string(forKey: key), !cachedName.isEmpty {
+        if let cachedName = Preferences.sharedUserDefaults()?.string(forKey: key), !cachedName.isEmpty {
             return cachedName
         }
 
@@ -43,10 +41,8 @@ class Device {
         let name = "apple-tv-\(randomString)"
 
         // Cache the name for future use
-        if let defaults = UserDefaults(suiteName: appGroup) {
-            defaults.set(name, forKey: key)
-            defaults.synchronize()
-        }
+        Preferences.sharedUserDefaults()?.set(name, forKey: key)
+        Preferences.sharedUserDefaults()?.synchronize()
 
         return name
     }

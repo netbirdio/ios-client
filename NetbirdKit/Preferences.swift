@@ -61,9 +61,15 @@ class Preferences {
         }
 
         #if DEBUG
-        // Fallback for testing when app group is not available
+        // Fallback for testing when app group is not available.
+        // On tvOS ~/Library/Application Support is read-only in the sandbox —
+        // use Caches (writable) so the Go SDK doesn't fail with EPERM.
+        #if os(tvOS)
+        let baseURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
+        #else
         let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
+        #endif
         return (baseURL ?? fileManager.temporaryDirectory).appendingPathComponent(fileName).path
         #else
         AppLogger.shared.log("ERROR: App group '\(GlobalConstants.userPreferencesSuiteName)' not available. Check entitlements.")
@@ -125,9 +131,16 @@ class Preferences {
     private static let configJSONKey = "netbird_config_json"
 
     /// Get the App Group UserDefaults.
-    /// Note: On tvOS, this is app-local only - NOT shared with extension.
+    /// Note: On tvOS, app-group suites don't work at all — cfprefsd detaches
+    /// ("Using kCFPreferencesAnyUser with a container is only allowed for System
+    /// Containers") and every read returns nil. Use process-local standard defaults
+    /// there; the app↔extension transfer happens via IPC instead.
     static func sharedUserDefaults() -> UserDefaults? {
+        #if os(tvOS)
+        return UserDefaults.standard
+        #else
         return UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        #endif
     }
 
     /// Save config JSON to UserDefaults (app-local storage).
