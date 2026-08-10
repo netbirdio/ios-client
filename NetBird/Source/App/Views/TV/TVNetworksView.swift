@@ -129,7 +129,9 @@ struct TVNetworkListContent: View {
 
 // Individual Network Card
 struct TVNetworkCard: View {
-    let route: RoutesSelectionInfo
+    // Must be @ObservedObject: `selected` is a plain var on RoutesSelectionInfo,
+    // so the view only re-renders when objectWillChange fires.
+    @ObservedObject var route: RoutesSelectionInfo
     @ObservedObject var routeViewModel: RoutesViewModel
 
     @FocusState private var isFocused: Bool

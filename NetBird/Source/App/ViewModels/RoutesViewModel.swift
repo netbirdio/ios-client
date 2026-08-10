@@ -53,15 +53,21 @@ class RoutesViewModel: ObservableObject {
         }
     
     func getRoutes() {
-        networkExtensionAdapter.getRoutes { details in
-            self.routeInfo = details.routeSelectionInfo
-            print("Route count: \(details.routeSelectionInfo.count)")
+        // sendProviderMessage completions are not guaranteed on the main queue;
+        // hop before mutating @Published routeInfo so all reconcile call sites are safe.
+        networkExtensionAdapter.getRoutes { [weak self] details in
+            DispatchQueue.main.async {
+                self?.routeInfo = details.routeSelectionInfo
+                print("Route count: \(details.routeSelectionInfo.count)")
+            }
         }
     }
     
     func selectRoute(route: RoutesSelectionInfo) {
         guard let index = self.routeInfo.firstIndex(where: { $0.id == route.id }) else { return }
 
+        // `selected` is not @Published (kept for Codable); notify observers explicitly.
+        self.routeInfo[index].objectWillChange.send()
         self.routeInfo[index].selected = true
 
         // Non-exit routes select independently.
@@ -122,9 +128,11 @@ class RoutesViewModel: ObservableObject {
     
     func deselectRoute(route: RoutesSelectionInfo) {
         guard let index = self.routeInfo.firstIndex(where: { $0.id == route.id }) else { return }
+        self.routeInfo[index].objectWillChange.send()
         self.routeInfo[index].selected = false
-        networkExtensionAdapter.deselectRoutes(id: route.name) { details in
-            print("deselect route")
+        // Reconcile with the core's real state, mirroring selectRoute.
+        networkExtensionAdapter.deselectRoutes(id: route.name) { [weak self] _ in
+            self?.getRoutes()
         }
     }
     
