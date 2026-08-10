@@ -119,17 +119,12 @@ struct TVMainView: View {
                         #endif
                         // Error is displayed in the auth view - user can dismiss manually
                     },
-                    checkLoginComplete: { completion in
-                        viewModel.networkExtensionAdapter.checkLoginComplete { isComplete in
+                    checkLoginDiagnostics: { completion in
+                        viewModel.networkExtensionAdapter.checkLoginDiagnostics { diagnostics in
                             #if DEBUG
-                            print("TVMainView: checkLoginComplete returned \(isComplete)")
+                            print("TVMainView: checkLoginDiagnostics returned isComplete=\(diagnostics?.isComplete ?? false)")
                             #endif
-                            completion(isComplete)
-                        }
-                    },
-                    checkLoginError: { completion in
-                        viewModel.networkExtensionAdapter.checkLoginError { errorMessage in
-                            completion(errorMessage)
+                            completion(diagnostics)
                         }
                     }
                 )

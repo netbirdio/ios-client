@@ -998,7 +998,7 @@ class ViewModel: ObservableObject {
 
     /// Checks shared app-group container for login required flag set by the network extension.
     /// Shows the authentication UI. Notification was already delivered via NEVPNStatusDidChange observer.
-    /// iOS only — tvOS uses IPC via `checkLoginError` in TVAuthView.
+    /// iOS only — tvOS uses IPC via `checkLoginDiagnostics` in TVAuthView.
     func checkLoginRequiredFlag() {
         #if os(iOS)
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)

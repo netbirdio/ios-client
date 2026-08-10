@@ -930,55 +930,19 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
 
-    /// Check if login is complete by asking the Network Extension directly
-    /// This is more reliable than isLoginRequired() because it queries the same SDK client
-    /// that is actually performing the login
-    func checkLoginComplete(completion: @escaping (Bool) -> Void) {
+    /// Fetch login diagnostics from the Network Extension in a single IPC round-trip.
+    /// This queries the same SDK client that is actually performing the login.
+    /// Callers derive both error and completion state from the same response.
+    func checkLoginDiagnostics(completion: @escaping (LoginDiagnostics?) -> Void) {
         guard let session = self.session else {
-            logger.error("checkLoginComplete: No session available")
-            completion(false)
-            return
-        }
-
-        let messageString = "IsLoginComplete"
-        guard let messageData = messageString.data(using: .utf8) else {
-            print("checkLoginComplete: Failed to encode message")
-            completion(false)
-            return
-        }
-
-        do {
-            try session.sendProviderMessage(messageData) { response in
-                if let response = response {
-                    do {
-                        let diagnostic = try self.decoder.decode(LoginDiagnostics.self, from: response)
-                        print("checkLoginComplete: result=\(diagnostic.isComplete), isExecuting=\(diagnostic.isExecuting), loginRequired=\(diagnostic.loginRequired), configExists=\(diagnostic.configExists), stateExists=\(diagnostic.stateExists), lastResult=\(diagnostic.lastResult), lastError=\(diagnostic.lastError)")
-                        completion(diagnostic.isComplete)
-                    } catch {
-                        print("checkLoginComplete: Failed to decode LoginDiagnostics - \(error)")
-                        completion(false)
-                    }
-                } else {
-                    print("checkLoginComplete: No response from extension")
-                    completion(false)
-                }
-            }
-        } catch {
-            print("checkLoginComplete: Failed to send message - \(error)")
-            completion(false)
-        }
-    }
-
-    /// Check if there's a login error from the extension
-    /// Returns the error message via completion handler, or nil if no error
-    func checkLoginError(completion: @escaping (String?) -> Void) {
-        guard let session = self.session else {
+            logger.error("checkLoginDiagnostics: No session available")
             completion(nil)
             return
         }
 
         let messageString = "IsLoginComplete"
         guard let messageData = messageString.data(using: .utf8) else {
+            print("checkLoginDiagnostics: Failed to encode message")
             completion(nil)
             return
         }
@@ -988,30 +952,19 @@ public class NetworkExtensionAdapter: ObservableObject {
                 if let response = response {
                     do {
                         let diagnostic = try self.decoder.decode(LoginDiagnostics.self, from: response)
-                        // Only report error if lastResult is "error" and there's an actual error message
-                        if diagnostic.lastResult == "error" && !diagnostic.lastError.isEmpty {
-                            // Make the error message more user-friendly
-                            var friendlyError = diagnostic.lastError
-                            if diagnostic.lastError.contains("no peer auth method provided") {
-                                friendlyError = "This server doesn't support device code authentication. Please use a setup key instead."
-                            } else if diagnostic.lastError.contains("expired") || diagnostic.lastError.contains("token") {
-                                friendlyError = "The device code has expired. Please try again."
-                            } else if diagnostic.lastError.contains("denied") || diagnostic.lastError.contains("rejected") {
-                                friendlyError = "Authentication was denied. Please try again."
-                            }
-                            completion(friendlyError)
-                            return
-                        }
-                        completion(nil)
+                        print("checkLoginDiagnostics: result=\(diagnostic.isComplete), isExecuting=\(diagnostic.isExecuting), loginRequired=\(diagnostic.loginRequired), configExists=\(diagnostic.configExists), stateExists=\(diagnostic.stateExists), lastResult=\(diagnostic.lastResult), lastError=\(diagnostic.lastError)")
+                        completion(diagnostic)
                     } catch {
-                        print("checkLoginError: Failed to decode LoginDiagnostics - \(error)")
+                        print("checkLoginDiagnostics: Failed to decode LoginDiagnostics - \(error)")
                         completion(nil)
                     }
                 } else {
+                    print("checkLoginDiagnostics: No response from extension")
                     completion(nil)
                 }
             }
         } catch {
+            print("checkLoginDiagnostics: Failed to send message - \(error)")
             completion(nil)
         }
     }

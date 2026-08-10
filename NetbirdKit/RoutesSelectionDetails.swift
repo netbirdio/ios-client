@@ -16,6 +16,21 @@ struct LoginDiagnostics: Codable {
     var lastError: String
 }
 
+extension LoginDiagnostics {
+    /// User-facing error message, or nil if login hasn't failed
+    var friendlyError: String? {
+        guard lastResult == "error", !lastError.isEmpty else { return nil }
+        if lastError.contains("no peer auth method provided") {
+            return "This server doesn't support device code authentication. Please use a setup key instead."
+        } else if lastError.contains("expired") || lastError.contains("token") {
+            return "The device code has expired. Please try again."
+        } else if lastError.contains("denied") || lastError.contains("rejected") {
+            return "Authentication was denied. Please try again."
+        }
+        return lastError
+    }
+}
+
 struct DeviceAuthResponse: Codable {
     var url: String
     var userCode: String
