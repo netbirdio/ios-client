@@ -35,9 +35,10 @@ struct ExitNodeSelectorCard: View {
     // card is laid out.
     @State private var cardHeight: CGFloat = 72
 
-    // @ScaledMetric so the row height tracks the user's Dynamic Type setting: rows grow
-    // with larger text, and the dropdown height computed from it grows with them.
-    @ScaledMetric private var rowHeight: CGFloat = 46
+    // A plain constant, deliberately not @ScaledMetric: every label here uses a fixed point
+    // size, matching the rest of this screen, so the text never grows with Dynamic Type and
+    // a scaling row height would only stretch the rows around unchanged text.
+    private let rowHeight: CGFloat = 46
     private let maxDropdownHeight: CGFloat = 400
 
     // Computed rather than measured: a GeometryReader/preference round-trip inside the
@@ -78,6 +79,15 @@ struct ExitNodeSelectorCard: View {
                 dropdown
                     .offset(y: -(cardHeight + 8))
                     .transition(.opacity)
+            }
+        }
+        // The node list can empty out underneath an open dropdown — losing the tunnel
+        // clears every route — which would otherwise leave a lone "None" row floating above
+        // a card that is now disabled.
+        .onChange(of: isAvailable) { available in
+            guard !available, isExpanded else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isExpanded = false
             }
         }
     }
@@ -168,6 +178,10 @@ struct ExitNodeSelectorCard: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.orange)
+                        // Purely decorative: the checkmark would otherwise fold into the
+                        // button's derived label, so the row reads "<name>, checkmark"
+                        // instead of carrying the selection as a trait.
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, 14)
@@ -177,6 +191,7 @@ struct ExitNodeSelectorCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func select(_ exitNode: RoutesSelectionInfo?) {

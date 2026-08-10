@@ -17,7 +17,25 @@ class RoutesViewModel: ObservableObject {
 
     @Published var tappedRoute: RoutesSelectionInfo?
     @Published var selectedRouteId: UUID?
-    
+
+    /// Bumped by every exit node mutation. Each one captures the value at its start and
+    /// re-checks it in its async continuation, so an operation the user has already
+    /// superseded drops its pending select/reconcile instead of applying it late. Without
+    /// this, switching exit nodes twice in quick succession races: the two deselect →
+    /// select chains are independent round-trips, and the older chain's select can land
+    /// last, leaving the core routing through a node the user already replaced.
+    /// Main-thread only, matching every caller.
+    private var exitNodeGeneration = 0
+
+    /// Bumped by every route read and by `clearRoutes()`. A GetRoutes reply whose captured
+    /// value is no longer current is dropped, so a read still in flight when the tunnel
+    /// goes down can't repopulate the list `clearRoutes()` just emptied — which would leave
+    /// the selector enabled over dead nodes, and a tap on one stuck showing a selection the
+    /// core never applied (with no session, the select never reports back to reconcile it).
+    /// Main-thread only, matching every caller.
+    private var routeReadGeneration = 0
+
+
     init(networkExtensionAdapter: NetworkExtensionAdapter) {
         self.networkExtensionAdapter = networkExtensionAdapter
         self.routeInfo = []
@@ -77,11 +95,18 @@ class RoutesViewModel: ObservableObject {
             objectWillChange.send()
             current.objectWillChange.send()
             current.selected = false
+            exitNodeGeneration &+= 1
+            let generation = exitNodeGeneration
             // Reconcile afterwards for the same reason sendSelectAndReconcile does: the
             // extension always replies "true", so only a fresh GetRoutes proves the core
-            // actually dropped the node.
+            // actually dropped the node. Hop to main before touching the generation and
+            // @Published state: this completion runs on whatever queue the extension
+            // replies on.
             networkExtensionAdapter.deselectRoutes(id: current.name) { [weak self] _ in
-                self?.getRoutes()
+                DispatchQueue.main.async {
+                    guard let self, self.exitNodeGeneration == generation else { return }
+                    self.getRoutes()
+                }
             }
             return
         }
@@ -95,6 +120,10 @@ class RoutesViewModel: ObservableObject {
     /// readable through the extension, so keeping stale entries would leave the exit node
     /// selector offering nodes that can no longer be applied.
     func clearRoutes() {
+        // Bump before the empty check, not after it: a read started while the tunnel was up
+        // can still be in flight with nothing cached yet, and letting the early return skip
+        // the invalidation would let that reply refill the list after the tunnel is gone.
+        routeReadGeneration &+= 1
         guard !routeInfo.isEmpty else { return }
         routeInfo = []
     }
@@ -106,9 +135,16 @@ class RoutesViewModel: ObservableObject {
         }
 
     func getRoutes() {
-        networkExtensionAdapter.getRoutes { details in
-            self.routeInfo = details.routeSelectionInfo
-            print("Route count: \(details.routeSelectionInfo.count)")
+        routeReadGeneration &+= 1
+        let generation = routeReadGeneration
+        // Hop to main before touching the generation and @Published state: this completion
+        // runs on whatever queue the extension replies on.
+        networkExtensionAdapter.getRoutes { [weak self] details in
+            DispatchQueue.main.async {
+                guard let self, self.routeReadGeneration == generation else { return }
+                self.routeInfo = details.routeSelectionInfo
+                print("Route count: \(details.routeSelectionInfo.count)")
+            }
         }
     }
     
@@ -131,6 +167,13 @@ class RoutesViewModel: ObservableObject {
         // are independent async round-trips, so firing the select without waiting lets it
         // race the deselects and the core can drop the node we just added. Wait for every
         // deselect to complete, then select.
+        //
+        // Tagging the operation guards the other half of that race: a second choice made
+        // while these round-trips are still in flight supersedes this one, and the check
+        // in the notify below keeps this stale select from landing after it.
+        exitNodeGeneration &+= 1
+        let generation = exitNodeGeneration
+
         let siblings = routeInfo.filter { $0.id != route.id && $0.selected && $0.isExitNode }
         guard !siblings.isEmpty else {
             sendSelectAndReconcile(route: route)
@@ -152,7 +195,8 @@ class RoutesViewModel: ObservableObject {
         }
 
         group.notify(queue: .main) { [weak self] in
-            self?.sendSelectAndReconcile(route: route)
+            guard let self, self.exitNodeGeneration == generation else { return }
+            self.sendSelectAndReconcile(route: route)
         }
     }
 
