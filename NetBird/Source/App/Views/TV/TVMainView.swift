@@ -75,6 +75,9 @@ struct TVMainView: View {
                     onCancel: {
                         viewModel.networkExtensionAdapter.showBrowser = false
                         viewModel.connectPressed = false
+                        // The extension is parked in startTunnel waiting for this login —
+                        // tear it down so it doesn't linger until the watchdog fires.
+                        viewModel.close()
                         viewModel.updateVPNDisplayState()
                     },
                     onComplete: {
@@ -83,7 +86,13 @@ struct TVMainView: View {
                         #endif
                         viewModel.networkExtensionAdapter.showBrowser = false
 
-                        // After login completes, ensure config is transferred to extension before connecting
+                        // The extension already holds the post-login config (loginAsync
+                        // saved it and loaded it into the client) and continues the
+                        // parked startTunnel by itself. Only push the config and start
+                        // the tunnel if it isn't already coming up — calling
+                        // startVPNTunnel on a .connecting session can disrupt it.
+                        guard viewModel.extensionState == .disconnected else { return }
+
                         // On tvOS, shared UserDefaults doesn't work, so we must send via IPC
                         if let configJSON = Preferences.loadConfigFromUserDefaults(), !configJSON.isEmpty {
                             #if DEBUG

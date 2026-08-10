@@ -571,12 +571,59 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
         #endif
 
-        // Fallback: IPC to the NE extension (tvOS, or if main-app auth setup failed)
+        #if os(tvOS)
+        // On tvOS the device-auth flow runs inside the extension (via the "LoginTV"
+        // IPC), and IPC only reaches a RUNNING extension. Boot the tunnel first: when
+        // login is required, the extension parks its startTunnel instead of failing,
+        // keeping the process alive for the whole auth flow.
+        if self.vpnManager?.connection.status == .disconnected
+            || self.vpnManager?.connection.status == .invalid {
+            logger.info("performLogin: tvOS - starting tunnel to boot extension for device auth")
+            startVPNConnection()
+        }
+
+        let loginURLString: String? = await withCheckedContinuation { continuation in
+            var attempts = 0
+            let maxAttempts = 12
+
+            func attempt() {
+                attempts += 1
+                // Push the server config each round: early attempts may run before the
+                // extension process is up, and the extension needs the management URL
+                // (custom servers) before it can start the device-auth flow.
+                if attempts > 1, let configJSON = Preferences.loadConfigFromUserDefaults(), !configJSON.isEmpty {
+                    self.sendConfigToExtension(configJSON)
+                    if let url = Preferences.loadManagementURL() {
+                        let messageString = "SetManagementURL:\(url)"
+                        if let data = messageString.data(using: .utf8) {
+                            try? self.session?.sendProviderMessage(data) { _ in }
+                        }
+                    }
+                }
+
+                self.login { urlString in
+                    if let urlString = urlString, !urlString.isEmpty {
+                        continuation.resume(returning: urlString)
+                    } else if attempts < maxAttempts {
+                        DispatchQueue.global().asyncAfter(deadline: .now() + 0.8) {
+                            attempt()
+                        }
+                    } else {
+                        continuation.resume(returning: nil)
+                    }
+                }
+            }
+
+            attempt()
+        }
+        #else
+        // Fallback: IPC to the NE extension (if main-app auth setup failed)
         let loginURLString: String? = await withCheckedContinuation { continuation in
             self.login { urlString in
                 continuation.resume(returning: urlString)
             }
         }
+        #endif
         guard let url = loginURLString, !url.isEmpty else {
             logger.error("performLogin: no login URL received from extension, aborting")
             return

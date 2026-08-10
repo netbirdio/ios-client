@@ -424,6 +424,21 @@ public class NetBirdAdapter {
                     #if os(tvOS)
                     let correctDeviceName = Device.getName()
                     configJSON = Self.updateDeviceNameInConfig(configJSON, newName: correctDeviceName)
+
+                    // Persist where adapter.init reads it: extension-local
+                    // standard UserDefaults (App Group storage is not shared
+                    // between app and extension on tvOS).
+                    UserDefaults.standard.set(configJSON, forKey: "netbird_config_json_local")
+                    UserDefaults.standard.synchronize()
+
+                    // Load the fresh config into the already-running client so a
+                    // parked startTunnel can proceed with adapter.start().
+                    do {
+                        try self?.client.setConfigFromJSON(configJSON)
+                        adapterLogger.info("loginAsync: tvOS - loaded post-login config into client")
+                    } catch {
+                        adapterLogger.error("loginAsync: tvOS - failed to load post-login config: \(error.localizedDescription)")
+                    }
                     #endif
 
                     _ = Preferences.saveConfigToUserDefaults(configJSON)
