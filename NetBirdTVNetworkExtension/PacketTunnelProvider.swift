@@ -94,14 +94,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // interface is owned by the provider and outlives the Go engine, so without
         // an explicit teardown it lingers with the default route and black-holes
         // all traffic (same pattern the iOS provider handles).
-        adapter.onLoginRequired = { [weak self] in
-            logger.error("onLoginRequired: session expired mid-tunnel — tearing down")
-            self?.cancelTunnelWithError(NSError(
-                domain: "io.netbird.NetBirdTVNetworkExtension",
-                code: 1001,
-                userInfo: [NSLocalizedDescriptionKey: "Login required."]
-            ))
-        }
+        configureLoginRequiredHandler(for: adapter)
 
         adapter.start { error in
             if let error = error {
@@ -139,7 +132,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private func parkStartUntilLogin(completionHandler: @escaping (Error?) -> Void) {
         pendingStartWatchdog?.cancel()
-        pendingStartCompletion = completionHandler
+        let previousCompletion = pendingStartCompletion
+        pendingStartCompletion = { error in
+            previousCompletion?(error)
+            completionHandler(error)
+        }
 
         let watchdog = DispatchWorkItem { [weak self] in
             guard let self = self, self.pendingStartCompletion != nil else { return }
@@ -171,6 +168,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
+        configureLoginRequiredHandler(for: adapter)
         logger.info("startTunnel: login completed, starting engine for parked tunnel")
         adapter.start { error in
             if let error = error {
@@ -186,6 +184,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         guard let pending = pendingStartCompletion else { return }
         pendingStartCompletion = nil
         pending(error)
+    }
+
+    private func configureLoginRequiredHandler(for adapter: NetBirdAdapter) {
+        adapter.onLoginRequired = { [weak self] in
+            logger.error("onLoginRequired: session expired mid-tunnel — tearing down")
+            self?.cancelTunnelWithError(NSError(
+                domain: "io.netbird.NetBirdTVNetworkExtension",
+                code: 1001,
+                userInfo: [NSLocalizedDescriptionKey: "Login required."]
+            ))
+        }
     }
 
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
@@ -512,7 +521,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             configExists: configExists,
             stateExists: stateExists,
             lastResult: lastResult,
-            lastError: lastError
+            lastError: lastError,
+            configJSON: isComplete
+                ? UserDefaults.standard.string(forKey: "netbird_config_json_local")
+                : nil
         )
 
         do {

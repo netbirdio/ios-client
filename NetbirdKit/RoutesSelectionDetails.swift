@@ -14,6 +14,10 @@ struct LoginDiagnostics: Codable {
     var stateExists: Bool
     var lastResult: String
     var lastError: String
+    /// Post-login config returned by the extension after device authentication.
+    /// The main app and extension have separate UserDefaults containers on tvOS,
+    /// so the app must persist this copy for subsequent login preflight checks.
+    var configJSON: String? = nil
 }
 
 extension LoginDiagnostics {

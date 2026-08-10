@@ -187,7 +187,11 @@ public class NetworkExtensionAdapter: ObservableObject {
             let providerID = (stale.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier
             if providerID != self.extensionID {
                 logger.warning("configureManager: removing stale VPN config (provider=\(providerID ?? "nil", privacy: .public))")
-                try? await stale.removeFromPreferences()
+                do {
+                    try await stale.removeFromPreferences()
+                } catch {
+                    logger.error("configureManager: failed to remove stale VPN config: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
 
@@ -428,7 +432,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         logger.info("isLoginRequired: tvOS - config found, checking with management server...")
 
         // Create a Client and load config from UserDefaults
-        guard let client = NetBirdSDKNewClient("", "", Preferences.cacheDirectory(), "", Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+        guard let client = NetBirdSDKNewClient("", statePath, Preferences.cacheDirectory(), "", Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
             logger.error("isLoginRequired: tvOS - failed to create SDK client")
             return true
         }
@@ -952,6 +956,17 @@ public class NetworkExtensionAdapter: ObservableObject {
                 if let response = response {
                     do {
                         let diagnostic = try self.decoder.decode(LoginDiagnostics.self, from: response)
+                        #if os(tvOS)
+                        if diagnostic.isComplete,
+                           let configJSON = diagnostic.configJSON,
+                           !configJSON.isEmpty {
+                            if Preferences.saveConfigToUserDefaults(configJSON) {
+                                self.logger.info("checkLoginDiagnostics: saved post-login config in main app")
+                            } else {
+                                self.logger.error("checkLoginDiagnostics: failed to save post-login config in main app")
+                            }
+                        }
+                        #endif
                         print("checkLoginDiagnostics: result=\(diagnostic.isComplete), isExecuting=\(diagnostic.isExecuting), loginRequired=\(diagnostic.loginRequired), configExists=\(diagnostic.configExists), stateExists=\(diagnostic.stateExists), lastResult=\(diagnostic.lastResult), lastError=\(diagnostic.lastError)")
                         completion(diagnostic)
                     } catch {

@@ -37,7 +37,7 @@ struct TVAuthView: View {
     var onError: ((String) -> Void)?
 
     /// Reference to fetch login diagnostics (async - calls completion with diagnostics, or nil on IPC failure)
-    var checkLoginDiagnostics: ((@escaping (LoginDiagnostics?) -> Void) -> Void)?
+    var checkLoginDiagnostics: (@escaping (LoginDiagnostics?) -> Void) -> Void
 
     /// Polling timer to check if login completed
     @State private var pollTimer: Timer?
@@ -274,13 +274,6 @@ struct TVAuthView: View {
             print("TVAuthView: Poll tick - checking login status via extension IPC...")
             #endif
 
-            guard let checkDiagnostics = checkDiagnostics else {
-                #if DEBUG
-                print("TVAuthView: No checkLoginDiagnostics closure provided")
-                #endif
-                return
-            }
-
             checkDiagnostics { diag in
                 DispatchQueue.main.async {
                     // nil means transient IPC failure - try again on the next tick
@@ -310,12 +303,6 @@ struct TVAuthView: View {
         #if DEBUG
         print("TVAuthView: Performing initial login check...")
         #endif
-        guard let checkDiagnostics = checkDiagnostics else {
-            #if DEBUG
-            print("TVAuthView: No checkLoginDiagnostics closure provided")
-            #endif
-            return
-        }
         checkDiagnostics { diag in
             DispatchQueue.main.async {
                 let isComplete = diag?.isComplete ?? false
@@ -357,5 +344,4 @@ struct TVAuthView_Previews: PreviewProvider {
 }
 
 #endif
-
 
