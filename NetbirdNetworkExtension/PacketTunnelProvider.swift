@@ -664,7 +664,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         DispatchQueue.global(qos: .utility).async {
             var error: NSError?
-            let key = adapter.client.debugBundle(anonymize, error: &error)
+            // The strict level stays unused until the troubleshoot screen
+            // grows an option for it.
+            let key = adapter.client.debugBundle(anonymize, anonymizeLevel: NetBirdSDKAnonymizeLevelDefault, error: &error)
             if let error = error {
                 completionHandler("error:\(error.localizedDescription)".data(using: .utf8))
             } else {
