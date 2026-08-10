@@ -134,7 +134,10 @@ class PacketTunnelProviderSettingsManager {
                     // makes setTunnelNetworkSettings KEEP the previously applied IPv6
                     // config, so the ::/0 blackhole installed while an exit node was
                     // selected would linger after deselect and keep black-holing traffic.
-                    tunnelNetworkSettings.ipv6Settings = NEIPv6Settings(addresses: [], networkPrefixLengths: [])
+                    let ipv6Settings = NEIPv6Settings(addresses: [Self.ipv6BlackholeAddress], networkPrefixLengths: [Self.ipv6BlackholePrefix])
+                    // Explicitly clear any previously-applied IPv6 routes.
+                    ipv6Settings.includedRoutes = []
+                    tunnelNetworkSettings.ipv6Settings = ipv6Settings
                 }
                 
                 tunnelNetworkSettings.mtu = 1280
