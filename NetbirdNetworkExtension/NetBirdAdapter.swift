@@ -277,7 +277,10 @@ public class NetBirdAdapter {
         // State path must be writable: the Go state manager persists next to it and fails
         // with EPERM if it is empty or read-only. Log path stays empty here; engine logging
         // is wired in a follow-up PR.
-        let statePath = Preferences.stateFile() ?? ""
+        guard let statePath = Preferences.stateFile(), !statePath.isEmpty else {
+            adapterLogger.error("init: tvOS - writable state path is unavailable")
+            return nil
+        }
         guard let client = NetBirdSDKNewClient("", statePath, Preferences.cacheDirectory(), "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
             adapterLogger.error("init: tvOS - Failed to create NetBird SDK client")
             return nil

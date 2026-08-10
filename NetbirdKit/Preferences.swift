@@ -107,10 +107,18 @@ class Preferences {
     }
 
     /// Returns a writable directory for debug bundle ZIP generation.
-    /// iOS: App Group container's Caches subdir. tvOS: system temp dir.
+    /// iOS: App Group container's Caches subdir. tvOS: process-local Caches.
     static func cacheDirectory() -> String {
         let fileManager = FileManager.default
         #if os(tvOS)
+        if let cacheURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            do {
+                try fileManager.createDirectory(at: cacheURL, withIntermediateDirectories: true)
+                return cacheURL.path
+            } catch {
+                return fileManager.temporaryDirectory.path
+            }
+        }
         return fileManager.temporaryDirectory.path
         #else
         if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
