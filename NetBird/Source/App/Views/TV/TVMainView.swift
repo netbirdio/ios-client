@@ -189,7 +189,7 @@ struct TVConnectionView: View {
                     }
                 }
                 .padding(.top, 36)
-                .onChange(of: viewModel.ip) { newValue in
+                .onChange(of: viewModel.ip) { _, newValue in
                     if newValue.isEmpty { showAddressDetails = false }
                 }
 
@@ -356,7 +356,7 @@ struct TVVPNToggleView: View {
         .accessibilityLabel("VPN connection")
         .accessibilityValue(isOn ? "On" : "Off")
         // Clear optimistic as soon as the OS confirms any state change
-        .onChange(of: vpnState) { _ in
+        .onChange(of: vpnState) {
             optimisticIsOn = nil
         }
         // Bounded fallback. A disconnect tap does not always move vpnState: when the
