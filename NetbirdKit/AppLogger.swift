@@ -162,6 +162,11 @@ public class AppLogger {
 
     public static func getGoLogFileURL() -> URL? {
         let fileManager = FileManager.default
+        #if os(tvOS)
+        if let path = Preferences.logFilePath(), fileManager.fileExists(atPath: path) {
+            return URL(fileURLWithPath: path)
+        }
+        #endif
         // Try app group first
         if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
             let url = groupURL.appendingPathComponent("logfile.log")

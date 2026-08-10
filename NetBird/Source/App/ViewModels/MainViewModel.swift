@@ -1047,9 +1047,28 @@ class ViewModel: ObservableObject {
             return .error(message: "Configuration not available")
         }
         let cacheDir = Preferences.cacheDirectory()
-        let logPath = AppLogger.getGoLogFileURL()?.path ?? ""
+        let logPath = AppLogger.getGoLogFileURL()?.path ?? Preferences.logFilePath() ?? ""
         guard let client = NetBirdSDKNewClient(configPath, statePath, cacheDir, logPath, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
             return .error(message: "Failed to initialize client")
+        }
+        var sdkError: NSError?
+        let key = client.debugBundle(anonymize, anonymizeLevel: NetBirdSDKAnonymizeLevelDefault, error: &sdkError)
+        if let sdkError {
+            return .error(message: sdkError.localizedDescription)
+        }
+        return .done(key: key)
+        #elseif os(tvOS)
+        let cacheDir = Preferences.cacheDirectory()
+        let logPath = Preferences.logFilePath() ?? ""
+        guard let client = NetBirdSDKNewClient("", "", cacheDir, logPath, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+            return .error(message: "Failed to initialize client")
+        }
+        if let configJSON = Preferences.loadConfigFromUserDefaults() {
+            do {
+                try client.setConfigFromJSON(configJSON)
+            } catch {
+                // Continue — a partial bundle is still useful for support.
+            }
         }
         var sdkError: NSError?
         let key = client.debugBundle(anonymize, anonymizeLevel: NetBirdSDKAnonymizeLevelDefault, error: &sdkError)

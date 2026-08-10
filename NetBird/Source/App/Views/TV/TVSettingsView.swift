@@ -18,6 +18,8 @@ struct TVSettingsView: View {
     @EnvironmentObject var viewModel: ViewModel
     @State private var showPreSharedKeyAlert = false
     @State private var showDocsQRCode = false
+    @State private var showUploadKeyQR = false
+    @State private var uploadKeyForQR = ""
 
     var body: some View {
         ZStack {
@@ -42,13 +44,6 @@ struct TVSettingsView: View {
                         }
 
                         TVSettingsSection(title: "Advanced") {
-                            TVSettingsToggleRow(
-                                icon: "ant.fill",
-                                title: "Trace Logging",
-                                subtitle: "Enable detailed logs for troubleshooting",
-                                isOn: $viewModel.traceLogsEnabled
-                            )
-
                             TVSettingsToggleRow(
                                 icon: "shield.lefthalf.filled",
                                 title: "Rosenpass",
@@ -76,6 +71,30 @@ struct TVSettingsView: View {
                                     }
                                 ),
                                 isDisabled: !viewModel.rosenpassEnabled
+                            )
+                        }
+
+                        TVSettingsSection(title: "Troubleshoot") {
+                            TVSettingsToggleRow(
+                                icon: "ant.fill",
+                                title: "Trace Logging",
+                                subtitle: "Enable detailed engine logs for troubleshooting",
+                                isOn: $viewModel.traceLogsEnabled
+                            )
+
+                            TVSettingsToggleRow(
+                                icon: "eye.slash.fill",
+                                title: "Anonymize Bundle",
+                                subtitle: "Hide IPs, domains, and private keys in uploads",
+                                isOn: $viewModel.anonymizeDebugBundle
+                            )
+
+                            TVTroubleshootBundleRow(
+                                viewModel: viewModel,
+                                onShowQR: { key in
+                                    uploadKeyForQR = key
+                                    showUploadKeyQR = true
+                                }
                             )
                         }
 
@@ -146,6 +165,10 @@ struct TVSettingsView: View {
                 TVRosenpassChangedAlert(viewModel: viewModel)
             }
 
+            if viewModel.showLogLevelChangedAlert {
+                TVLogLevelChangedAlert(viewModel: viewModel)
+            }
+
         }
         .onAppear {
             // Load settings from storage to sync UI with actual values
@@ -153,11 +176,21 @@ struct TVSettingsView: View {
             viewModel.loadPreSharedKey()
             viewModel.loadIPv6Settings()
         }
+        .onDisappear {
+            viewModel.debugBundleUploadState = .idle
+        }
         .sheet(isPresented: $showDocsQRCode) {
             TVQRCodeSheet(
                 url: "https://docs.netbird.io",
                 title: "Documentation",
                 subtitle: "Scan this QR code to visit our docs"
+            )
+        }
+        .sheet(isPresented: $showUploadKeyQR) {
+            TVQRCodeSheet(
+                url: uploadKeyForQR,
+                title: "Upload Key",
+                subtitle: "Scan or note this key for NetBird support"
             )
         }
         .fullScreenCover(isPresented: $showPreSharedKeyAlert) {
@@ -347,6 +380,114 @@ struct TVSettingsInfoRow: View {
         }
         .buttonStyle(TVSettingsButtonStyle())
         .focused($isFocused)
+    }
+}
+
+/// Upload debug bundle row — mirrors iOS TroubleshootView actions for the remote.
+struct TVTroubleshootBundleRow: View {
+    @ObservedObject var viewModel: ViewModel
+    let onShowQR: (String) -> Void
+
+    var body: some View {
+        switch viewModel.debugBundleUploadState {
+        case .idle:
+            TVSettingsRow(
+                icon: "arrow.up.doc.fill",
+                title: "Upload Debug Bundle",
+                subtitle: "Send logs to NetBird support",
+                action: { viewModel.uploadDebugBundle() }
+            )
+        case .uploading:
+            TVSettingsInfoRow(
+                icon: "arrow.up.doc.fill",
+                title: "Uploading…",
+                subtitle: "Generating debug bundle"
+            )
+        case .done(let key):
+            VStack(spacing: 4) {
+                TVSettingsInfoRow(
+                    icon: "checkmark.circle.fill",
+                    title: "Upload Key",
+                    subtitle: key
+                )
+                TVSettingsRow(
+                    icon: "qrcode",
+                    title: "Show Key QR",
+                    subtitle: "Scan with your phone to copy the key",
+                    action: { onShowQR(key) }
+                )
+                TVSettingsRow(
+                    icon: "arrow.clockwise",
+                    title: "Create New Bundle",
+                    subtitle: "Upload another debug bundle",
+                    action: { viewModel.debugBundleUploadState = .idle }
+                )
+            }
+        case .error(let message):
+            VStack(spacing: 4) {
+                TVSettingsInfoRow(
+                    icon: "exclamationmark.triangle.fill",
+                    title: "Upload Failed",
+                    subtitle: message
+                )
+                TVSettingsRow(
+                    icon: "arrow.clockwise",
+                    title: "Try Again",
+                    subtitle: "Retry debug bundle upload",
+                    action: { viewModel.debugBundleUploadState = .idle }
+                )
+            }
+        }
+    }
+}
+
+struct TVLogLevelChangedAlert: View {
+    @ObservedObject var viewModel: ViewModel
+
+    private enum FocusedButton {
+        case ok
+    }
+
+    @FocusState private var focusedButton: FocusedButton?
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+
+            VStack(spacing: 40) {
+                Image(systemName: "ant.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.orange)
+
+                Text("Changing Log Level")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(TVColors.textAlert)
+
+                Text("Changing log level will take effect after next connect.")
+                    .font(.system(size: 24))
+                    .foregroundColor(TVColors.textAlert)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 500)
+
+                TVAlertButton(
+                    title: "OK",
+                    style: .filled(Color.accentColor),
+                    isFocused: focusedButton == .ok,
+                    action: { viewModel.showLogLevelChangedAlert = false },
+                    isSemibold: true
+                )
+                .focused($focusedButton, equals: .ok)
+            }
+            .padding(60)
+            .background(
+                RoundedRectangle(cornerRadius: 30)
+                    .fill(TVColors.bgSideDrawer)
+            )
+        }
+        .onAppear {
+            focusedButton = .ok
+        }
     }
 }
 

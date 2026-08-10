@@ -49,6 +49,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let optionsDesc = options?.description ?? "nil"
         logger.info("startTunnel: options = \(optionsDesc, privacy: .public)")
 
+        let logLevel = (options?["logLevel"] as? String) ?? "INFO"
+        initializeLogging(loglevel: logLevel)
+
         // On tvOS, config is loaded from UserDefaults directly in NetBirdAdapter.init()
         // No need to restore to file - the adapter handles this internally.
         if Preferences.hasConfigInUserDefaults() {
@@ -157,6 +160,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case "ClearConfig":
             // Clear the extension-local config on logout
             clearLocalConfig(completionHandler: completionHandler)
+        case let s where s.hasPrefix("DebugBundle:"):
+            let anonymize = s.dropFirst("DebugBundle:".count) == "true"
+            debugBundle(anonymize: anonymize, completionHandler: completionHandler)
         default:
             logger.warning("handleAppMessage: Unknown message: \(string)")
             completionHandler(nil)
@@ -671,6 +677,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    func debugBundle(anonymize: Bool, completionHandler: @escaping (Data?) -> Void) {
+        guard let adapter = adapter else {
+            completionHandler("error:adapter not available".data(using: .utf8))
+            return
+        }
+        DispatchQueue.global(qos: .utility).async {
+            var error: NSError?
+            let key = adapter.client.debugBundle(anonymize, anonymizeLevel: NetBirdSDKAnonymizeLevelDefault, error: &error)
+            if let error = error {
+                completionHandler("error:\(error.localizedDescription)".data(using: .utf8))
+            } else {
+                completionHandler(key.data(using: .utf8))
+            }
+        }
+    }
+
     override func sleep(completionHandler: @escaping () -> Void) {
         completionHandler()
     }
@@ -690,47 +712,32 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 }
 
 func initializeLogging(loglevel: String) {
-    let fileManager = FileManager.default
-
-    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)
-    let logURL = groupURL?.appendingPathComponent("logfile.log")
-
-    var error: NSError?
-    var success = false
-
-    let logMessage = "Starting new log file from TV extension" + "\n"
-
-    guard let logURLValid = logURL else {
-        print("Failed to get the log file URL.")
+    guard let logPath = Preferences.logFilePath() else {
+        logger.error("initializeLogging: no writable log path")
         return
     }
 
-    if fileManager.fileExists(atPath: logURLValid.path) {
-        if let fileHandle = try? FileHandle(forWritingTo: logURLValid) {
-            do {
-                try "".write(to: logURLValid, atomically: true, encoding: .utf8)
-            } catch {
-                print("Error handling the log file: \(error)")
-            }
-            if let data = logMessage.data(using: .utf8) {
-                fileHandle.write(data)
-            }
-            fileHandle.closeFile()
-        } else {
-            print("Failed to open the log file for writing.")
-        }
-    } else {
-        do {
-            try logMessage.write(to: logURLValid, atomically: true, encoding: .utf8)
-        } catch {
-            print("Failed to write to the log file: \(error.localizedDescription)")
-        }
+    let fileManager = FileManager.default
+    let logURL = URL(fileURLWithPath: logPath)
+    let parent = logURL.deletingLastPathComponent()
+    do {
+        try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+    } catch {
+        logger.error("initializeLogging: failed to create log directory: \(error.localizedDescription, privacy: .public)")
     }
 
-    if let logPath = logURL?.path {
-        success = NetBirdSDKInitializeLog(loglevel, logPath, &error)
+    let logMessage = "Starting new log file from TV extension\n"
+    do {
+        try logMessage.write(to: logURL, atomically: true, encoding: .utf8)
+    } catch {
+        logger.error("initializeLogging: failed to write log file: \(error.localizedDescription, privacy: .public)")
     }
+
+    var error: NSError?
+    let success = NetBirdSDKInitializeLog(loglevel, logPath, &error)
     if !success, let actualError = error {
-        print("Failed to initialize log: \(actualError.localizedDescription)")
+        logger.error("initializeLogging: NetBirdSDKInitializeLog failed: \(actualError.localizedDescription, privacy: .public)")
+    } else {
+        logger.info("initializeLogging: level=\(loglevel, privacy: .public) path=\(logPath, privacy: .public)")
     }
 }
