@@ -81,6 +81,12 @@ class Preferences {
         #if os(iOS)
         // Use profile-aware paths on iOS
         return ProfileManager.shared.activeConfigPath()
+        #elseif os(tvOS)
+        // App Group container is not writable on tvOS, so the config path handed
+        // to NetBirdSDKNewAuth must live in a writable directory — otherwise the
+        // SDK's config create/update fails with EPERM before the SSO flow starts.
+        // Persistence on tvOS goes through UserDefaults + IPC, not this file.
+        return URL(fileURLWithPath: cacheDirectory()).appendingPathComponent(GlobalConstants.configFileName).path
         #else
         return getFilePath(fileName: GlobalConstants.configFileName)
         #endif
