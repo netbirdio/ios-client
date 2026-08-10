@@ -176,7 +176,25 @@ public class NetworkExtensionAdapter: ObservableObject {
 
     private func configureManager() async throws {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-        if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
+
+        // Remove stale configurations that share our display name but point at a
+        // different provider bundle — e.g. leftovers from an App Store install or a
+        // renamed bundle ID. Deleting an app does NOT remove its VPN configuration,
+        // and matching such a config by name makes startVPNTunnel target a provider
+        // that isn't installed ("The VPN app used by the VPN configuration is not
+        // installed").
+        for stale in managers where stale.localizedDescription == self.extensionName {
+            let providerID = (stale.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier
+            if providerID != self.extensionID {
+                logger.warning("configureManager: removing stale VPN config (provider=\(providerID ?? "nil", privacy: .public))")
+                try? await stale.removeFromPreferences()
+            }
+        }
+
+        if let manager = managers.first(where: {
+            $0.localizedDescription == self.extensionName &&
+            ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.extensionID
+        }) {
             self.vpnManager = manager
             // Only write preferences when strictly necessary.
             // Calling saveToPreferences() on an already-configured manager triggers
@@ -205,7 +223,10 @@ public class NetworkExtensionAdapter: ObservableObject {
     public func loadCurrentConnectionState() async -> NEVPNStatus? {
         do {
             let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-            guard let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) else {
+            guard let manager = managers.first(where: {
+                $0.localizedDescription == self.extensionName &&
+                ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.extensionID
+            }) else {
                 logger.info("loadCurrentConnectionState: No existing manager found")
                 return nil
             }
@@ -219,7 +240,10 @@ public class NetworkExtensionAdapter: ObservableObject {
             if status == .disconnected || status == .invalid {
                 try? await Task.sleep(nanoseconds: 200_000_000) // 200 ms
                 let refreshed = try await NETunnelProviderManager.loadAllFromPreferences()
-                if let fresh = refreshed.first(where: { $0.localizedDescription == self.extensionName }) {
+                if let fresh = refreshed.first(where: {
+                    $0.localizedDescription == self.extensionName &&
+                    ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.extensionID
+                }) {
                     status = fresh.connection.status
                     self.vpnManager = fresh
                     self.session = fresh.connection as? NETunnelProviderSession
