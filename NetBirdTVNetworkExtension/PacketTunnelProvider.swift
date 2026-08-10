@@ -50,7 +50,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         logger.info("startTunnel: options = \(optionsDesc, privacy: .public)")
 
         let logLevel = (options?["logLevel"] as? String) ?? "INFO"
-        initializeLogging(loglevel: logLevel)
+        let engineLogsEnabled = (options?["engineLogsEnabled"] as? Bool) ?? true
+        // Persist locally so getLog can explain why no log file exists.
+        UserDefaults.standard.set(engineLogsEnabled, forKey: "engineLogsEnabled")
+        initializeLogging(loglevel: logLevel, enabled: engineLogsEnabled)
 
         // On tvOS, config is loaded from UserDefaults directly in NetBirdAdapter.init()
         // No need to restore to file - the adapter handles this internally.
@@ -163,6 +166,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case let s where s.hasPrefix("DebugBundle:"):
             let anonymize = s.dropFirst("DebugBundle:".count) == "true"
             debugBundle(anonymize: anonymize, completionHandler: completionHandler)
+        case "GetLog":
+            getLog(completionHandler: completionHandler)
         default:
             logger.warning("handleAppMessage: Unknown message: \(string)")
             completionHandler(nil)
@@ -693,6 +698,36 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// Returns the tail of the Go engine log for display in Settings → Troubleshoot.
+    func getLog(completionHandler: ((Data?) -> Void)?) {
+        DispatchQueue.global(qos: .utility).async {
+            let maxBytes = 192 * 1024
+            let engineLogsEnabled = (UserDefaults.standard.object(forKey: "engineLogsEnabled") as? Bool) ?? true
+            guard engineLogsEnabled else {
+                completionHandler?("Engine logs are disabled. Enable them under Settings → Troubleshoot → Engine Logs, then reconnect.".data(using: .utf8))
+                return
+            }
+            guard let path = Preferences.logFilePath() else {
+                completionHandler?("No log path available.".data(using: .utf8))
+                return
+            }
+            guard let handle = FileHandle(forReadingAtPath: path) else {
+                completionHandler?("Log file not found. Connect to the VPN first.".data(using: .utf8))
+                return
+            }
+            defer { try? handle.close() }
+            let size = (try? handle.seekToEnd()) ?? 0
+            if size > UInt64(maxBytes) {
+                try? handle.seek(toOffset: size - UInt64(maxBytes))
+            } else {
+                try? handle.seek(toOffset: 0)
+            }
+            let data = (try? handle.readToEnd()) ?? Data()
+            let text = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+            completionHandler?(text.data(using: .utf8))
+        }
+    }
+
     override func sleep(completionHandler: @escaping () -> Void) {
         completionHandler()
     }
@@ -711,7 +746,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 }
 
-func initializeLogging(loglevel: String) {
+func initializeLogging(loglevel: String, enabled: Bool = true) {
     guard let logPath = Preferences.logFilePath() else {
         logger.error("initializeLogging: no writable log path")
         return
@@ -719,6 +754,15 @@ func initializeLogging(loglevel: String) {
 
     let fileManager = FileManager.default
     let logURL = URL(fileURLWithPath: logPath)
+
+    guard enabled else {
+        // Engine log output disabled: drop any stale log so the Debug Log view
+        // and debug bundles don't surface output from an older session.
+        try? fileManager.removeItem(at: logURL)
+        logger.info("initializeLogging: engine logs disabled, no log file will be written")
+        return
+    }
+
     let parent = logURL.deletingLastPathComponent()
     do {
         try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)

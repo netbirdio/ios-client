@@ -20,6 +20,7 @@ struct TVSettingsView: View {
     @State private var showDocsQRCode = false
     @State private var showUploadKeyQR = false
     @State private var uploadKeyForQR = ""
+    @State private var showDebugLog = false
 
     var body: some View {
         ZStack {
@@ -76,10 +77,18 @@ struct TVSettingsView: View {
 
                         TVSettingsSection(title: "Troubleshoot") {
                             TVSettingsToggleRow(
+                                icon: "doc.plaintext",
+                                title: "Engine Logs",
+                                subtitle: "Write engine logs to a file for the Debug Log viewer",
+                                isOn: $viewModel.engineLogsEnabled
+                            )
+
+                            TVSettingsToggleRow(
                                 icon: "ant.fill",
                                 title: "Trace Logging",
                                 subtitle: "Enable detailed engine logs for troubleshooting",
-                                isOn: $viewModel.traceLogsEnabled
+                                isOn: $viewModel.traceLogsEnabled,
+                                isDisabled: !viewModel.engineLogsEnabled
                             )
 
                             TVSettingsToggleRow(
@@ -95,6 +104,13 @@ struct TVSettingsView: View {
                                     uploadKeyForQR = key
                                     showUploadKeyQR = true
                                 }
+                            )
+
+                            TVSettingsRow(
+                                icon: "doc.text.magnifyingglass",
+                                title: "Debug Log",
+                                subtitle: "View engine logs from the VPN extension",
+                                action: { showDebugLog = true }
                             )
                         }
 
@@ -198,6 +214,9 @@ struct TVSettingsView: View {
                 viewModel: viewModel,
                 isPresented: $showPreSharedKeyAlert
             )
+        }
+        .fullScreenCover(isPresented: $showDebugLog) {
+            TVDebugLogView(viewModel: viewModel)
         }
     }
     
@@ -460,11 +479,11 @@ struct TVLogLevelChangedAlert: View {
                     .font(.system(size: 60))
                     .foregroundColor(.orange)
 
-                Text("Changing Log Level")
+                Text("Logging Settings Changed")
                     .font(.system(size: 40, weight: .bold))
                     .foregroundColor(TVColors.textAlert)
 
-                Text("Changing log level will take effect after next connect.")
+                Text("Logging changes will take effect after next connect.")
                     .font(.system(size: 24))
                     .foregroundColor(TVColors.textAlert)
                     .multilineTextAlignment(.center)
@@ -822,6 +841,109 @@ struct TVSettingsView_Previews: PreviewProvider {
     static var previews: some View {
         TVSettingsView()
             .environmentObject(ViewModel())
+    }
+}
+
+/// Full-screen engine log viewer. Dismiss with the remote's Menu/Back button.
+///
+/// The log is split into focusable chunks inside a ScrollView — the same native
+/// focus-driven scrolling every other tvOS screen in this app uses. Pressing
+/// down from Refresh enters the log; up/down moves chunk-by-chunk and tvOS
+/// automatically scrolls to keep the focused chunk visible. (A UITextView
+/// bridged via UIViewRepresentable never receives focus from SwiftUI on tvOS,
+/// so it can never scroll — that approach cannot work here.)
+struct TVDebugLogView: View {
+    @ObservedObject var viewModel: ViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    private static let linesPerChunk = 8
+
+    private var chunks: [LogChunk] {
+        let lines = viewModel.debugLogText.split(separator: "\n", omittingEmptySubsequences: false)
+        var result: [LogChunk] = []
+        var start = 0
+        while start < lines.count {
+            let end = min(start + Self.linesPerChunk, lines.count)
+            result.append(LogChunk(id: result.count, text: lines[start..<end].joined(separator: "\n")))
+            start = end
+        }
+        return result
+    }
+
+    var body: some View {
+        ZStack {
+            TVGradientBackground()
+
+            VStack(alignment: .leading, spacing: 24) {
+                HStack {
+                    Text("Debug Log")
+                        .font(.system(size: 40, weight: .bold))
+                        .foregroundColor(TVColors.textPrimary)
+
+                    Spacer()
+
+                    Button("Refresh") {
+                        viewModel.fetchExtensionDebugLog()
+                    }
+                }
+
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 4) {
+                            ForEach(chunks) { chunk in
+                                TVLogChunkView(text: chunk.text)
+                                    .id(chunk.id)
+                            }
+                        }
+                        .padding(24)
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.black.opacity(0.35))
+                    )
+                    .onChange(of: viewModel.debugLogText) {
+                        // Jump to the newest lines after a (re)load.
+                        if let last = chunks.last {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                }
+            }
+            .padding(60)
+        }
+        .onAppear {
+            viewModel.fetchExtensionDebugLog()
+        }
+        .onExitCommand {
+            dismiss()
+        }
+    }
+}
+
+private struct LogChunk: Identifiable {
+    let id: Int
+    let text: String
+}
+
+/// One focusable slice of the log. The focused chunk is highlighted; moving
+/// focus between chunks is what scrolls the enclosing ScrollView.
+private struct TVLogChunkView: View {
+    let text: String
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 20, design: .monospaced))
+            .foregroundColor(TVColors.textPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isFocused ? Color.white.opacity(0.15) : Color.clear)
+            )
+            .focusable()
+            .focused($isFocused)
     }
 }
 

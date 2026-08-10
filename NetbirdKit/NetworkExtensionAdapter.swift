@@ -609,8 +609,10 @@ public class NetworkExtensionAdapter: ObservableObject {
     public func startVPNConnection(loginVerified: Bool = false) {
         logger.info("startVPNConnection: called (loginVerified=\(loginVerified))")
         let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
+        let engineLogsEnabled = (UserDefaults.standard.object(forKey: "engineLogsEnabled") as? Bool) ?? true
         logger.info("startVPNConnection: logLevel = \(logLevel)")
         var options: [String: NSObject] = ["logLevel": logLevel as NSObject]
+        options["engineLogsEnabled"] = engineLogsEnabled as NSObject
         #if os(iOS)
         if loginVerified {
             options[GlobalConstants.optionLoginVerified] = true as NSObject
@@ -1050,6 +1052,29 @@ public class NetworkExtensionAdapter: ObservableObject {
             }
         } catch {
             completion(.failure(error))
+        }
+    }
+
+    /// Fetches the extension Go engine log tail (tvOS Troubleshoot → Debug Log).
+    func getExtensionLog(completion: @escaping (String) -> Void) {
+        guard let session = self.session else {
+            completion("VPN session not available. Connect first.")
+            return
+        }
+        guard let messageData = "GetLog".data(using: .utf8) else {
+            completion("Failed to encode GetLog message.")
+            return
+        }
+        do {
+            try session.sendProviderMessage(messageData) { response in
+                guard let data = response, let text = String(data: data, encoding: .utf8) else {
+                    completion("No response from extension.")
+                    return
+                }
+                completion(text)
+            }
+        } catch {
+            completion("Failed to request log: \(error.localizedDescription)")
         }
     }
 
