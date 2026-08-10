@@ -96,6 +96,11 @@ class Preferences {
         #if os(iOS)
         // Use profile-aware paths on iOS
         return ProfileManager.shared.activeStatePath()
+        #elseif os(tvOS)
+        // App Group container is not writable from the extension on tvOS.
+        // The Go state manager writes temp files next to this path, so it must
+        // live in a writable directory or every persist fails with EPERM.
+        return URL(fileURLWithPath: cacheDirectory()).appendingPathComponent(GlobalConstants.stateFileName).path
         #else
         return getFilePath(fileName: GlobalConstants.stateFileName)
         #endif

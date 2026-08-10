@@ -273,8 +273,12 @@ public class NetBirdAdapter {
 
         #if os(tvOS)
         // On tvOS, the filesystem is blocked for the App Group container.
-        // Create the client with empty paths and load config from local storage instead.
-        guard let client = NetBirdSDKNewClient("", "", Preferences.cacheDirectory(), "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
+        // Create the client with an empty config path and load config from local storage instead.
+        // State path must be writable: the Go state manager persists next to it and fails
+        // with EPERM if it is empty or read-only. Log path stays empty here; engine logging
+        // is wired in a follow-up PR.
+        let statePath = Preferences.stateFile() ?? ""
+        guard let client = NetBirdSDKNewClient("", statePath, Preferences.cacheDirectory(), "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
             adapterLogger.error("init: tvOS - Failed to create NetBird SDK client")
             return nil
         }
