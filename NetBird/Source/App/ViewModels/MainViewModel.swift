@@ -642,6 +642,12 @@ class ViewModel: ObservableObject {
             if connectOnDemand {
                 networkExtensionAdapter.setOnDemandEnabled(true)
             }
+        } else if status == .disconnected {
+            // Routes only exist while the extension is up. Drop them so the exit node
+            // selector on the connection screen falls back to its disabled state instead
+            // of listing nodes that can no longer be applied. The core keeps the actual
+            // selection, so it comes back with the next getRoutes on reconnect.
+            routeViewModel.clearRoutes()
         }
     }
     
@@ -1052,7 +1058,7 @@ class ViewModel: ObservableObject {
             return .error(message: "Failed to initialize client")
         }
         var sdkError: NSError?
-        let key = client.debugBundle(anonymize, error: &sdkError)
+        let key = client.debugBundle(anonymize, anonymizeLevel: NetBirdSDKAnonymizeLevelDefault, error: &sdkError)
         if let sdkError {
             return .error(message: sdkError.localizedDescription)
         }

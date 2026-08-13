@@ -107,18 +107,21 @@ struct iOSConnectionView: View {
                     }
 
                     Spacer()
-                }
 
-                // Network warning shown above tab bar when connected but offline
-                if viewModel.vpnDisplayState == .connected && !viewModel.isInternetConnected {
-                    GeometryReader { geo in
-                        VStack {
-                            Spacer()
+                    // Pinned above the tab bar: the offline warning (when connected but
+                    // without internet) stacked on top of the always-present exit node
+                    // selector. Both live in the layout flow rather than an overlay so the
+                    // banner can never cover the selector.
+                    VStack(spacing: 12) {
+                        if viewModel.vpnDisplayState == .connected && !viewModel.isInternetConnected {
                             NetworkWarningBanner()
-                                .padding(.bottom, geo.safeAreaInsets.bottom + 80)
+                                .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
+
+                        ExitNodeSelectorCard(routeViewModel: viewModel.routeViewModel)
+                            .padding(.horizontal, 16)
                     }
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .padding(.bottom, 16)
                     .animation(.easeInOut(duration: 0.3), value: viewModel.isInternetConnected)
                 }
 
@@ -177,6 +180,15 @@ struct iOSConnectionView: View {
         } message: {
             Text(viewModel.networkExtensionAdapter.loginErrorMessage ?? "")
         }
+        .onAppear {
+            // Returning to this tab doesn't go through applyExtensionStatus, so refresh the
+            // network map here to keep the exit node selector current. Only while connected:
+            // GetRoutes answers with an empty list when there is no tunnel session and would
+            // wipe a list that is still valid.
+            if viewModel.vpnDisplayState == .connected {
+                viewModel.routeViewModel.getRoutes()
+            }
+        }
     }
 
     /// Resolves what the login browser's end means for the VPN.
@@ -201,7 +213,9 @@ struct iOSConnectionView: View {
         case .closed:
             if adapter.loginSucceeded {
                 print("Finish login")
-                adapter.startVPNConnection()
+                // The SDK just completed the management login, so the extension can
+                // skip its own needs-login check (one Login RPC) when it starts.
+                adapter.startVPNConnection(loginVerified: true)
                 return
             }
             // Ambiguous: the user may have cancelled, or closed the SDK's success

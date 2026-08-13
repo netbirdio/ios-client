@@ -120,7 +120,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        if adapter.needsLogin() {
+        // Skip this check when the main app has already established the login state (its own
+        // isLoginRequired() call, or a login it just completed) and said so via the start
+        // options. needsLogin() is a full Login RPC against the management server, so the
+        // unconditional check duplicated one the other process had just made. Starts the main
+        // app did not initiate (On Demand, widget intent) carry no flag and still verify here.
+        // Either way an expired session is caught by the engine: its own login fails with
+        // PermissionDenied, which drives onLoginRequired and tears the tunnel down.
+        #if os(iOS)
+        let loginVerifiedByApp = (options?[GlobalConstants.optionLoginVerified] as? NSNumber)?.boolValue ?? false
+        #else
+        let loginVerifiedByApp = false
+        #endif
+        if loginVerifiedByApp {
+            AppLogger.shared.log("startTunnel: login already verified by the main app, skipping needsLogin check")
+        }
+        if !loginVerifiedByApp, adapter.needsLogin() {
             signalLoginRequired()
             // Clear any transitioning widget state so the login button appears immediately
             // instead of waiting for the snap-back window to expire.
@@ -388,7 +403,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // Tokens may have expired during a network change (common with self-hosted servers
             // that have shorter token lifetimes). Check before restarting; if login is required
             // signal the main app so it can show the re-auth UI instead of silently failing.
-            if self?.adapter?.needsLogin() == true {
+            // The cached check reads the auth state the engine already recorded, so a network
+            // change no longer costs a Login RPC. An expiry the recorder has not seen yet is
+            // still caught one step later: the restarted engine's own login fails with
+            // PermissionDenied and drives onLoginRequired from the connection listener.
+            if self?.adapter?.needsLoginCached() == true {
                 AppLogger.shared.log("restartClient: login required — signaling main app, skipping restart")
                 self?.signalLoginRequired()
                 self?.updateWidgetStatus("disconnected")
@@ -412,6 +431,23 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 if let error = error {
                     AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
+                    // If the start failed because the session expired, the connection
+                    // listener may have suppressed its login-required signalling: it skips
+                    // both checks while isRestarting is still true, which happens when the
+                    // stop phase never fired onDisconnected (engine already dead) and the
+                    // stop completion arrived via the 15s fallback instead. Re-check the
+                    // recorder here — the engine marks it with PermissionDenied before
+                    // Run() returns — and signal + tear down so the dead tunnel doesn't
+                    // linger and black-hole traffic.
+                    if self?.adapter?.needsLoginCached() == true {
+                        AppLogger.shared.log("restartClient: start failed due to expired login — signaling and tearing down")
+                        self?.signalLoginRequired()
+                        self?.cancelTunnelWithError(NSError(
+                            domain: "io.netbird.NetbirdNetworkExtension",
+                            code: 1001,
+                            userInfo: [NSLocalizedDescriptionKey: "Login required."]
+                        ))
+                    }
                     self?.updateWidgetStatus("disconnected")
                 } else {
                     AppLogger.shared.log("restartClient: start completed successfully")
@@ -628,7 +664,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         DispatchQueue.global(qos: .utility).async {
             var error: NSError?
-            let key = adapter.client.debugBundle(anonymize, error: &error)
+            // The strict level stays unused until the troubleshoot screen
+            // grows an option for it.
+            let key = adapter.client.debugBundle(anonymize, anonymizeLevel: NetBirdSDKAnonymizeLevelDefault, error: &error)
             if let error = error {
                 completionHandler("error:\(error.localizedDescription)".data(using: .utf8))
             } else {
