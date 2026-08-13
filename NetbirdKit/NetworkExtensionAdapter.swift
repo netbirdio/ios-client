@@ -9,6 +9,7 @@ import Foundation
 import NetworkExtension
 import SwiftUI
 import Combine
+import Network
 import NetBirdSDK
 import os
 
@@ -76,13 +77,22 @@ public class NetworkExtensionAdapter: ObservableObject {
     @Published var loginURL: String?
     #if os(iOS)
     private var pendingAuth: NetBirdSDKAuth?
-    /// Set to true by the SDK's onLoginSuccess callback (which fires once the Go PKCE
-    /// localhost server receives the OAuth callback). The browser-finished handler reads
-    /// this to tell a genuine login from the user dismissing the browser: the
-    /// ASWebAuthenticationSession completion fires with a nil callbackURL even on success
-    /// (the loopback redirect is consumed by the Go HTTP server, not the auth session),
-    /// so the SafariView callback alone cannot distinguish success from cancellation.
+    /// Set to true by the SDK's onLoginSuccess callback, which fires only once the
+    /// whole flow is done: authorization code exchanged AND the peer registered with
+    /// the management server. The browser cannot report this — its completion looks
+    /// the same whether the user cancelled or closed the SDK's success page — so
+    /// every "did the login work" decision reads this flag.
     public private(set) var loginSucceeded = false
+    /// Reason the last login failed, surfaced to the user. Nil when there is nothing
+    /// to report.
+    @Published public var loginErrorMessage: String?
+    /// Incremented on every performLogin entry. Deferred work armed for one attempt
+    /// captures the value and compares before acting, so a stale timer can never
+    /// abort a newer attempt.
+    public private(set) var loginAttemptToken = 0
+    /// Authorization URL of the in-flight login, used to locate the SDK's loopback
+    /// listener when deciding whether a closed browser means "cancelled".
+    private var pendingAuthorizeURL: String?
     #endif
     @Published var userCode: String?
 
@@ -490,12 +500,55 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
         let activeManagementURL = resolvedURL ?? ""
         logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfile, privacy: .public)'")
+        // Every profile logs in through the same persistent browser session, which is
+        // what keeps the IdP's SSO session and its trusted-device cookie alive so a
+        // re-login is not asked for the second factor again. Which account that
+        // session lands on is not left to the shared cookie jar: the SDK sends the
+        // profile's own account as an OIDC login_hint (see the Go binding's
+        // profile_state.go), so a re-login targets the account the profile already
+        // belongs to, and a profile with no stored account — fresh, or logged out —
+        // deliberately leaves the choice to the IdP, which is how accounts change.
+        //
+        // A hint is advisory, though: an IdP holding a live session for another
+        // account may sign in with that session instead, which ends with the peer's
+        // key and the token belonging to different accounts ("peer is already
+        // registered by a different User"). Two cases have to ask the IdP for an
+        // account chooser rather than let the session resolve itself:
+        //
+        //   - the profile has no account bound yet. Either it never completed an SSO
+        //     login, or it was logged out, or it last logged in before this app
+        //     version existed — in all three the app has nothing to steer with and no
+        //     way to tell whose account the session is holding. It costs one chooser
+        //     screen, once: the login binds the account and every re-login after it
+        //     goes out with the hint and stays silent.
+        //   - the session last signed in as a different profile, so its account is
+        //     known to be the wrong one for this login.
+        //
+        // See authorizeURL(_:promptingForAccount:) for why that ends up as
+        // prompt=login rather than the friendlier prompt=select_account.
+        let boundAccount = ProfileManager.shared.accountEmail(for: activeProfile)
+        let promptForAccount = boundAccount == nil || Preferences.browserSessionHoldsAnotherProfile(activeProfile)
+        if promptForAccount {
+            let reason = boundAccount == nil ? "no account bound to the profile" : "the browser session last signed in as another profile"
+            logger.info("performLogin: '\(activeProfile, privacy: .public)' asks the IdP to re-decide the account — \(reason, privacy: .public)")
+            AppLogger.shared.log("performLogin: '\(activeProfile)' asks the IdP to re-decide the account (\(reason))")
+        } else {
+            AppLogger.shared.log("performLogin: '\(activeProfile)' reuses the browser session with a login_hint")
+        }
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
            let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
+            // A stale flow from an abandoned attempt would keep its loopback port
+            // bound and its WaitToken goroutine alive — stop it first.
+            self.pendingAuth?.stop()
             self.pendingAuth = auth
+            self.loginAttemptToken += 1
             self.loginSucceeded = false
             let urlOpener = MainAppLoginURLOpener()
             let errListener = MainAppLoginErrListener()
+            // Set once the browser actually opened. Gates the ownership-conflict
+            // self-heal below: an error before the browser phase falls through to the
+            // IPC fallback, and retrying concurrently with it would race two flows.
+            var browserPhaseStarted = false
 
             let receivedURL: String? = await withCheckedContinuation { continuation in
                 var resumed = false
@@ -512,8 +565,14 @@ public class NetworkExtensionAdapter: ObservableObject {
                     // the extension, trips its needsLogin path, and pops the auth alert
                     // in parallel with this browser login. Ordering them guarantees the
                     // await caller sees showBrowser == true.
+                    let rewritten = Self.authorizeURL(url, promptingForAccount: promptForAccount)
+                    let browserURL = rewritten.url
+                    AppLogger.shared.log("performLogin: authorize URL account prompt — \(rewritten.outcome.rawValue)")
                     DispatchQueue.main.async {
-                        self?.loginURL = url
+                        browserPhaseStarted = true
+                        self?.loginErrorMessage = nil
+                        self?.pendingAuthorizeURL = browserURL
+                        self?.loginURL = browserURL
                         self?.showBrowser = true
                         resume(url)
                     }
@@ -534,20 +593,72 @@ public class NetworkExtensionAdapter: ObservableObject {
                         ProfileManager.shared.saveServerURL(activeManagementURL, for: activeProfile)
                         Preferences.saveManagementURL(activeManagementURL)
                     }
+                    // The account this login ran under is recorded by the SDK itself,
+                    // keyed by the config path it was handed, so the next login for
+                    // this profile can go out with it as the login_hint. What the SDK
+                    // cannot see is the browser session it went through, so record
+                    // here which profile that session now holds — the next login of a
+                    // different profile uses it to ask for the account chooser.
+                    Preferences.saveLastBrowserLoginProfile(activeProfile)
+                    AppLogger.shared.log("performLogin: SDK login succeeded for '\(activeProfile)'")
                     // onSuccess runs on a background goroutine. Mark success on the main
                     // queue so the browser-finished handler (also main-queue) reliably
-                    // observes it and starts the VPN instead of treating the browser
-                    // dismissal as a cancellation.
+                    // observes it.
                     DispatchQueue.main.async {
-                        self?.loginSucceeded = true
-                        self?.pendingAuth = nil
+                        guard let self else { return }
+                        // Success is delivered twice (urlOpener.onLoginSuccess and the
+                        // result listener); act on the first only.
+                        guard !self.loginSucceeded else { return }
+                        self.logger.info("performLogin: SDK login succeeded")
+                        self.loginSucceeded = true
+                        self.pendingAuth = nil
+                        self.pendingAuthorizeURL = nil
+                        // If the browser is already gone, the view's completion handler
+                        // deferred the decision to us — the login only finished now, so
+                        // start the VPN here. While it is still open, the view starts it
+                        // when the user dismisses the success page.
+                        if !self.showBrowser {
+                            self.logger.info("performLogin: login completed after browser closed - starting VPN")
+                            // The management login just completed here, so the extension
+                            // can skip its own needs-login check (one Login RPC).
+                            self.startVPNConnection(loginVerified: true)
+                        }
                     }
                 }
                 errListener.onSuccessCallback = { urlOpener.onSuccess?() }
-                errListener.onErrorCallback = { [weak self] _ in
-                    // onError runs on a background goroutine; mutate pendingAuth on the
-                    // main queue to stay consistent with onSuccess and cancelLogin().
-                    DispatchQueue.main.async { self?.pendingAuth = nil }
+                errListener.onErrorCallback = { [weak self] error in
+                    // Surface the reason: a login that dies after the browser phase
+                    // (failed token exchange or management registration) is otherwise
+                    // indistinguishable from "nothing happened".
+                    let message = error?.localizedDescription ?? "unknown login error"
+                    AppLogger.shared.log("performLogin: SDK login failed: \(message)")
+                    // onError runs on a background goroutine; mutate state on the main
+                    // queue to stay consistent with onSuccess and cancelLogin().
+                    DispatchQueue.main.async {
+                        guard let self else { return }
+                        self.logger.error("performLogin: SDK login failed: \(message, privacy: .public)")
+                        self.pendingAuth = nil
+                        self.pendingAuthorizeURL = nil
+                        guard browserPhaseStarted else { return }
+                        // "peer is already registered by a different User or a Setup
+                        // Key" means the account that signed in does not own this
+                        // profile's peer. Report it rather than "repairing" it: the
+                        // app cannot tell a stale local key from a login under the
+                        // wrong account, and deleting the profile's identity to fix
+                        // the latter destroys a working registration and can
+                        // re-register the peer under the wrong account. Removing an
+                        // identity stays an explicit user action — Profiles → Log out.
+                        if message.contains("registered by a different User") {
+                            self.loginErrorMessage = """
+                                This profile belongs to a different NetBird account. \
+                                Sign in with the account that owns it, or log the \
+                                profile out (Profiles → Log out) to register it again.
+                                """
+                        } else {
+                            self.loginErrorMessage = message
+                        }
+                        self.showBrowser = false
+                    }
                     resume(nil)
                 }
                 // Pass the device name explicitly. The plain login() path uses an empty
@@ -581,9 +692,73 @@ public class NetworkExtensionAdapter: ObservableObject {
             logger.error("performLogin: no login URL received from extension, aborting")
             return
         }
+        #if os(iOS)
+        // Same account-chooser policy as the main-app path. This path cannot observe
+        // login success, so it never records which profile the session ended up on —
+        // which also means the profile never gets an account bound and every login
+        // here asks, rather than silently resolving through the session.
+        let fallbackProfile = ProfileManager.shared.getActiveProfileName()
+        let rewritten = Self.authorizeURL(
+            url,
+            promptingForAccount: ProfileManager.shared.accountEmail(for: fallbackProfile) == nil
+                || Preferences.browserSessionHoldsAnotherProfile(fallbackProfile)
+        )
+        AppLogger.shared.log("performLogin: authorize URL account prompt — \(rewritten.outcome.rawValue)")
+        self.pendingAuthorizeURL = rewritten.url
+        self.loginURL = rewritten.url
+        #else
         self.loginURL = url
+        #endif
         self.showBrowser = true
     }
+
+    #if os(iOS)
+    /// What asking the IdP to re-decide the account did to an authorize URL. Reported
+    /// so the log says what actually reached the IdP, not merely what was intended —
+    /// a request that was skipped looks identical from the outside otherwise.
+    enum AccountPromptOutcome: String {
+        /// `prompt=login` was added.
+        case added
+        /// The flow already asked for a prompt of its own; it is left alone.
+        case alreadyPrompting
+        /// The URL could not be parsed, so it goes out untouched.
+        case urlNotParsable
+        /// This login may resolve through the existing session.
+        case notRequested
+    }
+
+    /// Asks the IdP to re-decide which account signs in, for logins that must not be
+    /// resolved by whatever session the browser already holds.
+    ///
+    /// The value is `login`, not `select_account`. `select_account` is the friendlier
+    /// request — pick an account, no re-authentication — but only Google, Microsoft
+    /// and Okta implement it; Auth0 and Zitadel ignore it and sign in with the session
+    /// they already have, which is exactly the failure this is meant to prevent.
+    /// `prompt=login` is the one value every OIDC provider honours. It costs a
+    /// password on an account switch, but not the second factor: it re-authenticates
+    /// the user, while the trusted-device cookie that gates 2FA stays in the jar.
+    ///
+    /// A `prompt` the flow itself put there (the management server drives this through
+    /// its login flag) wins — overriding a server-chosen prompt is not this layer's
+    /// call.
+    static func authorizeURL(
+        _ urlString: String,
+        promptingForAccount: Bool
+    ) -> (url: String, outcome: AccountPromptOutcome) {
+        guard promptingForAccount else { return (urlString, .notRequested) }
+        guard var components = URLComponents(string: urlString) else {
+            return (urlString, .urlNotParsable)
+        }
+        var items = components.queryItems ?? []
+        guard !items.contains(where: { $0.name == "prompt" }) else {
+            return (urlString, .alreadyPrompting)
+        }
+        items.append(URLQueryItem(name: "prompt", value: "login"))
+        components.queryItems = items
+        guard let rewritten = components.string else { return (urlString, .urlNotParsable) }
+        return (rewritten, .added)
+    }
+    #endif
 
     #if os(iOS)
     /// Aborts an in-progress interactive login (e.g. the user dismissed the OAuth
@@ -595,8 +770,117 @@ public class NetworkExtensionAdapter: ObservableObject {
         logger.info("cancelLogin: aborting in-progress login")
         pendingAuth?.stop()
         pendingAuth = nil
+        pendingAuthorizeURL = nil
         loginSucceeded = false
         showBrowser = false
+    }
+
+    /// Decides what a dismissed login browser means and calls `abort` only when the
+    /// login is definitely not in flight.
+    ///
+    /// The system auth session reports the same "cancelled" completion whether the
+    /// user backed out of the IdP page or closed the SDK's success page after the
+    /// redirect already went through, so the dismissal alone cannot be trusted. The
+    /// SDK's loopback listener settles it: it stays bound while the flow is still
+    /// waiting for the authorization code and goes away once the code arrives. A
+    /// listener that is still up on two probes means nothing was delivered — a real
+    /// cancel. Anything else defers to the SDK, with a bounded fallback so a login
+    /// that dies silently cannot leave the UI stuck on "Connecting…".
+    public func resolveLoginAfterBrowserClose(abort: @escaping () -> Void) {
+        let token = loginAttemptToken
+        // `abort` must never fire for an attempt other than the one being resolved.
+        let abortIfStillCurrent: () -> Void = { [weak self] in
+            guard let self, self.loginAttemptToken == token,
+                  !self.loginSucceeded, !self.showBrowser else { return }
+            abort()
+        }
+
+        guard let endpoint = pendingAuthorizeURL.flatMap(Self.loopbackEndpoint(fromAuthorizeURL:)) else {
+            logger.info("resolveLoginAfterBrowserClose: no loopback endpoint known, deferring to SDK result")
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.loginResolutionTimeout, execute: abortIfStillCurrent)
+            return
+        }
+
+        Self.probeListener(host: endpoint.host, port: endpoint.port) { [weak self] listening in
+            guard let self else { return }
+            guard listening else {
+                self.logger.info("resolveLoginAfterBrowserClose: loopback listener gone — code delivered, waiting for the SDK")
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.loginResolutionTimeout, execute: abortIfStillCurrent)
+                return
+            }
+            // Still listening: either nothing was delivered, or the code arrived and
+            // the token exchange is running with the listener briefly still up.
+            // Re-probe once before treating it as a cancel so a live exchange is
+            // never killed.
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.loopbackRecheckDelay) {
+                Self.probeListener(host: endpoint.host, port: endpoint.port) { stillListening in
+                    DispatchQueue.main.async {
+                        if stillListening {
+                            self.logger.info("resolveLoginAfterBrowserClose: loopback still waiting for the code — treating as cancelled")
+                            abortIfStillCurrent()
+                        } else {
+                            self.logger.info("resolveLoginAfterBrowserClose: code delivered late, waiting for the SDK")
+                            DispatchQueue.main.asyncAfter(deadline: .now() + Self.loginResolutionTimeout, execute: abortIfStillCurrent)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// How long to wait for the SDK's verdict once the code is known to be delivered.
+    /// Covers a first-time peer registration, which can outlast the browser session.
+    private static let loginResolutionTimeout: TimeInterval = 20
+    /// Gap between loopback probes, long enough to cover a token exchange.
+    private static let loopbackRecheckDelay: TimeInterval = 3
+
+    /// Extracts the loopback host/port the SDK told the IdP to redirect to.
+    static func loopbackEndpoint(fromAuthorizeURL urlString: String) -> (host: String, port: UInt16)? {
+        guard let components = URLComponents(string: urlString),
+              let redirect = components.queryItems?.first(where: { $0.name == "redirect_uri" })?.value,
+              let redirectComponents = URLComponents(string: redirect),
+              let host = redirectComponents.host,
+              let port = redirectComponents.port,
+              let port16 = UInt16(exactly: port)
+        else { return nil }
+        return (host, port16)
+    }
+
+    /// Reports whether something accepts TCP connections at host:port.
+    private static func probeListener(host: String, port: UInt16, completion: @escaping (Bool) -> Void) {
+        guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+            completion(false)
+            return
+        }
+        let connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
+        // Both the connection's state updates and the timeout below run here. A
+        // serial queue is what makes `settled` safe: on a concurrent queue the
+        // watchdog could run alongside a state update, and the check-then-set would
+        // let both through — cancelling twice and reporting the result twice.
+        let queue = DispatchQueue(label: "io.netbird.loopback-probe")
+        var settled = false
+        let settle: (Bool) -> Void = { listening in
+            guard !settled else { return }
+            settled = true
+            connection.cancel()
+            completion(listening)
+        }
+        connection.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                settle(true)
+            case .failed, .cancelled:
+                settle(false)
+            case .waiting:
+                // Connection refused surfaces as .waiting with a retry — for loopback
+                // that means nothing is bound.
+                settle(false)
+            default:
+                break
+            }
+        }
+        connection.start(queue: queue)
+        queue.asyncAfter(deadline: .now() + 2) { settle(false) }
     }
     #endif
 

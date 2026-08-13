@@ -7,9 +7,17 @@ import SwiftUI
 
 #if os(iOS)
 
+/// Per-profile display values shown under a profile's name. Resolved when the
+/// list is loaded rather than while a row renders — see `loadProfiles()`.
+private struct ProfileDisplayDetails {
+    let serverURL: String?
+    let account: String?
+}
+
 struct ProfilesListView: View {
     @EnvironmentObject var viewModel: ViewModel
     @State private var profiles: [Profile] = []
+    @State private var profileDetails: [String: ProfileDisplayDetails] = [:]
     @State private var showAddSheet = false
     @State private var showSwitchAlert = false
     @State private var showRemoveAlert = false
@@ -35,11 +43,7 @@ struct ProfilesListView: View {
                             Text(active.name)
                                 .font(.body.bold())
                                 .foregroundColor(Color("TextPrimary"))
-                            if let url = ProfileManager.shared.managementURL(for: active.name) {
-                                Text(url)
-                                    .font(.footnote)
-                                    .foregroundColor(Color("TextSecondary"))
-                            }
+                            profileSubtitle(for: active)
                         }
                         Spacer()
                         Text("Active")
@@ -78,11 +82,7 @@ struct ProfilesListView: View {
                                 Text(profile.name)
                                     .font(.body)
                                     .foregroundColor(Color("TextPrimary"))
-                                if let url = ProfileManager.shared.managementURL(for: profile.name) {
-                                    Text(url)
-                                        .font(.footnote)
-                                        .foregroundColor(Color("TextSecondary"))
-                                }
+                                profileSubtitle(for: profile)
                             }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -159,10 +159,47 @@ struct ProfilesListView: View {
         }
     }
 
+    // MARK: - Rows
+
+    /// Server and account lines under a profile's name. The account is the one the
+    /// profile last signed in with — it is also what goes out as the login_hint on
+    /// the next login, so showing it makes visible which account a re-login returns
+    /// to. A profile that never completed an SSO login, or was logged out, has none.
+    ///
+    /// Reads only what `loadProfiles()` already resolved: both lookups touch the
+    /// filesystem, and a body may be evaluated any number of times.
+    @ViewBuilder
+    private func profileSubtitle(for profile: Profile) -> some View {
+        let details = profileDetails[profile.name]
+        if let url = details?.serverURL {
+            Text(url)
+                .font(.footnote)
+                .foregroundColor(Color("TextSecondary"))
+        }
+        if let email = details?.account {
+            Text(email)
+                .font(.footnote)
+                .foregroundColor(Color("TextSecondary"))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+    }
+
     // MARK: - Actions
 
     private func loadProfiles() {
-        profiles = ProfileManager.shared.listProfiles()
+        let loaded = ProfileManager.shared.listProfiles()
+        // Resolved here, not while a row renders: managementURL(for:) reads the
+        // profile's config and writes the resolved URL back to the server-URL file
+        // and the connection cache, and accountEmail(for:) goes through the SDK to
+        // disk. Doing either inside `body` turns every redraw into file I/O.
+        profileDetails = Dictionary(uniqueKeysWithValues: loaded.map { profile in
+            (profile.name, ProfileDisplayDetails(
+                serverURL: ProfileManager.shared.managementURL(for: profile.name),
+                account: ProfileManager.shared.accountEmail(for: profile.name)
+            ))
+        })
+        profiles = loaded
     }
 
     private func switchToProfile(_ profile: Profile) {

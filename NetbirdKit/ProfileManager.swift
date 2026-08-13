@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import NetBirdSDK
 
 // MARK: - Profile Model
 
@@ -165,8 +166,16 @@ class ProfileManager {
             try writeMeta(meta)
         }
 
+        // The profile's account file lives inside `dir`, so removing the directory
+        // already takes the stored login_hint with it — a future profile with the
+        // same name starts with no account bound to it.
         try fileManager.removeItem(atPath: dir)
         ProfileConnectionCache().remove(for: name)
+        // The browser session may still hold this profile's account, and nothing
+        // names it any more — the next login has to ask which account to use.
+        if Preferences.loadLastBrowserLoginProfile() == name {
+            Preferences.requireAccountSelectionOnNextLogin()
+        }
     }
 
     /// Clears authentication data for a profile by removing its config and state files.
@@ -185,6 +194,15 @@ class ProfileManager {
             cache.saveManagementURL(url, for: name)
         }
         cache.clearConnectionData(for: name)
+
+        // Logging out must actually log out. While the account email is on disk it
+        // goes out as the login_hint, which would steer the next login straight back
+        // into the account just logged out of — dropping it hands the account choice
+        // back to the IdP, which is how a profile changes accounts. The browser
+        // session still holds that account, though, so also require the next login to
+        // ask which account to use rather than resolving silently through it.
+        clearAccountEmail(for: name)
+        Preferences.requireAccountSelectionOnNextLogin()
 
         if fileManager.fileExists(atPath: statePath) {
             try fileManager.removeItem(atPath: statePath)
@@ -250,6 +268,34 @@ class ProfileManager {
             return url
         }
         return ProfileConnectionCache().managementURL(for: profile)
+    }
+
+    // MARK: - Account Binding
+    //
+    // The SDK records the account a profile logged in with next to that profile's
+    // config file, and reads it back as the OIDC login_hint on every later login,
+    // so a re-login returns to the same account without a fresh password + OTP
+    // prompt. The app owns the directory layout, so it goes through the SDK by
+    // config path rather than duplicating the file naming here.
+
+    /// Account the profile last logged in with, or nil if it never completed an SSO
+    /// login or was logged out. Display-only — an unresolvable path reads as nil.
+    func accountEmail(for profile: String) -> String? {
+        guard let cfgPath = configPath(for: profile) else { return nil }
+        let email = NetBirdSDKProfileAccountEmail(cfgPath)
+        return email.isEmpty ? nil : email
+    }
+
+    /// Forgets the account bound to a profile, so its next login carries no
+    /// login_hint and the IdP asks which account to use.
+    func clearAccountEmail(for profile: String) {
+        guard let cfgPath = configPath(for: profile) else { return }
+        var err: NSError?
+        NetBirdSDKClearProfileAccountEmail(cfgPath, &err)
+        if let err {
+            // Not fatal: a stale hint costs an account switch, not the logout itself.
+            AppLogger.shared.log("ProfileManager: failed to clear account email for '\(profile)': \(err.localizedDescription)")
+        }
     }
 
     /// Saves the management URL to a dedicated file inside the profile directory.

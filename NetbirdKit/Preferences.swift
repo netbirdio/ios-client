@@ -178,6 +178,46 @@ class Preferences {
         return sharedUserDefaults()?.string(forKey: managementURLKey)
     }
 
+    // MARK: - Login Browser Account Tracking
+    //
+    // The login browser has one cookie jar shared by every profile. login_hint tells
+    // the IdP which account a profile wants, but a hint is advisory — an IdP with a
+    // live session for another account signs in with that session instead, which is
+    // how a profile ends up holding a peer key and a token from two different
+    // accounts. Recording which profile last completed a login through that jar lets
+    // the next login of a different profile ask the IdP to re-decide, instead of
+    // hoping the hint is honoured. Drift only ever costs one extra prompt, so nothing
+    // depends on this being exact.
+
+    /// Profile whose account the shared browser session last signed in with. Nil when
+    /// no login has completed yet; "" when the session holds an account no profile may
+    /// silently reuse (see `requireAccountSelectionOnNextLogin`).
+    static func loadLastBrowserLoginProfile() -> String? {
+        return sharedUserDefaults()?.string(forKey: GlobalConstants.keyLastBrowserLoginProfile)
+    }
+
+    /// Records the profile a completed login signed in as.
+    static func saveLastBrowserLoginProfile(_ name: String) {
+        sharedUserDefaults()?.set(name, forKey: GlobalConstants.keyLastBrowserLoginProfile)
+    }
+
+    /// Makes the next login — of any profile — ask the IdP to re-decide the account.
+    /// Called on logout and on removing a profile: the browser session still holds the
+    /// account that was just left, and no profile should be signed back into it
+    /// silently. Stores "" because no profile can be named that, so the "profile
+    /// changed" test below matches every profile.
+    static func requireAccountSelectionOnNextLogin() {
+        sharedUserDefaults()?.set("", forKey: GlobalConstants.keyLastBrowserLoginProfile)
+    }
+
+    /// Whether a login for `profile` must make the IdP re-decide which account signs
+    /// in: the shared session last signed in as a different profile, or as an account
+    /// that was logged out. The first login on an install has nothing to disambiguate.
+    static func browserSessionHoldsAnotherProfile(_ profile: String) -> Bool {
+        guard let last = loadLastBrowserLoginProfile() else { return false }
+        return last != profile
+    }
+
     /// Restore config from UserDefaults to the config file path.
     /// iOS only - needed because the Go SDK reads from the file path.
     #if os(iOS)
