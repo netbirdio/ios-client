@@ -619,7 +619,9 @@ public class NetworkExtensionAdapter: ObservableObject {
                         // when the user dismisses the success page.
                         if !self.showBrowser {
                             self.logger.info("performLogin: login completed after browser closed - starting VPN")
-                            self.startVPNConnection()
+                            // The management login just completed here, so the extension
+                            // can skip its own needs-login check (one Login RPC).
+                            self.startVPNConnection(loginVerified: true)
                         }
                     }
                 }
