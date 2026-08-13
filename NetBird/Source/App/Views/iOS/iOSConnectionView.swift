@@ -164,8 +164,11 @@ struct iOSConnectionView: View {
                 // outcome, leaving the SDK flow pending until it expires — cancel it
                 // here instead.
                 Color.clear.onAppear {
-                    let raw = viewModel.networkExtensionAdapter.loginURL ?? "<nil>"
-                    AppLogger.shared.log("Login browser: unusable login URL (\(raw)) — cancelling")
+                    // The URL never goes to the log: it carries the OAuth state, the
+                    // redirect target and the login_hint — the user's email address.
+                    // Which of the two failure modes it was is the diagnostic part.
+                    let reason = viewModel.networkExtensionAdapter.loginURL == nil ? "missing" : "unparsable"
+                    AppLogger.shared.log("Login browser: \(reason) authorize URL — cancelling")
                     viewModel.cancelPendingLogin()
                 }
             }
