@@ -528,12 +528,11 @@ public class NetBirdAdapter {
         if let auth = NetBirdSDKNewAuth(configPath, managementURL, nil) {
             authRef = auth
 
-            #if os(tvOS)
+            // Always pass the device name so the peer registers under the user's
+            // device name (UIDevice.current.name on iOS, the generated apple-tv-* name
+            // on tvOS) instead of the plain login() path's empty-name hostname fallback.
             let deviceName = Device.getName()
             auth.login(withDeviceName: errListener, urlOpener: urlOpener, forceDeviceAuth: forceDeviceAuth, deviceName: deviceName)
-            #else
-            auth.login(errListener, urlOpener: urlOpener, forceDeviceAuth: forceDeviceAuth)
-            #endif
         } else {
             handleError(NSError(domain: "io.netbird", code: 1002, userInfo: [NSLocalizedDescriptionKey: "Failed to create Auth object"]))
         }
