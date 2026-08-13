@@ -153,9 +153,18 @@ struct iOSConnectionView: View {
                 SafariView(
                     isPresented: $viewModel.networkExtensionAdapter.showBrowser,
                     url: loginURL,
-                    prefersEphemeralSession: viewModel.networkExtensionAdapter.useEphemeralBrowserSession,
                     didFinish: loginBrowserDidFinish
                 )
+            } else if viewModel.networkExtensionAdapter.showBrowser {
+                // A login was started but its authorize URL is missing or unparsable,
+                // so no browser can be presented. Nothing would ever report an
+                // outcome, leaving the SDK flow pending until it expires — cancel it
+                // here instead.
+                Color.clear.onAppear {
+                    let raw = viewModel.networkExtensionAdapter.loginURL ?? "<nil>"
+                    AppLogger.shared.log("Login browser: unusable login URL (\(raw)) — cancelling")
+                    viewModel.cancelPendingLogin()
+                }
             }
         }
         .navigationBarTitleDisplayMode(.inline)

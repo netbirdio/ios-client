@@ -12,9 +12,12 @@
 //
 //  The session is NOT ephemeral: it shares Safari's cookie jar, so the IdP's
 //  trusted-device cookie survives and a re-login does not re-prompt for the second
-//  factor. That single jar is shared by every profile, so profile isolation is
-//  enforced on the request instead — the adapter adds prompt=select_account when a
-//  login targets a different profile than the last authenticated one.
+//  factor. That single jar is shared by every profile, and the app deliberately
+//  does not try to partition it. Which account a login lands on is decided on the
+//  request instead: the SDK sends the profile's own account as an OIDC login_hint,
+//  and the adapter adds prompt=select_account when the login targets a different
+//  profile than the session last signed in as (see NetworkExtensionAdapter's
+//  authorizeURL(_:selectingAccount:)).
 //
 
 import SwiftUI
@@ -43,11 +46,6 @@ enum LoginBrowserOutcome {
 struct SafariView: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
     let url: URL
-    /// True starts the session with an empty cookie jar. Set for profiles whose
-    /// account conflicts with the one the shared session holds — the only reliable
-    /// way to reach a different account when the IdP ignores both login_hint and
-    /// prompt=select_account.
-    let prefersEphemeralSession: Bool
     let didFinish: (LoginBrowserOutcome) -> Void
 
     func makeUIViewController(context: Context) -> UIViewController {
@@ -141,11 +139,13 @@ struct SafariView: UIViewControllerRepresentable {
                 )
             }
 
-            // Non-ephemeral: shares Safari's cookie jar so the IdP's trusted-device
-            // cookie survives between logins and the second factor is not re-prompted
-            // on every re-login. Cross-profile isolation is enforced by the
-            // prompt=select_account the adapter adds when the profile changes.
-            session.prefersEphemeralWebBrowserSession = parent.prefersEphemeralSession
+            // Never ephemeral. Sharing Safari's cookie jar is the whole point: the
+            // IdP's trusted-device cookie survives between logins, so the second
+            // factor is not re-prompted on every re-login — for every profile, not
+            // just one. Which account the session resolves to is decided by the
+            // login_hint in the authorize URL, so an empty jar buys no isolation
+            // here, it only throws the trusted-device state away.
+            session.prefersEphemeralWebBrowserSession = false
             session.presentationContextProvider = self
             self.session = session
             session.start()
@@ -161,7 +161,18 @@ struct SafariView: UIViewControllerRepresentable {
         private static func replayToLoopback(_ callbackURL: URL) {
             var request = URLRequest(url: callbackURL)
             request.timeoutInterval = 10
-            URLSession.shared.dataTask(with: request).resume()
+            URLSession.shared.dataTask(with: request) { _, _, error in
+                // Log the outcome without the URL — its query carries the live
+                // authorization code. A failure here is not fatal on its own: it also
+                // happens on the normal path, where the browser already delivered the
+                // code and the SDK's server is gone. It is the one signal that
+                // separates the two, so it is worth recording.
+                if let error {
+                    AppLogger.shared.log("Login redirect replay to the loopback server failed: \(error.localizedDescription)")
+                } else {
+                    AppLogger.shared.log("Login redirect replayed to the loopback server")
+                }
+            }.resume()
         }
 
         func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {

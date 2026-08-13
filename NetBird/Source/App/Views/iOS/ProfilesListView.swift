@@ -35,11 +35,7 @@ struct ProfilesListView: View {
                             Text(active.name)
                                 .font(.body.bold())
                                 .foregroundColor(Color("TextPrimary"))
-                            if let url = ProfileManager.shared.managementURL(for: active.name) {
-                                Text(url)
-                                    .font(.footnote)
-                                    .foregroundColor(Color("TextSecondary"))
-                            }
+                            profileSubtitle(for: active)
                         }
                         Spacer()
                         Text("Active")
@@ -78,11 +74,7 @@ struct ProfilesListView: View {
                                 Text(profile.name)
                                     .font(.body)
                                     .foregroundColor(Color("TextPrimary"))
-                                if let url = ProfileManager.shared.managementURL(for: profile.name) {
-                                    Text(url)
-                                        .font(.footnote)
-                                        .foregroundColor(Color("TextSecondary"))
-                                }
+                                profileSubtitle(for: profile)
                             }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -156,6 +148,28 @@ struct ProfilesListView: View {
             Button("OK") {}
         } message: {
             Text(errorMessage)
+        }
+    }
+
+    // MARK: - Rows
+
+    /// Server and account lines under a profile's name. The account is the one the
+    /// profile last signed in with — it is also what goes out as the login_hint on
+    /// the next login, so showing it makes visible which account a re-login returns
+    /// to. A profile that never completed an SSO login, or was logged out, has none.
+    @ViewBuilder
+    private func profileSubtitle(for profile: Profile) -> some View {
+        if let url = ProfileManager.shared.managementURL(for: profile.name) {
+            Text(url)
+                .font(.footnote)
+                .foregroundColor(Color("TextSecondary"))
+        }
+        if let email = ProfileManager.shared.accountEmail(for: profile.name) {
+            Text(email)
+                .font(.footnote)
+                .foregroundColor(Color("TextSecondary"))
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
     }
 

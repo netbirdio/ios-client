@@ -83,9 +83,6 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// the same whether the user cancelled or closed the SDK's success page — so
     /// every "did the login work" decision reads this flag.
     public private(set) var loginSucceeded = false
-    /// Whether the pending login must start from a fresh browser session rather
-    /// than the stored one. Decided per login by the policy in performLogin.
-    @Published public private(set) var useEphemeralBrowserSession = false
     /// Reason the last login failed, surfaced to the user. Nil when there is nothing
     /// to report.
     @Published public var loginErrorMessage: String?
@@ -501,27 +498,41 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
         let activeManagementURL = resolvedURL ?? ""
         logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfile, privacy: .public)'")
-        // Browser session policy. The system auth session has a single cookie store,
-        // shared by every profile, that the app can neither scope nor clear — the
-        // only control it offers is whether a session starts from that store or from
-        // an empty one. Reusing it is what keeps the IdP's SSO session and its
-        // trusted-device cookie alive, so a re-login does not re-prompt for the
-        // second factor. Starting empty is the only way to keep one profile's
-        // account out of another's login.
+        // Every profile logs in through the same persistent browser session, which is
+        // what keeps the IdP's SSO session and its trusted-device cookie alive so a
+        // re-login is not asked for the second factor again. Which account that
+        // session lands on is not left to the shared cookie jar: the SDK sends the
+        // profile's own account as an OIDC login_hint (see the Go binding's
+        // profile_state.go), so a re-login targets the account the profile already
+        // belongs to, and a profile with no stored account — fresh, or logged out —
+        // deliberately leaves the choice to the IdP, which is how accounts change.
         //
-        // So the stored session is reused for a plain re-login, and a fresh one is
-        // started in exactly the three cases where reuse would be wrong:
-        //   - switching profiles, and the first login of a new profile: the stored
-        //     session belongs to a different profile (sessionOwner != activeProfile);
-        //   - after logging out: signing straight back in through the session that
-        //     was just logged out of would make the logout meaningless.
-        // A nil owner means nothing has claimed the store yet, i.e. the first login
-        // on this install — nothing to inherit, so it may claim it.
-        let sessionOwner = Preferences.loadLastAuthenticatedProfile()
-        let ownsStoredSession = sessionOwner == nil || sessionOwner == activeProfile
-        let useEphemeralSession = Preferences.needsFreshBrowserSession() || !ownsStoredSession
-        logger.info("performLogin: '\(activeProfile, privacy: .public)' — \(useEphemeralSession ? "fresh" : "stored", privacy: .public) browser session (owner: \(sessionOwner ?? "none", privacy: .public))")
-        AppLogger.shared.log("performLogin: '\(activeProfile)' uses a \(useEphemeralSession ? "fresh" : "stored") browser session")
+        // A hint is advisory, though: an IdP holding a live session for another
+        // account may sign in with that session instead, which ends with the peer's
+        // key and the token belonging to different accounts ("peer is already
+        // registered by a different User"). Two cases have to ask the IdP for an
+        // account chooser rather than let the session resolve itself:
+        //
+        //   - the profile has no account bound yet. Either it never completed an SSO
+        //     login, or it was logged out, or it last logged in before this app
+        //     version existed — in all three the app has nothing to steer with and no
+        //     way to tell whose account the session is holding. It costs one chooser
+        //     screen, once: the login binds the account and every re-login after it
+        //     goes out with the hint and stays silent.
+        //   - the session last signed in as a different profile, so its account is
+        //     known to be the wrong one for this login.
+        //
+        // See authorizeURL(_:promptingForAccount:) for why that ends up as
+        // prompt=login rather than the friendlier prompt=select_account.
+        let boundAccount = ProfileManager.shared.accountEmail(for: activeProfile)
+        let promptForAccount = boundAccount == nil || Preferences.browserSessionHoldsAnotherProfile(activeProfile)
+        if promptForAccount {
+            let reason = boundAccount == nil ? "no account bound to the profile" : "the browser session last signed in as another profile"
+            logger.info("performLogin: '\(activeProfile, privacy: .public)' asks the IdP to re-decide the account — \(reason, privacy: .public)")
+            AppLogger.shared.log("performLogin: '\(activeProfile)' asks the IdP to re-decide the account (\(reason))")
+        } else {
+            AppLogger.shared.log("performLogin: '\(activeProfile)' reuses the browser session with a login_hint")
+        }
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
            let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
             // A stale flow from an abandoned attempt would keep its loopback port
@@ -552,10 +563,11 @@ public class NetworkExtensionAdapter: ObservableObject {
                     // the extension, trips its needsLogin path, and pops the auth alert
                     // in parallel with this browser login. Ordering them guarantees the
                     // await caller sees showBrowser == true.
-                    let browserURL = url
+                    let rewritten = Self.authorizeURL(url, promptingForAccount: promptForAccount)
+                    let browserURL = rewritten.url
+                    AppLogger.shared.log("performLogin: authorize URL account prompt — \(rewritten.outcome.rawValue)")
                     DispatchQueue.main.async {
                         browserPhaseStarted = true
-                        self?.useEphemeralBrowserSession = useEphemeralSession
                         self?.loginErrorMessage = nil
                         self?.pendingAuthorizeURL = browserURL
                         self?.loginURL = browserURL
@@ -579,19 +591,13 @@ public class NetworkExtensionAdapter: ObservableObject {
                         ProfileManager.shared.saveServerURL(activeManagementURL, for: activeProfile)
                         Preferences.saveManagementURL(activeManagementURL)
                     }
-                    // An ephemeral login leaves no cookies behind, so the shared
-                    // session still holds whichever account was there — only a
-                    // shared-session login may claim it.
-                    // This login just put its account's SSO and trusted-device state
-                    // into the shared browser store, so the profile now owns it and
-                    // its re-logins may reuse it. A fresh session leaves nothing
-                    // behind, so it cannot take ownership — claiming from one would
-                    // send this profile's next login into a store still holding
-                    // another profile's account.
-                    if !useEphemeralSession {
-                        Preferences.saveLastAuthenticatedProfile(activeProfile)
-                    }
-                    Preferences.clearNeedsFreshBrowserSession()
+                    // The account this login ran under is recorded by the SDK itself,
+                    // keyed by the config path it was handed, so the next login for
+                    // this profile can go out with it as the login_hint. What the SDK
+                    // cannot see is the browser session it went through, so record
+                    // here which profile that session now holds — the next login of a
+                    // different profile uses it to ask for the account chooser.
+                    Preferences.saveLastBrowserLoginProfile(activeProfile)
                     AppLogger.shared.log("performLogin: SDK login succeeded for '\(activeProfile)'")
                     // onSuccess runs on a background goroutine. Mark success on the main
                     // queue so the browser-finished handler (also main-queue) reliably
@@ -624,7 +630,7 @@ public class NetworkExtensionAdapter: ObservableObject {
                     AppLogger.shared.log("performLogin: SDK login failed: \(message)")
                     // onError runs on a background goroutine; mutate state on the main
                     // queue to stay consistent with onSuccess and cancelLogin().
-                    DispatchQueue.main.async { [weak self] in
+                    DispatchQueue.main.async {
                         guard let self else { return }
                         self.logger.error("performLogin: SDK login failed: \(message, privacy: .public)")
                         self.pendingAuth = nil
@@ -680,18 +686,72 @@ public class NetworkExtensionAdapter: ObservableObject {
             return
         }
         #if os(iOS)
-        // Same session policy as the main-app path above. This path cannot observe
-        // login success, so it never claims the stored session — which also means it
-        // must not reuse one it does not already own.
-        let fallbackOwner = Preferences.loadLastAuthenticatedProfile()
+        // Same account-chooser policy as the main-app path. This path cannot observe
+        // login success, so it never records which profile the session ended up on —
+        // which also means the profile never gets an account bound and every login
+        // here asks, rather than silently resolving through the session.
         let fallbackProfile = ProfileManager.shared.getActiveProfileName()
-        self.useEphemeralBrowserSession = Preferences.needsFreshBrowserSession()
-            || (fallbackOwner != nil && fallbackOwner != fallbackProfile)
-        self.pendingAuthorizeURL = url
-        #endif
+        let rewritten = Self.authorizeURL(
+            url,
+            promptingForAccount: ProfileManager.shared.accountEmail(for: fallbackProfile) == nil
+                || Preferences.browserSessionHoldsAnotherProfile(fallbackProfile)
+        )
+        AppLogger.shared.log("performLogin: authorize URL account prompt — \(rewritten.outcome.rawValue)")
+        self.pendingAuthorizeURL = rewritten.url
+        self.loginURL = rewritten.url
+        #else
         self.loginURL = url
+        #endif
         self.showBrowser = true
     }
+
+    #if os(iOS)
+    /// What asking the IdP to re-decide the account did to an authorize URL. Reported
+    /// so the log says what actually reached the IdP, not merely what was intended —
+    /// a request that was skipped looks identical from the outside otherwise.
+    enum AccountPromptOutcome: String {
+        /// `prompt=login` was added.
+        case added
+        /// The flow already asked for a prompt of its own; it is left alone.
+        case alreadyPrompting
+        /// The URL could not be parsed, so it goes out untouched.
+        case urlNotParsable
+        /// This login may resolve through the existing session.
+        case notRequested
+    }
+
+    /// Asks the IdP to re-decide which account signs in, for logins that must not be
+    /// resolved by whatever session the browser already holds.
+    ///
+    /// The value is `login`, not `select_account`. `select_account` is the friendlier
+    /// request — pick an account, no re-authentication — but only Google, Microsoft
+    /// and Okta implement it; Auth0 and Zitadel ignore it and sign in with the session
+    /// they already have, which is exactly the failure this is meant to prevent.
+    /// `prompt=login` is the one value every OIDC provider honours. It costs a
+    /// password on an account switch, but not the second factor: it re-authenticates
+    /// the user, while the trusted-device cookie that gates 2FA stays in the jar.
+    ///
+    /// A `prompt` the flow itself put there (the management server drives this through
+    /// its login flag) wins — overriding a server-chosen prompt is not this layer's
+    /// call.
+    static func authorizeURL(
+        _ urlString: String,
+        promptingForAccount: Bool
+    ) -> (url: String, outcome: AccountPromptOutcome) {
+        guard promptingForAccount else { return (urlString, .notRequested) }
+        guard var components = URLComponents(string: urlString) else {
+            return (urlString, .urlNotParsable)
+        }
+        var items = components.queryItems ?? []
+        guard !items.contains(where: { $0.name == "prompt" }) else {
+            return (urlString, .alreadyPrompting)
+        }
+        items.append(URLQueryItem(name: "prompt", value: "login"))
+        components.queryItems = items
+        guard let rewritten = components.string else { return (urlString, .urlNotParsable) }
+        return (rewritten, .added)
+    }
+    #endif
 
     #if os(iOS)
     /// Aborts an in-progress interactive login (e.g. the user dismissed the OAuth
