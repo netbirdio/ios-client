@@ -40,6 +40,7 @@ enum MainAlertType: String, Identifiable {
 
 struct iOSMainView: View {
     @EnvironmentObject var viewModel: ViewModel
+    @EnvironmentObject var activeSessionStore: SSHActiveSessionStore
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var selectedTab = 0
     @State private var activeAlert: MainAlertType?
@@ -127,7 +128,7 @@ struct iOSMainView: View {
                         viewModel.connectWithOnDemandDisabled()
                     },
                     secondaryButton: .cancel(Text("Edit Rules")) {
-                        selectedTab = 3 // Switch to Settings tab
+                        selectedTab = 4
                     }
                 )
             case .onDemandDisconnect:
@@ -176,13 +177,23 @@ struct iOSMainView: View {
                 .tag(2)
 
                 NavigationView {
+                    iOSSSHView()
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .tabItem {
+                    Label("SSH", systemImage: "terminal")
+                }
+                .tag(3)
+                .badge(activeSessionStore.sessions.isEmpty ? 0 : activeSessionStore.sessions.count)
+
+                NavigationView {
                     iOSSettingsView()
                 }
                 .navigationViewStyle(StackNavigationViewStyle())
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
-                .tag(3)
+                .tag(4)
             }
             .onChange(of: viewModel.navigateToServerView) { newValue in
                 if newValue {

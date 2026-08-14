@@ -7,9 +7,11 @@ import SwiftUI
 
 struct PeerDetailSheet: View {
     @ObservedObject var peer: PeerInfo
+    let networkExtensionAdapter: NetworkExtensionAdapter
     @Environment(\.presentationMode) var presentationMode
 
     @State private var relativeDateText: String = ""
+    @State private var showSSHConnect = false
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -59,6 +61,17 @@ struct PeerDetailSheet: View {
                 Section {
                     detailRow("Public key", peer.pubKey)
                 }
+
+                #if os(iOS)
+                Section {
+                    Button {
+                        showSSHConnect = true
+                    } label: {
+                        Label("SSH", systemImage: "terminal")
+                    }
+                    .disabled(peer.ip.isEmpty || peer.connStatus != "Connected")
+                }
+                #endif
             }
             .listStyle(.insetGrouped)
             .navigationTitle(peer.fqdn)
@@ -70,6 +83,16 @@ struct PeerDetailSheet: View {
             }
         }
         .onAppear { updateRelativeDate() }
+        #if os(iOS)
+        .sheet(isPresented: $showSSHConnect) {
+            SSHConnectSheet(
+                networkExtensionAdapter: networkExtensionAdapter,
+                isPeerContext: true,
+                peerName: peer.fqdn,
+                host: peer.ip
+            )
+        }
+        #endif
     }
 
     @ViewBuilder

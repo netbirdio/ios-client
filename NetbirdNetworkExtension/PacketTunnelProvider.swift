@@ -66,6 +66,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }()
 
     private var adapter: NetBirdAdapter?
+    private let sshSessionManager = SSHSessionManager()
+    private let sshQueue = DispatchQueue(label: "io.netbird.app.ssh", attributes: .concurrent)
 
     var pathMonitor: NWPathMonitor?
     let monitorQueue = DispatchQueue(label: "NetworkMonitor")
@@ -271,6 +273,18 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case let s where s.hasPrefix("DebugBundle:"):
             let anonymize = s.dropFirst("DebugBundle:".count) == "true"
             debugBundle(anonymize: anonymize, completionHandler: completionHandler)
+        case let s where s.hasPrefix("SSHConnect:"):
+            handleSSHConnect(String(s.dropFirst("SSHConnect:".count)), completionHandler: completionHandler)
+        case let s where s.hasPrefix("SSHWrite:"):
+            handleSSHWrite(String(s.dropFirst("SSHWrite:".count)), completionHandler: completionHandler)
+        case let s where s.hasPrefix("SSHPoll:"):
+            handleSSHPoll(String(s.dropFirst("SSHPoll:".count)), completionHandler: completionHandler)
+        case let s where s.hasPrefix("SSHResize:"):
+            handleSSHResize(String(s.dropFirst("SSHResize:".count)), completionHandler: completionHandler)
+        case let s where s.hasPrefix("SSHClose:"):
+            let sessionID = String(s.dropFirst("SSHClose:".count))
+            sshSessionManager.close(sessionID: sessionID)
+            completionHandler("ok".data(using: .utf8))
         default:
             AppLogger.shared.log("Unknown message: \(string)")
             completionHandler(nil)
@@ -654,6 +668,82 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             try adapter.client.deselectRoute(id)
         } catch {
             AppLogger.shared.log("Failed to deselect route: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: SSH
+
+    /// Format: "<sessionID>|<host>|<port>|<user>|<base64 password>|<cols>|<rows>"
+    func handleSSHConnect(_ payload: String, completionHandler: @escaping (Data?) -> Void) {
+        let parts = payload.components(separatedBy: "|")
+        guard parts.count == 7,
+              let port = Int(parts[2]),
+              let passwordData = Data(base64Encoded: parts[4]),
+              let cols = Int(parts[5]),
+              let rows = Int(parts[6]) else {
+            completionHandler("error:malformed SSHConnect payload".data(using: .utf8))
+            return
+        }
+        guard let nbClient = adapter?.client else {
+            completionHandler("error:netbird client not running".data(using: .utf8))
+            return
+        }
+        let sessionID = parts[0]
+        let host = parts[1]
+        let user = parts[3]
+        let password = String(data: passwordData, encoding: .utf8) ?? ""
+
+        sshQueue.async { [weak self] in
+            let error = self?.sshSessionManager.connect(sessionID: sessionID, nbClient: nbClient, host: host, port: port, user: user, password: password, cols: cols, rows: rows)
+            let response = error.map { "error:\($0)" } ?? "ok"
+            completionHandler(response.data(using: .utf8))
+        }
+    }
+
+    /// Format: "<sessionID>|<base64 data>"
+    func handleSSHWrite(_ payload: String, completionHandler: @escaping (Data?) -> Void) {
+        let parts = payload.components(separatedBy: "|")
+        guard parts.count == 2, let data = Data(base64Encoded: parts[1]) else {
+            completionHandler("error:malformed SSHWrite payload".data(using: .utf8))
+            return
+        }
+        let sessionID = parts[0]
+        sshQueue.async { [weak self] in
+            let error = self?.sshSessionManager.write(sessionID: sessionID, data: data)
+            let response = error.map { "error:\($0)" } ?? "ok"
+            completionHandler(response.data(using: .utf8))
+        }
+    }
+
+    /// Format: "<sessionID>|<timeoutMs>". Blocks on `sshQueue` (not the caller's
+    /// queue) until data arrives, the session ends, or the timeout elapses.
+    func handleSSHPoll(_ payload: String, completionHandler: @escaping (Data?) -> Void) {
+        let parts = payload.components(separatedBy: "|")
+        guard parts.count == 2, let timeoutMs = Int(parts[1]) else {
+            completionHandler(nil)
+            return
+        }
+        let sessionID = parts[0]
+        sshQueue.async { [weak self] in
+            let result = self?.sshSessionManager.poll(sessionID: sessionID, timeout: TimeInterval(timeoutMs) / 1000.0)
+                ?? SSHPollResult(dataBase64: "", status: "closed", reason: "extension unavailable")
+            let data = try? PropertyListEncoder().encode(result)
+            completionHandler(data)
+        }
+    }
+
+    /// Format: "<sessionID>|<cols>|<rows>"
+    func handleSSHResize(_ payload: String, completionHandler: @escaping (Data?) -> Void) {
+        let parts = payload.components(separatedBy: "|")
+        guard parts.count == 3, let cols = Int(parts[1]), let rows = Int(parts[2]) else {
+            completionHandler("error:malformed SSHResize payload".data(using: .utf8))
+            return
+        }
+        let sessionID = parts[0]
+        sshQueue.async { [weak self] in
+            let error = self?.sshSessionManager.resize(sessionID: sessionID, cols: cols, rows: rows)
+            let response = error.map { "error:\($0)" } ?? "ok"
+            completionHandler(response.data(using: .utf8))
         }
     }
 

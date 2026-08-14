@@ -1,3 +1,4 @@
 [submodule "netbird-core"]
 	path = netbird-core
 	url = https://github.com/netbirdio/netbird.git
+	branch = feature/ios-ssh
