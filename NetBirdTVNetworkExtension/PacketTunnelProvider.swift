@@ -40,6 +40,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     let monitorQueue = DispatchQueue(label: "NetworkMonitor")
     var currentNetworkType: NWInterface.InterfaceType?
 
+    /// When startTunnel runs before the user is authenticated, the start is "parked"
+    /// here instead of failing: the extension process stays alive so the main app can
+    /// drive the device-auth flow via the "LoginTV" IPC message (IPC only reaches a
+    /// running extension). The pending start is completed once loginTV succeeds.
+    private var pendingStartCompletion: ((Error?) -> Void)?
+    private var pendingStartWatchdog: DispatchWorkItem?
+
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         // CRITICAL: Log immediately to confirm startTunnel is being called
         // Use privacy: .public to avoid log redaction
@@ -73,16 +80,21 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let needsLogin = adapter.needsLogin()
 
         if needsLogin {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                let error = NSError(
-                    domain: "io.netbird.NetBirdTVNetworkExtension",
-                    code: 1001,
-                    userInfo: [NSLocalizedDescriptionKey: "Login required."]
-                )
-                completionHandler(error)
-            }
+            // Don't fail the start: the device-auth flow needs a RUNNING extension to
+            // receive the app's "LoginTV" IPC, and failing startTunnel would kill this
+            // process before the app can ask. Park the completion and wait for login
+            // (loginTV calls continuePendingStart() on success). No routes or addresses
+            // are assigned while parked, so no traffic is affected.
+            logger.info("startTunnel: login required — parking start until device auth completes")
+            parkStartUntilLogin(completionHandler: completionHandler)
             return
         }
+
+        // Tear the tunnel down if the auth session expires mid-session. The utun
+        // interface is owned by the provider and outlives the Go engine, so without
+        // an explicit teardown it lingers with the default route and black-holes
+        // all traffic (same pattern the iOS provider handles).
+        configureLoginRequiredHandler(for: adapter)
 
         adapter.start { error in
             if let error = error {
@@ -95,6 +107,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        // If the start was parked waiting for login (e.g. the user cancelled the auth
+        // sheet), release it as cancelled so the system doesn't hang on teardown.
+        failPendingStartIfParked(NSError(
+            domain: "io.netbird.NetBirdTVNetworkExtension",
+            code: 1005,
+            userInfo: [NSLocalizedDescriptionKey: "Login cancelled."]
+        ))
         adapter?.stop()
         if let pathMonitor = self.pathMonitor {
             pathMonitor.cancel()
@@ -102,6 +121,79 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             completionHandler()
+        }
+    }
+
+    // MARK: - Parked start (device auth)
+
+    /// How long a parked startTunnel waits for the device-auth flow before failing.
+    /// Matches the typical device-code lifetime; covers a user walking to a browser.
+    private static let parkedStartTimeout: TimeInterval = 5 * 60
+
+    private func parkStartUntilLogin(completionHandler: @escaping (Error?) -> Void) {
+        pendingStartWatchdog?.cancel()
+        let previousCompletion = pendingStartCompletion
+        pendingStartCompletion = { error in
+            previousCompletion?(error)
+            completionHandler(error)
+        }
+
+        let watchdog = DispatchWorkItem { [weak self] in
+            guard let self = self, self.pendingStartCompletion != nil else { return }
+            logger.error("startTunnel: parked start timed out waiting for login")
+            self.failPendingStartIfParked(NSError(
+                domain: "io.netbird.NetBirdTVNetworkExtension",
+                code: 1001,
+                userInfo: [NSLocalizedDescriptionKey: "Login required."]
+            ))
+        }
+        pendingStartWatchdog = watchdog
+        DispatchQueue.global().asyncAfter(deadline: .now() + Self.parkedStartTimeout, execute: watchdog)
+    }
+
+    /// Called when the device-auth login succeeded: the adapter's client now holds the
+    /// post-login config (set by NetBirdAdapter.loginAsync), so the tunnel can start.
+    private func continuePendingStart() {
+        pendingStartWatchdog?.cancel()
+        pendingStartWatchdog = nil
+        guard let pending = pendingStartCompletion else { return }
+        pendingStartCompletion = nil
+
+        guard let adapter = adapter else {
+            pending(NSError(
+                domain: "io.netbird.NetBirdTVNetworkExtension",
+                code: 1003,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to initialize NetBird adapter."]
+            ))
+            return
+        }
+
+        configureLoginRequiredHandler(for: adapter)
+        logger.info("startTunnel: login completed, starting engine for parked tunnel")
+        adapter.start { error in
+            if let error = error {
+                logger.error("startTunnel: adapter.start() after login failed: \(error.localizedDescription, privacy: .public)")
+            }
+            pending(error)
+        }
+    }
+
+    private func failPendingStartIfParked(_ error: Error) {
+        pendingStartWatchdog?.cancel()
+        pendingStartWatchdog = nil
+        guard let pending = pendingStartCompletion else { return }
+        pendingStartCompletion = nil
+        pending(error)
+    }
+
+    private func configureLoginRequiredHandler(for adapter: NetBirdAdapter) {
+        adapter.onLoginRequired = { [weak self] in
+            logger.error("onLoginRequired: session expired mid-tunnel — tearing down")
+            self?.cancelTunnelWithError(NSError(
+                domain: "io.netbird.NetBirdTVNetworkExtension",
+                code: 1001,
+                userInfo: [NSLocalizedDescriptionKey: "Login required."]
+            ))
         }
     }
 
@@ -400,8 +492,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // For the new Auth.Login() with device auth flow, we need to check lastLoginResult instead.
         let sdkLoginComplete = adapter.client.isLoginComplete()
 
-        // Also check loginRequired for comparison (may be stale if Client was created before config)
-        let loginRequired = adapter.needsLogin()
+        // While the start is parked (no config yet) a full needsLogin() would run a
+        // doomed config-load + Login RPC on every poll tick — use the cached check.
+        let loginRequired = pendingStartCompletion != nil ? adapter.needsLoginCached() : adapter.needsLogin()
 
         // Also check if config file exists now (written after successful auth)
         let configPath = Preferences.configFile() ?? ""
@@ -428,7 +521,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             configExists: configExists,
             stateExists: stateExists,
             lastResult: lastResult,
-            lastError: lastError
+            lastError: lastError,
+            configJSON: isComplete
+                ? UserDefaults.standard.string(forKey: "netbird_config_json_local")
+                : nil
         )
 
         do {
@@ -490,20 +586,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     completionHandler(nil)
                 }
             },
-            onSuccess: {
-                // Login completed - the app will detect this via polling
-                // and start the VPN tunnel via startVPNConnection()
+            onSuccess: { [weak self] in
+                // Login completed - the config is persisted and loaded into the client
+                // by NetBirdAdapter.loginAsync's success handler (runs first, same hop).
                 logger.info("loginTV: Login completed successfully!")
-                logger.info("loginTV: Config should now be saved to App Group container")
 
-                // Debug: Verify config file was written
-                let configPath = Preferences.configFile() ?? ""
-                let statePath = Preferences.stateFile() ?? ""
-                let fileManager = FileManager.default
-                logger.info("loginTV: configFile exists = \(!configPath.isEmpty && fileManager.fileExists(atPath: configPath))")
-                logger.info("loginTV: stateFile exists = \(!statePath.isEmpty && fileManager.fileExists(atPath: statePath))")
+                // If startTunnel was parked waiting for this login, start the engine now.
+                self?.continuePendingStart()
             },
-            onError: { error in
+            onError: { [weak self] error in
                 // Log with privacy: .public to avoid iOS privacy redaction
                 if let nsError = error as NSError? {
                     logger.error("loginTV: Login failed - domain: \(nsError.domain, privacy: .public), code: \(nsError.code, privacy: .public), description: \(nsError.localizedDescription, privacy: .public)")
@@ -523,6 +614,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 if !alreadySentUrl {
                     logger.error("loginTV: Error before URL was sent, returning nil to app")
+                    // Auth can't proceed (server unreachable, device auth unsupported…);
+                    // a parked start would otherwise wait out the full watchdog timeout.
+                    self?.failPendingStartIfParked(NSError(
+                        domain: "io.netbird.NetBirdTVNetworkExtension",
+                        code: 1006,
+                        userInfo: [NSLocalizedDescriptionKey: "Login failed: \(error?.localizedDescription ?? "unknown error")"]
+                    ))
                     completionHandler(nil)
                 } else {
                     logger.warning("loginTV: Error after URL was sent (device code may have expired), app is still polling")
@@ -681,7 +779,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     func setTunnelSettings(tunnelNetworkSettings: NEPacketTunnelNetworkSettings) {
         setTunnelNetworkSettings(tunnelNetworkSettings) { error in
             if let error = error {
-                logger.error("setTunnelSettings: Error assigning routes: \(error.localizedDescription)")
+                logger.error("setTunnelSettings: Error assigning routes: \(error.localizedDescription, privacy: .public)")
                 return
             }
             logger.info("setTunnelSettings: Routes set successfully.")
