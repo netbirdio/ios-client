@@ -82,10 +82,13 @@ struct TVNetworkListContent: View {
             .padding(.horizontal, 80)
             .padding(.bottom, 30)
 
+            // Exit nodes are excluded here on purpose: they are mutually exclusive, so they
+            // get their own selector on the connection screen rather than sitting among
+            // the independently toggled resources.
             // Network list
             ScrollView {
                 LazyVStack(spacing: 4) {
-                    ForEach(viewModel.routeViewModel.filteredRoutes, id: \.id) { route in
+                    ForEach(viewModel.routeViewModel.filteredResourceRoutes, id: \.id) { route in
                         TVNetworkCard(
                             route: route,
                             routeViewModel: viewModel.routeViewModel
@@ -107,12 +110,13 @@ struct TVNetworkListContent: View {
     
     // Computed Properties
 
+    // Exit nodes are counted by their own selector, not by this list.
     private var activeCount: Int {
-        viewModel.routeViewModel.routeInfo.filter { $0.selected }.count
+        viewModel.routeViewModel.resourceRouteInfo.filter { $0.selected }.count
     }
 
     private var totalCount: Int {
-        viewModel.routeViewModel.routeInfo.count
+        viewModel.routeViewModel.resourceRouteInfo.count
     }
     
     // Actions

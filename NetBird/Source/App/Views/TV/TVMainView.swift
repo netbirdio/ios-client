@@ -163,9 +163,7 @@ struct TVConnectionView: View {
                 }
                 .padding(.top, 28)
 
-                // Device info sits below the toggle (mirrors the iOS layout) so the
-                // expanding address dropdown grows into the empty area underneath
-                // instead of pushing the toggle off-centre.
+                // Device info sits below the toggle, mirroring the iOS layout.
                 VStack(spacing: 12) {
                     Text(viewModel.fqdn.isEmpty ? " " : viewModel.fqdn)
                         .font(.system(size: 34, weight: .semibold))
@@ -194,6 +192,10 @@ struct TVConnectionView: View {
                 }
 
                 Spacer()
+
+                TVExitNodeSelector(routeViewModel: viewModel.routeViewModel)
+                    .padding(.horizontal, 120)
+                    .padding(.bottom, 24)
 
                 // Bottom stats bar — glanceable network overview
                 HStack(spacing: 50) {
@@ -240,8 +242,17 @@ struct TVConnectionView: View {
                 .padding(.bottom, 50)
             }
         }
+        .onAppear {
+            // Coming back to this tab doesn't go through applyExtensionStatus, so refresh
+            // the network map here to keep the exit node selector current. Only while
+            // connected: GetRoutes answers with an empty list when there is no tunnel
+            // session and would wipe a list that is still valid.
+            if viewModel.vpnDisplayState == .connected {
+                viewModel.routeViewModel.getRoutes()
+            }
+        }
     }
-    
+
     // Computed Properties
     
     private var statusColor: Color {
@@ -262,14 +273,15 @@ struct TVConnectionView: View {
         return viewModel.peerViewModel.peerInfo.count.description
     }
 
+    // Exit nodes are reported by their own selector, not counted as resources here.
     private var activeNetworksCount: String {
         guard viewModel.extensionStateText == "Connected" else { return "0" }
-        return viewModel.routeViewModel.routeInfo.filter { $0.selected }.count.description
+        return viewModel.routeViewModel.resourceRouteInfo.filter { $0.selected }.count.description
     }
 
     private var totalNetworksCount: String {
         guard viewModel.extensionStateText == "Connected" else { return "0" }
-        return viewModel.routeViewModel.routeInfo.count.description
+        return viewModel.routeViewModel.resourceRouteInfo.count.description
     }
 }
 
@@ -407,15 +419,14 @@ struct TVVPNToggleView: View {
     }
 }
 
-/// Expandable IPv4 / IPv6 readout for the tvOS connection screen.
+/// IPv4 / IPv6 readout for the tvOS connection screen: shows the v4 address inline and
+/// opens the full pair in its own screen.
 ///
-/// The iOS version pairs each address with a copy-to-clipboard button; tvOS has no
-/// pasteboard and nothing to paste into, so the rows are read-only. Keeping them
-/// non-focusable also means the expanded panel cannot trap Siri Remote focus — only
-/// the disclosure row itself participates in focus navigation.
-///
-/// The panel is an overlay rather than part of the stack flow, so expanding it does
-/// not resize the centred block and shift the toggle above it.
+/// This used to expand a panel in place, but that panel hung over whatever sat below it
+/// on a centred layout — the exit node card, and before that the stats bar it was
+/// hand-tuned to just barely clear. A separate screen removes the overlap entirely
+/// instead of trading one collision for another, and matches how the exit node list is
+/// presented on this platform.
 struct TVAddressDropdown: View {
     let ipv4: String
     let ipv6: String
@@ -425,19 +436,16 @@ struct TVAddressDropdown: View {
 
     var body: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isExpanded.toggle()
-            }
+            isExpanded = true
         } label: {
             HStack(spacing: 14) {
                 Text(ipv4.isEmpty ? "—" : ipv4)
                     .font(.system(size: 30, weight: .medium, design: .monospaced))
                     .foregroundColor(isFocused ? .black : TVColors.textSecondary.opacity(0.7))
 
-                Image(systemName: "chevron.down")
+                Image(systemName: "chevron.right")
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundColor(isFocused ? .black.opacity(0.6) : TVColors.textSecondary.opacity(0.7))
-                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
             }
             .padding(.horizontal, 28)
             .padding(.vertical, 14)
@@ -456,8 +464,35 @@ struct TVAddressDropdown: View {
         .buttonStyle(TVSettingsButtonStyle())
         .focused($isFocused)
         .accessibilityLabel("IP addresses")
-        .overlay(alignment: .top) {
-            if isExpanded {
+        .sheet(isPresented: $isExpanded) {
+            TVAddressDetailsView(ipv4: ipv4, ipv6: ipv6)
+        }
+    }
+}
+
+/// Full IPv4 / IPv6 readout.
+///
+/// The iOS version pairs each address with a copy-to-clipboard button; tvOS has no
+/// pasteboard and nothing to paste into, so the rows are read-only and non-focusable —
+/// the screen is dismissed with the remote's Menu button.
+struct TVAddressDetailsView: View {
+    let ipv4: String
+    let ipv6: String
+
+    var body: some View {
+        ZStack {
+            TVGradientBackground()
+
+            VStack(alignment: .leading, spacing: 20) {
+                Text("IP addresses")
+                    .font(.system(size: 48, weight: .bold))
+                    .foregroundColor(TVColors.textPrimary)
+
+                Text("Addresses assigned to this device on the NetBird network.")
+                    .font(.system(size: 26))
+                    .foregroundColor(TVColors.textSecondary)
+                    .padding(.bottom, 10)
+
                 VStack(spacing: 0) {
                     addressRow(label: "IPv4", value: ipv4)
 
@@ -467,9 +502,6 @@ struct TVAddressDropdown: View {
 
                     addressRow(label: "IPv6", value: ipv6)
                 }
-                .frame(width: 760)
-                // Same card treatment as the bottom stats bar, so the panel reads
-                // as part of the tvOS layout rather than a pop-up menu.
                 .background(
                     RoundedRectangle(cornerRadius: TVLayout.cornerRadiusMedium)
                         .fill(Color.white.opacity(0.05))
@@ -478,15 +510,16 @@ struct TVAddressDropdown: View {
                                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
                         )
                 )
-                .offset(y: 74)
-                .transition(.opacity)
+
+                Spacer()
             }
+            .padding(.horizontal, TVLayout.contentPadding)
+            .padding(.vertical, 60)
         }
     }
 
     /// Single-line row: the address is the payload, so it carries the large type
-    /// while the family label stays a quiet caption. Keeping rows to one line also
-    /// keeps the expanded panel clear of the bottom stats bar.
+    /// while the family label stays a quiet caption.
     @ViewBuilder
     private func addressRow(label: String, value: String) -> some View {
         HStack(spacing: 18) {
@@ -504,7 +537,7 @@ struct TVAddressDropdown: View {
                 .truncationMode(.middle)
         }
         .padding(.horizontal, 28)
-        .padding(.vertical, 14)
+        .padding(.vertical, 18)
     }
 }
 

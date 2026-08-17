@@ -18,6 +18,7 @@
 		443782C52EDF288A00F9FA94 /* TVSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C32EDF288A00F9FA94 /* TVSettingsView.swift */; };
 		443782C62EDF288A00F9FA94 /* TVPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C22EDF288A00F9FA94 /* TVPeersView.swift */; };
 		443782C72EDF288A00F9FA94 /* TVNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C12EDF288A00F9FA94 /* TVNetworksView.swift */; };
+		E1E0F0012F90000100000001 /* TVExitNodeSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */; };
 		443782C82EDF288A00F9FA94 /* TVMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C02EDF288A00F9FA94 /* TVMainView.swift */; };
 		443782C92EDF293400F9FA94 /* NetBirdApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911A2A792A15007C48FC /* NetBirdApp.swift */; };
 		443782CA2EDF296500F9FA94 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911C2A792A15007C48FC /* MainView.swift */; };
@@ -286,6 +287,7 @@
 		443782BD2EDF284A00F9FA94 /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
 		443782C02EDF288A00F9FA94 /* TVMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVMainView.swift; sourceTree = "<group>"; };
 		443782C12EDF288A00F9FA94 /* TVNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVNetworksView.swift; sourceTree = "<group>"; };
+		E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVExitNodeSelector.swift; sourceTree = "<group>"; };
 		443782C22EDF288A00F9FA94 /* TVPeersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPeersView.swift; sourceTree = "<group>"; };
 		443782C32EDF288A00F9FA94 /* TVSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVSettingsView.swift; sourceTree = "<group>"; };
 		4483B26C2F19331A00BD9F66 /* TVColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVColors.swift; sourceTree = "<group>"; };
@@ -495,6 +497,7 @@
 				44F3E39A2EE2F9FA00C87FEC /* TVAuthView.swift */,
 				443782C02EDF288A00F9FA94 /* TVMainView.swift */,
 				443782C12EDF288A00F9FA94 /* TVNetworksView.swift */,
+				E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */,
 				443782C22EDF288A00F9FA94 /* TVPeersView.swift */,
 				443782C32EDF288A00F9FA94 /* TVSettingsView.swift */,
 				AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */,
@@ -1084,6 +1087,7 @@
 				443782C92EDF293400F9FA94 /* NetBirdApp.swift in Sources */,
 				443782C62EDF288A00F9FA94 /* TVPeersView.swift in Sources */,
 				443782C72EDF288A00F9FA94 /* TVNetworksView.swift in Sources */,
+				E1E0F0012F90000100000001 /* TVExitNodeSelector.swift in Sources */,
 				44F3E39B2EE2F9FA00C87FEC /* TVAuthView.swift in Sources */,
 				4483B26D2F19331A00BD9F66 /* TVColors.swift in Sources */,
 				443782C82EDF288A00F9FA94 /* TVMainView.swift in Sources */,
