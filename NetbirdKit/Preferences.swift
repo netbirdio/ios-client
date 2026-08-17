@@ -61,9 +61,15 @@ class Preferences {
         }
 
         #if DEBUG
-        // Fallback for testing when app group is not available
+        // Fallback for testing when app group is not available.
+        // On tvOS ~/Library/Application Support is read-only in the sandbox —
+        // use Caches (writable) so the Go SDK doesn't fail with EPERM.
+        #if os(tvOS)
+        let baseURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
+        #else
         let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
+        #endif
         return (baseURL ?? fileManager.temporaryDirectory).appendingPathComponent(fileName).path
         #else
         AppLogger.shared.log("ERROR: App group '\(GlobalConstants.userPreferencesSuiteName)' not available. Check entitlements.")
@@ -75,6 +81,12 @@ class Preferences {
         #if os(iOS)
         // Use profile-aware paths on iOS
         return ProfileManager.shared.activeConfigPath()
+        #elseif os(tvOS)
+        // App Group container is not writable on tvOS, so the config path handed
+        // to NetBirdSDKNewAuth must live in a writable directory — otherwise the
+        // SDK's config create/update fails with EPERM before the SSO flow starts.
+        // Persistence on tvOS goes through UserDefaults + IPC, not this file.
+        return URL(fileURLWithPath: cacheDirectory()).appendingPathComponent(GlobalConstants.configFileName).path
         #else
         return getFilePath(fileName: GlobalConstants.configFileName)
         #endif
@@ -84,16 +96,29 @@ class Preferences {
         #if os(iOS)
         // Use profile-aware paths on iOS
         return ProfileManager.shared.activeStatePath()
+        #elseif os(tvOS)
+        // App Group container is not writable from the extension on tvOS.
+        // The Go state manager writes temp files next to this path, so it must
+        // live in a writable directory or every persist fails with EPERM.
+        return URL(fileURLWithPath: cacheDirectory()).appendingPathComponent(GlobalConstants.stateFileName).path
         #else
         return getFilePath(fileName: GlobalConstants.stateFileName)
         #endif
     }
 
     /// Returns a writable directory for debug bundle ZIP generation.
-    /// iOS: App Group container's Caches subdir. tvOS: system temp dir.
+    /// iOS: App Group container's Caches subdir. tvOS: process-local Caches.
     static func cacheDirectory() -> String {
         let fileManager = FileManager.default
         #if os(tvOS)
+        if let cacheURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            do {
+                try fileManager.createDirectory(at: cacheURL, withIntermediateDirectories: true)
+                return cacheURL.path
+            } catch {
+                return fileManager.temporaryDirectory.path
+            }
+        }
         return fileManager.temporaryDirectory.path
         #else
         if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
@@ -125,9 +150,16 @@ class Preferences {
     private static let configJSONKey = "netbird_config_json"
 
     /// Get the App Group UserDefaults.
-    /// Note: On tvOS, this is app-local only - NOT shared with extension.
+    /// Note: On tvOS, app-group suites don't work at all — cfprefsd detaches
+    /// ("Using kCFPreferencesAnyUser with a container is only allowed for System
+    /// Containers") and every read returns nil. Use process-local standard defaults
+    /// there; the app↔extension transfer happens via IPC instead.
     static func sharedUserDefaults() -> UserDefaults? {
+        #if os(tvOS)
+        return UserDefaults.standard
+        #else
         return UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        #endif
     }
 
     /// Save config JSON to UserDefaults (app-local storage).
