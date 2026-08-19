@@ -418,6 +418,13 @@ class ViewModel: ObservableObject {
             showOnDemandDisconnectAlert = true
             return
         }
+        #else
+        // tvOS runs a single always-connect rule, so an armed On Demand reconnects
+        // immediately on any interface — always warn before a manual disconnect.
+        if connectOnDemand {
+            showOnDemandDisconnectAlert = true
+            return
+        }
         #endif
 
         performClose()
@@ -681,7 +688,15 @@ class ViewModel: ObservableObject {
     func updatePreSharedKey() {
         configProvider.preSharedKey = presharedKey
         if configProvider.commit() {
+            // tvOS: bypass the On Demand disconnect prompt. The user changed a setting that
+            // needs a reconnect, not asked to stay offline — letting On Demand bring the
+            // tunnel back with the new key is the intended outcome (and the prompt would be
+            // hidden behind the pre-shared key cover anyway).
+            #if os(tvOS)
+            self.performClose()
+            #else
             self.close()
+            #endif
             self.presharedKeySecure = true
             self.showPreSharedKeyChangedInfo = true
         } else {
@@ -693,7 +708,11 @@ class ViewModel: ObservableObject {
         presharedKey = ""
         configProvider.preSharedKey = ""
         if configProvider.commit() {
+            #if os(tvOS)
+            self.performClose()
+            #else
             self.close()
+            #endif
             self.presharedKeySecure = false
         } else {
             print("Failed to remove preshared key")

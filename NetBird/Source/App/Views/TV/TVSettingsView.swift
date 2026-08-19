@@ -33,6 +33,18 @@ struct TVSettingsView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         TVSettingsSection(title: "Connection") {
+                            TVSettingsToggleRow(
+                                icon: "bolt.horizontal.circle.fill",
+                                title: "Connect On Demand",
+                                subtitle: "Reconnect automatically after a reboot or network change",
+                                isOn: Binding(
+                                    get: { viewModel.connectOnDemand },
+                                    set: { newValue in
+                                        viewModel.setConnectOnDemand(isEnabled: newValue)
+                                    }
+                                )
+                            )
+
                             TVSettingsRow(
                                 icon: "server.rack",
                                 title: "Change Server",
@@ -442,13 +454,91 @@ struct TVChangeServerAlert: View {
                         style: .filled(Color.red),
                         isFocused: focusedButton == .confirm,
                         action: {
-                            viewModel.close()
+                            // Disable On Demand along with the disconnect: the config is about
+                            // to be wiped, so an armed rule would have the system restart a
+                            // tunnel that can no longer log in.
+                            viewModel.closeWithOnDemandDisabled()
                             viewModel.clearDetails()
                             viewModel.showChangeServerAlert = false
                             viewModel.navigateToServerView = true
                         }
                     )
                     .focused($focusedButton, equals: .confirm)
+                }
+                .focusSection()
+            }
+            .padding(60)
+            .background(
+                RoundedRectangle(cornerRadius: 30)
+                    .fill(TVColors.bgSideDrawer)
+            )
+        }
+        .onAppear {
+            focusedButton = .cancel
+        }
+        .onChange(of: focusedButton) { oldValue, newValue in
+            _ = oldValue  // Suppress unused warning
+            if let newValue = newValue {
+                lastFocusedButton = newValue
+            } else {
+                // Focus escaped - pull it back
+                focusedButton = lastFocusedButton
+            }
+        }
+    }
+}
+
+/// Shown when the user disconnects manually while On Demand is armed. Without this the
+/// tunnel would come straight back up and the disconnect would look like it failed.
+struct TVOnDemandDisconnectAlert: View {
+    @ObservedObject var viewModel: ViewModel
+
+    private enum FocusedButton {
+        case cancel, disconnect
+    }
+
+    @FocusState private var focusedButton: FocusedButton?
+    @State private var lastFocusedButton: FocusedButton = .cancel
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+
+            VStack(spacing: 40) {
+                Image(systemName: "bolt.horizontal.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.orange)
+
+                Text("Connect On Demand Is Active")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(TVColors.textAlert)
+
+                Text("NetBird will reconnect automatically. Do you want to turn Connect On Demand off and disconnect?")
+                    .font(.system(size: 24))
+                    .foregroundColor(TVColors.textAlert)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 600)
+
+                HStack(spacing: 40) {
+                    TVAlertButton(
+                        title: "Cancel",
+                        style: .outlined,
+                        isFocused: focusedButton == .cancel,
+                        action: { viewModel.showOnDemandDisconnectAlert = false }
+                    )
+                    .focused($focusedButton, equals: .cancel)
+
+                    TVAlertButton(
+                        title: "Turn Off & Disconnect",
+                        style: .filled(Color.red),
+                        isFocused: focusedButton == .disconnect,
+                        action: {
+                            viewModel.showOnDemandDisconnectAlert = false
+                            viewModel.closeWithOnDemandDisabled()
+                        }
+                    )
+                    .focused($focusedButton, equals: .disconnect)
                 }
                 .focusSection()
             }
@@ -522,7 +612,9 @@ struct TVRosenpassChangedAlert: View {
                         isFocused: focusedButton == .reconnect,
                         action: {
                             viewModel.showRosenpassChangedAlert = false
-                            viewModel.close()
+                            // performClose(), not close(): this is an explicit reconnect, so the
+                            // On Demand disconnect prompt would only interrupt the sequence.
+                            viewModel.performClose()
                             // Small delay before reconnecting to allow disconnect to complete
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                                 viewModel.connect()

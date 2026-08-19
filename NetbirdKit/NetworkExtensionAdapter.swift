@@ -264,6 +264,17 @@ public class NetworkExtensionAdapter: ObservableObject {
 
         if needsLogin {
             logger.info("loginIfRequired: login required, calling performLogin()")
+
+            #if os(tvOS)
+            // Stop the system from retry-looping the tunnel while the user works through the
+            // device code flow — every unattended start would fail on "login required".
+            // applyExtensionStatus re-arms On Demand once the tunnel is up again.
+            if isOnDemandEnabled {
+                logger.info("loginIfRequired: disarming On Demand for the duration of the login")
+                setOnDemandEnabled(false)
+            }
+            #endif
+
             // Note: For tvOS, config initialization happens in the extension's startTunnel
             // before the needsLogin check. The extension has permission to write to App Group.
             await performLogin()
@@ -657,20 +668,45 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// When enabled, iOS will automatically reconnect the VPN after network changes or reboot.
     /// Should only be enabled when the user is logged in to avoid reconnect loops.
     func setOnDemandEnabled(_ enabled: Bool) {
-        guard let manager = self.vpnManager else {
-            logger.warning("setOnDemandEnabled: No VPN manager available")
+        if enabled && !hasUsableConfigForOnDemand() {
+            logger.warning("setOnDemandEnabled: Refusing to enable On Demand — user is not logged in")
             return
         }
 
-        if enabled {
-            let defaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
-            let loginRequired = defaults?.bool(forKey: GlobalConstants.keyLoginRequired) ?? true
-            if loginRequired {
-                logger.warning("setOnDemandEnabled: Refusing to enable On Demand — user is not logged in")
+        guard let manager = self.vpnManager else {
+            // Nothing is armed without a manager, so disabling is already the effective
+            // state. Never configure one just to switch On Demand off — that would create
+            // the VPN configuration (and its system prompt) from a background code path.
+            guard enabled else {
+                logger.warning("setOnDemandEnabled: No VPN manager available")
                 return
             }
+
+            // The manager is created lazily on the first connect. On tvOS the On Demand
+            // toggle lives in Settings and can be flipped before that ever happens, so
+            // load (or create) the manager here instead of dropping the change.
+            logger.info("setOnDemandEnabled: No VPN manager yet — configuring one first")
+            Task { @MainActor in
+                do {
+                    try await self.configureManager()
+                } catch {
+                    self.logger.error("setOnDemandEnabled: configureManager failed: \(error.localizedDescription)")
+                    return
+                }
+                guard let manager = self.vpnManager else {
+                    self.logger.error("setOnDemandEnabled: manager still unavailable after configureManager")
+                    return
+                }
+                self.applyOnDemandState(enabled, to: manager)
+            }
+            return
         }
 
+        applyOnDemandState(enabled, to: manager)
+    }
+
+    /// Writes the On Demand state and matching rules to the given manager.
+    private func applyOnDemandState(_ enabled: Bool, to manager: NETunnelProviderManager) {
         if enabled {
             // Build rules from saved settings
             let rules = buildOnDemandRules()
@@ -694,6 +730,20 @@ public class NetworkExtensionAdapter: ObservableObject {
                 self.logger.info("setOnDemandEnabled: On Demand \(enabled ? "enabled" : "disabled") successfully")
             }
         }
+    }
+
+    /// True when there is a configuration the extension can connect with unattended.
+    /// On Demand must not be armed before that — the system would otherwise keep
+    /// starting a tunnel that immediately fails with "login required".
+    private func hasUsableConfigForOnDemand() -> Bool {
+        #if os(tvOS)
+        // tvOS never writes keyLoginRequired: the app-group defaults are not shared with
+        // the extension there, so the login state is tracked through the stored config.
+        return Preferences.hasConfigInUserDefaults()
+        #else
+        let defaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        return !(defaults?.bool(forKey: GlobalConstants.keyLoginRequired) ?? true)
+        #endif
     }
 
     /// Applies granular On Demand rules based on Wi-Fi/Cellular policies and network lists.
@@ -735,6 +785,15 @@ public class NetworkExtensionAdapter: ObservableObject {
 
     /// Converts policy enums into NEOnDemandRule objects.
     private func buildOnDemandRulesFrom(wifiPolicy: WiFiOnDemandPolicy, cellularPolicy: CellularOnDemandPolicy, wifiNetworks: [String]) -> [NEOnDemandRule] {
+        #if os(tvOS)
+        // Apple TV exposes a single "always connect" behaviour: there are no per-network
+        // rules (NEHotspotNetwork is unavailable) and no cellular interface. The match must
+        // be .any rather than .wiFi — an Apple TV on Ethernet never matches a Wi-Fi rule,
+        // and wired setups are exactly the always-on ones this is meant to serve.
+        let rule = NEOnDemandRuleConnect()
+        rule.interfaceTypeMatch = .any
+        return [rule]
+        #else
         var rules: [NEOnDemandRule] = []
 
         // Wi-Fi rules
@@ -772,8 +831,7 @@ public class NetworkExtensionAdapter: ObservableObject {
             break
         }
 
-        // Cellular rules (cellular is not available on tvOS)
-        #if !os(tvOS)
+        // Cellular rules
         switch cellularPolicy {
         case .always:
             let rule = NEOnDemandRuleConnect()
@@ -786,9 +844,9 @@ public class NetworkExtensionAdapter: ObservableObject {
         case .doNothing:
             break
         }
-        #endif
 
         return rules
+        #endif
     }
 
     /// Returns the current On Demand enabled state from the VPN manager.

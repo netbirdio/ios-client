@@ -239,6 +239,12 @@ struct TVConnectionView: View {
                 .padding(.horizontal, 120)
                 .padding(.bottom, 50)
             }
+
+            // A manual disconnect while On Demand is armed needs a confirmation:
+            // the system would otherwise bring the tunnel straight back up.
+            if viewModel.showOnDemandDisconnectAlert {
+                TVOnDemandDisconnectAlert(viewModel: viewModel)
+            }
         }
     }
     
