@@ -269,9 +269,16 @@ public class NetworkExtensionAdapter: ObservableObject {
             // Stop the system from retry-looping the tunnel while the user works through the
             // device code flow — every unattended start would fail on "login required".
             // applyExtensionStatus re-arms On Demand once the tunnel is up again.
+            // Await the save: the login starts a tunnel of its own, and a rule that is still
+            // in force would race it with an unauthenticated start.
             if isOnDemandEnabled {
                 logger.info("loginIfRequired: disarming On Demand for the duration of the login")
-                setOnDemandEnabled(false)
+                let result = await withCheckedContinuation { (continuation: CheckedContinuation<OnDemandUpdate, Never>) in
+                    setOnDemandEnabled(false) { continuation.resume(returning: $0) }
+                }
+                if case .failed(let error) = result {
+                    logger.error("loginIfRequired: could not disarm On Demand: \(error?.localizedDescription ?? "unknown error")")
+                }
             }
             #endif
 
@@ -664,21 +671,51 @@ public class NetworkExtensionAdapter: ObservableObject {
         self.vpnManager?.connection.stopVPNTunnel()
     }
 
+    /// Outcome of an On Demand update. Callers that persist or display the state must wait
+    /// for this before claiming the change took effect.
+    enum OnDemandUpdate {
+        /// The rules were written to the tunnel manager.
+        case applied
+        /// There was nothing to arm — no manager exists yet, or no configuration to connect
+        /// with. The stored preference stands and `applyExtensionStatus` arms it after the
+        /// next successful connection.
+        case deferred
+        /// The tunnel manager rejected the change; what is in force is still the old state.
+        case failed(Error?)
+    }
+
+    /// Last requested On Demand state, kept because the manager may still be loading when
+    /// the next request arrives. Locked like `isFetchingStatus`: requests come from the main
+    /// queue and from the (non-isolated) async login path.
+    private let onDemandLock = NSLock()
+    private var _requestedOnDemandState: Bool?
+    private var requestedOnDemandState: Bool? {
+        get { onDemandLock.lock(); defer { onDemandLock.unlock() }; return _requestedOnDemandState }
+        set { onDemandLock.lock(); defer { onDemandLock.unlock() }; _requestedOnDemandState = newValue }
+    }
+
     /// Updates the VPN On Demand configuration on the current manager.
     /// When enabled, iOS will automatically reconnect the VPN after network changes or reboot.
     /// Should only be enabled when the user is logged in to avoid reconnect loops.
-    func setOnDemandEnabled(_ enabled: Bool) {
+    func setOnDemandEnabled(_ enabled: Bool, completion: ((OnDemandUpdate) -> Void)? = nil) {
         if enabled && !hasUsableConfigForOnDemand() {
             logger.warning("setOnDemandEnabled: Refusing to enable On Demand — user is not logged in")
+            completion?(.deferred)
             return
         }
+
+        // Record the request before any async work: a state that arrives while the manager
+        // is still loading must win over the one that started that load, or the stale value
+        // gets written after it.
+        requestedOnDemandState = enabled
 
         guard let manager = self.vpnManager else {
             // Nothing is armed without a manager, so disabling is already the effective
             // state. Never configure one just to switch On Demand off — that would create
             // the VPN configuration (and its system prompt) from a background code path.
             guard enabled else {
-                logger.warning("setOnDemandEnabled: No VPN manager available")
+                logger.info("setOnDemandEnabled: No VPN manager — nothing is armed, disable is already in force")
+                completion?(.deferred)
                 return
             }
 
@@ -691,22 +728,29 @@ public class NetworkExtensionAdapter: ObservableObject {
                     try await self.configureManager()
                 } catch {
                     self.logger.error("setOnDemandEnabled: configureManager failed: \(error.localizedDescription)")
+                    completion?(.failed(error))
                     return
                 }
                 guard let manager = self.vpnManager else {
                     self.logger.error("setOnDemandEnabled: manager still unavailable after configureManager")
+                    completion?(.failed(nil))
                     return
                 }
-                self.applyOnDemandState(enabled, to: manager)
+                // Apply the latest request rather than the one this task was started for.
+                let state = self.requestedOnDemandState ?? enabled
+                if state != enabled {
+                    self.logger.info("setOnDemandEnabled: superseded while configuring, applying \(state) instead of \(enabled)")
+                }
+                self.applyOnDemandState(state, to: manager, completion: completion)
             }
             return
         }
 
-        applyOnDemandState(enabled, to: manager)
+        applyOnDemandState(enabled, to: manager, completion: completion)
     }
 
     /// Writes the On Demand state and matching rules to the given manager.
-    private func applyOnDemandState(_ enabled: Bool, to manager: NETunnelProviderManager) {
+    private func applyOnDemandState(_ enabled: Bool, to manager: NETunnelProviderManager, completion: ((OnDemandUpdate) -> Void)? = nil) {
         if enabled {
             // Build rules from saved settings
             let rules = buildOnDemandRules()
@@ -726,8 +770,10 @@ public class NetworkExtensionAdapter: ObservableObject {
         manager.saveToPreferences { error in
             if let error = error {
                 self.logger.error("setOnDemandEnabled: Failed to save preferences: \(error.localizedDescription)")
+                completion?(.failed(error))
             } else {
                 self.logger.info("setOnDemandEnabled: On Demand \(enabled ? "enabled" : "disabled") successfully")
+                completion?(.applied)
             }
         }
     }

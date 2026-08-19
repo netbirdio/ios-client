@@ -454,13 +454,13 @@ struct TVChangeServerAlert: View {
                         style: .filled(Color.red),
                         isFocused: focusedButton == .confirm,
                         action: {
-                            // Disable On Demand along with the disconnect: the config is about
-                            // to be wiped, so an armed rule would have the system restart a
-                            // tunnel that can no longer log in.
-                            viewModel.closeWithOnDemandDisabled()
-                            viewModel.clearDetails()
                             viewModel.showChangeServerAlert = false
-                            viewModel.navigateToServerView = true
+                            // Disarm On Demand before the disconnect and the config wipe: an
+                            // armed rule would have the system restart a tunnel that can no
+                            // longer log in.
+                            viewModel.resetForServerChange {
+                                viewModel.navigateToServerView = true
+                            }
                         }
                     )
                     .focused($focusedButton, equals: .confirm)

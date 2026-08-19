@@ -310,9 +310,16 @@ class ViewModel: ObservableObject {
     }
 
     /// Disables On Demand and connects (user chose to override conflicting rules).
+    /// Connects only once the disarm has been written, otherwise a Disconnect rule that is
+    /// still in force tears the new tunnel down again. The connect runs even if the manager
+    /// refused the change — the user asked for a connection, and the rule conflict is
+    /// reported by the alert that led here.
     func connectWithOnDemandDisabled() {
-        setConnectOnDemand(isEnabled: false)
-        performConnect()
+        setConnectOnDemand(isEnabled: false) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.performConnect()
+            }
+        }
     }
 
     #if os(iOS)
@@ -463,9 +470,20 @@ class ViewModel: ObservableObject {
     }
 
     /// Disables On Demand and disconnects (user chose to prevent auto-reconnect).
+    /// The disconnect waits for the disarm to be persisted: stopping the tunnel while a rule
+    /// is still in force just has the system bring it back, which reads as a failed
+    /// disconnect. If the manager refuses the change, the tunnel is left up rather than
+    /// dropped into an immediate reconnect.
     func closeWithOnDemandDisabled() {
-        setConnectOnDemand(isEnabled: false)
-        performClose()
+        setConnectOnDemand(isEnabled: false) { [weak self] inForce in
+            guard inForce else {
+                AppLogger.shared.log("closeWithOnDemandDisabled: On Demand still armed, keeping the tunnel up")
+                return
+            }
+            DispatchQueue.main.async {
+                self?.performClose()
+            }
+        }
     }
 
     func updateVPNDisplayState(priorExtensionState: NEVPNStatus? = nil) {
@@ -665,22 +683,54 @@ class ViewModel: ObservableObject {
         defaults.removeObject(forKey: "ip")
         defaults.removeObject(forKey: "fqdn")
 
-        // Disable and persist On Demand off to keep UI/storage/manager in sync
-        setConnectOnDemand(isEnabled: false)
-
-        // Clear config JSON (contains server credentials and all settings)
-        Preferences.removeConfigFromUserDefaults()
+        // Disable and persist On Demand off to keep UI/storage/manager in sync, and wipe the
+        // config only once that disarm has actually landed — a rule still in force would have
+        // the system restart the tunnel against the configuration being removed.
+        if connectOnDemand {
+            setConnectOnDemand(isEnabled: false) { [weak self] inForce in
+                if !inForce {
+                    AppLogger.shared.log("clearDetails: On Demand disarm failed, clearing the config anyway")
+                }
+                DispatchQueue.main.async {
+                    self?.wipeStoredConfig()
+                }
+            }
+        } else {
+            wipeStoredConfig()
+        }
 
         // Reset @Published properties to reflect cleared state in UI
         self.rosenpassEnabled = false
         self.rosenpassPermissive = false
         self.presharedKey = ""
         self.presharedKeySecure = false
+    }
+
+    /// Removes the stored configuration — server credentials and all settings.
+    private func wipeStoredConfig() {
+        Preferences.removeConfigFromUserDefaults()
 
         #if os(tvOS)
         // Also clear extension-local config to prevent stale credentials
         networkExtensionAdapter.clearExtensionConfig()
         #endif
+    }
+
+    /// Server change: disarm On Demand, then disconnect and clear local state, in that order.
+    /// Proceeds even when the disarm fails — the user asked to leave this server, and stale
+    /// credentials must not be kept just because the tunnel manager refused a rule change.
+    func resetForServerChange(completion: @escaping () -> Void) {
+        setConnectOnDemand(isEnabled: false) { [weak self] inForce in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if !inForce {
+                    AppLogger.shared.log("resetForServerChange: On Demand disarm failed, resetting anyway")
+                }
+                self.performClose()
+                self.clearDetails()
+                completion()
+            }
+        }
     }
     
     // MARK: - Configuration Methods (via ConfigurationProvider)
@@ -830,11 +880,35 @@ class ViewModel: ObservableObject {
         #endif
     }
     
-    func setConnectOnDemand(isEnabled: Bool) {
+    /// Stores the user's On Demand choice and asks the tunnel manager to apply it.
+    ///
+    /// The preference is written up front because it is the user's *intent*: when there is
+    /// nothing to arm yet (no manager, or no login), the choice has to survive so
+    /// `applyExtensionStatus` can arm it after the next successful connection. Only a manager
+    /// that actively rejects the change rolls the stored value back, so UI, storage and the
+    /// tunnel manager never disagree about what is in force.
+    ///
+    /// - Parameter completion: called with `true` when the requested state is in force
+    ///   (applied, or nothing needed arming), `false` when the manager refused it. Callers
+    ///   that depend on the change — disconnecting, wiping the config — must wait for it.
+    func setConnectOnDemand(isEnabled: Bool, completion: ((Bool) -> Void)? = nil) {
+        let previous = connectOnDemand
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         userDefaults?.set(isEnabled, forKey: GlobalConstants.keyConnectOnDemand)
         self.connectOnDemand = isEnabled
-        networkExtensionAdapter.setOnDemandEnabled(isEnabled)
+        networkExtensionAdapter.setOnDemandEnabled(isEnabled) { [weak self] result in
+            switch result {
+            case .applied, .deferred:
+                completion?(true)
+            case .failed(let error):
+                AppLogger.shared.log("On Demand change to \(isEnabled) failed (\(error?.localizedDescription ?? "unknown error")), reverting to \(previous)")
+                DispatchQueue.main.async {
+                    userDefaults?.set(previous, forKey: GlobalConstants.keyConnectOnDemand)
+                    self?.connectOnDemand = previous
+                    completion?(false)
+                }
+            }
+        }
         if isEnabled {
             self.showOnDemandAlert = true
         }
