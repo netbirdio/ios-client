@@ -184,6 +184,12 @@ struct NetBirdApp: App {
                 // does the fetch. Foregrounding onto a tunnel that dropped while the app
                 // was away is the mirror case: the routes are never cleared, so the
                 // selector stays enabled over nodes the core can no longer apply.
+                //
+                // loadCurrentConnectionState can await past this activation's lifetime:
+                // its 200 ms retry sleep uses `try?`, which swallows cancellation. The
+                // assignment above is a cheap local update, but the route sync below is
+                // an IPC round-trip — don't make it for an activation already superseded.
+                guard isAppActive, !Task.isCancelled else { return }
                 viewModel.applyRouteSideEffects(for: initialStatus)
             } else {
                 // No matching VPN profile found — still force a widget timeline refresh so
