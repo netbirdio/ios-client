@@ -173,6 +173,18 @@ struct NetBirdApp: App {
                 viewModel.disconnectPressed = false
                 viewModel.extensionState = initialStatus
                 viewModel.updateVPNDisplayState()
+
+                // Assigning extensionState directly means the checkExtensionState() below
+                // hits applyExtensionStatus' `extensionState != status` guard and returns
+                // early — taking its route side effects with it. Apply them here instead.
+                //
+                // Launching (or foregrounding) onto an already-connected tunnel would
+                // otherwise leave the exit node selector stuck on "No exit nodes
+                // available" until the user visits the Resources tab, whose own onAppear
+                // does the fetch. Foregrounding onto a tunnel that dropped while the app
+                // was away is the mirror case: the routes are never cleared, so the
+                // selector stays enabled over nodes the core can no longer apply.
+                viewModel.applyRouteSideEffects(for: initialStatus)
             } else {
                 // No matching VPN profile found — still force a widget timeline refresh so
                 // the widget doesn't stay stuck on a transitioning state from a prior

@@ -637,11 +637,22 @@ class ViewModel: ObservableObject {
         extensionState = status
         updateVPNDisplayState(priorExtensionState: priorState)
 
+        applyRouteSideEffects(for: status)
+
+        if status == .connected, connectOnDemand {
+            networkExtensionAdapter.setOnDemandEnabled(true)
+        }
+    }
+
+    /// Brings the cached route list in line with `status`.
+    ///
+    /// Separate from `applyExtensionStatus` so that callers which assign `extensionState`
+    /// themselves — and therefore trip its `extensionState != status` guard — can still
+    /// apply this part. Idempotent: re-running it for an unchanged status costs one
+    /// GetRoutes round-trip while connected, and nothing at all while disconnected.
+    func applyRouteSideEffects(for status: NEVPNStatus) {
         if status == .connected {
             routeViewModel.getRoutes()
-            if connectOnDemand {
-                networkExtensionAdapter.setOnDemandEnabled(true)
-            }
         } else if status == .disconnected {
             // Routes only exist while the extension is up. Drop them so the exit node
             // selector on the connection screen falls back to its disabled state instead
