@@ -62,6 +62,7 @@ class ProfileManager {
             preconditionFailure("Failed to create NetBirdSDKProfileManager at \(configDir)")
         }
         self.go = manager
+        ProfileManager.excludeProfileStorageFromBackup(configDir: configDir)
     }
 #else
     private init() {}
@@ -275,6 +276,47 @@ class ProfileManager {
             return nil
         }
         return result.isEmpty ? nil : result
+    }
+
+    /// Excludes the profile storage from iCloud/iTunes backups. The profile
+    /// configs hold the WireGuard and SSH private keys, and the WireGuard key
+    /// is the peer's identity: restoring a backup onto another device would
+    /// produce two peers with the same key. Re-applied on every launch because
+    /// the Go core replaces some of these files atomically (temp + rename),
+    /// which drops per-file attributes; the profiles/ directory is excluded as
+    /// a whole so its contents stay covered regardless. The directory is
+    /// created here if missing so the exclusion is in place before the Go
+    /// manager first writes into it.
+    private static func excludeProfileStorageFromBackup(configDir: String) {
+        let fm = FileManager.default
+        let root = URL(fileURLWithPath: configDir, isDirectory: true)
+
+        let profilesDir = root.appendingPathComponent("profiles", isDirectory: true)
+        try? fm.createDirectory(at: profilesDir, withIntermediateDirectories: true)
+        excludeFromBackup(profilesDir)
+
+        let rootFiles = [
+            GlobalConstants.configFileName,
+            GlobalConstants.stateFileName,
+            GlobalConstants.serverURLFileName,
+            "active_profile.json",
+        ]
+        for name in rootFiles {
+            let file = root.appendingPathComponent(name)
+            guard fm.fileExists(atPath: file.path) else { continue }
+            excludeFromBackup(file)
+        }
+    }
+
+    private static func excludeFromBackup(_ url: URL) {
+        var url = url
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        do {
+            try url.setResourceValues(values)
+        } catch {
+            AppLogger.shared.log("ProfileManager: backup exclusion failed for \(url.lastPathComponent): \(error)")
+        }
     }
 
     /// Base directory for profile storage: the App Group shared container.
