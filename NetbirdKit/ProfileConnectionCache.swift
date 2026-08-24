@@ -11,6 +11,7 @@ struct ProfileConnectionEntry: Codable, Equatable {
     var ip: String
     var fqdn: String
     var managementURL: String?
+    var ipv6: String?
 }
 
 // MARK: - Cache
@@ -38,18 +39,19 @@ struct ProfileConnectionCache {
 
     // MARK: - Write
 
-    func save(ip: String, fqdn: String, forID id: String) {
+    func save(ip: String, fqdn: String, ipv6: String? = nil, forID id: String) {
         var all = load()
-        var entry = all[id] ?? ProfileConnectionEntry(ip: "", fqdn: "", managementURL: nil)
+        var entry = all[id] ?? ProfileConnectionEntry(ip: "", fqdn: "", managementURL: nil, ipv6: nil)
         entry.ip = ip
         entry.fqdn = fqdn
+        entry.ipv6 = ipv6
         all[id] = entry
         persist(all)
     }
 
     func saveManagementURL(_ url: String, forID id: String) {
         var all = load()
-        var entry = all[id] ?? ProfileConnectionEntry(ip: "", fqdn: "", managementURL: nil)
+        var entry = all[id] ?? ProfileConnectionEntry(ip: "", fqdn: "", managementURL: nil, ipv6: nil)
         entry.managementURL = url
         all[id] = entry
         persist(all)
@@ -61,6 +63,7 @@ struct ProfileConnectionCache {
         guard var entry = all[id] else { return }
         entry.ip = ""
         entry.fqdn = ""
+        entry.ipv6 = nil
         all[id] = entry
         persist(all)
     }

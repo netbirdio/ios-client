@@ -528,15 +528,25 @@ public class NetBirdAdapter {
         if let auth = NetBirdSDKNewAuth(configPath, managementURL, nil) {
             authRef = auth
 
-            #if os(tvOS)
+            // Always pass the device name so the peer registers under the user's
+            // device name (UIDevice.current.name on iOS, the generated apple-tv-* name
+            // on tvOS) instead of the plain login() path's empty-name hostname fallback.
             let deviceName = Device.getName()
             auth.login(withDeviceName: errListener, urlOpener: urlOpener, forceDeviceAuth: forceDeviceAuth, deviceName: deviceName)
-            #else
-            auth.login(errListener, urlOpener: urlOpener, forceDeviceAuth: forceDeviceAuth)
-            #endif
         } else {
             handleError(NSError(domain: "io.netbird", code: 1002, userInfo: [NSLocalizedDescriptionKey: "Failed to create Auth object"]))
         }
+    }
+
+    /// Permanently detach the listeners the Go engine holds for this adapter's client so
+    /// that any late callback fired while the old client spins down becomes a no-op instead
+    /// of dereferencing a torn-down tunnel manager/provider (EXC_BAD_ACCESS / 0x28).
+    /// Call this when the adapter is being DISCARDED (profile switch / replacement) — not
+    /// on a plain stop()/restart, where the same adapter is reused and must keep delivering
+    /// route/DNS callbacks afterwards. Safe to call multiple times.
+    func invalidateListeners() {
+        self.networkChangeListener.invalidate()
+        self.dnsManager.invalidate()
     }
 
     public func stop(completionHandler: (() -> Void)? = nil) {

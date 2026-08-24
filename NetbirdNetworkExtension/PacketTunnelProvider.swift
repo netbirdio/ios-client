@@ -12,8 +12,54 @@ import os
 import UserNotifications
 import WidgetKit
 
+/// One-time (per process) redirect of stderr (fd 2) into "netbird.err" in the app
+/// group container. The Go runtime writes panic messages and fatal-error goroutine
+/// dumps to fd 2, which an app extension otherwise discards — after a SIGABRT crash
+/// this file is the only place the panic reason can be recovered from.
+/// The file lives next to logfile.log, so the debug bundle generator picks it up
+/// automatically as "netbird.err" (see BundleGenerator.addLogfile in netbird-core).
+private let stderrRedirectOnce: Void = {
+    let fileManager = FileManager.default
+    guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) else {
+        AppLogger.shared.log("stderr redirect: app group container unavailable")
+        return
+    }
+    let errLogURL = groupURL.appendingPathComponent("netbird.err")
+
+    if let attrs = try? fileManager.attributesOfItem(atPath: errLogURL.path),
+       let size = attrs[.size] as? UInt64, size > 0 {
+        // Surface a previous session's crash output before appending to it.
+        AppLogger.shared.log("stderr redirect: netbird.err has \(size) bytes from a previous session (possible crash dump)")
+        // Cap growth across sessions: reset once it grows beyond 5 MB.
+        if size > 5 * 1024 * 1024 {
+            AppLogger.shared.log("stderr redirect: netbird.err exceeds 5 MB cap, resetting")
+            try? fileManager.removeItem(at: errLogURL)
+        }
+    }
+
+    let fd = open(errLogURL.path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
+    guard fd >= 0 else {
+        AppLogger.shared.log("stderr redirect: failed to open \(errLogURL.path), errno=\(errno)")
+        return
+    }
+    dup2(fd, STDERR_FILENO)
+    if fd != STDERR_FILENO {
+        close(fd)
+    }
+
+    let marker = "\n=== stderr redirect active pid=\(getpid()) at \(ISO8601DateFormatter().string(from: Date())) ===\n"
+    marker.withCString { _ = write(STDERR_FILENO, $0, strlen($0)) }
+    AppLogger.shared.log("stderr redirect: fd 2 -> netbird.err in app group container")
+}()
+
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
+
+    override init() {
+        // Must run before any Go SDK call so a Go panic during startup is captured too.
+        _ = stderrRedirectOnce
+        super.init()
+    }
 
     private lazy var tunnelManager: PacketTunnelProviderSettingsManager = {
         return PacketTunnelProviderSettingsManager(with: self)
@@ -44,6 +90,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let statePath  = (options?["statePath"]  as? String).flatMap { $0.isEmpty ? nil : $0 }
         if adapter == nil || (configPath != nil && configPath != adapter?.initializedConfigPath) {
             AppLogger.shared.log("PacketTunnelProvider: (re)creating adapter for configPath=\(configPath ?? "default")")
+            // Detach the outgoing adapter's Go callbacks before discarding it so a late
+            // callback from the old client can't reach into the tunnel manager once the
+            // new adapter has replaced it (EXC_BAD_ACCESS / 0x28 during profile switch).
+            adapter?.invalidateListeners()
             adapter = NetBirdAdapter(with: tunnelManager, configPath: configPath, statePath: statePath)
         }
         #else
@@ -70,7 +120,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        if adapter.needsLogin() {
+        // Skip this check when the main app has already established the login state (its own
+        // isLoginRequired() call, or a login it just completed) and said so via the start
+        // options. needsLogin() is a full Login RPC against the management server, so the
+        // unconditional check duplicated one the other process had just made. Starts the main
+        // app did not initiate (On Demand, widget intent) carry no flag and still verify here.
+        // Either way an expired session is caught by the engine: its own login fails with
+        // PermissionDenied, which drives onLoginRequired and tears the tunnel down.
+        #if os(iOS)
+        let loginVerifiedByApp = (options?[GlobalConstants.optionLoginVerified] as? NSNumber)?.boolValue ?? false
+        #else
+        let loginVerifiedByApp = false
+        #endif
+        if loginVerifiedByApp {
+            AppLogger.shared.log("startTunnel: login already verified by the main app, skipping needsLogin check")
+        }
+        if !loginVerifiedByApp, adapter.needsLogin() {
             signalLoginRequired()
             // Clear any transitioning widget state so the login button appears immediately
             // instead of waiting for the snap-back window to expire.
@@ -185,6 +250,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 if configPath != adapter?.initializedConfigPath || configRestored {
                     AppLogger.shared.log("handleAppMessage: (re)creating adapter for \(configPath)")
+                    // Detach the outgoing adapter's Go callbacks before discarding it (see startTunnel).
+                    adapter?.invalidateListeners()
                     adapter = NetBirdAdapter(with: tunnelManager, configPath: configPath, statePath: statePath)
                 }
             }
@@ -336,7 +403,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // Tokens may have expired during a network change (common with self-hosted servers
             // that have shorter token lifetimes). Check before restarting; if login is required
             // signal the main app so it can show the re-auth UI instead of silently failing.
-            if self?.adapter?.needsLogin() == true {
+            // The cached check reads the auth state the engine already recorded, so a network
+            // change no longer costs a Login RPC. An expiry the recorder has not seen yet is
+            // still caught one step later: the restarted engine's own login fails with
+            // PermissionDenied and drives onLoginRequired from the connection listener.
+            if self?.adapter?.needsLoginCached() == true {
                 AppLogger.shared.log("restartClient: login required — signaling main app, skipping restart")
                 self?.signalLoginRequired()
                 self?.updateWidgetStatus("disconnected")
@@ -360,6 +431,23 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 if let error = error {
                     AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
+                    // If the start failed because the session expired, the connection
+                    // listener may have suppressed its login-required signalling: it skips
+                    // both checks while isRestarting is still true, which happens when the
+                    // stop phase never fired onDisconnected (engine already dead) and the
+                    // stop completion arrived via the 15s fallback instead. Re-check the
+                    // recorder here — the engine marks it with PermissionDenied before
+                    // Run() returns — and signal + tear down so the dead tunnel doesn't
+                    // linger and black-hole traffic.
+                    if self?.adapter?.needsLoginCached() == true {
+                        AppLogger.shared.log("restartClient: start failed due to expired login — signaling and tearing down")
+                        self?.signalLoginRequired()
+                        self?.cancelTunnelWithError(NSError(
+                            domain: "io.netbird.NetbirdNetworkExtension",
+                            code: 1001,
+                            userInfo: [NSLocalizedDescriptionKey: "Login required."]
+                        ))
+                    }
                     self?.updateWidgetStatus("disconnected")
                 } else {
                     AppLogger.shared.log("restartClient: start completed successfully")
@@ -576,7 +664,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         DispatchQueue.global(qos: .utility).async {
             var error: NSError?
-            let key = adapter.client.debugBundle(anonymize, error: &error)
+            // The strict level stays unused until the troubleshoot screen
+            // grows an option for it.
+            let key = adapter.client.debugBundle(anonymize, anonymizeLevel: NetBirdSDKAnonymizeLevelDefault, error: &error)
             if let error = error {
                 completionHandler("error:\(error.localizedDescription)".data(using: .utf8))
             } else {

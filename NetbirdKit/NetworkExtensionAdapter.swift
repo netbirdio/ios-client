@@ -76,6 +76,13 @@ public class NetworkExtensionAdapter: ObservableObject {
     @Published var loginURL: String?
     #if os(iOS)
     private var pendingAuth: NetBirdSDKAuth?
+    /// Set to true by the SDK's onLoginSuccess callback (which fires once the Go PKCE
+    /// localhost server receives the OAuth callback). The browser-finished handler reads
+    /// this to tell a genuine login from the user dismissing the browser: the
+    /// ASWebAuthenticationSession completion fires with a nil callbackURL even on success
+    /// (the loopback redirect is consumed by the Go HTTP server, not the auth session),
+    /// so the SafariView callback alone cannot distinguish success from cancellation.
+    public private(set) var loginSucceeded = false
     #endif
     @Published var userCode: String?
 
@@ -256,6 +263,24 @@ public class NetworkExtensionAdapter: ObservableObject {
 
         if needsLogin {
             logger.info("loginIfRequired: login required, calling performLogin()")
+
+            #if os(tvOS)
+            // Stop the system from retry-looping the tunnel while the user works through the
+            // device code flow — every unattended start would fail on "login required".
+            // applyExtensionStatus re-arms On Demand once the tunnel is up again.
+            // Await the save: the login starts a tunnel of its own, and a rule that is still
+            // in force would race it with an unauthenticated start.
+            if isOnDemandEnabled {
+                logger.info("loginIfRequired: disarming On Demand for the duration of the login")
+                let result = await withCheckedContinuation { (continuation: CheckedContinuation<OnDemandUpdate, Never>) in
+                    setOnDemandEnabled(false) { continuation.resume(returning: $0) }
+                }
+                if case .failed(let error) = result {
+                    logger.error("loginIfRequired: could not disarm On Demand: \(error?.localizedDescription ?? "unknown error")")
+                }
+            }
+            #endif
+
             // Note: For tvOS, config initialization happens in the extension's startTunnel
             // before the needsLogin check. The extension has permission to write to App Group.
             await performLogin()
@@ -273,7 +298,9 @@ public class NetworkExtensionAdapter: ObservableObject {
             #endif
         } else {
             logger.info("loginIfRequired: login NOT required, calling startVPNConnection()")
-            startVPNConnection()
+            // isLoginRequired() above just answered this against the management server;
+            // tell the extension so it doesn't repeat the same Login RPC.
+            startVPNConnection(loginVerified: true)
         }
 
         logger.info("loginIfRequired: done")
@@ -454,9 +481,36 @@ public class NetworkExtensionAdapter: ObservableObject {
         // (after startTunnel fails with login-required), which kills the WaitToken
         // goroutine before the HTTP server can receive the OAuth callback.
         // Running it here keeps the HTTP server alive for the full browser session.
+        // NetBirdSDKNewAuth loads the existing config file at configPath when one is
+        // present, so an interactive re-login reuses the peer's persisted WireGuard
+        // private key (its identity) instead of generating a fresh one. A fresh key
+        // would register a brand-new peer on the management server on every re-auth
+        // (named after the fallback hostname). Only a first-time login with no config
+        // yet builds a new in-memory config from the URL argument.
+        // The second argument is the management URL: passing "" makes the Go SDK fall
+        // back to the default cloud server (api.netbird.io), so login would run against
+        // — and be written back to — the wrong server. Pass the active profile's real
+        // management URL so login targets the user's own server and the config keeps it.
+        let activeProfileID = ProfileManager.shared.getActiveProfileID()
+        // managementURL(forID:) already recovers the URL from the config file, the
+        // logout-surviving server URL file, and the connection cache in turn. A nil
+        // result therefore means no server URL is persisted anywhere — which only
+        // happens on a genuine first-time login, where falling back to the default
+        // cloud server is correct. For a re-login the config file exists and its URL
+        // is preserved even when "" is passed (SDK's apply() only overrides the
+        // config URL when a non-empty one is provided). Log the nil case so a rare
+        // corrupted state (own-server profile that lost every URL source, which would
+        // silently fall back to the default cloud) is visible in diagnostics.
+        let resolvedURL = ProfileManager.shared.managementURL(forID: activeProfileID)
+        if resolvedURL == nil {
+            logger.warning("performLogin: no persisted management URL for '\(activeProfileID, privacy: .public)' — login will use the default cloud server")
+        }
+        let activeManagementURL = resolvedURL ?? ""
+        logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfileID, privacy: .public)'")
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
-           let auth = NetBirdSDKNewAuth(configPath, "", nil) {
+           let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
             self.pendingAuth = auth
+            self.loginSucceeded = false
             let urlOpener = MainAppLoginURLOpener()
             let errListener = MainAppLoginErrListener()
 
@@ -468,11 +522,18 @@ public class NetworkExtensionAdapter: ObservableObject {
                     continuation.resume(returning: url)
                 }
                 urlOpener.onOpen = { [weak self] url, _ in
+                    // Set showBrowser and resume the continuation in the SAME main-queue
+                    // block. onOpen is invoked from a background goroutine, so resuming
+                    // before showBrowser is committed lets loginIfRequired() observe
+                    // showBrowser == false and spuriously start the VPN — which launches
+                    // the extension, trips its needsLogin path, and pops the auth alert
+                    // in parallel with this browser login. Ordering them guarantees the
+                    // await caller sees showBrowser == true.
                     DispatchQueue.main.async {
                         self?.loginURL = url
                         self?.showBrowser = true
+                        resume(url)
                     }
-                    resume(url)
                 }
                 urlOpener.onSuccess = { [weak self] in
                     var err: NSError?
@@ -483,14 +544,39 @@ public class NetworkExtensionAdapter: ObservableObject {
                             try? json.write(toFile: path, atomically: true, encoding: .utf8)
                         }
                     }
-                    self?.pendingAuth = nil
+                    // Persist the management URL to the dedicated, logout-surviving file and
+                    // the shared UserDefaults so the user's own server cannot later fall back
+                    // to the default cloud server (e.g. when the config file is recreated).
+                    if !activeManagementURL.isEmpty {
+                        ProfileManager.shared.saveServerURL(activeManagementURL, forID: activeProfileID)
+                        Preferences.saveManagementURL(activeManagementURL)
+                    }
+                    // onSuccess runs on a background goroutine. Mark success on the main
+                    // queue so the browser-finished handler (also main-queue) reliably
+                    // observes it and starts the VPN instead of treating the browser
+                    // dismissal as a cancellation.
+                    DispatchQueue.main.async {
+                        self?.loginSucceeded = true
+                        self?.pendingAuth = nil
+                    }
                 }
                 errListener.onSuccessCallback = { urlOpener.onSuccess?() }
                 errListener.onErrorCallback = { [weak self] _ in
-                    self?.pendingAuth = nil
+                    // onError runs on a background goroutine; mutate pendingAuth on the
+                    // main queue to stay consistent with onSuccess and cancelLogin().
+                    DispatchQueue.main.async { self?.pendingAuth = nil }
                     resume(nil)
                 }
-                auth.login(errListener, urlOpener: urlOpener, forceDeviceAuth: false)
+                // Pass the device name explicitly. The plain login() path uses an empty
+                // device name, which makes the management server register the peer under
+                // the machine hostname fallback instead of the user's device name
+                // (UIDevice.current.name). This only affects first-time registration —
+                // a re-login reuses the persisted config/identity — but that first peer
+                // would otherwise show up as "hostname".
+                // loginInteractive skips the SDK's own IsLoginRequired() pre-flight: we only
+                // reach performLogin() after loginIfRequired() established that login is
+                // needed, and that pre-flight is itself a full Login RPC.
+                auth.loginInteractive(errListener, urlOpener: urlOpener, forceDeviceAuth: false, deviceName: Device.getName())
             }
 
             if let url = receivedURL, !url.isEmpty {
@@ -516,12 +602,36 @@ public class NetworkExtensionAdapter: ObservableObject {
         self.showBrowser = true
     }
 
-    public func startVPNConnection() {
-        logger.info("startVPNConnection: called")
+    #if os(iOS)
+    /// Aborts an in-progress interactive login (e.g. the user dismissed the OAuth
+    /// browser without completing it). Stopping the SDK auth cancels its context,
+    /// which unblocks the PKCE WaitToken and shuts down the loopback HTTP server so
+    /// the redirect port is freed immediately. Without this the next connect stalls
+    /// trying to bind the same port until the previous flow expires.
+    public func cancelLogin() {
+        logger.info("cancelLogin: aborting in-progress login")
+        pendingAuth?.stop()
+        pendingAuth = nil
+        loginSucceeded = false
+        showBrowser = false
+    }
+    #endif
+
+    /// Starts the tunnel.
+    /// - Parameter loginVerified: pass true only when this process has just established the
+    ///   login state — either its own isLoginRequired() check returned false, or an
+    ///   interactive login completed successfully. The extension then skips its own
+    ///   needs-login check, which is a full Login RPC against the management server.
+    ///   Defaults to false so any caller that has not verified stays on the safe path.
+    public func startVPNConnection(loginVerified: Bool = false) {
+        logger.info("startVPNConnection: called (loginVerified=\(loginVerified))")
         let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
         logger.info("startVPNConnection: logLevel = \(logLevel)")
         var options: [String: NSObject] = ["logLevel": logLevel as NSObject]
         #if os(iOS)
+        if loginVerified {
+            options[GlobalConstants.optionLoginVerified] = true as NSObject
+        }
         // Pass active profile paths so the extension can reinitialize the adapter
         // if the profile changed while the extension process was still alive.
         let configPath = Preferences.configFile()
@@ -560,24 +670,86 @@ public class NetworkExtensionAdapter: ObservableObject {
         self.vpnManager?.connection.stopVPNTunnel()
     }
 
+    /// Outcome of an On Demand update. Callers that persist or display the state must wait
+    /// for this before claiming the change took effect.
+    enum OnDemandUpdate {
+        /// The rules were written to the tunnel manager.
+        case applied
+        /// There was nothing to arm — no manager exists yet, or no configuration to connect
+        /// with. The stored preference stands and `applyExtensionStatus` arms it after the
+        /// next successful connection.
+        case deferred
+        /// The tunnel manager rejected the change; what is in force is still the old state.
+        case failed(Error?)
+    }
+
+    /// Last requested On Demand state, kept because the manager may still be loading when
+    /// the next request arrives. Locked like `isFetchingStatus`: requests come from the main
+    /// queue and from the (non-isolated) async login path.
+    private let onDemandLock = NSLock()
+    private var _requestedOnDemandState: Bool?
+    private var requestedOnDemandState: Bool? {
+        get { onDemandLock.lock(); defer { onDemandLock.unlock() }; return _requestedOnDemandState }
+        set { onDemandLock.lock(); defer { onDemandLock.unlock() }; _requestedOnDemandState = newValue }
+    }
+
     /// Updates the VPN On Demand configuration on the current manager.
     /// When enabled, iOS will automatically reconnect the VPN after network changes or reboot.
     /// Should only be enabled when the user is logged in to avoid reconnect loops.
-    func setOnDemandEnabled(_ enabled: Bool) {
-        guard let manager = self.vpnManager else {
-            logger.warning("setOnDemandEnabled: No VPN manager available")
+    func setOnDemandEnabled(_ enabled: Bool, completion: ((OnDemandUpdate) -> Void)? = nil) {
+        if enabled && !hasUsableConfigForOnDemand() {
+            logger.warning("setOnDemandEnabled: Refusing to enable On Demand — user is not logged in")
+            completion?(.deferred)
             return
         }
 
-        if enabled {
-            let defaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
-            let loginRequired = defaults?.bool(forKey: GlobalConstants.keyLoginRequired) ?? true
-            if loginRequired {
-                logger.warning("setOnDemandEnabled: Refusing to enable On Demand — user is not logged in")
+        // Record the request before any async work: a state that arrives while the manager
+        // is still loading must win over the one that started that load, or the stale value
+        // gets written after it.
+        requestedOnDemandState = enabled
+
+        guard let manager = self.vpnManager else {
+            // Nothing is armed without a manager, so disabling is already the effective
+            // state. Never configure one just to switch On Demand off — that would create
+            // the VPN configuration (and its system prompt) from a background code path.
+            guard enabled else {
+                logger.info("setOnDemandEnabled: No VPN manager — nothing is armed, disable is already in force")
+                completion?(.deferred)
                 return
             }
+
+            // The manager is created lazily on the first connect. On tvOS the On Demand
+            // toggle lives in Settings and can be flipped before that ever happens, so
+            // load (or create) the manager here instead of dropping the change.
+            logger.info("setOnDemandEnabled: No VPN manager yet — configuring one first")
+            Task { @MainActor in
+                do {
+                    try await self.configureManager()
+                } catch {
+                    self.logger.error("setOnDemandEnabled: configureManager failed: \(error.localizedDescription)")
+                    completion?(.failed(error))
+                    return
+                }
+                guard let manager = self.vpnManager else {
+                    self.logger.error("setOnDemandEnabled: manager still unavailable after configureManager")
+                    completion?(.failed(nil))
+                    return
+                }
+                // Apply the latest request rather than the one this task was started for.
+                let state = self.requestedOnDemandState ?? enabled
+                if state != enabled {
+                    self.logger.info("setOnDemandEnabled: superseded while configuring, applying \(state) instead of \(enabled)")
+                }
+                self.applyOnDemandState(state, to: manager, completion: completion)
+            }
+            return
         }
 
+        applyOnDemandState(enabled, to: manager, completion: completion)
+    }
+
+    /// Writes the On Demand state and matching rules to the given manager.
+    private func applyOnDemandState(_ enabled: Bool, to manager: NETunnelProviderManager, completion: ((OnDemandUpdate) -> Void)? = nil) {
         if enabled {
             // Build rules from saved settings
             let rules = buildOnDemandRules()
@@ -597,10 +769,26 @@ public class NetworkExtensionAdapter: ObservableObject {
         manager.saveToPreferences { error in
             if let error = error {
                 self.logger.error("setOnDemandEnabled: Failed to save preferences: \(error.localizedDescription)")
+                completion?(.failed(error))
             } else {
                 self.logger.info("setOnDemandEnabled: On Demand \(enabled ? "enabled" : "disabled") successfully")
+                completion?(.applied)
             }
         }
+    }
+
+    /// True when there is a configuration the extension can connect with unattended.
+    /// On Demand must not be armed before that — the system would otherwise keep
+    /// starting a tunnel that immediately fails with "login required".
+    private func hasUsableConfigForOnDemand() -> Bool {
+        #if os(tvOS)
+        // tvOS never writes keyLoginRequired: the app-group defaults are not shared with
+        // the extension there, so the login state is tracked through the stored config.
+        return Preferences.hasConfigInUserDefaults()
+        #else
+        let defaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        return !(defaults?.bool(forKey: GlobalConstants.keyLoginRequired) ?? true)
+        #endif
     }
 
     /// Applies granular On Demand rules based on Wi-Fi/Cellular policies and network lists.
@@ -642,6 +830,15 @@ public class NetworkExtensionAdapter: ObservableObject {
 
     /// Converts policy enums into NEOnDemandRule objects.
     private func buildOnDemandRulesFrom(wifiPolicy: WiFiOnDemandPolicy, cellularPolicy: CellularOnDemandPolicy, wifiNetworks: [String]) -> [NEOnDemandRule] {
+        #if os(tvOS)
+        // Apple TV exposes a single "always connect" behaviour: there are no per-network
+        // rules (NEHotspotNetwork is unavailable) and no cellular interface. The match must
+        // be .any rather than .wiFi — an Apple TV on Ethernet never matches a Wi-Fi rule,
+        // and wired setups are exactly the always-on ones this is meant to serve.
+        let rule = NEOnDemandRuleConnect()
+        rule.interfaceTypeMatch = .any
+        return [rule]
+        #else
         var rules: [NEOnDemandRule] = []
 
         // Wi-Fi rules
@@ -679,8 +876,7 @@ public class NetworkExtensionAdapter: ObservableObject {
             break
         }
 
-        // Cellular rules (cellular is not available on tvOS)
-        #if !os(tvOS)
+        // Cellular rules
         switch cellularPolicy {
         case .always:
             let rule = NEOnDemandRuleConnect()
@@ -693,9 +889,9 @@ public class NetworkExtensionAdapter: ObservableObject {
         case .doNothing:
             break
         }
-        #endif
 
         return rules
+        #endif
     }
 
     /// Returns the current On Demand enabled state from the VPN manager.
@@ -906,7 +1102,13 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
 
     func deselectRoutes(id: String, completion: @escaping (RoutesSelectionDetails) -> Void) {
+        // Callers (e.g. RoutesViewModel.selectRoute) balance a DispatchGroup enter/leave
+        // around this call, so completion must fire on every exit path or the group hangs
+        // and the pending select is never sent.
+        let routes = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
+
         guard let session = self.session else {
+            completion(routes)
             return
         }
 
@@ -914,14 +1116,15 @@ public class NetworkExtensionAdapter: ObservableObject {
         if let messageData = messageString.data(using: .utf8) {
             do {
                 try session.sendProviderMessage(messageData) { response in
-                    let routes = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
                     completion(routes)
                 }
             } catch {
                 print("Failed to send Provider message")
+                completion(routes)
             }
         } else {
             print("Error converting message to Data")
+            completion(routes)
         }
     }
     

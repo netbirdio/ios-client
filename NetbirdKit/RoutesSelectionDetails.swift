@@ -48,6 +48,16 @@ class RoutesSelectionInfo: ObservableObject, Codable, Identifiable {
         self.status = status
     }
 
+    // A route that covers all traffic (0.0.0.0/0 or ::/0) is an exit node. The core
+    // may merge a v4+v6 pair into a single comma-joined range string.
+    var isExitNode: Bool {
+        guard let network else { return false }
+        return network.split(separator: ",").contains { part in
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+            return trimmed == "0.0.0.0/0" || trimmed == "::/0"
+        }
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, name, network, domains, selected, status
     }

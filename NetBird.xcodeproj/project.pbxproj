@@ -19,6 +19,7 @@
 		443782C52EDF288A00F9FA94 /* TVSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C32EDF288A00F9FA94 /* TVSettingsView.swift */; };
 		443782C62EDF288A00F9FA94 /* TVPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C22EDF288A00F9FA94 /* TVPeersView.swift */; };
 		443782C72EDF288A00F9FA94 /* TVNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C12EDF288A00F9FA94 /* TVNetworksView.swift */; };
+		E1E0F0012F90000100000001 /* TVExitNodeSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */; };
 		443782C82EDF288A00F9FA94 /* TVMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C02EDF288A00F9FA94 /* TVMainView.swift */; };
 		443782C92EDF293400F9FA94 /* NetBirdApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911A2A792A15007C48FC /* NetBirdApp.swift */; };
 		443782CA2EDF296500F9FA94 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911C2A792A15007C48FC /* MainView.swift */; };
@@ -113,6 +114,7 @@
 		509CCD6A2BE908C000B7C2D8 /* RoutesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */; };
 		509CCD6C2BE90D0E00B7C2D8 /* PeerTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD6B2BE90D0E00B7C2D8 /* PeerTabView.swift */; };
 		509CCD6E2BE90D2100B7C2D8 /* RouteTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD6D2BE90D2100B7C2D8 /* RouteTabView.swift */; };
+		E1D0E0032F80000200000001 /* ExitNodeSelectorCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D0E0022F80000200000001 /* ExitNodeSelectorCard.swift */; };
 		50A8911B2A792A15007C48FC /* NetBirdApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911A2A792A15007C48FC /* NetBirdApp.swift */; };
 		50A8911D2A792A15007C48FC /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911C2A792A15007C48FC /* MainView.swift */; };
 		50A8911F2A792A16007C48FC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 50A8911E2A792A16007C48FC /* Assets.xcassets */; };
@@ -135,6 +137,12 @@
 		50E608132A7958B100BAF09B /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608122A7958B100BAF09B /* MainViewModel.swift */; };
 		50E608242A79966600BAF09B /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608232A79966600BAF09B /* AboutView.swift */; };
 		50E608262A79968500BAF09B /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608252A79968500BAF09B /* AdvancedView.swift */; };
+		558553FB2FE34921004FB58D /* jetbrains-mono-variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558553FA2FE34921004FB58D /* jetbrains-mono-variable.ttf */; };
+		558553FC2FE34921004FB58D /* inter-variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558553F92FE34921004FB58D /* inter-variable.ttf */; };
+		558553FD2FE34921004FB58D /* jetbrains-mono-variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558553FA2FE34921004FB58D /* jetbrains-mono-variable.ttf */; };
+		558553FE2FE34921004FB58D /* inter-variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558553F92FE34921004FB58D /* inter-variable.ttf */; };
+		558553FF2FE34921004FB58D /* jetbrains-mono-variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558553FA2FE34921004FB58D /* jetbrains-mono-variable.ttf */; };
+		558554002FE34921004FB58D /* inter-variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558553F92FE34921004FB58D /* inter-variable.ttf */; };
 		5573F6EE2F9F523D00E63A73 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5573F6ED2F9F523D00E63A73 /* GoogleService-Info.plist */; };
 		5573F6EF2F9F523D00E63A73 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5573F6ED2F9F523D00E63A73 /* GoogleService-Info.plist */; };
 		5573F6F02F9F523D00E63A73 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5573F6ED2F9F523D00E63A73 /* GoogleService-Info.plist */; };
@@ -153,6 +161,7 @@
 		978FC4742EEDF168002D0EB8 /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782BD2EDF284A00F9FA94 /* Platform.swift */; };
 		9B6C03E5ED4245A597C0FBE7 /* iOSConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */; };
 		9CC0E000AE3F165CA72FD465 /* AppLoggerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */; };
+		A1B2C3D42F4A000100000001 /* VPNToggleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D32F4A000100000001 /* VPNToggleView.swift */; };
 		A1B2C3D52EEDF501001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
 		A1B2C3D72EEDF503001A2B3C /* ConfigurationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */; };
@@ -284,6 +293,7 @@
 		443782BD2EDF284A00F9FA94 /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
 		443782C02EDF288A00F9FA94 /* TVMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVMainView.swift; sourceTree = "<group>"; };
 		443782C12EDF288A00F9FA94 /* TVNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVNetworksView.swift; sourceTree = "<group>"; };
+		E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVExitNodeSelector.swift; sourceTree = "<group>"; };
 		443782C22EDF288A00F9FA94 /* TVPeersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPeersView.swift; sourceTree = "<group>"; };
 		443782C32EDF288A00F9FA94 /* TVSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVSettingsView.swift; sourceTree = "<group>"; };
 		4483B26C2F19331A00BD9F66 /* TVColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVColors.swift; sourceTree = "<group>"; };
@@ -325,6 +335,7 @@
 		509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutesViewModel.swift; sourceTree = "<group>"; };
 		509CCD6B2BE90D0E00B7C2D8 /* PeerTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerTabView.swift; sourceTree = "<group>"; };
 		509CCD6D2BE90D2100B7C2D8 /* RouteTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteTabView.swift; sourceTree = "<group>"; };
+		E1D0E0022F80000200000001 /* ExitNodeSelectorCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExitNodeSelectorCard.swift; sourceTree = "<group>"; };
 		50A891172A792A15007C48FC /* NetBird.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NetBird.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		50A8911A2A792A15007C48FC /* NetBirdApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetBirdApp.swift; sourceTree = "<group>"; };
 		50A8911C2A792A15007C48FC /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
@@ -344,6 +355,8 @@
 		50E608232A79966600BAF09B /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		50E608252A79968500BAF09B /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
 		53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedUserDefaultsTests.swift; sourceTree = "<group>"; };
+		558553F92FE34921004FB58D /* inter-variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "inter-variable.ttf"; sourceTree = "<group>"; };
+		558553FA2FE34921004FB58D /* jetbrains-mono-variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "jetbrains-mono-variable.ttf"; sourceTree = "<group>"; };
 		5573F6ED2F9F523D00E63A73 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		55B5E81A2F39158200852AA7 /* InternetStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InternetStatusView.swift; sourceTree = "<group>"; };
 		55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NetBirdWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -355,6 +368,7 @@
 		91FA1F06D3375864C74EAB3B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		978FC46F2EEDF167002D0EB8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		9CD257EF78F038560FF3112D /* VPNOnDemandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNOnDemandView.swift; sourceTree = "<group>"; };
+		A1B2C3D32F4A000100000001 /* VPNToggleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNToggleView.swift; sourceTree = "<group>"; };
 		BB001A002F99000000000001 /* TroubleshootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TroubleshootView.swift; sourceTree = "<group>"; };
 		A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationProvider.swift; sourceTree = "<group>"; };
 		A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiOnDemandPolicy.swift; sourceTree = "<group>"; };
@@ -492,6 +506,7 @@
 				44F3E39A2EE2F9FA00C87FEC /* TVAuthView.swift */,
 				443782C02EDF288A00F9FA94 /* TVMainView.swift */,
 				443782C12EDF288A00F9FA94 /* TVNetworksView.swift */,
+				E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */,
 				443782C22EDF288A00F9FA94 /* TVPeersView.swift */,
 				443782C32EDF288A00F9FA94 /* TVSettingsView.swift */,
 				AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */,
@@ -592,6 +607,7 @@
 		50A891192A792A15007C48FC /* NetBird */ = {
 			isa = PBXGroup;
 			children = (
+				558553F82FE34913004FB58D /* Fonts */,
 				50245A3B2A7FD1CD0034792B /* Info.plist */,
 				50245A1B2A7BCF120034792B /* NetBird.entitlements */,
 				50E608082A79542D00BAF09B /* Source */,
@@ -670,9 +686,11 @@
 				506331FA2AF52AB900BC8F0E /* CustomLottieView.swift */,
 				506332012AF9415500BC8F0E /* CustomTextField.swift */,
 				50BB17402C30239400518BCA /* RouteCard.swift */,
+				E1D0E0022F80000200000001 /* ExitNodeSelectorCard.swift */,
 				E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */,
 				E1C0D0002F72000100000001 /* AppButton.swift */,
 				E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */,
+				A1B2C3D32F4A000100000001 /* VPNToggleView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -688,6 +706,15 @@
 				50E608012A7950C000BAF09B /* ViewModels */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		558553F82FE34913004FB58D /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				558553F92FE34921004FB58D /* inter-variable.ttf */,
+				558553FA2FE34921004FB58D /* jetbrains-mono-variable.ttf */,
+			);
+			path = Fonts;
 			sourceTree = "<group>";
 		};
 		651C942641826A7AA94ED369 /* NetBirdTests */ = {
@@ -927,6 +954,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				558553FB2FE34921004FB58D /* jetbrains-mono-variable.ttf in Resources */,
+				558553FC2FE34921004FB58D /* inter-variable.ttf in Resources */,
 				5573F6EE2F9F523D00E63A73 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -967,6 +996,8 @@
 				501B0DCD2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD12AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
 				501B0DDB2AE04DDE004BE7A7 /* button-connected.json in Resources */,
+				558553FD2FE34921004FB58D /* jetbrains-mono-variable.ttf in Resources */,
+				558553FE2FE34921004FB58D /* inter-variable.ttf in Resources */,
 				5573F6F02F9F523D00E63A73 /* GoogleService-Info.plist in Resources */,
 				501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
 				501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */,
@@ -977,6 +1008,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				558553FF2FE34921004FB58D /* jetbrains-mono-variable.ttf in Resources */,
+				558554002FE34921004FB58D /* inter-variable.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1066,6 +1099,7 @@
 				443782C92EDF293400F9FA94 /* NetBirdApp.swift in Sources */,
 				443782C62EDF288A00F9FA94 /* TVPeersView.swift in Sources */,
 				443782C72EDF288A00F9FA94 /* TVNetworksView.swift in Sources */,
+				E1E0F0012F90000100000001 /* TVExitNodeSelector.swift in Sources */,
 				44F3E39B2EE2F9FA00C87FEC /* TVAuthView.swift in Sources */,
 				4483B26D2F19331A00BD9F66 /* TVColors.swift in Sources */,
 				443782C82EDF288A00F9FA94 /* TVMainView.swift in Sources */,
@@ -1143,9 +1177,11 @@
 				509CCD6A2BE908C000B7C2D8 /* RoutesViewModel.swift in Sources */,
 				50A8911B2A792A15007C48FC /* NetBirdApp.swift in Sources */,
 				509CCD6E2BE90D2100B7C2D8 /* RouteTabView.swift in Sources */,
+				E1D0E0032F80000200000001 /* ExitNodeSelectorCard.swift in Sources */,
 				E1A0B0012F5E000100000001 /* EmptyTabPlaceholder.swift in Sources */,
 				E1C0D0012F72000100000001 /* AppButton.swift in Sources */,
 				E1B0C0012F60000100000001 /* NetworkWarningBanner.swift in Sources */,
+				A1B2C3D42F4A000100000001 /* VPNToggleView.swift in Sources */,
 				50BB17412C30239400518BCA /* RouteCard.swift in Sources */,
 				50216D932ACB2488009574C9 /* NetworkExtensionAdapter.swift in Sources */,
 				55B5E81B2F39158200852AA7 /* InternetStatusView.swift in Sources */,
