@@ -18,13 +18,21 @@ struct ProfileConnectionEntry: Codable, Equatable {
 
 /// Stores and retrieves last-known connection data (ip/fqdn/managementURL) per profile.
 /// Keyed by profile ID. Persisted as a JSON-encoded dictionary under a single UserDefaults key.
+///
+/// Backed by the App Group suite so the main app and the network extension see
+/// the same entries: the extension is the process that learns the peer's ip/fqdn
+/// and, on iOS, runs its own login. With the previous `.standard` backing each
+/// process kept its own copy, so a value written by one was invisible to the
+/// other.
 struct ProfileConnectionCache {
 
     private static let storageKey = "netbird_profiles_connection_data"
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(defaults: UserDefaults? = nil) {
+        let store = defaults ?? Preferences.sharedUserDefaults() ?? .standard
+        ProfileConnectionCache.migrateFromStandardIfNeeded(into: store)
+        self.defaults = store
     }
 
     // MARK: - Read
@@ -89,5 +97,21 @@ struct ProfileConnectionCache {
     private func persist(_ entries: [String: ProfileConnectionEntry]) {
         guard let data = try? JSONEncoder().encode(entries) else { return }
         defaults.set(data, forKey: Self.storageKey)
+    }
+
+    /// Moves entries written by an earlier app version into the App Group suite.
+    /// The standard-domain copy is removed afterwards, and a suite that already
+    /// holds data is never overwritten, so entries the extension has since
+    /// written cannot be clobbered by a stale app-local copy.
+    private static func migrateFromStandardIfNeeded(into store: UserDefaults) {
+        guard store != .standard else { return }
+
+        let standard = UserDefaults.standard
+        guard let legacy = standard.data(forKey: storageKey) else { return }
+
+        if store.data(forKey: storageKey) == nil {
+            store.set(legacy, forKey: storageKey)
+        }
+        standard.removeObject(forKey: storageKey)
     }
 }
