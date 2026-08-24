@@ -36,8 +36,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ios-client/NetBirdSDK.xcframework
-          # gomobile/xcode segments must match the pinned versions in this job
-          key: netbirdsdk-ios-${{ steps.core-sha.outputs.sha }}-${{ hashFiles('ios-client/build-go-lib.sh') }}-gomobile-20251113184115-xcode-26.1.1
+          # The xcode segment must match the version selected in this job. The
+          # gomobile/gobind pin comes from netbird-core/go.mod, which the core
+          # sha already captures.
+          key: netbirdsdk-ios-${{ steps.core-sha.outputs.sha }}-${{ hashFiles('ios-client/build-go-lib.sh') }}-xcode-26.1.1
 
       - name: Fetch netbird tags
         if: steps.sdk-cache.outputs.cache-hit != 'true'
@@ -50,10 +52,6 @@ jobs:
         with:
           go-version-file: 'ios-client/netbird-core/go.mod'
           cache-dependency-path: ios-client/netbird-core/go.sum
-
-      - name: Install gomobile
-        if: steps.sdk-cache.outputs.cache-hit != 'true'
-        run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
 
       - name: Build NetBirdSDK xcframework
         if: steps.sdk-cache.outputs.cache-hit != 'true'
