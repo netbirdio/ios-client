@@ -492,9 +492,9 @@ public class NetworkExtensionAdapter: ObservableObject {
         // — and be written back to — the wrong server. Pass the active profile's real
         // management URL so login targets the user's own server and the config keeps it.
         let activeProfileID = ProfileManager.shared.getActiveProfileID()
-        // managementURL(forID:) already recovers the URL from the config file, the
-        // logout-surviving server URL file, and the connection cache in turn. A nil
-        // result therefore means no server URL is persisted anywhere — which only
+        // managementURL(forID:) already recovers the URL from the config file and
+        // then the connection cache. A nil result therefore means no server URL
+        // is persisted anywhere — which only
         // happens on a genuine first-time login, where falling back to the default
         // cloud server is correct. For a re-login the config file exists and its URL
         // is preserved even when "" is passed (SDK's apply() only overrides the
@@ -544,9 +544,9 @@ public class NetworkExtensionAdapter: ObservableObject {
                             try? json.write(toFile: path, atomically: true, encoding: .utf8)
                         }
                     }
-                    // Persist the management URL to the dedicated, logout-surviving file and
-                    // the shared UserDefaults so the user's own server cannot later fall back
-                    // to the default cloud server (e.g. when the config file is recreated).
+                    // Record the management URL in the connection cache and the shared
+                    // UserDefaults so the user's own server is available to the next login
+                    // even before the config file can be read back.
                     if !activeManagementURL.isEmpty {
                         ProfileManager.shared.saveServerURL(activeManagementURL, forID: activeProfileID)
                         Preferences.saveManagementURL(activeManagementURL)
