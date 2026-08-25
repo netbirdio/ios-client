@@ -83,6 +83,15 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// (the loopback redirect is consumed by the Go HTTP server, not the auth session),
     /// so the SafariView callback alone cannot distinguish success from cancellation.
     public private(set) var loginSucceeded = false
+
+    /// True while a login whose browser session was cut short by backgrounding is
+    /// still allowed to finish. See deferLoginCancellation(onGiveUp:).
+    private var awaitingDeferredLogin = false
+
+    /// How long an interrupted login may still complete before it is abandoned and
+    /// its loopback port released. Comfortably covers a trip to an authenticator
+    /// app, and stays well inside the SDK flow's own five-minute deadline.
+    private static let deferredLoginGracePeriod: TimeInterval = 90
     #endif
     @Published var userCode: String?
 
@@ -557,8 +566,19 @@ public class NetworkExtensionAdapter: ObservableObject {
                     // observes it and starts the VPN instead of treating the browser
                     // dismissal as a cancellation.
                     DispatchQueue.main.async {
-                        self?.loginSucceeded = true
-                        self?.pendingAuth = nil
+                        guard let self else { return }
+                        self.loginSucceeded = true
+                        self.pendingAuth = nil
+
+                        // The browser session may already be gone: iOS ends it when the
+                        // app is backgrounded, which is exactly what happens when the
+                        // user leaves to approve an MFA push. Nobody is left to react to
+                        // the login, so start the tunnel here instead.
+                        if self.awaitingDeferredLogin {
+                            self.awaitingDeferredLogin = false
+                            self.logger.info("login completed after the browser session had ended, starting the tunnel")
+                            self.startVPNConnection(loginVerified: true)
+                        }
                     }
                 }
                 errListener.onSuccessCallback = { urlOpener.onSuccess?() }
@@ -604,6 +624,33 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
 
     #if os(iOS)
+    /// Keeps an interrupted login alive for a grace period instead of aborting it.
+    ///
+    /// iOS ends an ASWebAuthenticationSession with `canceledLogin` whenever the app is
+    /// backgrounded, and that is indistinguishable from the user tapping Cancel. Any
+    /// login that sends the user to another app — approving an MFA push, fetching a
+    /// one-time code — therefore looks like a cancellation. Acting on it tears down
+    /// the loopback server just as the IdP redirect carrying the authorization code is
+    /// about to reach it, and the browser is left reporting that it cannot connect.
+    ///
+    /// So let the flow run on. If the code arrives, onSuccess starts the tunnel; if
+    /// nothing arrives within the grace period, give up and free the port.
+    public func deferLoginCancellation(onGiveUp: @escaping () -> Void) {
+        guard !loginSucceeded else { return }
+
+        logger.info("deferLoginCancellation: browser session ended while backgrounded, letting the login finish")
+        awaitingDeferredLogin = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.deferredLoginGracePeriod) { [weak self] in
+            guard let self, self.awaitingDeferredLogin else { return }
+            self.awaitingDeferredLogin = false
+
+            guard !self.loginSucceeded else { return }
+            self.logger.info("deferLoginCancellation: nothing arrived within the grace period, abandoning the login")
+            onGiveUp()
+        }
+    }
+
     /// Aborts an in-progress interactive login (e.g. the user dismissed the OAuth
     /// browser without completing it). Stopping the SDK auth cancels its context,
     /// which unblocks the PKCE WaitToken and shuts down the loopback HTTP server so
@@ -611,6 +658,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// trying to bind the same port until the previous flow expires.
     public func cancelLogin() {
         logger.info("cancelLogin: aborting in-progress login")
+        awaitingDeferredLogin = false
         pendingAuth?.stop()
         pendingAuth = nil
         loginSucceeded = false

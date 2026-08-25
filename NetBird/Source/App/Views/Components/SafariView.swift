@@ -17,11 +17,20 @@ struct SafariView: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
     let url: URL
     /// Called when the web auth session ends (success, user cancel, or error).
+    ///
     /// Note: with the NetBird PKCE loopback flow the completion fires with a nil
     /// callbackURL even on success — the loopback redirect is consumed by the Go HTTP
     /// server, not the auth session — so the caller must determine success from the
     /// SDK's login callback, not from this handler.
-    let didFinish: () -> Void
+    ///
+    /// - Parameter interruptedByBackgrounding: true when the app was sent to the
+    ///   background while the session was open. iOS then ends the session with
+    ///   `canceledLogin`, which is indistinguishable from the user tapping Cancel,
+    ///   even though the login is still very much in progress. This happens on every
+    ///   login that requires leaving the app — switching to an authenticator app to
+    ///   approve a push, for instance. Treating it as a cancellation tears down the
+    ///   loopback server that the IdP redirect is about to arrive at.
+    let didFinish: (_ interruptedByBackgrounding: Bool) -> Void
 
     func makeUIViewController(context: Context) -> UIViewController {
         let vc = UIViewController()
@@ -41,9 +50,17 @@ struct SafariView: UIViewControllerRepresentable {
     class Coordinator: NSObject, ASWebAuthenticationPresentationContextProviding {
         let parent: SafariView
         private var session: ASWebAuthenticationSession?
+        private var backgroundObserver: NSObjectProtocol?
+        private var wentToBackground = false
 
         init(_ parent: SafariView) {
             self.parent = parent
+        }
+
+        deinit {
+            if let backgroundObserver {
+                NotificationCenter.default.removeObserver(backgroundObserver)
+            }
         }
 
         func startSession(from viewController: UIViewController) {
@@ -52,6 +69,16 @@ struct SafariView: UIViewControllerRepresentable {
             // follows it, so "http" works as a callback scheme in practice.
             // A proper long-term fix requires the SDK to expose a custom-scheme
             // redirect URI (e.g. "netbird://") for mobile OAuth flows.
+            // iOS ends the session with .canceledLogin when the app is backgrounded,
+            // so remember whether that happened before the completion fires.
+            backgroundObserver = NotificationCenter.default.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.wentToBackground = true
+            }
+
             let completionHandler: ASWebAuthenticationSession.CompletionHandler = { [weak self] callbackURL, error in
                 guard let self else { return }
 
@@ -61,10 +88,16 @@ struct SafariView: UIViewControllerRepresentable {
                     }
                     if let error = error as? ASWebAuthenticationSessionError,
                        error.code == .canceledLogin {
-                        print("User cancelled login")
+                        print(self.wentToBackground
+                              ? "Auth session ended after the app was backgrounded"
+                              : "User cancelled login")
+                    }
+                    if let backgroundObserver = self.backgroundObserver {
+                        NotificationCenter.default.removeObserver(backgroundObserver)
+                        self.backgroundObserver = nil
                     }
                     self.parent.isPresented = false
-                    self.parent.didFinish()
+                    self.parent.didFinish(self.wentToBackground)
                 }
             }
 
