@@ -121,6 +121,9 @@ struct TVMainView: View {
                     },
                     checkLoginDiagnostics: { completion in
                         viewModel.networkExtensionAdapter.checkLoginDiagnostics { diagnostics in
+                            if let diagnostics, diagnostics.isComplete {
+                                viewModel.networkExtensionAdapter.persistLoginConfiguration(from: diagnostics)
+                            }
                             #if DEBUG
                             print("TVMainView: checkLoginDiagnostics returned isComplete=\(diagnostics?.isComplete ?? false)")
                             #endif
@@ -557,5 +560,4 @@ struct TVMainView_Previews: PreviewProvider {
 }
 
 #endif
-
 

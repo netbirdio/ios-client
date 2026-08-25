@@ -44,8 +44,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// here instead of failing: the extension process stays alive so the main app can
     /// drive the device-auth flow via the "LoginTV" IPC message (IPC only reaches a
     /// running extension). The pending start is completed once loginTV succeeds.
+    /// Owns all access to the parked-start state. Network Extension lifecycle calls,
+    /// SDK callbacks, IPC handlers, and the watchdog can all run on different threads.
+    private let parkedStartQueue = DispatchQueue(label: "io.netbird.tv.parkedStart")
     private var pendingStartCompletion: ((Error?) -> Void)?
     private var pendingStartWatchdog: DispatchWorkItem?
+    private var pendingStartGeneration: UInt = 0
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         // CRITICAL: Log immediately to confirm startTunnel is being called
@@ -131,33 +135,60 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let parkedStartTimeout: TimeInterval = 5 * 60
 
     private func parkStartUntilLogin(completionHandler: @escaping (Error?) -> Void) {
-        pendingStartWatchdog?.cancel()
-        let previousCompletion = pendingStartCompletion
-        pendingStartCompletion = { error in
-            previousCompletion?(error)
-            completionHandler(error)
+        let watchdog = parkedStartQueue.sync { () -> DispatchWorkItem in
+            pendingStartWatchdog?.cancel()
+            pendingStartGeneration &+= 1
+            let generation = pendingStartGeneration
+            let previousCompletion = pendingStartCompletion
+            pendingStartCompletion = { error in
+                previousCompletion?(error)
+                completionHandler(error)
+            }
+
+            let watchdog = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                let didFail = self.failPendingStartIfParked(NSError(
+                    domain: "io.netbird.NetBirdTVNetworkExtension",
+                    code: 1001,
+                    userInfo: [NSLocalizedDescriptionKey: "Login required."]
+                ), expectedGeneration: generation)
+                if didFail {
+                    logger.error("startTunnel: parked start timed out waiting for login")
+                }
+            }
+            pendingStartWatchdog = watchdog
+            return watchdog
         }
 
-        let watchdog = DispatchWorkItem { [weak self] in
-            guard let self = self, self.pendingStartCompletion != nil else { return }
-            logger.error("startTunnel: parked start timed out waiting for login")
-            self.failPendingStartIfParked(NSError(
-                domain: "io.netbird.NetBirdTVNetworkExtension",
-                code: 1001,
-                userInfo: [NSLocalizedDescriptionKey: "Login required."]
-            ))
-        }
-        pendingStartWatchdog = watchdog
+        // Keep the watchdog off parkedStartQueue because it atomically claims state
+        // through takePendingStart(), which synchronously enters that queue.
         DispatchQueue.global().asyncAfter(deadline: .now() + Self.parkedStartTimeout, execute: watchdog)
+    }
+
+    /// Atomically claims the parked start. Only one competing lifecycle or SDK
+    /// callback can receive the completion closure.
+    private func takePendingStart(expectedGeneration: UInt? = nil) -> ((Error?) -> Void)? {
+        parkedStartQueue.sync {
+            if let expectedGeneration,
+               expectedGeneration != pendingStartGeneration {
+                return nil
+            }
+            pendingStartWatchdog?.cancel()
+            pendingStartWatchdog = nil
+            let pending = pendingStartCompletion
+            pendingStartCompletion = nil
+            return pending
+        }
+    }
+
+    private var hasPendingStart: Bool {
+        parkedStartQueue.sync { pendingStartCompletion != nil }
     }
 
     /// Called when the device-auth login succeeded: the adapter's client now holds the
     /// post-login config (set by NetBirdAdapter.loginAsync), so the tunnel can start.
     private func continuePendingStart() {
-        pendingStartWatchdog?.cancel()
-        pendingStartWatchdog = nil
-        guard let pending = pendingStartCompletion else { return }
-        pendingStartCompletion = nil
+        guard let pending = takePendingStart() else { return }
 
         guard let adapter = adapter else {
             pending(NSError(
@@ -178,12 +209,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
-    private func failPendingStartIfParked(_ error: Error) {
-        pendingStartWatchdog?.cancel()
-        pendingStartWatchdog = nil
-        guard let pending = pendingStartCompletion else { return }
-        pendingStartCompletion = nil
+    @discardableResult
+    private func failPendingStartIfParked(
+        _ error: Error,
+        expectedGeneration: UInt? = nil
+    ) -> Bool {
+        guard let pending = takePendingStart(expectedGeneration: expectedGeneration) else { return false }
         pending(error)
+        return true
     }
 
     private func configureLoginRequiredHandler(for adapter: NetBirdAdapter) {
@@ -494,7 +527,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         // While the start is parked (no config yet) a full needsLogin() would run a
         // doomed config-load + Login RPC on every poll tick — use the cached check.
-        let loginRequired = pendingStartCompletion != nil ? adapter.needsLoginCached() : adapter.needsLogin()
+        let loginRequired = hasPendingStart ? adapter.needsLoginCached() : adapter.needsLogin()
 
         // Also check if config file exists now (written after successful auth)
         let configPath = Preferences.configFile() ?? ""

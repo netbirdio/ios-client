@@ -49,6 +49,33 @@ class ConfigSSOListener: NSObject, NetBirdSDKSSOListenerProtocol {
     }
 }
 
+#if os(tvOS)
+/// Thread-safe generation token for cancelling the delayed device-auth IPC retry chain.
+private nonisolated final class LoginRetryState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var generation: UInt = 0
+
+    func begin() -> UInt {
+        lock.lock()
+        defer { lock.unlock() }
+        generation &+= 1
+        return generation
+    }
+
+    func isActive(_ candidate: UInt) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return generation == candidate
+    }
+
+    func cancel() {
+        lock.lock()
+        generation &+= 1
+        lock.unlock()
+    }
+}
+#endif
+
 public class NetworkExtensionAdapter: ObservableObject {
 
     private let logger = Logger(subsystem: "io.netbird.app", category: "NetworkExtensionAdapter")
@@ -63,6 +90,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     #if os(tvOS)
     var extensionID = "io.netbird.app.tv.extension"
     var extensionName = "NetBird"
+    private let loginRetryState = LoginRetryState()
     #else
     var extensionID = "io.netbird.app.NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
@@ -177,24 +205,10 @@ public class NetworkExtensionAdapter: ObservableObject {
     private func configureManager() async throws {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
 
-        // Remove stale configurations that share our display name but point at a
-        // different provider bundle — e.g. leftovers from an App Store install or a
-        // renamed bundle ID. Deleting an app does NOT remove its VPN configuration,
-        // and matching such a config by name makes startVPNTunnel target a provider
-        // that isn't installed ("The VPN app used by the VPN configuration is not
-        // installed").
-        for stale in managers where stale.localizedDescription == self.extensionName {
-            let providerID = (stale.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier
-            if providerID != self.extensionID {
-                logger.warning("configureManager: removing stale VPN config (provider=\(providerID ?? "nil", privacy: .public))")
-                do {
-                    try await stale.removeFromPreferences()
-                } catch {
-                    logger.error("configureManager: failed to remove stale VPN config: \(error.localizedDescription, privacy: .public)")
-                }
-            }
-        }
-
+        // The provider bundle ID is the stable identity. A matching display name may
+        // belong to another installed flavor, such as App Store and development builds.
+        // Leave foreign configurations untouched, including active connections. Exact
+        // provider matching below prevents one build from binding to another's profile.
         if let manager = managers.first(where: {
             $0.localizedDescription == self.extensionName &&
             ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.extensionID
@@ -600,6 +614,9 @@ public class NetworkExtensionAdapter: ObservableObject {
         #endif
 
         #if os(tvOS)
+        let retryState = loginRetryState
+        let retryGeneration = retryState.begin()
+
         // On tvOS the device-auth flow runs inside the extension (via the "LoginTV"
         // IPC), and IPC only reaches a RUNNING extension. Boot the tunnel first: when
         // login is required, the extension parks its startTunnel instead of failing,
@@ -615,6 +632,11 @@ public class NetworkExtensionAdapter: ObservableObject {
             let maxAttempts = 12
 
             func attempt() {
+                guard retryState.isActive(retryGeneration) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
                 attempts += 1
                 // Push the server config each round: early attempts may run before the
                 // extension process is up, and the extension needs the management URL
@@ -630,6 +652,11 @@ public class NetworkExtensionAdapter: ObservableObject {
                 }
 
                 self.login { urlString in
+                    guard retryState.isActive(retryGeneration) else {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+
                     if let urlString = urlString, !urlString.isEmpty {
                         continuation.resume(returning: urlString)
                     } else if attempts < maxAttempts {
@@ -650,6 +677,12 @@ public class NetworkExtensionAdapter: ObservableObject {
             self.login { urlString in
                 continuation.resume(returning: urlString)
             }
+        }
+        #endif
+        #if os(tvOS)
+        guard retryState.isActive(retryGeneration) else {
+            logger.info("performLogin: tvOS login IPC retry loop cancelled")
+            return
         }
         #endif
         guard let url = loginURLString, !url.isEmpty else {
@@ -725,6 +758,9 @@ public class NetworkExtensionAdapter: ObservableObject {
 
     
     func stop() -> Void {
+        #if os(tvOS)
+        loginRetryState.cancel()
+        #endif
         self.vpnManager?.connection.stopVPNTunnel()
     }
 
@@ -956,17 +992,6 @@ public class NetworkExtensionAdapter: ObservableObject {
                 if let response = response {
                     do {
                         let diagnostic = try self.decoder.decode(LoginDiagnostics.self, from: response)
-                        #if os(tvOS)
-                        if diagnostic.isComplete,
-                           let configJSON = diagnostic.configJSON,
-                           !configJSON.isEmpty {
-                            if Preferences.saveConfigToUserDefaults(configJSON) {
-                                self.logger.info("checkLoginDiagnostics: saved post-login config in main app")
-                            } else {
-                                self.logger.error("checkLoginDiagnostics: failed to save post-login config in main app")
-                            }
-                        }
-                        #endif
                         print("checkLoginDiagnostics: result=\(diagnostic.isComplete), isExecuting=\(diagnostic.isExecuting), loginRequired=\(diagnostic.loginRequired), configExists=\(diagnostic.configExists), stateExists=\(diagnostic.stateExists), lastResult=\(diagnostic.lastResult), lastError=\(diagnostic.lastError)")
                         completion(diagnostic)
                     } catch {
@@ -982,6 +1007,24 @@ public class NetworkExtensionAdapter: ObservableObject {
             print("checkLoginDiagnostics: Failed to send message - \(error)")
             completion(nil)
         }
+    }
+
+    /// Persists configuration returned by a completed tvOS device-auth flow.
+    /// Kept separate from checkLoginDiagnostics so polling remains a read-only operation.
+    func persistLoginConfiguration(from diagnostic: LoginDiagnostics) {
+        #if os(tvOS)
+        guard diagnostic.isComplete,
+              let configJSON = diagnostic.configJSON,
+              !configJSON.isEmpty else {
+            return
+        }
+
+        if Preferences.saveConfigToUserDefaults(configJSON) {
+            logger.info("persistLoginConfiguration: saved post-login config in main app")
+        } else {
+            logger.error("persistLoginConfiguration: failed to save post-login config in main app")
+        }
+        #endif
     }
 
     func getRoutes(completion: @escaping (RoutesSelectionDetails) -> Void) {
