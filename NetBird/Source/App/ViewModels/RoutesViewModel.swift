@@ -151,7 +151,8 @@ class RoutesViewModel: ObservableObject {
     func selectRoute(route: RoutesSelectionInfo) {
         guard let index = self.routeInfo.firstIndex(where: { $0.id == route.id }) else { return }
 
-        // `selected` is not @Published (kept for Codable); notify observers explicitly.
+        // `selected` is not @Published (kept for Codable); notify both observers explicitly.
+        self.objectWillChange.send()
         self.routeInfo[index].objectWillChange.send()
         self.routeInfo[index].selected = true
 
@@ -223,6 +224,7 @@ class RoutesViewModel: ObservableObject {
     
     func deselectRoute(route: RoutesSelectionInfo) {
         guard let index = self.routeInfo.firstIndex(where: { $0.id == route.id }) else { return }
+        self.objectWillChange.send()
         self.routeInfo[index].objectWillChange.send()
         self.routeInfo[index].selected = false
         // Reconcile with the core's real state, mirroring selectRoute.
