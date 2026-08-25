@@ -19,6 +19,9 @@ struct TVSettingsView: View {
     @EnvironmentObject var viewModel: ViewModel
     @State private var showPreSharedKeyAlert = false
     @State private var showDocsQRCode = false
+    @State private var showUploadKeyQR = false
+    @State private var uploadKeyForQR = ""
+    @State private var showDebugLog = false
 
     var body: some View {
         ZStack {
@@ -56,13 +59,6 @@ struct TVSettingsView: View {
 
                         TVSettingsSection(title: "Advanced") {
                             TVSettingsToggleRow(
-                                icon: "ant.fill",
-                                title: "Trace Logging",
-                                subtitle: "Enable detailed logs for troubleshooting",
-                                isOn: $viewModel.traceLogsEnabled
-                            )
-
-                            TVSettingsToggleRow(
                                 icon: "shield.lefthalf.filled",
                                 title: "Rosenpass",
                                 subtitle: "Post-quantum secure encryption",
@@ -89,6 +85,45 @@ struct TVSettingsView: View {
                                     }
                                 ),
                                 isDisabled: !viewModel.rosenpassEnabled
+                            )
+                        }
+
+                        TVSettingsSection(title: "Troubleshoot") {
+                            TVSettingsToggleRow(
+                                icon: "doc.plaintext",
+                                title: "Engine Logs",
+                                subtitle: "Write engine logs to a file for the Debug Log viewer",
+                                isOn: $viewModel.engineLogsEnabled
+                            )
+
+                            TVSettingsToggleRow(
+                                icon: "ant.fill",
+                                title: "Trace Logging",
+                                subtitle: "Enable detailed engine logs for troubleshooting",
+                                isOn: $viewModel.traceLogsEnabled,
+                                isDisabled: !viewModel.engineLogsEnabled
+                            )
+
+                            TVSettingsToggleRow(
+                                icon: "eye.slash.fill",
+                                title: "Anonymize Bundle",
+                                subtitle: "Hide IPs, domains, and private keys in uploads",
+                                isOn: $viewModel.anonymizeDebugBundle
+                            )
+
+                            TVTroubleshootBundleRow(
+                                viewModel: viewModel,
+                                onShowQR: { key in
+                                    uploadKeyForQR = key
+                                    showUploadKeyQR = true
+                                }
+                            )
+
+                            TVSettingsRow(
+                                icon: "doc.text.magnifyingglass",
+                                title: "Debug Log",
+                                subtitle: "View engine logs from the VPN extension",
+                                action: { showDebugLog = true }
                             )
                         }
 
@@ -159,12 +194,19 @@ struct TVSettingsView: View {
                 TVRosenpassChangedAlert(viewModel: viewModel)
             }
 
+            if viewModel.showLogLevelChangedAlert {
+                TVLogLevelChangedAlert(viewModel: viewModel)
+            }
+
         }
         .onAppear {
             // Load settings from storage to sync UI with actual values
             viewModel.loadRosenpassSettings()
             viewModel.loadPreSharedKey()
             viewModel.loadIPv6Settings()
+        }
+        .onDisappear {
+            viewModel.debugBundleUploadState = .idle
         }
         .sheet(isPresented: $showDocsQRCode) {
             TVQRCodeSheet(
@@ -173,11 +215,21 @@ struct TVSettingsView: View {
                 subtitle: "Scan this QR code to visit our docs"
             )
         }
+        .sheet(isPresented: $showUploadKeyQR) {
+            TVQRCodeSheet(
+                url: uploadKeyForQR,
+                title: "Upload Key",
+                subtitle: "Scan or note this key for NetBird support"
+            )
+        }
         .fullScreenCover(isPresented: $showPreSharedKeyAlert) {
             TVPreSharedKeyAlert(
                 viewModel: viewModel,
                 isPresented: $showPreSharedKeyAlert
             )
+        }
+        .fullScreenCover(isPresented: $showDebugLog) {
+            TVDebugLogView(viewModel: viewModel)
         }
     }
     
@@ -366,6 +418,114 @@ struct TVSettingsInfoRow: View {
         }
         .buttonStyle(TVSettingsButtonStyle())
         .focused($isFocused)
+    }
+}
+
+/// Upload debug bundle row — mirrors iOS TroubleshootView actions for the remote.
+struct TVTroubleshootBundleRow: View {
+    @ObservedObject var viewModel: ViewModel
+    let onShowQR: (String) -> Void
+
+    var body: some View {
+        switch viewModel.debugBundleUploadState {
+        case .idle:
+            TVSettingsRow(
+                icon: "arrow.up.doc.fill",
+                title: "Upload Debug Bundle",
+                subtitle: "Send logs to NetBird support",
+                action: { viewModel.uploadDebugBundle() }
+            )
+        case .uploading:
+            TVSettingsInfoRow(
+                icon: "arrow.up.doc.fill",
+                title: "Uploading…",
+                subtitle: "Generating debug bundle"
+            )
+        case .done(let key):
+            VStack(spacing: 4) {
+                TVSettingsInfoRow(
+                    icon: "checkmark.circle.fill",
+                    title: "Upload Key",
+                    subtitle: key
+                )
+                TVSettingsRow(
+                    icon: "qrcode",
+                    title: "Show Key QR",
+                    subtitle: "Scan with your phone to copy the key",
+                    action: { onShowQR(key) }
+                )
+                TVSettingsRow(
+                    icon: "arrow.clockwise",
+                    title: "Create New Bundle",
+                    subtitle: "Upload another debug bundle",
+                    action: { viewModel.debugBundleUploadState = .idle }
+                )
+            }
+        case .error(let message):
+            VStack(spacing: 4) {
+                TVSettingsInfoRow(
+                    icon: "exclamationmark.triangle.fill",
+                    title: "Upload Failed",
+                    subtitle: message
+                )
+                TVSettingsRow(
+                    icon: "arrow.clockwise",
+                    title: "Try Again",
+                    subtitle: "Retry debug bundle upload",
+                    action: { viewModel.debugBundleUploadState = .idle }
+                )
+            }
+        }
+    }
+}
+
+struct TVLogLevelChangedAlert: View {
+    @ObservedObject var viewModel: ViewModel
+
+    private enum FocusedButton {
+        case ok
+    }
+
+    @FocusState private var focusedButton: FocusedButton?
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+
+            VStack(spacing: 40) {
+                Image(systemName: "ant.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.orange)
+
+                Text("Logging Settings Changed")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(TVColors.textAlert)
+
+                Text("Logging changes will take effect after next connect.")
+                    .font(.system(size: 24))
+                    .foregroundColor(TVColors.textAlert)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 500)
+
+                TVAlertButton(
+                    title: "OK",
+                    style: .filled(Color.accentColor),
+                    isFocused: focusedButton == .ok,
+                    action: { viewModel.showLogLevelChangedAlert = false },
+                    isSemibold: true
+                )
+                .focused($focusedButton, equals: .ok)
+            }
+            .padding(60)
+            .background(
+                RoundedRectangle(cornerRadius: 30)
+                    .fill(TVColors.bgSideDrawer)
+            )
+        }
+        .onAppear {
+            focusedButton = .ok
+        }
     }
 }
 
@@ -780,6 +940,109 @@ struct TVSettingsView_Previews: PreviewProvider {
     static var previews: some View {
         TVSettingsView()
             .environmentObject(ViewModel())
+    }
+}
+
+/// Full-screen engine log viewer. Dismiss with the remote's Menu/Back button.
+///
+/// The log is split into focusable chunks inside a ScrollView — the same native
+/// focus-driven scrolling every other tvOS screen in this app uses. Pressing
+/// down from Refresh enters the log; up/down moves chunk-by-chunk and tvOS
+/// automatically scrolls to keep the focused chunk visible. (A UITextView
+/// bridged via UIViewRepresentable never receives focus from SwiftUI on tvOS,
+/// so it can never scroll — that approach cannot work here.)
+struct TVDebugLogView: View {
+    @ObservedObject var viewModel: ViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    private static let linesPerChunk = 8
+
+    private var chunks: [LogChunk] {
+        let lines = viewModel.debugLogText.split(separator: "\n", omittingEmptySubsequences: false)
+        var result: [LogChunk] = []
+        var start = 0
+        while start < lines.count {
+            let end = min(start + Self.linesPerChunk, lines.count)
+            result.append(LogChunk(id: result.count, text: lines[start..<end].joined(separator: "\n")))
+            start = end
+        }
+        return result
+    }
+
+    var body: some View {
+        ZStack {
+            TVGradientBackground()
+
+            VStack(alignment: .leading, spacing: 24) {
+                HStack {
+                    Text("Debug Log")
+                        .font(.system(size: 40, weight: .bold))
+                        .foregroundColor(TVColors.textPrimary)
+
+                    Spacer()
+
+                    Button("Refresh") {
+                        viewModel.fetchExtensionDebugLog()
+                    }
+                }
+
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 4) {
+                            ForEach(chunks) { chunk in
+                                TVLogChunkView(text: chunk.text)
+                                    .id(chunk.id)
+                            }
+                        }
+                        .padding(24)
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.black.opacity(0.35))
+                    )
+                    .onChange(of: viewModel.debugLogText) {
+                        // Jump to the newest lines after a (re)load.
+                        if let last = chunks.last {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                }
+            }
+            .padding(60)
+        }
+        .onAppear {
+            viewModel.fetchExtensionDebugLog()
+        }
+        .onExitCommand {
+            dismiss()
+        }
+    }
+}
+
+private struct LogChunk: Identifiable {
+    let id: Int
+    let text: String
+}
+
+/// One focusable slice of the log. The focused chunk is highlighted; moving
+/// focus between chunks is what scrolls the enclosing ScrollView.
+private struct TVLogChunkView: View {
+    let text: String
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 20, design: .monospaced))
+            .foregroundColor(TVColors.textPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isFocused ? Color.white.opacity(0.15) : Color.clear)
+            )
+            .focusable()
+            .focused($isFocused)
     }
 }
 

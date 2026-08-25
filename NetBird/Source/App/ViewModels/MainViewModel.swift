@@ -117,6 +117,19 @@ class ViewModel: ObservableObject {
         }
     }
 
+    /// Master switch for engine log file output. When off, the extension writes
+    /// no log file at all, so trace sessions are not mixed into always-on logs.
+    @Published var engineLogsEnabled: Bool {
+        didSet {
+            self.showLogLevelChangedAlert = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                self.showLogLevelChangedAlert = false
+            }
+            UserDefaults.standard.set(engineLogsEnabled, forKey: "engineLogsEnabled")
+            UserDefaults.standard.synchronize()
+        }
+    }
+
     // Troubleshoot / Debug Bundle
     enum DebugBundleUploadState {
         case idle
@@ -131,6 +144,9 @@ class ViewModel: ObservableObject {
         }
     }
     @Published var debugBundleUploadState: DebugBundleUploadState = .idle
+    #if os(tvOS)
+    @Published var debugLogText: String = ""
+    #endif
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
     @Published var disableIPv6 = false
@@ -191,6 +207,7 @@ class ViewModel: ObservableObject {
         self.networkExtensionAdapter = networkExtensionAdapter
         let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
         self.traceLogsEnabled = logLevel == "TRACE"
+        self.engineLogsEnabled = (UserDefaults.standard.object(forKey: "engineLogsEnabled") as? Bool) ?? true
         self.anonymizeDebugBundle = UserDefaults.standard.bool(forKey: "netbird.anonymizeDebugBundle")
         self.peerViewModel = PeerViewModel()
         self.routeViewModel = RoutesViewModel(networkExtensionAdapter: networkExtensionAdapter)
@@ -1150,6 +1167,17 @@ class ViewModel: ObservableObject {
         }
     }
 
+    #if os(tvOS)
+    func fetchExtensionDebugLog() {
+        debugLogText = "Loading…"
+        networkExtensionAdapter.getExtensionLog { [weak self] text in
+            DispatchQueue.main.async {
+                self?.debugLogText = text.isEmpty ? "(empty log)" : text
+            }
+        }
+    }
+    #endif
+
     private static nonisolated func directDebugBundleUpload(anonymize: Bool) -> DebugBundleUploadState {
         #if os(iOS)
         guard let configPath = Preferences.configFile(),
@@ -1157,9 +1185,28 @@ class ViewModel: ObservableObject {
             return .error(message: "Configuration not available")
         }
         let cacheDir = Preferences.cacheDirectory()
-        let logPath = AppLogger.getGoLogFileURL()?.path ?? ""
+        let logPath = AppLogger.getGoLogFileURL()?.path ?? Preferences.logFilePath() ?? ""
         guard let client = NetBirdSDKNewClient(configPath, statePath, cacheDir, logPath, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
             return .error(message: "Failed to initialize client")
+        }
+        var sdkError: NSError?
+        let key = client.debugBundle(anonymize, anonymizeLevel: NetBirdSDKAnonymizeLevelDefault, error: &sdkError)
+        if let sdkError {
+            return .error(message: sdkError.localizedDescription)
+        }
+        return .done(key: key)
+        #elseif os(tvOS)
+        let cacheDir = Preferences.cacheDirectory()
+        let logPath = Preferences.logFilePath() ?? ""
+        guard let client = NetBirdSDKNewClient("", "", cacheDir, logPath, Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+            return .error(message: "Failed to initialize client")
+        }
+        if let configJSON = Preferences.loadConfigFromUserDefaults() {
+            do {
+                try client.setConfigFromJSON(configJSON)
+            } catch {
+                // Continue — a partial bundle is still useful for support.
+            }
         }
         var sdkError: NSError?
         let key = client.debugBundle(anonymize, anonymizeLevel: NetBirdSDKAnonymizeLevelDefault, error: &sdkError)

@@ -110,10 +110,15 @@ class Preferences {
     }
 
     static func logFilePath() -> String? {
+        #if os(tvOS)
+        // App Group container is not writable from the extension on tvOS.
+        return URL(fileURLWithPath: cacheDirectory()).appendingPathComponent("logfile.log").path
+        #else
         return FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)?
             .appendingPathComponent("logfile.log")
             .path
+        #endif
     }
 
     // MARK: - App-Local UserDefaults Storage
