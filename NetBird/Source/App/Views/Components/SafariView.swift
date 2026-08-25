@@ -83,8 +83,21 @@ struct SafariView: UIViewControllerRepresentable {
                 )
             }
 
-            // Ephemeral = no shared cookies, fresh login every time
-            session.prefersEphemeralWebBrowserSession = true
+            // Deliberately NOT ephemeral. An ephemeral session starts with an empty
+            // cookie jar on every login, and Keycloak's login theme reacts to that by
+            // starting the session poll in authChecker.js — it only skips it when a
+            // KEYCLOAK_SESSION cookie is already present ("if (initialSession) return").
+            // That poll is what races the redirect carrying the authorization code and
+            // bounces the browser to /login-actions/restart, which answers
+            // ALREADY_LOGGED_IN and fails the login with authentication_expired. Safari
+            // on iOS never fires beforeunload (WebKit bug 219102), so Keycloak's own
+            // safeguard against that race does not apply here.
+            //
+            // Persisting cookies keeps the IdP session across logins, so the poll never
+            // starts from the second login onwards. The trade-off is that a logout no
+            // longer clears the IdP session for the next profile, which matters for
+            // multi-profile setups against different accounts.
+            session.prefersEphemeralWebBrowserSession = false
             session.presentationContextProvider = self
             self.session = session
             session.start()
