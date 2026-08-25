@@ -88,6 +88,12 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// still allowed to finish. See deferLoginCancellation(onGiveUp:).
     private var awaitingDeferredLogin = false
 
+    /// Identifies the current login attempt. Bumped whenever an attempt starts or is
+    /// abandoned, so that a grace period armed for one attempt cannot act on another:
+    /// a user who retries within the grace period would otherwise have the newer login
+    /// cancelled by the older timer.
+    private var loginAttempt = 0
+
     /// How long an interrupted login may still complete before it is abandoned and
     /// its loopback port released. Comfortably covers a trip to an authenticator
     /// app, and stays well inside the SDK flow's own five-minute deadline.
@@ -521,6 +527,11 @@ public class NetworkExtensionAdapter: ObservableObject {
            let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
             self.pendingAuth = auth
             self.loginSucceeded = false
+
+            // A new attempt supersedes any grace period still running for a previous one.
+            loginAttempt &+= 1
+            awaitingDeferredLogin = false
+            let attempt = loginAttempt
             let urlOpener = MainAppLoginURLOpener()
             let errListener = MainAppLoginErrListener()
 
@@ -574,7 +585,7 @@ public class NetworkExtensionAdapter: ObservableObject {
                         // app is backgrounded, which is exactly what happens when the
                         // user leaves to approve an MFA push. Nobody is left to react to
                         // the login, so start the tunnel here instead.
-                        if self.awaitingDeferredLogin {
+                        if self.awaitingDeferredLogin, self.loginAttempt == attempt {
                             self.awaitingDeferredLogin = false
                             self.logger.info("login completed after the browser session had ended, starting the tunnel")
                             self.startVPNConnection(loginVerified: true)
@@ -640,9 +651,11 @@ public class NetworkExtensionAdapter: ObservableObject {
 
         logger.info("deferLoginCancellation: browser session ended while backgrounded, letting the login finish")
         awaitingDeferredLogin = true
+        let attempt = loginAttempt
 
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.deferredLoginGracePeriod) { [weak self] in
-            guard let self, self.awaitingDeferredLogin else { return }
+            // Only act while this is still the attempt the grace period was armed for.
+            guard let self, self.awaitingDeferredLogin, self.loginAttempt == attempt else { return }
             self.awaitingDeferredLogin = false
 
             guard !self.loginSucceeded else { return }
@@ -658,6 +671,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// trying to bind the same port until the previous flow expires.
     public func cancelLogin() {
         logger.info("cancelLogin: aborting in-progress login")
+        loginAttempt &+= 1
         awaitingDeferredLogin = false
         pendingAuth?.stop()
         pendingAuth = nil
