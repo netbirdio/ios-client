@@ -99,19 +99,43 @@ struct ProfileConnectionCache {
         defaults.set(data, forKey: Self.storageKey)
     }
 
-    /// Moves entries written by an earlier app version into the App Group suite.
-    /// The standard-domain copy is removed afterwards, and a suite that already
-    /// holds data is never overwritten, so entries the extension has since
-    /// written cannot be clobbered by a stale app-local copy.
-    private static func migrateFromStandardIfNeeded(into store: UserDefaults) {
-        guard store != .standard else { return }
+    /// Merges entries written by an earlier app version into the App Group suite.
+    /// Suite values win field by field — the suite is strictly newer than the
+    /// legacy copy, which is frozen at upgrade time — and legacy values only fill
+    /// fields the suite holds no value for (e.g. ip/fqdn on an entry the
+    /// extension seeded with just the URL before the app first ran). The
+    /// standard-domain copy is removed only after a verified read-back of the
+    /// merged data, so a write that silently fails (e.g. missing App Group
+    /// entitlement) cannot destroy the last remaining copy; the migration then
+    /// retries on the next init.
+    static func migrateFromStandardIfNeeded(from standard: UserDefaults = .standard, into store: UserDefaults) {
+        guard store != standard else { return }
+        guard let legacyData = standard.data(forKey: storageKey) else { return }
 
-        let standard = UserDefaults.standard
-        guard let legacy = standard.data(forKey: storageKey) else { return }
+        let decoder = JSONDecoder()
+        let legacy = (try? decoder.decode([String: ProfileConnectionEntry].self, from: legacyData)) ?? [:]
+        let suite = store.data(forKey: storageKey)
+            .flatMap { try? decoder.decode([String: ProfileConnectionEntry].self, from: $0) } ?? [:]
 
-        if store.data(forKey: storageKey) == nil {
-            store.set(legacy, forKey: storageKey)
+        var merged = suite
+        for (id, legacyEntry) in legacy {
+            if var entry = merged[id] {
+                if entry.ip.isEmpty { entry.ip = legacyEntry.ip }
+                if entry.fqdn.isEmpty { entry.fqdn = legacyEntry.fqdn }
+                if entry.managementURL?.isEmpty != false { entry.managementURL = legacyEntry.managementURL }
+                if entry.ipv6?.isEmpty != false { entry.ipv6 = legacyEntry.ipv6 }
+                merged[id] = entry
+            } else {
+                merged[id] = legacyEntry
+            }
         }
+
+        guard let mergedData = try? JSONEncoder().encode(merged) else { return }
+        store.set(mergedData, forKey: storageKey)
+
+        guard let readBack = store.data(forKey: storageKey),
+              (try? decoder.decode([String: ProfileConnectionEntry].self, from: readBack)) == merged
+        else { return }
         standard.removeObject(forKey: storageKey)
     }
 }
