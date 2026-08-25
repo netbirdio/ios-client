@@ -163,6 +163,7 @@ struct TVAuthView: View {
                     // Cancel button
                     Button(action: {
                         pollTimer?.invalidate()
+                        pollTimer = nil
                         onCancel?()
                         isPresented = false
                     }) {
@@ -192,6 +193,7 @@ struct TVAuthView: View {
         }
         .onDisappear {
             pollTimer?.invalidate()
+            pollTimer = nil
         }
     }
 
@@ -280,17 +282,21 @@ struct TVAuthView: View {
                     guard let diag = diag else { return }
 
                     if let errorMsg = diag.friendlyError {
+                        guard timer.isValid else { return }
                         #if DEBUG
                         print("TVAuthView: Login error detected: \(errorMsg)")
                         #endif
                         self.errorMessage = errorMsg
                         timer.invalidate()
+                        self.pollTimer = nil
                         onErrorHandler?(errorMsg)
                     } else if diag.isComplete {
+                        guard timer.isValid else { return }
                         #if DEBUG
                         print("TVAuthView: Login detected as complete, dismissing auth view")
                         #endif
                         timer.invalidate()
+                        self.pollTimer = nil
                         onCompleteHandler?()
                     }
                 }
@@ -310,9 +316,12 @@ struct TVAuthView: View {
                 print("TVAuthView: Initial check - login complete = \(isComplete)")
                 #endif
                 if isComplete {
+                    guard timer.isValid else { return }
                     #if DEBUG
                     print("TVAuthView: Login already complete, dismissing auth view")
                     #endif
+                    timer.invalidate()
+                    self.pollTimer = nil
                     onCompleteHandler?()
                 }
             }
@@ -344,4 +353,3 @@ struct TVAuthView_Previews: PreviewProvider {
 }
 
 #endif
-
