@@ -913,16 +913,17 @@ public class NetworkExtensionAdapter: ObservableObject {
             #else
             // Include active profile paths so the extension can reinitialize
             // its adapter for the correct profile before performing login.
-            // Also include the cached management URL so the extension can restore
+            // Also include the management URL — resolved from the profile config,
+            // falling back to the connection cache — so the extension can restore
             // a missing config (e.g. after logout) and use the correct server.
             // Format: "Login:<configPath>|<statePath>[|<managementURL>]"
             var messageString = "Login"
             if let configPath = Preferences.configFile(), let statePath = Preferences.stateFile() {
                 messageString = "Login:\(configPath)|\(statePath)"
                 let activeID = ProfileManager.shared.getActiveProfileID()
-                if let cachedURL = ProfileConnectionCache().managementURL(forID: activeID),
-                   !cachedURL.isEmpty {
-                    messageString += "|\(cachedURL)"
+                if let managementURL = ProfileManager.shared.managementURL(forID: activeID),
+                   !managementURL.isEmpty {
+                    messageString += "|\(managementURL)"
                 }
             }
             #endif
