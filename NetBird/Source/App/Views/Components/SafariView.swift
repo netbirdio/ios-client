@@ -57,12 +57,18 @@ struct SafariView: UIViewControllerRepresentable {
             self.parent = parent
         }
 
+        /// Drops the backgrounding observer if the coordinator goes away before the
+        /// auth session completes.
         deinit {
             if let backgroundObserver {
                 NotificationCenter.default.removeObserver(backgroundObserver)
             }
         }
 
+        /// Presents the web authentication session for the login URL.
+        ///
+        /// - Parameter viewController: the just-presented controller the session is
+        ///   started from, once it is part of the window hierarchy.
         func startSession(from viewController: UIViewController) {
             // The NetBird SDK uses a PKCE flow with an http://localhost redirect URI.
             // ASWebAuthenticationSession intercepts that navigation before the browser

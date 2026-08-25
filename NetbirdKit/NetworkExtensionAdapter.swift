@@ -490,6 +490,13 @@ public class NetworkExtensionAdapter: ObservableObject {
         var observer: NSObjectProtocol?
     }
 
+    /// Runs the interactive OAuth login and hands the resulting URL to the browser.
+    ///
+    /// On iOS the flow deliberately runs in the main app rather than in the network
+    /// extension, whose context is cancelled when the tunnel is torn down after a
+    /// login-required failure — that would kill the loopback server before the OAuth
+    /// callback could reach it. Falls back to IPC with the extension on tvOS, or if
+    /// the SDK auth cannot be set up here.
     private func performLogin() async {
         #if os(iOS)
         // Run the OAuth flow in the main-app process using NetBirdSDKAuth.
