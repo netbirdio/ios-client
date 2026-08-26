@@ -174,8 +174,8 @@ class ServerViewModel : ObservableObject {
                             // profile's netbird.cfg. Also persist it to the dedicated,
                             // logout-surviving server URL file and shared UserDefaults so
                             // the chosen server cannot later fall back to the default cloud.
-                            let profile = ProfileManager.shared.getActiveProfileName()
-                            ProfileManager.shared.saveServerURL(managementServerUrl, for: profile)
+                            let profileID = ProfileManager.shared.getActiveProfileID()
+                            ProfileManager.shared.saveServerURL(managementServerUrl, forID: profileID)
                             Preferences.saveManagementURL(managementServerUrl)
                             #endif
                             self?.isOperationSuccessful = true

@@ -35,7 +35,7 @@ struct ProfilesListView: View {
                             Text(active.name)
                                 .font(.body.bold())
                                 .foregroundColor(Color("TextPrimary"))
-                            if let url = ProfileManager.shared.managementURL(for: active.name) {
+                            if let url = ProfileManager.shared.managementURL(forID: active.id) {
                                 Text(url)
                                     .font(.footnote)
                                     .foregroundColor(Color("TextSecondary"))
@@ -78,7 +78,7 @@ struct ProfilesListView: View {
                                 Text(profile.name)
                                     .font(.body)
                                     .foregroundColor(Color("TextPrimary"))
-                                if let url = ProfileManager.shared.managementURL(for: profile.name) {
+                                if let url = ProfileManager.shared.managementURL(forID: profile.id) {
                                     Text(url)
                                         .font(.footnote)
                                         .foregroundColor(Color("TextSecondary"))
@@ -86,7 +86,7 @@ struct ProfilesListView: View {
                             }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            if profile.name != "default" {
+                            if !profile.isDefault {
                                 Button(role: .destructive) {
                                     selectedProfile = profile
                                     showRemoveAlert = true
@@ -169,11 +169,11 @@ struct ProfilesListView: View {
         viewModel.performClose()
 
         do {
-            try ProfileManager.shared.switchProfile(profile.name)
-            viewModel.switchConnectionInfo(to: profile.name)
+            try ProfileManager.shared.switchProfile(id: profile.id)
+            viewModel.switchConnectionInfo(toID: profile.id)
             viewModel.reloadConfiguration()
             viewModel.activeProfileName = ProfileManager.shared.getActiveProfileName()
-            if let url = ProfileManager.shared.managementURL(for: profile.name) {
+            if let url = ProfileManager.shared.managementURL(forID: profile.id) {
                 Preferences.saveManagementURL(url)
             }
             loadProfiles()
@@ -185,7 +185,7 @@ struct ProfilesListView: View {
 
     private func removeProfile(_ profile: Profile) {
         do {
-            try ProfileManager.shared.removeProfile(profile.name)
+            try ProfileManager.shared.removeProfile(id: profile.id)
             loadProfiles()
         } catch {
             errorMessage = error.localizedDescription
@@ -198,7 +198,7 @@ struct ProfilesListView: View {
             viewModel.performClose()
         }
         do {
-            try ProfileManager.shared.logoutProfile(profile.name)
+            try ProfileManager.shared.logoutProfile(id: profile.id)
             loadProfiles()
         } catch {
             errorMessage = error.localizedDescription
