@@ -67,9 +67,6 @@ jobs:
           go-version-file: 'ios-client/netbird-core/go.mod'
           cache-dependency-path: ios-client/netbird-core/go.sum
 
-      - name: Install gomobile
-        run: go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20251113184115-a159579294ab
-
       - name: Build NetBirdSDK xcframework
         working-directory: ios-client
         run: ./build-go-lib.sh
