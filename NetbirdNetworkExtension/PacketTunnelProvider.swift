@@ -640,18 +640,30 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func selectRoute(id: String) {
-        guard let adapter = adapter else { return }
+        guard let adapter = adapter else {
+            AppLogger.shared.log("selectRoute(\(id)): no adapter")
+            return
+        }
+        AppLogger.shared.log("selectRoute(\(id)): calling Go")
+        TunnelStateProbe.snapshot("before-selectRoute")
         do {
             try adapter.client.selectRoute(id)
+            AppLogger.shared.log("selectRoute(\(id)): Go returned OK")
         } catch {
             AppLogger.shared.log("Failed to select route: \(error.localizedDescription)")
         }
     }
 
     func deselectRoute(id: String) {
-        guard let adapter = adapter else { return }
+        guard let adapter = adapter else {
+            AppLogger.shared.log("deselectRoute(\(id)): no adapter")
+            return
+        }
+        AppLogger.shared.log("deselectRoute(\(id)): calling Go")
+        TunnelStateProbe.snapshot("before-deselectRoute")
         do {
             try adapter.client.deselectRoute(id)
+            AppLogger.shared.log("deselectRoute(\(id)): Go returned OK")
         } catch {
             AppLogger.shared.log("Failed to deselect route: \(error.localizedDescription)")
         }
@@ -710,6 +722,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             v6Desc = "NIL"
         }
         AppLogger.shared.log("setTunnelSettings: calling setTunnelNetworkSettings with v6=\(v6Desc)")
+        TunnelStateProbe.snapshot("before-apply")
 
         let startedAt = Date()
         setTunnelNetworkSettings(tunnelNetworkSettings) { error in
@@ -718,10 +731,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 let nsError = error as NSError
                 AppLogger.shared.log("setTunnelSettings: FAILED after \(elapsed)s v6=\(v6Desc) domain=\(nsError.domain) code=\(nsError.code)")
                 AppLogger.shared.log("Error assigning routes: \(error.localizedDescription)")
+                TunnelStateProbe.snapshot("after-failed-apply")
                 return
             }
             AppLogger.shared.log("setTunnelSettings: OK after \(elapsed)s v6=\(v6Desc)")
             AppLogger.shared.log("Routes set successfully.")
+            TunnelStateProbe.snapshotAfterSettle("after-apply")
         }
     }
 }

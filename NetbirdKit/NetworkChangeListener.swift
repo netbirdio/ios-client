@@ -52,11 +52,17 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
     func onNetworkChanged(_ p0: String?) {
         callbackQueue.sync {
             guard self.isValid, let tunnelManager = self.tunnelManager else {
+                AppLogger.shared.log("onNetworkChanged: DROPPED (isValid=\(self.isValid) tunnelManager=\(self.tunnelManager == nil ? "nil" : "set")) raw=\(p0 ?? "nil")")
                 return
             }
             let routesString = p0 ?? ""
+            AppLogger.shared.log("onNetworkChanged: raw prefixes from Go = \"\(routesString)\"")
             let (v4Routes, v6Routes, containsDefault) = parseRoutesToNESettings(routesString: routesString)
+            let v4Desc = v4Routes.map { "\($0.destinationAddress)/\($0.destinationSubnetMask)" }.joined(separator: ",")
+            let v6Desc = v6Routes.map { "\($0.destinationAddress)/\($0.destinationNetworkPrefixLength)" }.joined(separator: ",")
+            AppLogger.shared.log("onNetworkChanged: parsed containsDefault=\(containsDefault) v4=[\(v4Desc)] v6=[\(v6Desc)] interfaceIP=\(self.interfaceIP ?? "nil") interfaceIPv6=\(self.interfaceIPv6 ?? "nil")")
             if v4Routes.isEmpty && v6Routes.isEmpty && self.interfaceIP == nil {
+                AppLogger.shared.log("onNetworkChanged: SKIPPED setRoutes (no routes and no interfaceIP)")
                 return
             }
             tunnelManager.setRoutes(v4Routes: v4Routes, v6Routes: v6Routes, containsDefault: containsDefault)
@@ -69,8 +75,10 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
                 return
             }
             guard let validIP = p0, !validIP.isEmpty else {
+                AppLogger.shared.log("setInterfaceIP: ignored empty value")
                 return
             }
+            AppLogger.shared.log("setInterfaceIP: \(validIP) (clearing interfaceIPv6, was \(self.interfaceIPv6 ?? "nil"))")
             self.interfaceIP = validIP
             // New engine session boundary: drop the previous session's v6 address. The
             // engine re-announces it via setInterfaceIPv6 only when the session actually
@@ -86,8 +94,10 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
                 return
             }
             guard let validIPv6 = p0, !validIPv6.isEmpty else {
+                AppLogger.shared.log("setInterfaceIPv6: ignored empty value")
                 return
             }
+            AppLogger.shared.log("setInterfaceIPv6: \(validIPv6)")
             self.interfaceIPv6 = validIPv6
             tunnelManager.setInterfaceIPv6(interfaceIPv6: validIPv6)
         }
