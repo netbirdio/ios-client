@@ -40,6 +40,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     let monitorQueue = DispatchQueue(label: "NetworkMonitor")
     var currentNetworkType: NWInterface.InterfaceType?
 
+    /// Restart coalescing state, accessed only on monitorQueue. See restartClient.
+    private var isRestartInProgress = false
+    private var restartPending = false
+
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         // CRITICAL: Log immediately to confirm startTunnel is being called
         // Use privacy: .public to avoid log redaction
@@ -58,6 +62,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         currentNetworkType = nil
+        monitorQueue.async { [weak self] in
+            self?.isRestartInProgress = false
+            self?.restartPending = false
+        }
         startMonitoringNetworkChanges()
 
         guard let adapter = adapter else {
@@ -95,7 +103,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        adapter?.stop()
+        adapter?.stop(waitForExit: false)
         if let pathMonitor = self.pathMonitor {
             pathMonitor.cancel()
             self.pathMonitor = nil
@@ -205,14 +213,47 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// Restarts the client after a network change. Must be called on monitorQueue.
+    ///
+    /// Restarts are coalesced rather than overlapped. NetBirdAdapter.stop fires a
+    /// pending completion as soon as a second stop arrives, so two calls would
+    /// otherwise have their completions run start() concurrently. A network change
+    /// arriving mid-restart therefore only sets a flag, and the restart in flight
+    /// runs one more pass when it finishes.
     func restartClient() {
+        if isRestartInProgress {
+            logger.info("restartClient: restart already in progress, coalescing")
+            restartPending = true
+            return
+        }
+
+        guard let adapter = adapter else {
+            logger.info("restartClient: adapter is nil, nothing to restart")
+            return
+        }
+
+        isRestartInProgress = true
         logger.info("restartClient: Restarting client due to network change")
-        adapter?.stop()
-        adapter?.start { error in
-            if let error = error {
-                logger.error("restartClient: Error restarting client: \(error.localizedDescription)")
-            } else {
-                logger.info("restartClient: Client restarted successfully")
+
+        // Wait for the stop to complete before starting: an overlapping start
+        // inherits the outgoing run's cancellation and fails, leaving the tunnel
+        // installed with no engine behind it (all traffic black-holed).
+        adapter.stop { [weak self] in
+            self?.adapter?.start { error in
+                if let error = error {
+                    logger.error("restartClient: Error restarting client: \(error.localizedDescription)")
+                } else {
+                    logger.info("restartClient: Client restarted successfully")
+                }
+
+                self?.monitorQueue.async {
+                    guard let self = self else { return }
+                    self.isRestartInProgress = false
+                    if self.restartPending {
+                        self.restartPending = false
+                        self.restartClient()
+                    }
+                }
             }
         }
     }

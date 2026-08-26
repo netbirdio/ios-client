@@ -556,7 +556,11 @@ public class NetBirdAdapter {
         self.dnsManager.invalidate()
     }
 
-    public func stop(completionHandler: (() -> Void)? = nil) {
+    /// Tears the client down. `waitForExit` blocks until the Go run loop has
+    /// finished, which a restart needs so the next start cannot inherit the
+    /// outgoing run's cancellation. Pass false where the caller is on a
+    /// deadline — stopTunnel gets only a few seconds from iOS.
+    public func stop(waitForExit: Bool = true, completionHandler: (() -> Void)? = nil) {
         stopLock.lock()
 
         // Call any pending handler before setting a new one
@@ -572,7 +576,11 @@ public class NetBirdAdapter {
         self.stopCompletionHandler = completionHandler
         stopLock.unlock()
 
-        self.client.stop()
+        if waitForExit {
+            self.client.stop()
+        } else {
+            self.client.stopWithoutWait()
+        }
 
         // Fallback timeout (15 seconds) in case onDisconnected doesn't fire
         if completionHandler != nil {
