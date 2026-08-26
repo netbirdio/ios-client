@@ -701,11 +701,26 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func setTunnelSettings(tunnelNetworkSettings: NEPacketTunnelNetworkSettings) {
+        let v6Desc: String
+        if let v6 = tunnelNetworkSettings.ipv6Settings {
+            let incl = v6.includedRoutes.map { $0.isEmpty ? "EMPTY_ARRAY" : $0.map { r in "\(r.destinationAddress)/\(r.destinationNetworkPrefixLength)" }.joined(separator: ",") } ?? "NIL"
+            let excl = v6.excludedRoutes.map { $0.isEmpty ? "EMPTY_ARRAY" : $0.map { r in "\(r.destinationAddress)/\(r.destinationNetworkPrefixLength)" }.joined(separator: ",") } ?? "NIL"
+            v6Desc = "addrs=\(v6.addresses) prefixes=\(v6.networkPrefixLengths) incl=\(incl) excl=\(excl)"
+        } else {
+            v6Desc = "NIL"
+        }
+        AppLogger.shared.log("setTunnelSettings: calling setTunnelNetworkSettings with v6=\(v6Desc)")
+
+        let startedAt = Date()
         setTunnelNetworkSettings(tunnelNetworkSettings) { error in
+            let elapsed = String(format: "%.3f", Date().timeIntervalSince(startedAt))
             if let error = error {
+                let nsError = error as NSError
+                AppLogger.shared.log("setTunnelSettings: FAILED after \(elapsed)s v6=\(v6Desc) domain=\(nsError.domain) code=\(nsError.code)")
                 AppLogger.shared.log("Error assigning routes: \(error.localizedDescription)")
                 return
             }
+            AppLogger.shared.log("setTunnelSettings: OK after \(elapsed)s v6=\(v6Desc)")
             AppLogger.shared.log("Routes set successfully.")
         }
     }

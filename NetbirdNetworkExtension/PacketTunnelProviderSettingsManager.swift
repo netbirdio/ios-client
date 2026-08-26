@@ -8,6 +8,15 @@
 import Foundation
 import NetworkExtension
 
+enum IPv6ClearMode: String {
+    case explicitNil
+    case emptyAddrs
+    case dummyEmptyRt
+    case dummyExcluded
+
+    static let active = IPv6ClearMode(rawValue: ProcessInfo.processInfo.environment["NB_IPV6_CLEAR_MODE"] ?? "") ?? .dummyEmptyRt
+}
+
 class PacketTunnelProviderSettingsManager {
     
     private weak var packetTunnelProvider: PacketTunnelProvider?
@@ -84,13 +93,17 @@ class PacketTunnelProviderSettingsManager {
     }
     
     private func updateTunnel() {
+        AppLogger.shared.log("updateTunnel: interfaceIP=\(interfaceIP ?? "nil") interfaceIPv6=\(interfaceIPv6 ?? "nil") containsDefaultRoute=\(containsDefaultRoute) v4RouteCount=\(ipv4Routes?.count ?? -1) v6RouteCount=\(ipv6Routes?.count ?? -1) clearMode=\(IPv6ClearMode.active.rawValue)")
         if let tunnelSettings = createTunnelSettings() {
             if let tunnelProvider = self.packetTunnelProvider {
+                AppLogger.shared.log("updateTunnel: applying -> \(Self.describe(tunnelSettings))")
                 tunnelProvider.setTunnelSettings(tunnelNetworkSettings: tunnelSettings)
             } else {
+                AppLogger.shared.log("updateTunnel: failed to get tunnel provider")
                 print("Failed to get tunnel provider")
             }
         } else {
+            AppLogger.shared.log("updateTunnel: createTunnelSettings returned nil")
             print("Failed to update tunnel")
         }
     }
@@ -129,15 +142,35 @@ class PacketTunnelProviderSettingsManager {
                         ipv6Settings.includedRoutes = v6Routes
                     }
                     tunnelNetworkSettings.ipv6Settings = ipv6Settings
+                    AppLogger.shared.log("createTunnelSettings: v6 branch=ACTIVE (address present)")
                 } else {
                     // Always assign IPv6 settings explicitly: leaving the property nil
                     // makes setTunnelNetworkSettings KEEP the previously applied IPv6
                     // config, so the ::/0 blackhole installed while an exit node was
                     // selected would linger after deselect and keep black-holing traffic.
-                    let ipv6Settings = NEIPv6Settings(addresses: [Self.ipv6BlackholeAddress], networkPrefixLengths: [Self.ipv6BlackholePrefix])
-                    // Explicitly clear any previously-applied IPv6 routes.
-                    ipv6Settings.includedRoutes = []
-                    tunnelNetworkSettings.ipv6Settings = ipv6Settings
+                    switch IPv6ClearMode.active {
+                    case .explicitNil:
+                        AppLogger.shared.log("createTunnelSettings: v6 branch=CLEAR mode=explicitNil (ipv6Settings left nil)")
+
+                    case .emptyAddrs:
+                        AppLogger.shared.log("createTunnelSettings: v6 branch=CLEAR mode=emptyAddrs (constructing NEIPv6Settings with empty arrays)")
+                        tunnelNetworkSettings.ipv6Settings = NEIPv6Settings(addresses: [], networkPrefixLengths: [])
+                        AppLogger.shared.log("createTunnelSettings: v6 branch=CLEAR mode=emptyAddrs constructed OK")
+
+                    case .dummyEmptyRt:
+                        let ipv6Settings = NEIPv6Settings(addresses: [Self.ipv6BlackholeAddress], networkPrefixLengths: [Self.ipv6BlackholePrefix])
+                        // Explicitly clear any previously-applied IPv6 routes.
+                        ipv6Settings.includedRoutes = []
+                        tunnelNetworkSettings.ipv6Settings = ipv6Settings
+                        AppLogger.shared.log("createTunnelSettings: v6 branch=CLEAR mode=dummyEmptyRt")
+
+                    case .dummyExcluded:
+                        let ipv6Settings = NEIPv6Settings(addresses: [Self.ipv6BlackholeAddress], networkPrefixLengths: [Self.ipv6BlackholePrefix])
+                        ipv6Settings.includedRoutes = []
+                        ipv6Settings.excludedRoutes = [NEIPv6Route.default()]
+                        tunnelNetworkSettings.ipv6Settings = ipv6Settings
+                        AppLogger.shared.log("createTunnelSettings: v6 branch=CLEAR mode=dummyExcluded")
+                    }
                 }
                 
                 tunnelNetworkSettings.mtu = 1280
@@ -161,6 +194,52 @@ class PacketTunnelProviderSettingsManager {
             return nil
         }
         return (String(parts[0]), prefix)
+    }
+
+    private static func describe(_ settings: NEPacketTunnelNetworkSettings) -> String {
+        var out: [String] = []
+
+        if let v4 = settings.ipv4Settings {
+            out.append("v4[addrs=\(v4.addresses) masks=\(v4.subnetMasks) incl=\(describeV4(v4.includedRoutes)) excl=\(describeV4(v4.excludedRoutes))]")
+        } else {
+            out.append("v4[nil]")
+        }
+
+        if let v6 = settings.ipv6Settings {
+            out.append("v6[addrs=\(v6.addresses) prefixes=\(v6.networkPrefixLengths) incl=\(describeV6(v6.includedRoutes)) excl=\(describeV6(v6.excludedRoutes))]")
+        } else {
+            out.append("v6[NIL <- property not set]")
+        }
+
+        if let dns = settings.dnsSettings {
+            out.append("dns[servers=\(dns.servers) match=\(dns.matchDomains ?? []) search=\(dns.searchDomains ?? [])]")
+        } else {
+            out.append("dns[nil]")
+        }
+
+        out.append("mtu=\(settings.mtu?.stringValue ?? "nil")")
+
+        return out.joined(separator: " ")
+    }
+
+    private static func describeV4(_ routes: [NEIPv4Route]?) -> String {
+        guard let routes = routes else {
+            return "NIL"
+        }
+        if routes.isEmpty {
+            return "EMPTY_ARRAY"
+        }
+        return routes.map { "\($0.destinationAddress)/\($0.destinationSubnetMask)" }.joined(separator: ",")
+    }
+
+    private static func describeV6(_ routes: [NEIPv6Route]?) -> String {
+        guard let routes = routes else {
+            return "NIL"
+        }
+        if routes.isEmpty {
+            return "EMPTY_ARRAY"
+        }
+        return routes.map { "\($0.destinationAddress)/\($0.destinationNetworkPrefixLength)" }.joined(separator: ",")
     }
 
 }
