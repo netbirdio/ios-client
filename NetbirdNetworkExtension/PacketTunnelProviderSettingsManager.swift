@@ -72,6 +72,40 @@ enum TunnelStateProbe {
         }.joined(separator: " | ")
     }
 
+    // Darwin's <net/route.h> types are not surfaced to Swift, so the header
+    // layout is restated here to read the sysctl dump.
+    private struct RouteMsgHeader {
+        var msglen: UInt16 = 0
+        var version: UInt8 = 0
+        var type: UInt8 = 0
+        var index: UInt16 = 0
+        var flags: Int32 = 0
+        var addrs: Int32 = 0
+
+        init(buf: [UInt8], offset: Int) {
+            func u16(_ at: Int) -> UInt16 {
+                UInt16(buf[at]) | (UInt16(buf[at + 1]) << 8)
+            }
+            func i32(_ at: Int) -> Int32 {
+                var v: UInt32 = 0
+                for i in 0..<4 {
+                    v |= UInt32(buf[at + i]) << (8 * UInt32(i))
+                }
+                return Int32(bitPattern: v)
+            }
+            msglen = u16(offset)
+            version = buf[offset + 2]
+            type = buf[offset + 3]
+            index = u16(offset + 4)
+            // offset+6..7 is rtm_pad/reserved on Darwin; flags follow at +8.
+            flags = i32(offset + 8)
+            addrs = i32(offset + 12)
+        }
+
+        static let size = 92
+        static let addrsStart = 92
+    }
+
     // Walks the kernel routing table via sysctl(NET_RT_DUMP). This is the only
     // way to see whether the ::/0 route we asked to drop is actually gone --
     // the completion handler of setTunnelNetworkSettings says nothing about it.
@@ -88,11 +122,10 @@ enum TunnelStateProbe {
 
         var lines: [String] = []
         var offset = 0
-        let hdrSize = MemoryLayout<rt_msghdr>.size
-        while offset + hdrSize <= size {
-            let hdr = buf.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: rt_msghdr.self) }
-            let msgLen = Int(hdr.rtm_msglen)
-            guard msgLen > 0, offset + msgLen <= size else { break }
+        while offset + RouteMsgHeader.size <= size {
+            let hdr = RouteMsgHeader(buf: buf, offset: offset)
+            let msgLen = Int(hdr.msglen)
+            guard msgLen > RouteMsgHeader.size, offset + msgLen <= size else { break }
             if let line = describeRoute(buf: buf, start: offset, msgLen: msgLen, hdr: hdr) {
                 lines.append(line)
             }
@@ -111,16 +144,17 @@ enum TunnelStateProbe {
         return (defaults + capped).joined(separator: ", ") + suffix
     }
 
-    private static func describeRoute(buf: [UInt8], start: Int, msgLen: Int, hdr: rt_msghdr) -> String? {
-        var cursor = start + MemoryLayout<rt_msghdr>.size
+    private static func describeRoute(buf: [UInt8], start: Int, msgLen: Int, hdr: RouteMsgHeader) -> String? {
+        var cursor = start + RouteMsgHeader.addrsStart
         let end = start + msgLen
 
         var dest: String?
         var gateway: String?
         var maskBits: Int?
 
-        for bit in 0..<Int(RTAX_MAX) {
-            guard hdr.rtm_addrs & (1 << bit) != 0 else { continue }
+        // RTAX_DST/GATEWAY/NETMASK are 0/1/2 in the fixed RTA_* bit order.
+        for bit in 0..<8 {
+            guard hdr.addrs & (1 << Int32(bit)) != 0 else { continue }
             guard cursor + 2 <= end else { break }
 
             let saLen = Int(buf[cursor])
@@ -130,15 +164,12 @@ enum TunnelStateProbe {
             cursor += advance
             guard saLen > 0 else { continue }
 
-            switch Int32(bit) {
-            case RTAX_DST:
+            if bit == 0 {
                 dest = addressText(buf: buf, offset: base, family: saFamily)
-            case RTAX_GATEWAY:
+            } else if bit == 1 {
                 gateway = addressText(buf: buf, offset: base, family: saFamily)
-            case RTAX_NETMASK:
+            } else if bit == 2 {
                 maskBits = maskPrefix(buf: buf, offset: base, saLen: saLen)
-            default:
-                break
             }
         }
 
@@ -150,12 +181,13 @@ enum TunnelStateProbe {
         }
 
         let via = gateway.map { " via \($0)" } ?? ""
-        return "\(text)\(via) dev \(interfaceName(index: Int(hdr.rtm_index))) \(routeFlagText(hdr.rtm_flags))"
+        return "\(text)\(via) dev \(interfaceName(index: Int(hdr.index))) \(routeFlagText(hdr.flags))"
     }
 
     private static func addressText(buf: [UInt8], offset: Int, family: UInt8) -> String {
         if family == UInt8(AF_INET6) {
-            let at = offset + MemoryLayout<sockaddr_in6>.offset(of: \.sin6_addr)!
+            // sin6_addr sits at +8: len/family/port(2)/flowinfo(4).
+            let at = offset + 8
             guard at + 16 <= buf.count else { return "?" }
             var bytes = Array(buf[at..<(at + 16)])
             var out = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
@@ -167,7 +199,8 @@ enum TunnelStateProbe {
             return text
         }
         if family == UInt8(AF_INET) {
-            let at = offset + MemoryLayout<sockaddr_in>.offset(of: \.sin_addr)!
+            // sin_addr sits at +4: len/family/port(2).
+            let at = offset + 4
             guard at + 4 <= buf.count else { return "?" }
             var bytes = Array(buf[at..<(at + 4)])
             var out = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
@@ -195,12 +228,13 @@ enum TunnelStateProbe {
 
     private static func routeFlagText(_ flags: Int32) -> String {
         var out: [String] = []
-        if flags & RTF_UP != 0 { out.append("UP") }
-        if flags & RTF_GATEWAY != 0 { out.append("GW") }
-        if flags & RTF_HOST != 0 { out.append("HOST") }
-        if flags & RTF_REJECT != 0 { out.append("REJECT") }
-        if flags & RTF_BLACKHOLE != 0 { out.append("BLACKHOLE") }
-        if flags & RTF_IFSCOPE != 0 { out.append("IFSCOPE") }
+        // Values from <net/route.h>, restated because the header is not exposed.
+        if flags & 0x1 != 0 { out.append("UP") }
+        if flags & 0x2 != 0 { out.append("GW") }
+        if flags & 0x4 != 0 { out.append("HOST") }
+        if flags & 0x8 != 0 { out.append("REJECT") }
+        if flags & 0x1000 != 0 { out.append("BLACKHOLE") }
+        if flags & 0x1000000 != 0 { out.append("IFSCOPE") }
         return out.isEmpty ? "-" : out.joined(separator: "+")
     }
 
