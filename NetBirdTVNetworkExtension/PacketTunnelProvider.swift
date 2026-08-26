@@ -207,12 +207,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     func restartClient() {
         logger.info("restartClient: Restarting client due to network change")
-        adapter?.stop()
-        adapter?.start { error in
-            if let error = error {
-                logger.error("restartClient: Error restarting client: \(error.localizedDescription)")
-            } else {
-                logger.info("restartClient: Client restarted successfully")
+        // Wait for the stop to complete before starting: an overlapping start
+        // inherits the outgoing run's cancellation and fails, leaving the tunnel
+        // installed with no engine behind it (all traffic black-holed).
+        adapter?.stop { [weak self] in
+            self?.adapter?.start { error in
+                if let error = error {
+                    logger.error("restartClient: Error restarting client: \(error.localizedDescription)")
+                } else {
+                    logger.info("restartClient: Client restarted successfully")
+                }
             }
         }
     }

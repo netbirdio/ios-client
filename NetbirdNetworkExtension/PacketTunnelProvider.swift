@@ -77,6 +77,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     
     private var networkChangeWorkItem: DispatchWorkItem?
 
+    /// Restart-retry state. A failed restart used to be terminal: the tunnel stayed
+    /// installed with no engine behind it, so every packet was black-holed until the
+    /// user toggled the VPN off. Accessed only on monitorQueue.
+    private var restartRetryCount = 0
+    private var restartRetryWorkItem: DispatchWorkItem?
+    private static let restartMaxRetries = 4
+    private static let restartRetryBaseDelay: TimeInterval = 2.0
+
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
@@ -106,6 +114,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
+            self?.restartRetryWorkItem?.cancel()
+            self?.restartRetryWorkItem = nil
+            self?.restartRetryCount = 0
             self?.adapter?.isNetworkUnavailable = false
             self?.startMonitoringNetworkChanges()
         }
@@ -184,6 +195,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         monitorQueue.async { [weak self] in
             self?.networkChangeWorkItem?.cancel()
             self?.networkChangeWorkItem = nil
+            self?.restartRetryWorkItem?.cancel()
+            self?.restartRetryWorkItem = nil
+            self?.restartRetryCount = 0
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
@@ -358,6 +372,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // Cancel any pending restart from previous rapid change
             networkChangeWorkItem?.cancel()
             networkChangeWorkItem = nil
+            // A fresh network change supersedes a pending retry from the previous one.
+            restartRetryWorkItem?.cancel()
+            restartRetryWorkItem = nil
+            restartRetryCount = 0
 
             // Debounce: schedule restart after 1 second
             let workItem = DispatchWorkItem { [weak self] in
@@ -447,14 +465,58 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                             code: 1001,
                             userInfo: [NSLocalizedDescriptionKey: "Login required."]
                         ))
+                        self?.updateWidgetStatus("disconnected")
+                        return
                     }
                     self?.updateWidgetStatus("disconnected")
+                    // Not a login problem, so the start lost a race with the previous
+                    // run's teardown (its context cancellation lands on the fresh
+                    // client). Retry with backoff; give up by tearing the tunnel down
+                    // rather than leaving it installed with no engine behind it.
+                    self?.monitorQueue.async {
+                        self?.scheduleRestartRetry()
+                    }
                 } else {
                     AppLogger.shared.log("restartClient: start completed successfully")
+                    self?.monitorQueue.async {
+                        self?.restartRetryCount = 0
+                        self?.restartRetryWorkItem?.cancel()
+                        self?.restartRetryWorkItem = nil
+                    }
                     self?.updateWidgetStatus("connected")
                 }
             }
         }
+    }
+
+    /// Retries a failed restart with exponential backoff. Must run on monitorQueue.
+    /// After restartMaxRetries the tunnel is torn down: an installed tunnel with no
+    /// engine behind it black-holes all traffic, which is worse than a clean drop
+    /// the OS and the UI can both see.
+    private func scheduleRestartRetry() {
+        restartRetryWorkItem?.cancel()
+        restartRetryWorkItem = nil
+
+        guard restartRetryCount < Self.restartMaxRetries else {
+            AppLogger.shared.log("restartClient: giving up after \(restartRetryCount) retries — tearing down the tunnel")
+            restartRetryCount = 0
+            cancelTunnelWithError(NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1005,
+                userInfo: [NSLocalizedDescriptionKey: "Could not restart the NetBird client after a network change."]
+            ))
+            return
+        }
+
+        restartRetryCount += 1
+        let delay = Self.restartRetryBaseDelay * pow(2.0, Double(restartRetryCount - 1))
+        AppLogger.shared.log("restartClient: scheduling retry \(restartRetryCount)/\(Self.restartMaxRetries) in \(delay)s")
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.restartClient()
+        }
+        restartRetryWorkItem = workItem
+        monitorQueue.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     /// Signals login required by persisting a flag to the shared app-group container.
