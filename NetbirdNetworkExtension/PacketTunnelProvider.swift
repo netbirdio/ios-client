@@ -85,6 +85,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let restartMaxRetries = 4
     private static let restartRetryBaseDelay: TimeInterval = 2.0
 
+    /// Bumped whenever the tunnel lifecycle moves on: a new tunnel starts, the
+    /// tunnel stops, or a fresh network change supersedes the restart in flight.
+    /// A restart captures it and drops its own callbacks once it no longer
+    /// matches, because NetBirdAdapter.stop fires a pending completion handler
+    /// as soon as a second stop arrives — so a restart's completion can run
+    /// after the lifecycle it belonged to is over. Accessed only on monitorQueue.
+    private var lifecycleToken: UInt64 = 0
+
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
@@ -117,6 +125,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.restartRetryWorkItem?.cancel()
             self?.restartRetryWorkItem = nil
             self?.restartRetryCount = 0
+            self?.lifecycleToken &+= 1
             self?.adapter?.isNetworkUnavailable = false
             self?.startMonitoringNetworkChanges()
         }
@@ -198,6 +207,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.restartRetryWorkItem?.cancel()
             self?.restartRetryWorkItem = nil
             self?.restartRetryCount = 0
+            self?.lifecycleToken &+= 1
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
@@ -372,10 +382,18 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // Cancel any pending restart from previous rapid change
             networkChangeWorkItem?.cancel()
             networkChangeWorkItem = nil
-            // A fresh network change supersedes a pending retry from the previous one.
+            // A fresh network change supersedes the restart in flight, pending
+            // retry included: bumping the token also drops the callbacks of a
+            // restart whose stop completion has not fired yet.
             restartRetryWorkItem?.cancel()
             restartRetryWorkItem = nil
             restartRetryCount = 0
+            lifecycleToken &+= 1
+            // The superseded restart's callbacks are now inert, so release the
+            // flags it holds: the debounced restart below must not be refused by
+            // the isRestartInProgress guard.
+            adapter?.isRestarting = false
+            isRestartInProgress = false
 
             // Debounce: schedule restart after 1 second
             let workItem = DispatchWorkItem { [weak self] in
@@ -406,9 +424,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         isRestartInProgress = true
         adapter.isRestarting = true
 
+        // The lifecycle this restart belongs to. Every callback below re-checks
+        // it, because adapter.stop fires a pending completion as soon as a
+        // second stop arrives — so this restart's completion can run after
+        // stopTunnel, or after a newer network change took over.
+        let token = lifecycleToken
+
         // Timeout after 30 seconds to reset flags if restart hangs
         let timeoutWorkItem = DispatchWorkItem { [weak self] in
-            guard let self = self, self.isRestartInProgress else { return }
+            guard let self = self, self.isRestartInProgress, self.lifecycleToken == token else { return }
             AppLogger.shared.log("restartClient: timeout - resetting flags")
             self.adapter?.isRestarting = false
             self.isRestartInProgress = false
@@ -416,75 +440,101 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         monitorQueue.asyncAfter(deadline: .now() + 30, execute: timeoutWorkItem)
 
         adapter.stop { [weak self] in
-            AppLogger.shared.log("restartClient: stop completed, checking login status")
+            guard let self = self else { return }
 
-            // Tokens may have expired during a network change (common with self-hosted servers
-            // that have shorter token lifetimes). Check before restarting; if login is required
-            // signal the main app so it can show the re-auth UI instead of silently failing.
-            // The cached check reads the auth state the engine already recorded, so a network
-            // change no longer costs a Login RPC. An expiry the recorder has not seen yet is
-            // still caught one step later: the restarted engine's own login fails with
-            // PermissionDenied and drives onLoginRequired from the connection listener.
-            if self?.adapter?.needsLoginCached() == true {
-                AppLogger.shared.log("restartClient: login required — signaling main app, skipping restart")
-                self?.signalLoginRequired()
-                self?.updateWidgetStatus("disconnected")
-                self?.monitorQueue.async {
-                    self?.adapter?.isRestarting = false
-                    self?.isRestartInProgress = false
+            // Re-check on monitorQueue: the completion can arrive on any thread,
+            // and lifecycleToken is only safe to read there.
+            self.monitorQueue.async {
+                guard self.lifecycleToken == token else {
+                    // Release the flags this restart set, or the next restart is
+                    // refused by the isRestartInProgress guard forever.
+                    AppLogger.shared.log("restartClient: superseded during stop, not starting")
+                    timeoutWorkItem.cancel()
+                    self.adapter?.isRestarting = false
+                    self.isRestartInProgress = false
+                    return
                 }
-                timeoutWorkItem.cancel()
-                return
+                self.continueRestart(token: token, timeoutWorkItem: timeoutWorkItem)
             }
+        }
+    }
 
-            AppLogger.shared.log("restartClient: starting client")
-            self?.adapter?.start { [weak self] error in
-                // Cancel timeout whether start succeeds or not
-                timeoutWorkItem.cancel()
+    /// Second half of restartClient, entered on monitorQueue once the stop that
+    /// belongs to this lifecycle has completed.
+    private func continueRestart(token: UInt64, timeoutWorkItem: DispatchWorkItem) {
+        AppLogger.shared.log("restartClient: stop completed, checking login status")
 
-                self?.monitorQueue.async {
-                    self?.adapter?.isRestarting = false
-                    self?.isRestartInProgress = false
+        // Tokens may have expired during a network change (common with self-hosted servers
+        // that have shorter token lifetimes). Check before restarting; if login is required
+        // signal the main app so it can show the re-auth UI instead of silently failing.
+        // The cached check reads the auth state the engine already recorded, so a network
+        // change no longer costs a Login RPC. An expiry the recorder has not seen yet is
+        // still caught one step later: the restarted engine's own login fails with
+        // PermissionDenied and drives onLoginRequired from the connection listener.
+        if adapter?.needsLoginCached() == true {
+            AppLogger.shared.log("restartClient: login required — signaling main app, skipping restart")
+            signalLoginRequired()
+            updateWidgetStatus("disconnected")
+            adapter?.isRestarting = false
+            isRestartInProgress = false
+            timeoutWorkItem.cancel()
+            return
+        }
+
+        AppLogger.shared.log("restartClient: starting client")
+        adapter?.start { [weak self] error in
+            // Cancel timeout whether start succeeds or not
+            timeoutWorkItem.cancel()
+
+            guard let self = self else { return }
+
+            self.monitorQueue.async {
+                guard self.lifecycleToken == token else {
+                    AppLogger.shared.log("restartClient: superseded during start, dropping the result")
+                    self.adapter?.isRestarting = false
+                    self.isRestartInProgress = false
+                    return
                 }
 
-                if let error = error {
-                    AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
-                    // If the start failed because the session expired, the connection
-                    // listener may have suppressed its login-required signalling: it skips
-                    // both checks while isRestarting is still true, which happens when the
-                    // stop phase never fired onDisconnected (engine already dead) and the
-                    // stop completion arrived via the 15s fallback instead. Re-check the
-                    // recorder here — the engine marks it with PermissionDenied before
-                    // Run() returns — and signal + tear down so the dead tunnel doesn't
-                    // linger and black-hole traffic.
-                    if self?.adapter?.needsLoginCached() == true {
-                        AppLogger.shared.log("restartClient: start failed due to expired login — signaling and tearing down")
-                        self?.signalLoginRequired()
-                        self?.cancelTunnelWithError(NSError(
-                            domain: "io.netbird.NetbirdNetworkExtension",
-                            code: 1001,
-                            userInfo: [NSLocalizedDescriptionKey: "Login required."]
-                        ))
-                        self?.updateWidgetStatus("disconnected")
-                        return
-                    }
-                    self?.updateWidgetStatus("disconnected")
-                    // Not a login problem, so the start lost a race with the previous
-                    // run's teardown (its context cancellation lands on the fresh
-                    // client). Retry with backoff; give up by tearing the tunnel down
-                    // rather than leaving it installed with no engine behind it.
-                    self?.monitorQueue.async {
-                        self?.scheduleRestartRetry()
-                    }
-                } else {
+                self.adapter?.isRestarting = false
+                self.isRestartInProgress = false
+
+                guard let error = error else {
                     AppLogger.shared.log("restartClient: start completed successfully")
-                    self?.monitorQueue.async {
-                        self?.restartRetryCount = 0
-                        self?.restartRetryWorkItem?.cancel()
-                        self?.restartRetryWorkItem = nil
-                    }
-                    self?.updateWidgetStatus("connected")
+                    self.restartRetryCount = 0
+                    self.restartRetryWorkItem?.cancel()
+                    self.restartRetryWorkItem = nil
+                    self.updateWidgetStatus("connected")
+                    return
                 }
+
+                AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
+                self.updateWidgetStatus("disconnected")
+
+                // If the start failed because the session expired, the connection
+                // listener may have suppressed its login-required signalling: it skips
+                // both checks while isRestarting is still true, which happens when the
+                // stop phase never fired onDisconnected (engine already dead) and the
+                // stop completion arrived via the 15s fallback instead. Re-check the
+                // recorder here — the engine marks it with PermissionDenied before
+                // Run() returns — and signal + tear down so the dead tunnel doesn't
+                // linger and black-hole traffic.
+                if self.adapter?.needsLoginCached() == true {
+                    AppLogger.shared.log("restartClient: start failed due to expired login — signaling and tearing down")
+                    self.signalLoginRequired()
+                    self.cancelTunnelWithError(NSError(
+                        domain: "io.netbird.NetbirdNetworkExtension",
+                        code: 1001,
+                        userInfo: [NSLocalizedDescriptionKey: "Login required."]
+                    ))
+                    return
+                }
+
+                // Not a login problem, so the start lost a race with the previous
+                // run's teardown (its context cancellation lands on the fresh
+                // client). Retry with backoff; give up by tearing the tunnel down
+                // rather than leaving it installed with no engine behind it.
+                self.scheduleRestartRetry(token: token)
             }
         }
     }
@@ -492,8 +542,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Retries a failed restart with exponential backoff. Must run on monitorQueue.
     /// After restartMaxRetries the tunnel is torn down: an installed tunnel with no
     /// engine behind it black-holes all traffic, which is worse than a clean drop
-    /// the OS and the UI can both see.
-    private func scheduleRestartRetry() {
+    /// the OS and the UI can both see. The token is re-checked when the retry fires,
+    /// so a retry queued before a stop or a newer network change does not run.
+    private func scheduleRestartRetry(token: UInt64) {
         restartRetryWorkItem?.cancel()
         restartRetryWorkItem = nil
 
@@ -513,7 +564,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         AppLogger.shared.log("restartClient: scheduling retry \(restartRetryCount)/\(Self.restartMaxRetries) in \(delay)s")
 
         let workItem = DispatchWorkItem { [weak self] in
-            self?.restartClient()
+            guard let self = self, self.lifecycleToken == token else { return }
+            self.restartClient()
         }
         restartRetryWorkItem = workItem
         monitorQueue.asyncAfter(deadline: .now() + delay, execute: workItem)
