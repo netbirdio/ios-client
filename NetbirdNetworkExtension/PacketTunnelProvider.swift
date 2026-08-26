@@ -205,7 +205,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // Reset network unavailable flag when tunnel stops
         adapter?.isNetworkUnavailable = false
         setNetworkUnavailableFlag(false)
-        adapter?.stop()
+        adapter?.stop(waitForExit: false)
         updateWidgetStatus("disconnected")
         guard let pathMonitor = self.pathMonitor else {
             AppLogger.shared.log("pathMonitor is nil; nothing to cancel.")

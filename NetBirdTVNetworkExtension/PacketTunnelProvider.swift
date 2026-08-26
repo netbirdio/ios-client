@@ -95,7 +95,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        adapter?.stop()
+        adapter?.stop(waitForExit: false)
         if let pathMonitor = self.pathMonitor {
             pathMonitor.cancel()
             self.pathMonitor = nil
