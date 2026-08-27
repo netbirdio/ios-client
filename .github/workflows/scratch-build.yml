@@ -1,0 +1,174 @@
+name: Scratch Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: false
+        type: string
+        description: 'Marketing version override (e.g. 1.2.3)'
+      build-number:
+        required: false
+        type: string
+        description: 'Build number override'
+      netbird-ref:
+        required: false
+        type: string
+        description: 'Override netbird submodule ref (default: use pinned submodule commit)'
+      ios-only:
+        required: false
+        type: string
+        default: 'false'
+        description: 'Skip the tvOS build'
+      deploy:
+        required: false
+        type: choice
+        options: [artifact, testflight]
+        default: artifact
+        description: 'artifact = downloadable development-signed IPA, testflight = upload to App Store Connect'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scratch-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.finalize.outputs.version }}
+      build-number: ${{ steps.finalize.outputs.build-number }}
+      build-number-tvos: ${{ steps.finalize.outputs.build-number-tvos }}
+    steps:
+      - name: Checkout for version derivation
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          sparse-checkout: .
+
+      - name: Derive version from git tags
+        id: derive
+        run: |
+          LATEST_TAG=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LATEST_TAG" ]; then
+            echo "::error::No v* tags found — cannot derive version"
+            exit 1
+          elif ! echo "$LATEST_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '$LATEST_TAG' is not valid semver (expected vX.Y.Z)"
+            exit 1
+          fi
+          VERSION="${LATEST_TAG#v}"
+          MAJOR="${VERSION%%.*}"
+          REST="${VERSION#*.}"
+          MINOR="${REST%%.*}"
+          PATCH="${REST#*.}"
+          NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Tag: $LATEST_TAG → next: $NEXT"
+
+      - name: Fetch latest build number from App Store Connect
+        if: inputs.deploy == 'testflight'
+        id: asc-build
+        env:
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APP_ID_IOS:  ${{ secrets.APP_STORE_APP_ID_IOS }}
+          APP_ID_TVOS: ${{ secrets.APP_STORE_APP_ID_TVOS }}
+        run: |
+          VERSION="${{ inputs.version || steps.derive.outputs.version }}"
+
+          pip install cryptography --quiet
+
+          echo "$PRIVATE_KEY_BASE64" | base64 --decode > /tmp/AuthKey.p8
+          trap 'rm -f /tmp/AuthKey.p8' EXIT
+
+          JWT=$(python3 -c "import base64,json,time,os;from cryptography.hazmat.primitives import hashes,serialization;from cryptography.hazmat.primitives.asymmetric import ec;from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature;key=serialization.load_pem_private_key(open('/tmp/AuthKey.p8','rb').read(),password=None);b64url=lambda d:base64.urlsafe_b64encode(d if isinstance(d,bytes) else d.encode()).rstrip(b'=').decode();now=int(time.time());h=b64url(json.dumps({'alg':'ES256','kid':os.environ['KEY_ID'],'typ':'JWT'},separators=(',',':')));p=b64url(json.dumps({'iss':os.environ['ISSUER_ID'],'exp':now+1200,'aud':'appstoreconnect-v1'},separators=(',',':')));msg=f'{h}.{p}'.encode();sig_der=key.sign(msg,ec.ECDSA(hashes.SHA256()));r,s=decode_dss_signature(sig_der);sig=b64url(r.to_bytes(32,'big')+s.to_bytes(32,'big'));print(f'{h}.{p}.{sig}')")
+
+          fetch_latest() {
+            local APP_ID=$1
+            local RESP STATUS LATEST
+            STATUS=$(curl -sg \
+              -o /tmp/asc_response.json \
+              -w "%{http_code}" \
+              "https://api.appstoreconnect.apple.com/v1/builds?filter[app]=$APP_ID&filter[preReleaseVersion.version]=$VERSION&sort=-uploadedDate&limit=1" \
+              -H "Authorization: Bearer $JWT")
+            RESP=$(cat /tmp/asc_response.json)
+            if [ "$STATUS" != "200" ]; then
+              echo "API error (app=$APP_ID):" && echo "$RESP" | jq . || echo "$RESP"
+              exit 1
+            fi
+            echo "$RESP" | jq -r 'if (.data | length) > 0 and (.data[0].attributes.version != null) then .data[0].attributes.version else "none" end'
+          }
+
+          LATEST_BUILD=$(fetch_latest "$APP_ID_IOS")
+          LATEST_BUILD_TVOS=$(fetch_latest "$APP_ID_TVOS")
+
+          echo "latest-build=$LATEST_BUILD"           >> "$GITHUB_OUTPUT"
+          echo "latest-build-tvos=$LATEST_BUILD_TVOS" >> "$GITHUB_OUTPUT"
+
+      - name: Finalize outputs
+        id: finalize
+        env:
+          OVERRIDE_VERSION:  ${{ inputs.version }}
+          OVERRIDE_BUILD:    ${{ inputs.build-number }}
+          DERIVED_VERSION:   ${{ steps.derive.outputs.version }}
+          LATEST_BUILD:      ${{ steps.asc-build.outputs.latest-build }}
+          LATEST_BUILD_TVOS: ${{ steps.asc-build.outputs.latest-build-tvos }}
+          DEPLOY:            ${{ inputs.deploy }}
+        run: |
+          VERSION="${OVERRIDE_VERSION:-$DERIVED_VERSION}"
+
+          next_build() {
+            local latest=$1
+            if [ -n "$OVERRIDE_BUILD" ]; then
+              echo "$OVERRIDE_BUILD"
+            elif [ "$DEPLOY" != "testflight" ]; then
+              echo "$GITHUB_RUN_NUMBER"
+            elif [[ "$latest" =~ ^[0-9]+$ ]]; then
+              echo $((latest + 1))
+            else
+              echo 1
+            fi
+          }
+
+          BUILD_NUMBER=$(next_build "$LATEST_BUILD")
+          BUILD_NUMBER_TVOS=$(next_build "$LATEST_BUILD_TVOS")
+
+          echo "version: $VERSION"
+          echo "build-number: $BUILD_NUMBER"
+          echo "build-number-tvos: $BUILD_NUMBER_TVOS (latest=$LATEST_BUILD_TVOS)"
+          echo "deploy: $DEPLOY"
+
+          echo "version=$VERSION"                     >> "$GITHUB_OUTPUT"
+          echo "build-number=$BUILD_NUMBER"           >> "$GITHUB_OUTPUT"
+          echo "build-number-tvos=$BUILD_NUMBER_TVOS" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build and Upload iOS
+    needs: gate
+    uses: ./.github/workflows/build-upload.yml
+    with:
+      ref: ${{ github.sha }}
+      netbird-ref: ${{ inputs.netbird-ref }}
+      version: ${{ needs.gate.outputs.version }}
+      build-number: ${{ needs.gate.outputs.build-number }}
+      upload: ${{ inputs.deploy == 'testflight' }}
+      deploy: ${{ inputs.deploy }}
+    secrets: inherit
+
+  build-tvos:
+    name: Build and Upload tvOS
+    needs: gate
+    if: inputs.deploy == 'testflight' && inputs.ios-only != 'true'
+    uses: ./.github/workflows/build-upload-tvos.yml
+    with:
+      ref: ${{ github.sha }}
+      version: ${{ needs.gate.outputs.version }}
+      build-number: ${{ needs.gate.outputs.build-number-tvos }}
+      upload: true
+    secrets: inherit
