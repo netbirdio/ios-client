@@ -145,6 +145,15 @@ struct SafariView: UIViewControllerRepresentable {
             // just one. Which account the session resolves to is decided by the
             // login_hint in the authorize URL, so an empty jar buys no isolation
             // here, it only throws the trusted-device state away.
+            //
+            // This also covers what #204 fixed, and covers more of it. An empty jar
+            // makes Keycloak's login theme start the authChecker.js session poll —
+            // it only skips it when a KEYCLOAK_SESSION cookie is already present —
+            // and that poll races the redirect carrying the authorization code,
+            // failing the login with authentication_expired. #204 dropped the
+            // ephemeral session only when the authorize URL already carries
+            // prompt=login or max_age=0; where the server sends neither, the race
+            // stayed. Dropping it unconditionally removes the race everywhere.
             session.prefersEphemeralWebBrowserSession = false
             session.presentationContextProvider = self
             self.session = session
@@ -188,4 +197,6 @@ struct SafariView: UIViewControllerRepresentable {
         }
     }
 }
+
+
 #endif

@@ -26,6 +26,11 @@ on:
         type: boolean
         default: true
         description: 'Upload to App Store Connect (false = build only)'
+      deploy:
+        required: false
+        type: string
+        default: 'testflight'
+        description: 'testflight = App Store Connect upload, artifact = development-signed IPA artifact'
 
 concurrency:
   group: build-upload-${{ inputs.ref }}
@@ -299,6 +304,48 @@ jobs:
             -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8" \
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER_ID"
+
+      - name: Export development-signed IPA
+        if: inputs.deploy == 'artifact'
+        working-directory: ios-client
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          cat > ExportOptionsDev.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>development</string>
+            <key>destination</key>
+            <string>export</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>teamID</key>
+            <string>TA739QLA7A</string>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/NetBird.xcarchive \
+            -exportOptionsPlist ExportOptionsDev.plist \
+            -exportPath $RUNNER_TEMP/export-dev \
+            -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
+            -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8" \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER_ID"
+
+      - name: Upload IPA artifact
+        if: inputs.deploy == 'artifact'
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetBird-ipa
+          path: ${{ runner.temp }}/export-dev/*.ipa
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Clean up signing assets
         if: always()
