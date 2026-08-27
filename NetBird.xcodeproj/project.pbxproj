@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FD0000000000000000000002 /* FileDropModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD0000000000000000000001 /* FileDropModels.swift */; };
+		FD0000000000000000000003 /* FileDropModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD0000000000000000000001 /* FileDropModels.swift */; };
+		FD0000000000000000000004 /* FileDropModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD0000000000000000000001 /* FileDropModels.swift */; };
+		FD0000000000000000000005 /* FileDropModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD0000000000000000000001 /* FileDropModels.swift */; };
+		FD0000000000000000000007 /* FilesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD0000000000000000000006 /* FilesViewModel.swift */; };
+		FD0000000000000000000009 /* iOSFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD0000000000000000000008 /* iOSFilesView.swift */; };
+		FD0000000000000000000011 /* FileSendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD0000000000000000000010 /* FileSendView.swift */; };
 		0C71C019350D42AB8F110336 /* iOSSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */; };
 		1C4E6A81CD33FF6D2DEFF8D5 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91FA1F06D3375864C74EAB3B /* Foundation.framework */; };
 		AA000C012F22000C00000001 /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
@@ -286,6 +293,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		FD0000000000000000000001 /* FileDropModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileDropModels.swift; sourceTree = "<group>"; };
+		FD0000000000000000000006 /* FilesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilesViewModel.swift; sourceTree = "<group>"; };
+		FD0000000000000000000008 /* iOSFilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSFilesView.swift; sourceTree = "<group>"; };
+		FD0000000000000000000010 /* FileSendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSendView.swift; sourceTree = "<group>"; };
 		2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSSettingsView.swift; sourceTree = "<group>"; };
 		3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlobalConstantsTests.swift; sourceTree = "<group>"; };
 		42873052F9544A89B1408339 /* iOSPeersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSPeersView.swift; sourceTree = "<group>"; };
@@ -621,6 +632,7 @@
 		50C727EA2A82479B006E898D /* NetbirdKit */ = {
 			isa = PBXGroup;
 			children = (
+				FD0000000000000000000001 /* FileDropModels.swift */,
 				978FC46F2EEDF167002D0EB8 /* AppLogger.swift */,
 				F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */,
 				A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */,
@@ -661,6 +673,7 @@
 		50E608012A7950C000BAF09B /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				FD0000000000000000000006 /* FilesViewModel.swift */,
 				F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */,
 				50E608122A7958B100BAF09B /* MainViewModel.swift */,
 				50D402962BD9B89300D4AC5B /* PeerViewModel.swift */,
@@ -734,6 +747,8 @@
 		A35A69207D60447AA6465276 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
+				FD0000000000000000000010 /* FileSendView.swift */,
+				FD0000000000000000000008 /* iOSFilesView.swift */,
 				8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */,
 				42873052F9544A89B1408339 /* iOSPeersView.swift */,
 				C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */,
@@ -1077,6 +1092,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FD0000000000000000000004 /* FileDropModels.swift in Sources */,
 				445B5F752EECAF01008932B8 /* GlobalConstants.swift in Sources */,
 				A1C3D5E92F000003001A2B3C /* WiFiOnDemandPolicy.swift in Sources */,
 				A1C3D5ED2F000007001A2B3C /* CellularOnDemandPolicy.swift in Sources */,
@@ -1117,6 +1133,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FD0000000000000000000005 /* FileDropModels.swift in Sources */,
 				44F3E3982EE2F89200C87FEC /* NetworkChangeListener.swift in Sources */,
 				44F3E38B2EE214D300C87FEC /* PacketTunnelProviderSettingsManager.swift in Sources */,
 				445B5F742EECAE4E008932B8 /* EnvVarPackager.swift in Sources */,
@@ -1144,6 +1161,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FD0000000000000000000003 /* FileDropModels.swift in Sources */,
 				50CD81632AD0595E00CF830B /* DNSManager.swift in Sources */,
 				50C5D3102BDD96CF003159BE /* RoutesSelectionDetails.swift in Sources */,
 				50C727ED2A824C10006E898D /* NetBirdAdapter.swift in Sources */,
@@ -1172,6 +1190,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FD0000000000000000000011 /* FileSendView.swift in Sources */,
+				FD0000000000000000000009 /* iOSFilesView.swift in Sources */,
+				FD0000000000000000000007 /* FilesViewModel.swift in Sources */,
+				FD0000000000000000000002 /* FileDropModels.swift in Sources */,
 				50CD84362AD82F9400CF830B /* ServerView.swift in Sources */,
 				50C5D30F2BDD96CF003159BE /* RoutesSelectionDetails.swift in Sources */,
 				50A8911D2A792A15007C48FC /* MainView.swift in Sources */,

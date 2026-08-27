@@ -77,6 +77,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     
     private var networkChangeWorkItem: DispatchWorkItem?
 
+    /// Serial queue for file drop provider messages, keeping their blocking Go
+    /// calls off the message-handling thread.
+    private let fileDropQueue = DispatchQueue(label: "io.netbird.filedrop")
+
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
@@ -271,6 +275,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case let s where s.hasPrefix("DebugBundle:"):
             let anonymize = s.dropFirst("DebugBundle:".count) == "true"
             debugBundle(anonymize: anonymize, completionHandler: completionHandler)
+        case let s where s.hasPrefix("FileDrop:"):
+            handleFileDropMessage(String(s.dropFirst("FileDrop:".count)), completionHandler: completionHandler)
         default:
             AppLogger.shared.log("Unknown message: \(string)")
             completionHandler(nil)
@@ -673,6 +679,106 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 completionHandler(key.data(using: .utf8))
             }
         }
+    }
+
+    /// Serves the app's file drop messages. Every Go call runs off the message
+    /// thread: sends and accepts can block on disk and network for a while, and
+    /// the provider must stay responsive to other messages meanwhile.
+    func handleFileDropMessage(_ command: String, completionHandler: @escaping (Data?) -> Void) {
+        guard let fileDrop = adapter?.fileDrop() else {
+            completionHandler(nil)
+            return
+        }
+
+        fileDropQueue.async { [weak self] in
+            switch command {
+            case "List":
+                self?.fileDropList(fileDrop, completionHandler: completionHandler)
+            case let c where c.hasPrefix("Send:"):
+                self?.fileDropSend(fileDrop, payload: String(c.dropFirst("Send:".count)), completionHandler: completionHandler)
+            case let c where c.hasPrefix("Accept:"):
+                let ok = (try? fileDrop.accept(String(c.dropFirst("Accept:".count)))) != nil
+                completionHandler((ok ? "true" : "false").data(using: .utf8))
+            case let c where c.hasPrefix("Decline:"):
+                let ok = (try? fileDrop.decline(String(c.dropFirst("Decline:".count)))) != nil
+                completionHandler((ok ? "true" : "false").data(using: .utf8))
+            case let c where c.hasPrefix("Stop:"):
+                fileDrop.cancel(String(c.dropFirst("Stop:".count)))
+                completionHandler("true".data(using: .utf8))
+            case let c where c.hasPrefix("Remove:"):
+                fileDrop.deleteTransfer(String(c.dropFirst("Remove:".count)))
+                completionHandler("true".data(using: .utf8))
+            case "GetMode":
+                completionHandler(String(fileDrop.mode()).data(using: .utf8))
+            case let c where c.hasPrefix("SetMode:"):
+                let mode = Int(c.dropFirst("SetMode:".count)) ?? -1
+                let ok = mode >= 0 && (try? fileDrop.setMode(mode)) != nil
+                completionHandler((ok ? "true" : "false").data(using: .utf8))
+            default:
+                AppLogger.shared.log("Unknown file drop message: \(command)")
+                completionHandler(nil)
+            }
+        }
+    }
+
+    private func fileDropList(_ fileDrop: NetBirdSDKFileDrop, completionHandler: (Data?) -> Void) {
+        guard let array = fileDrop.transfers() else {
+            completionHandler(nil)
+            return
+        }
+
+        var transfers: [FileDropTransferInfo] = []
+        for i in 0..<array.length() {
+            guard let t = array.get(i) else { continue }
+            transfers.append(FileDropTransferInfo(sdk: t))
+        }
+
+        do {
+            let data = try PropertyListEncoder().encode(transfers)
+            completionHandler(data)
+        } catch {
+            AppLogger.shared.log("Failed to encode file drop transfers: \(error.localizedDescription)")
+            completionHandler(nil)
+        }
+    }
+
+    private func fileDropSend(_ fileDrop: NetBirdSDKFileDrop, payload: String, completionHandler: @escaping (Data?) -> Void) {
+        let respond: (FileDropSendResponse) -> Void = { response in
+            let data = try? PropertyListEncoder().encode(response)
+            completionHandler(data)
+        }
+
+        guard let requestData = payload.data(using: .utf8),
+              let request = try? JSONDecoder().decode(FileDropSendRequest.self, from: requestData) else {
+            respond(FileDropSendResponse(transferID: "", error: "invalid send request"))
+            return
+        }
+
+        guard let payloads = NetBirdSDKNewFileDropPayloads() else {
+            respond(FileDropSendResponse(transferID: "", error: "payloads unavailable"))
+            return
+        }
+
+        do {
+            if !request.text.isEmpty {
+                try payloads.addText("text", text: request.text)
+            }
+            for file in request.files {
+                try payloads.addFile(file.name, size: file.size, contentType: file.contentType, path: file.path)
+            }
+        } catch {
+            respond(FileDropSendResponse(transferID: "", error: error.localizedDescription))
+            return
+        }
+
+        var error: NSError?
+        let transferID = fileDrop.send(request.peerKey, peerName: request.peerName, peerIP: request.peerIP,
+                                       payloads: payloads, error: &error)
+        if let error = error {
+            respond(FileDropSendResponse(transferID: "", error: error.localizedDescription))
+            return
+        }
+        respond(FileDropSendResponse(transferID: transferID, error: ""))
     }
 
     override func sleep(completionHandler: @escaping () -> Void) {
