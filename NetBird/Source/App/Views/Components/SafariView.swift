@@ -83,8 +83,25 @@ struct SafariView: UIViewControllerRepresentable {
                 )
             }
 
-            // Ephemeral = no shared cookies, fresh login every time
-            session.prefersEphemeralWebBrowserSession = true
+            // An ephemeral session hands the IdP an empty cookie jar on every login.
+            // Keycloak's login theme reacts to that by starting the session poll in
+            // authChecker.js — it only skips it when a KEYCLOAK_SESSION cookie is
+            // already present ("if (initialSession) return"). That poll races the
+            // redirect carrying the authorization code and bounces the browser to
+            // /login-actions/restart, which answers ALREADY_LOGGED_IN and fails the
+            // login with authentication_expired. Safari on iOS never fires
+            // beforeunload (WebKit bug 219102), so Keycloak's own safeguard against
+            // that race never applies, and every login becomes a race against a
+            // two-second timer.
+            //
+            // Persisting cookies avoids that, but it also means a logout no longer
+            // clears the IdP session — which is what keeps profiles signed into
+            // different accounts apart. So keep the ephemeral session exactly where it
+            // still buys something: when the server does not already force a fresh
+            // authentication. With prompt=login or max_age=0 the IdP re-authenticates
+            // regardless of any live session, so the empty jar protects nothing and
+            // only costs reliability.
+            session.prefersEphemeralWebBrowserSession = !parent.url.forcesReauthentication
             session.presentationContextProvider = self
             self.session = session
             session.start()
@@ -103,4 +120,22 @@ struct SafariView: UIViewControllerRepresentable {
         }
     }
 }
+
+private extension URL {
+    /// Whether this authorization request asks the IdP to authenticate the user afresh,
+    /// ignoring any existing session.
+    ///
+    /// The SDK adds `prompt=login` or `max_age=0` according to the login flag the
+    /// management server sends (`LoginFlagPromptLogin` by default), so the request URL
+    /// already carries the answer and nothing needs plumbing through the SDK.
+    var forcesReauthentication: Bool {
+        guard let items = URLComponents(url: self, resolvingAgainstBaseURL: false)?.queryItems else {
+            return false
+        }
+        return items.contains { item in
+            (item.name == "prompt" && item.value == "login") || (item.name == "max_age" && item.value == "0")
+        }
+    }
+}
+
 #endif
