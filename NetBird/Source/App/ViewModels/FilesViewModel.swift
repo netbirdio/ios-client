@@ -81,7 +81,7 @@ class FilesViewModel: ObservableObject {
         if let adapter = adapter {
             adapter.fileDropTransfers { [weak self] list in
                 if let list = list {
-                    DispatchQueue.main.async { self?.transfers = list }
+                    DispatchQueue.main.async { self?.apply(list) }
                 } else {
                     self?.refreshDirect()
                 }
@@ -90,6 +90,11 @@ class FilesViewModel: ObservableObject {
             refreshDirect()
         }
         cleanupOutbox()
+    }
+
+    private func apply(_ list: [FileDropTransferInfo]) {
+        transfers = list
+        relocateDelivered(list)
     }
 
     func refreshMode() {
@@ -262,6 +267,85 @@ class FilesViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Delivered file relocation
+
+    /// Received files land in the app group container, which nothing outside
+    /// the app can browse. Completed transfers are therefore moved into the
+    /// app's Documents directory, which Info.plist exposes in the Files app as
+    /// the NetBird folder, and the new locations are remembered per transfer
+    /// since the Go history keeps pointing at the old ones.
+    private static let relocatedKey = "netbird.filedrop.relocated"
+
+    /// Returns where a transfer's received files live now: the relocated
+    /// copies when the move already happened, the original delivery paths
+    /// otherwise.
+    func deliveredURLs(for transfer: FileDropTransferInfo) -> [URL] {
+        let map = UserDefaults.standard.dictionary(forKey: FilesViewModel.relocatedKey) as? [String: [String]] ?? [:]
+        let paths = map[transfer.id] ?? transfer.deliveredPaths
+        return paths.map { URL(fileURLWithPath: $0) }
+    }
+
+    private func relocateDelivered(_ list: [FileDropTransferInfo]) {
+        directQueue.async {
+            let defaults = UserDefaults.standard
+            var map = defaults.dictionary(forKey: FilesViewModel.relocatedKey) as? [String: [String]] ?? [:]
+            let fileManager = FileManager.default
+            guard let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+
+            var changed = false
+            for transfer in list where !transfer.outgoing && !transfer.isText
+                && transfer.transferState == .completed && !transfer.deliveredPaths.isEmpty {
+                if map[transfer.id] != nil { continue }
+
+                var moved: [String] = []
+                for path in transfer.deliveredPaths {
+                    let source = URL(fileURLWithPath: path)
+                    guard fileManager.fileExists(atPath: source.path) else { continue }
+                    let destination = FilesViewModel.uniqueDestination(for: source.lastPathComponent, in: documents)
+                    do {
+                        try fileManager.moveItem(at: source, to: destination)
+                        moved.append(destination.path)
+                    } catch {
+                        AppLogger.shared.log("file drop relocation failed for \(source.lastPathComponent): \(error.localizedDescription)")
+                    }
+                }
+                if !moved.isEmpty {
+                    map[transfer.id] = moved
+                    changed = true
+                }
+            }
+
+            let ids = Set(list.map { $0.id })
+            let pruned = map.filter { ids.contains($0.key) }
+            if pruned.count != map.count {
+                map = pruned
+                changed = true
+            }
+
+            if changed {
+                defaults.set(map, forKey: FilesViewModel.relocatedKey)
+            }
+        }
+    }
+
+    private static func uniqueDestination(for name: String, in directory: URL) -> URL {
+        let fileManager = FileManager.default
+        var candidate = directory.appendingPathComponent(name)
+        if !fileManager.fileExists(atPath: candidate.path) {
+            return candidate
+        }
+
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var counter = 2
+        repeat {
+            let numbered = ext.isEmpty ? "\(base) (\(counter))" : "\(base) (\(counter)).\(ext)"
+            candidate = directory.appendingPathComponent(numbered)
+            counter += 1
+        } while fileManager.fileExists(atPath: candidate.path)
+        return candidate
+    }
+
     // MARK: - Direct (extension not running)
 
     static func sharedContainerURL() -> URL? {
@@ -293,7 +377,7 @@ class FilesViewModel: ObservableObject {
                 guard let t = array.get(i) else { continue }
                 list.append(FileDropTransferInfo(sdk: t))
             }
-            DispatchQueue.main.async { self?.transfers = list }
+            DispatchQueue.main.async { self?.apply(list) }
         }
     }
 

@@ -145,7 +145,7 @@ struct iOSFilesView: View {
 
         if !transfer.outgoing, transfer.transferState == .completed, !transfer.deliveredPaths.isEmpty {
             Button {
-                shareItems = transfer.deliveredPaths.map { URL(fileURLWithPath: $0) }
+                shareItems = filesVM.deliveredURLs(for: transfer)
             } label: {
                 Label("Save or share", systemImage: "square.and.arrow.up")
             }

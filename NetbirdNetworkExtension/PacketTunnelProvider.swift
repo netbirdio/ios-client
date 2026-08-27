@@ -81,6 +81,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// calls off the message-handling thread.
     private let fileDropQueue = DispatchQueue(label: "io.netbird.filedrop")
 
+    /// Posts local notifications for incoming transfers. Held strongly: the Go
+    /// side only keeps a weak-equivalent handle on the listener.
+    private let fileDropNotifier = FileDropNotifier()
+
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
@@ -122,6 +126,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             )
             completionHandler(error)
             return
+        }
+
+        // Register for transfer events off the message path: opening the handle
+        // can block on disk, and the events must flow with no app attached.
+        fileDropQueue.async { [weak self] in
+            guard let self = self, let fileDrop = self.adapter?.fileDrop() else { return }
+            fileDrop.setListener(self.fileDropNotifier)
         }
 
         // Skip this check when the main app has already established the login state (its own
@@ -783,6 +794,73 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func sleep(completionHandler: @escaping () -> Void) {
         completionHandler()
+    }
+
+    /// Mirrors incoming transfer events into local notifications, so an offer
+    /// or a finished download surfaces without the app being open. Delivery is
+    /// best-effort: notification scheduling from a Network Extension can be
+    /// rejected by the system, and the Files tab still shows everything.
+    private class FileDropNotifier: NSObject, NetBirdSDKFileDropListenerProtocol {
+
+        private enum Event: Int {
+            case offer = 0
+            case completed = 1
+            case failed = 2
+            case withdrawn = 3
+            case progress = 4
+        }
+
+        func onFileDropEvent(_ kind: Int, transfer: NetBirdSDKFileDropTransfer?) {
+            guard let transfer = transfer, !transfer.outgoing else { return }
+
+            let center = UNUserNotificationCenter.current()
+            let offerID = "netbird.filedrop.offer.\(transfer.id_)"
+            let doneID = "netbird.filedrop.done.\(transfer.id_)"
+
+            switch Event(rawValue: kind) {
+            case .offer:
+                guard transfer.state == 0 else { return }
+                post(id: offerID,
+                     title: "Incoming file",
+                     body: "\(transfer.peerName) wants to send you \(itemLabel(transfer)). Open NetBird to accept it.")
+            case .completed:
+                center.removePendingNotificationRequests(withIdentifiers: [offerID])
+                center.removeDeliveredNotifications(withIdentifiers: [offerID])
+                post(id: doneID,
+                     title: "File received",
+                     body: "\(itemLabel(transfer)) from \(transfer.peerName). Open NetBird to save it.")
+            case .withdrawn, .failed:
+                center.removePendingNotificationRequests(withIdentifiers: [offerID])
+                center.removeDeliveredNotifications(withIdentifiers: [offerID])
+            default:
+                break
+            }
+        }
+
+        private func itemLabel(_ transfer: NetBirdSDKFileDropTransfer) -> String {
+            if transfer.isText {
+                return "a text snippet"
+            }
+            let count = transfer.fileCount()
+            if count > 1 {
+                return "\(count) files"
+            }
+            return transfer.getFile(0)?.name ?? "a file"
+        }
+
+        private func post(id: String, title: String, body: String) {
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+
+            let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    AppLogger.shared.log("file drop notification failed: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     override func wake() {
