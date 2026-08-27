@@ -249,11 +249,19 @@ struct FileTransferRow: View {
                     Text(FileDropFormat.title(for: transfer))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(Color("TextPrimary"))
-                        .lineLimit(2)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
 
-                    Text(FileDropFormat.subtitle(for: transfer))
+                    Text(FileDropFormat.peerLine(for: transfer))
                         .font(.system(size: 13))
                         .foregroundColor(Color("TextSecondary"))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Text(FileDropFormat.metaLine(for: transfer))
+                        .font(.system(size: 13))
+                        .foregroundColor(Color("TextSecondary"))
+                        .lineLimit(1)
                 }
 
                 Spacer()
@@ -287,16 +295,19 @@ enum FileDropFormat {
         return transfer.fileNames.first ?? "File"
     }
 
-    static func subtitle(for transfer: FileDropTransferInfo) -> String {
-        let direction = transfer.outgoing ? "to \(transfer.peerName)" : "from \(transfer.peerName)"
-        var parts = [direction]
-        if !transfer.isText, transfer.totalSize > 0 {
-            parts.append(size(transfer.totalSize))
-        }
+    static func peerLine(for transfer: FileDropTransferInfo) -> String {
+        transfer.outgoing ? "to \(transfer.peerName)" : "from \(transfer.peerName)"
+    }
+
+    static func metaLine(for transfer: FileDropTransferInfo) -> String {
+        var parts: [String] = []
         if let created = transfer.createdAt {
             let formatter = DateFormatter()
             formatter.timeStyle = .short
             parts.append(formatter.string(from: created))
+        }
+        if !transfer.isText, transfer.totalSize > 0 {
+            parts.append(size(transfer.totalSize))
         }
         return parts.joined(separator: " · ")
     }
