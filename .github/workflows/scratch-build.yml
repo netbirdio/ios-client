@@ -43,6 +43,25 @@ jobs:
       build-number: ${{ steps.finalize.outputs.build-number }}
       build-number-tvos: ${{ steps.finalize.outputs.build-number-tvos }}
     steps:
+      - name: Validate inputs
+        env:
+          IN_VERSION:     ${{ inputs.version }}
+          IN_BUILD:       ${{ inputs.build-number }}
+          IN_NETBIRD_REF: ${{ inputs.netbird-ref }}
+        run: |
+          if [ -n "$IN_VERSION" ] && ! [[ "$IN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must be X.Y.Z, got: $IN_VERSION"
+            exit 1
+          fi
+          if [ -n "$IN_BUILD" ] && ! [[ "$IN_BUILD" =~ ^[0-9]+$ ]]; then
+            echo "::error::build-number must be numeric, got: $IN_BUILD"
+            exit 1
+          fi
+          if [ -n "$IN_NETBIRD_REF" ] && ! [[ "$IN_NETBIRD_REF" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+            echo "::error::netbird-ref contains invalid characters"
+            exit 1
+          fi
+
       - name: Checkout for version derivation
         uses: actions/checkout@v4
         with:
@@ -79,8 +98,10 @@ jobs:
           PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
           APP_ID_IOS:  ${{ secrets.APP_STORE_APP_ID_IOS }}
           APP_ID_TVOS: ${{ secrets.APP_STORE_APP_ID_TVOS }}
+          OVERRIDE_VERSION: ${{ inputs.version }}
+          DERIVED_VERSION:  ${{ steps.derive.outputs.version }}
         run: |
-          VERSION="${{ inputs.version || steps.derive.outputs.version }}"
+          VERSION="${OVERRIDE_VERSION:-$DERIVED_VERSION}"
 
           pip install cryptography --quiet
 
