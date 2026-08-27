@@ -47,7 +47,6 @@ struct GlobalConstants {
     // login_hint the SDK sends, not by this. An empty string means "an account no
     // profile may silently reuse": set on logout, so signing back in cannot land on
     // the account just left.
-    static let keyLastBrowserLoginProfile = "netbird.lastBrowserLoginProfile"
 
     // Local notification identifiers
     static let notificationLoginRequired = "netbird.login.required"

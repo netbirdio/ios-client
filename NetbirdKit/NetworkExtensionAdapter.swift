@@ -559,41 +559,10 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
         let activeManagementURL = resolvedURL ?? ""
         logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfileID, privacy: .public)'")
-        // Every profile logs in through the same persistent browser session, which is
-        // what keeps the IdP's SSO session and its trusted-device cookie alive so a
-        // re-login is not asked for the second factor again. Which account that
-        // session lands on is not left to the shared cookie jar: the SDK sends the
-        // profile's own account as an OIDC login_hint (see the Go binding's
-        // profile_state.go), so a re-login targets the account the profile already
-        // belongs to, and a profile with no stored account — fresh, or logged out —
-        // deliberately leaves the choice to the IdP, which is how accounts change.
-        //
-        // A hint is advisory, though: an IdP holding a live session for another
-        // account may sign in with that session instead, which ends with the peer's
-        // key and the token belonging to different accounts ("peer is already
-        // registered by a different User"). Two cases have to ask the IdP for an
-        // account chooser rather than let the session resolve itself:
-        //
-        //   - the profile has no account bound yet. Either it never completed an SSO
-        //     login, or it was logged out, or it last logged in before this app
-        //     version existed — in all three the app has nothing to steer with and no
-        //     way to tell whose account the session is holding. It costs one chooser
-        //     screen, once: the login binds the account and every re-login after it
-        //     goes out with the hint and stays silent.
-        //   - the session last signed in as a different profile, so its account is
-        //     known to be the wrong one for this login.
-        //
-        // See authorizeURL(_:promptingForAccount:) for why that ends up as
-        // prompt=login rather than the friendlier prompt=select_account.
-        let boundAccount = ProfileManager.shared.accountEmail(forID: activeProfileID)
-        let promptForAccount = boundAccount == nil || Preferences.browserSessionHoldsAnotherProfile(activeProfileID)
-        if promptForAccount {
-            let reason = boundAccount == nil ? "no account bound to the profile" : "the browser session last signed in as another profile"
-            logger.info("performLogin: '\(activeProfileID, privacy: .public)' asks the IdP to re-decide the account — \(reason, privacy: .public)")
-            AppLogger.shared.log("performLogin: '\(activeProfileID)' asks the IdP to re-decide the account (\(reason))")
-        } else {
-            AppLogger.shared.log("performLogin: '\(activeProfileID)' reuses the browser session with a login_hint")
-        }
+        // The account this login targets is decided by the Go SDK: it reads the
+        // profile's stored account and sends it as the OIDC login_hint, and the
+        // management server's login flag decides whether the IdP is asked to
+        // re-authenticate. Nothing here rewrites the authorize URL.
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
            let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
             // A stale flow from an abandoned attempt would keep its loopback port
@@ -624,9 +593,7 @@ public class NetworkExtensionAdapter: ObservableObject {
                     // the extension, trips its needsLogin path, and pops the auth alert
                     // in parallel with this browser login. Ordering them guarantees the
                     // await caller sees showBrowser == true.
-                    let rewritten = Self.authorizeURL(url, promptingForAccount: promptForAccount)
-                    let browserURL = rewritten.url
-                    AppLogger.shared.log("performLogin: authorize URL account prompt — \(rewritten.outcome.rawValue)")
+                    let browserURL = url
                     DispatchQueue.main.async {
                         browserPhaseStarted = true
                         self?.loginErrorMessage = nil
@@ -654,11 +621,7 @@ public class NetworkExtensionAdapter: ObservableObject {
                     }
                     // The account this login ran under is recorded by the SDK itself,
                     // keyed by the config path it was handed, so the next login for
-                    // this profile can go out with it as the login_hint. What the SDK
-                    // cannot see is the browser session it went through, so record
-                    // here which profile that session now holds — the next login of a
-                    // different profile uses it to ask for the account chooser.
-                    Preferences.saveLastBrowserLoginProfile(activeProfileID)
+                    // this profile goes out with it as the login_hint.
                     AppLogger.shared.log("performLogin: SDK login succeeded for '\(activeProfileID)'")
                     // onSuccess runs on a background goroutine. Mark success on the main
                     // queue so the browser-finished handler (also main-queue) reliably
@@ -817,73 +780,10 @@ public class NetworkExtensionAdapter: ObservableObject {
             logger.error("performLogin: no login URL received from extension, aborting")
             return
         }
-        #if os(iOS)
-        // Same account-chooser policy as the main-app path. This path cannot observe
-        // login success, so it never records which profile the session ended up on —
-        // which also means the profile never gets an account bound and every login
-        // here asks, rather than silently resolving through the session.
-        let fallbackProfile = ProfileManager.shared.getActiveProfileName()
-        let rewritten = Self.authorizeURL(
-            url,
-            promptingForAccount: ProfileManager.shared.accountEmail(forID: fallbackProfile) == nil
-                || Preferences.browserSessionHoldsAnotherProfile(fallbackProfile)
-        )
-        AppLogger.shared.log("performLogin: authorize URL account prompt — \(rewritten.outcome.rawValue)")
-        self.pendingAuthorizeURL = rewritten.url
-        self.loginURL = rewritten.url
-        #else
         self.loginURL = url
-        #endif
         self.showBrowser = true
     }
 
-    #if os(iOS)
-    /// What asking the IdP to re-decide the account did to an authorize URL. Reported
-    /// so the log says what actually reached the IdP, not merely what was intended —
-    /// a request that was skipped looks identical from the outside otherwise.
-    enum AccountPromptOutcome: String {
-        /// `prompt=login` was added.
-        case added
-        /// The flow already asked for a prompt of its own; it is left alone.
-        case alreadyPrompting
-        /// The URL could not be parsed, so it goes out untouched.
-        case urlNotParsable
-        /// This login may resolve through the existing session.
-        case notRequested
-    }
-
-    /// Asks the IdP to re-decide which account signs in, for logins that must not be
-    /// resolved by whatever session the browser already holds.
-    ///
-    /// The value is `login`, not `select_account`. `select_account` is the friendlier
-    /// request — pick an account, no re-authentication — but only Google, Microsoft
-    /// and Okta implement it; Auth0 and Zitadel ignore it and sign in with the session
-    /// they already have, which is exactly the failure this is meant to prevent.
-    /// `prompt=login` is the one value every OIDC provider honours. It costs a
-    /// password on an account switch, but not the second factor: it re-authenticates
-    /// the user, while the trusted-device cookie that gates 2FA stays in the jar.
-    ///
-    /// A `prompt` the flow itself put there (the management server drives this through
-    /// its login flag) wins — overriding a server-chosen prompt is not this layer's
-    /// call.
-    static func authorizeURL(
-        _ urlString: String,
-        promptingForAccount: Bool
-    ) -> (url: String, outcome: AccountPromptOutcome) {
-        guard promptingForAccount else { return (urlString, .notRequested) }
-        guard var components = URLComponents(string: urlString) else {
-            return (urlString, .urlNotParsable)
-        }
-        var items = components.queryItems ?? []
-        guard !items.contains(where: { $0.name == "prompt" }) else {
-            return (urlString, .alreadyPrompting)
-        }
-        items.append(URLQueryItem(name: "prompt", value: "login"))
-        components.queryItems = items
-        guard let rewritten = components.string else { return (urlString, .urlNotParsable) }
-        return (rewritten, .added)
-    }
-    #endif
 
     #if os(iOS)
     /// Aborts an in-progress interactive login (e.g. the user dismissed the OAuth

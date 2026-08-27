@@ -176,20 +176,6 @@ class ProfileManager {
 
     /// Records the management URL for a profile so it is available before the
     /// profile config can be read back.
-    /// Account the profile last logged in with, or nil if it never completed an
-    /// SSO login. Read from the Go core, which records it next to the profile
-    /// config. Used as the OIDC login_hint so a re-login targets the account the
-    /// profile already belongs to.
-    ///
-    /// The core keeps this across logout on purpose (matching desktop, CLI and
-    /// Android): it is a hint, not a session. What makes a logout stop the next
-    /// login from silently reusing the account is
-    /// `Preferences.requireAccountSelectionOnNextLogin()`, not erasing this.
-    func accountEmail(forID id: String) -> String? {
-        guard let profile = listProfiles().first(where: { $0.id == id }),
-              !profile.email.isEmpty else { return nil }
-        return profile.email
-    }
 
     func saveServerURL(_ url: String, forID id: String) {
         ProfileConnectionCache().saveManagementURL(url, forID: id)
@@ -223,12 +209,6 @@ class ProfileManager {
     func removeProfile(id: String) throws {
         try go.removeProfile(id)
         ProfileConnectionCache().remove(forID: id)
-        // The core drops the profile's stored account with the profile itself, but
-        // the browser session may still hold that account and nothing names it any
-        // more — the next login has to ask which account to use.
-        if Preferences.loadLastBrowserLoginProfile() == id {
-            Preferences.requireAccountSelectionOnNextLogin()
-        }
     }
 
     /// Clears authentication for a profile, forcing re-login. The management
@@ -236,13 +216,6 @@ class ProfileManager {
     func logoutProfile(id: String) throws {
         try go.logoutProfile(id)
         ProfileConnectionCache().clearConnectionData(forID: id)
-        // Logging out must actually log out. The core keeps the account email on
-        // purpose — it is the login_hint that lets a re-login land on the right
-        // account — so what stops the next login from silently resolving through the
-        // browser session still holding the account just left is this flag, not
-        // erasing the hint. The next login asks the IdP which account to use, which
-        // is how a profile changes accounts.
-        Preferences.requireAccountSelectionOnNextLogin()
     }
 #endif
 
