@@ -221,16 +221,21 @@ class Preferences {
     // hoping the hint is honoured. Drift only ever costs one extra prompt, so nothing
     // depends on this being exact.
 
-    /// Profile whose account the shared browser session last signed in with. Nil when
-    /// no login has completed yet; "" when the session holds an account no profile may
-    /// silently reuse (see `requireAccountSelectionOnNextLogin`).
+    /// ID of the profile whose account the shared browser session last signed in
+    /// with. Nil when no login has completed yet; "" when the session holds an
+    /// account no profile may silently reuse (see
+    /// `requireAccountSelectionOnNextLogin`).
+    ///
+    /// Keyed by profile ID, not display name: the ID is what the Go profile
+    /// manager owns and it survives a rename, so renaming a profile cannot make
+    /// its own session look like another profile's.
     static func loadLastBrowserLoginProfile() -> String? {
         return sharedUserDefaults()?.string(forKey: GlobalConstants.keyLastBrowserLoginProfile)
     }
 
     /// Records the profile a completed login signed in as.
-    static func saveLastBrowserLoginProfile(_ name: String) {
-        sharedUserDefaults()?.set(name, forKey: GlobalConstants.keyLastBrowserLoginProfile)
+    static func saveLastBrowserLoginProfile(_ id: String) {
+        sharedUserDefaults()?.set(id, forKey: GlobalConstants.keyLastBrowserLoginProfile)
     }
 
     /// Makes the next login — of any profile — ask the IdP to re-decide the account.
@@ -245,9 +250,9 @@ class Preferences {
     /// Whether a login for `profile` must make the IdP re-decide which account signs
     /// in: the shared session last signed in as a different profile, or as an account
     /// that was logged out. The first login on an install has nothing to disambiguate.
-    static func browserSessionHoldsAnotherProfile(_ profile: String) -> Bool {
+    static func browserSessionHoldsAnotherProfile(_ id: String) -> Bool {
         guard let last = loadLastBrowserLoginProfile() else { return false }
-        return last != profile
+        return last != id
     }
 
     /// Restore config from UserDefaults to the config file path.
