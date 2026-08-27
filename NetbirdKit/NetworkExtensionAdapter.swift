@@ -49,6 +49,33 @@ class ConfigSSOListener: NSObject, NetBirdSDKSSOListenerProtocol {
     }
 }
 
+#if os(tvOS)
+/// Thread-safe generation token for cancelling the delayed device-auth IPC retry chain.
+private nonisolated final class LoginRetryState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var generation: UInt = 0
+
+    func begin() -> UInt {
+        lock.lock()
+        defer { lock.unlock() }
+        generation &+= 1
+        return generation
+    }
+
+    func isActive(_ candidate: UInt) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return generation == candidate
+    }
+
+    func cancel() {
+        lock.lock()
+        generation &+= 1
+        lock.unlock()
+    }
+}
+#endif
+
 public class NetworkExtensionAdapter: ObservableObject {
 
     private let logger = Logger(subsystem: "io.netbird.app", category: "NetworkExtensionAdapter")
@@ -63,6 +90,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     #if os(tvOS)
     var extensionID = "io.netbird.app.tv.extension"
     var extensionName = "NetBird"
+    private let loginRetryState = LoginRetryState()
     #else
     var extensionID = "io.netbird.app.NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
@@ -175,7 +203,15 @@ public class NetworkExtensionAdapter: ObservableObject {
 
     private func configureManager() async throws {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-        if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
+
+        // The provider bundle ID is the stable identity. A matching display name may
+        // belong to another installed flavor, such as App Store and development builds.
+        // Leave foreign configurations untouched, including active connections. Exact
+        // provider matching below prevents one build from binding to another's profile.
+        if let manager = managers.first(where: {
+            $0.localizedDescription == self.extensionName &&
+            ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.extensionID
+        }) {
             self.vpnManager = manager
             // Only write preferences when strictly necessary.
             // Calling saveToPreferences() on an already-configured manager triggers
@@ -204,7 +240,10 @@ public class NetworkExtensionAdapter: ObservableObject {
     public func loadCurrentConnectionState() async -> NEVPNStatus? {
         do {
             let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-            guard let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) else {
+            guard let manager = managers.first(where: {
+                $0.localizedDescription == self.extensionName &&
+                ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.extensionID
+            }) else {
                 logger.info("loadCurrentConnectionState: No existing manager found")
                 return nil
             }
@@ -218,7 +257,10 @@ public class NetworkExtensionAdapter: ObservableObject {
             if status == .disconnected || status == .invalid {
                 try? await Task.sleep(nanoseconds: 200_000_000) // 200 ms
                 let refreshed = try await NETunnelProviderManager.loadAllFromPreferences()
-                if let fresh = refreshed.first(where: { $0.localizedDescription == self.extensionName }) {
+                if let fresh = refreshed.first(where: {
+                    $0.localizedDescription == self.extensionName &&
+                    ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.extensionID
+                }) {
                     status = fresh.connection.status
                     self.vpnManager = fresh
                     self.session = fresh.connection as? NETunnelProviderSession
@@ -421,7 +463,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         logger.info("isLoginRequired: tvOS - config found, checking with management server...")
 
         // Create a Client and load config from UserDefaults
-        guard let client = NetBirdSDKNewClient("", "", Preferences.cacheDirectory(), "", Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
+        guard let client = NetBirdSDKNewClient("", statePath, Preferences.cacheDirectory(), "", Device.getName(), Device.getOsVersion(), Device.getOsName(), nil, nil) else {
             logger.error("isLoginRequired: tvOS - failed to create SDK client")
             return true
         }
@@ -588,12 +630,78 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
         #endif
 
-        // Fallback: IPC to the NE extension (tvOS, or if main-app auth setup failed)
+        #if os(tvOS)
+        let retryState = loginRetryState
+        let retryGeneration = retryState.begin()
+
+        // On tvOS the device-auth flow runs inside the extension (via the "LoginTV"
+        // IPC), and IPC only reaches a RUNNING extension. Boot the tunnel first: when
+        // login is required, the extension parks its startTunnel instead of failing,
+        // keeping the process alive for the whole auth flow.
+        if self.vpnManager?.connection.status == .disconnected
+            || self.vpnManager?.connection.status == .invalid {
+            logger.info("performLogin: tvOS - starting tunnel to boot extension for device auth")
+            startVPNConnection()
+        }
+
+        let loginURLString: String? = await withCheckedContinuation { continuation in
+            var attempts = 0
+            let maxAttempts = 12
+
+            func attempt() {
+                guard retryState.isActive(retryGeneration) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                attempts += 1
+                // Push the server config each round: early attempts may run before the
+                // extension process is up, and the extension needs the management URL
+                // (custom servers) before it can start the device-auth flow.
+                if attempts > 1, let configJSON = Preferences.loadConfigFromUserDefaults(), !configJSON.isEmpty {
+                    self.sendConfigToExtension(configJSON)
+                    if let url = Preferences.loadManagementURL() {
+                        let messageString = "SetManagementURL:\(url)"
+                        if let data = messageString.data(using: .utf8) {
+                            try? self.session?.sendProviderMessage(data) { _ in }
+                        }
+                    }
+                }
+
+                self.login { urlString in
+                    guard retryState.isActive(retryGeneration) else {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+
+                    if let urlString = urlString, !urlString.isEmpty {
+                        continuation.resume(returning: urlString)
+                    } else if attempts < maxAttempts {
+                        DispatchQueue.global().asyncAfter(deadline: .now() + 0.8) {
+                            attempt()
+                        }
+                    } else {
+                        continuation.resume(returning: nil)
+                    }
+                }
+            }
+
+            attempt()
+        }
+        #else
+        // Fallback: IPC to the NE extension (if main-app auth setup failed)
         let loginURLString: String? = await withCheckedContinuation { continuation in
             self.login { urlString in
                 continuation.resume(returning: urlString)
             }
         }
+        #endif
+        #if os(tvOS)
+        guard retryState.isActive(retryGeneration) else {
+            logger.info("performLogin: tvOS login IPC retry loop cancelled")
+            return
+        }
+        #endif
         guard let url = loginURLString, !url.isEmpty else {
             logger.error("performLogin: no login URL received from extension, aborting")
             return
@@ -667,6 +775,9 @@ public class NetworkExtensionAdapter: ObservableObject {
 
     
     func stop() -> Void {
+        #if os(tvOS)
+        loginRetryState.cancel()
+        #endif
         self.vpnManager?.connection.stopVPNTunnel()
     }
 
@@ -963,55 +1074,19 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
 
-    /// Check if login is complete by asking the Network Extension directly
-    /// This is more reliable than isLoginRequired() because it queries the same SDK client
-    /// that is actually performing the login
-    func checkLoginComplete(completion: @escaping (Bool) -> Void) {
+    /// Fetch login diagnostics from the Network Extension in a single IPC round-trip.
+    /// This queries the same SDK client that is actually performing the login.
+    /// Callers derive both error and completion state from the same response.
+    func checkLoginDiagnostics(completion: @escaping (LoginDiagnostics?) -> Void) {
         guard let session = self.session else {
-            logger.error("checkLoginComplete: No session available")
-            completion(false)
-            return
-        }
-
-        let messageString = "IsLoginComplete"
-        guard let messageData = messageString.data(using: .utf8) else {
-            print("checkLoginComplete: Failed to encode message")
-            completion(false)
-            return
-        }
-
-        do {
-            try session.sendProviderMessage(messageData) { response in
-                if let response = response {
-                    do {
-                        let diagnostic = try self.decoder.decode(LoginDiagnostics.self, from: response)
-                        print("checkLoginComplete: result=\(diagnostic.isComplete), isExecuting=\(diagnostic.isExecuting), loginRequired=\(diagnostic.loginRequired), configExists=\(diagnostic.configExists), stateExists=\(diagnostic.stateExists), lastResult=\(diagnostic.lastResult), lastError=\(diagnostic.lastError)")
-                        completion(diagnostic.isComplete)
-                    } catch {
-                        print("checkLoginComplete: Failed to decode LoginDiagnostics - \(error)")
-                        completion(false)
-                    }
-                } else {
-                    print("checkLoginComplete: No response from extension")
-                    completion(false)
-                }
-            }
-        } catch {
-            print("checkLoginComplete: Failed to send message - \(error)")
-            completion(false)
-        }
-    }
-
-    /// Check if there's a login error from the extension
-    /// Returns the error message via completion handler, or nil if no error
-    func checkLoginError(completion: @escaping (String?) -> Void) {
-        guard let session = self.session else {
+            logger.error("checkLoginDiagnostics: No session available")
             completion(nil)
             return
         }
 
         let messageString = "IsLoginComplete"
         guard let messageData = messageString.data(using: .utf8) else {
+            print("checkLoginDiagnostics: Failed to encode message")
             completion(nil)
             return
         }
@@ -1021,32 +1096,39 @@ public class NetworkExtensionAdapter: ObservableObject {
                 if let response = response {
                     do {
                         let diagnostic = try self.decoder.decode(LoginDiagnostics.self, from: response)
-                        // Only report error if lastResult is "error" and there's an actual error message
-                        if diagnostic.lastResult == "error" && !diagnostic.lastError.isEmpty {
-                            // Make the error message more user-friendly
-                            var friendlyError = diagnostic.lastError
-                            if diagnostic.lastError.contains("no peer auth method provided") {
-                                friendlyError = "This server doesn't support device code authentication. Please use a setup key instead."
-                            } else if diagnostic.lastError.contains("expired") || diagnostic.lastError.contains("token") {
-                                friendlyError = "The device code has expired. Please try again."
-                            } else if diagnostic.lastError.contains("denied") || diagnostic.lastError.contains("rejected") {
-                                friendlyError = "Authentication was denied. Please try again."
-                            }
-                            completion(friendlyError)
-                            return
-                        }
-                        completion(nil)
+                        print("checkLoginDiagnostics: result=\(diagnostic.isComplete), isExecuting=\(diagnostic.isExecuting), loginRequired=\(diagnostic.loginRequired), configExists=\(diagnostic.configExists), stateExists=\(diagnostic.stateExists), lastResult=\(diagnostic.lastResult), lastError=\(diagnostic.lastError)")
+                        completion(diagnostic)
                     } catch {
-                        print("checkLoginError: Failed to decode LoginDiagnostics - \(error)")
+                        print("checkLoginDiagnostics: Failed to decode LoginDiagnostics - \(error)")
                         completion(nil)
                     }
                 } else {
+                    print("checkLoginDiagnostics: No response from extension")
                     completion(nil)
                 }
             }
         } catch {
+            print("checkLoginDiagnostics: Failed to send message - \(error)")
             completion(nil)
         }
+    }
+
+    /// Persists configuration returned by a completed tvOS device-auth flow.
+    /// Kept separate from checkLoginDiagnostics so polling remains a read-only operation.
+    func persistLoginConfiguration(from diagnostic: LoginDiagnostics) {
+        #if os(tvOS)
+        guard diagnostic.isComplete,
+              let configJSON = diagnostic.configJSON,
+              !configJSON.isEmpty else {
+            return
+        }
+
+        if Preferences.saveConfigToUserDefaults(configJSON) {
+            logger.info("persistLoginConfiguration: saved post-login config in main app")
+        } else {
+            logger.error("persistLoginConfiguration: failed to save post-login config in main app")
+        }
+        #endif
     }
 
     func getRoutes(completion: @escaping (RoutesSelectionDetails) -> Void) {

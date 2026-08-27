@@ -75,6 +75,9 @@ struct TVMainView: View {
                     onCancel: {
                         viewModel.networkExtensionAdapter.showBrowser = false
                         viewModel.connectPressed = false
+                        // The extension is parked in startTunnel waiting for this login —
+                        // tear it down so it doesn't linger until the watchdog fires.
+                        viewModel.close()
                         viewModel.updateVPNDisplayState()
                     },
                     onComplete: {
@@ -83,7 +86,13 @@ struct TVMainView: View {
                         #endif
                         viewModel.networkExtensionAdapter.showBrowser = false
 
-                        // After login completes, ensure config is transferred to extension before connecting
+                        // The extension already holds the post-login config (loginAsync
+                        // saved it and loaded it into the client) and continues the
+                        // parked startTunnel by itself. Only push the config and start
+                        // the tunnel if it isn't already coming up — calling
+                        // startVPNTunnel on a .connecting session can disrupt it.
+                        guard viewModel.extensionState == .disconnected else { return }
+
                         // On tvOS, shared UserDefaults doesn't work, so we must send via IPC
                         if let configJSON = Preferences.loadConfigFromUserDefaults(), !configJSON.isEmpty {
                             #if DEBUG
@@ -110,17 +119,15 @@ struct TVMainView: View {
                         #endif
                         // Error is displayed in the auth view - user can dismiss manually
                     },
-                    checkLoginComplete: { completion in
-                        viewModel.networkExtensionAdapter.checkLoginComplete { isComplete in
+                    checkLoginDiagnostics: { completion in
+                        viewModel.networkExtensionAdapter.checkLoginDiagnostics { diagnostics in
+                            if let diagnostics, diagnostics.isComplete {
+                                viewModel.networkExtensionAdapter.persistLoginConfiguration(from: diagnostics)
+                            }
                             #if DEBUG
-                            print("TVMainView: checkLoginComplete returned \(isComplete)")
+                            print("TVMainView: checkLoginDiagnostics returned isComplete=\(diagnostics?.isComplete ?? false)")
                             #endif
-                            completion(isComplete)
-                        }
-                    },
-                    checkLoginError: { completion in
-                        viewModel.networkExtensionAdapter.checkLoginError { errorMessage in
-                            completion(errorMessage)
+                            completion(diagnostics)
                         }
                     }
                 )
@@ -187,7 +194,7 @@ struct TVConnectionView: View {
                     }
                 }
                 .padding(.top, 36)
-                .onChange(of: viewModel.ip) { newValue in
+                .onChange(of: viewModel.ip) { _, newValue in
                     if newValue.isEmpty { showAddressDetails = false }
                 }
 
@@ -374,7 +381,7 @@ struct TVVPNToggleView: View {
         .accessibilityLabel("VPN connection")
         .accessibilityValue(isOn ? "On" : "Off")
         // Clear optimistic as soon as the OS confirms any state change
-        .onChange(of: vpnState) { _ in
+        .onChange(of: vpnState) {
             optimisticIsOn = nil
         }
         // Bounded fallback. A disconnect tap does not always move vpnState: when the
@@ -592,5 +599,4 @@ struct TVMainView_Previews: PreviewProvider {
 }
 
 #endif
-
 
