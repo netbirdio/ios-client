@@ -41,12 +41,6 @@ struct GlobalConstants {
     static let stateFileName = "state.json"
     static let serverURLFileName = "netbird_server_url"
 
-    // Profile whose account the login browser's shared cookie jar last signed in
-    // with. Only decides whether the next login asks the IdP for an account chooser
-    // (prompt=select_account) — the account a profile belongs to is bound by the
-    // login_hint the SDK sends, not by this. An empty string means "an account no
-    // profile may silently reuse": set on logout, so signing back in cannot land on
-    // the account just left.
 
     // Local notification identifiers
     static let notificationLoginRequired = "netbird.login.required"
