@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import NetBirdSDK
 
 #if os(iOS)
 
@@ -117,7 +118,7 @@ struct iOSSettingsView: View {
                 Section {
                     HStack {
                         Spacer()
-                        Text("Version \(appVersion)")
+                        Text("Version: \(appVersion) (core \(goVersion))")
                             .font(.system(size: 14))
                             .foregroundColor(Color("TextSecondary"))
                         Spacer()
@@ -131,6 +132,12 @@ struct iOSSettingsView: View {
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+
+    /// Version of the Go client baked into NetBirdSDK.xcframework at compile time.
+    private var goVersion: String {
+        let version = NetBirdSDKGoClientVersion()
+        return version.isEmpty ? "unknown" : version
     }
 }
 

@@ -22,18 +22,20 @@ class AddProfileViewModel: ObservableObject {
     func create(name: String, serverUrl: String, setupKey: String) {
         clearErrors()
 
-        // 1. Create profile directory
+        // 1. Create the profile. The returned profile carries the generated ID,
+        //    which we must use for all follow-up operations (it is NOT the name).
+        let profile: Profile
         do {
-            try ProfileManager.shared.addProfile(name)
+            profile = try ProfileManager.shared.addProfile(name)
         } catch {
             profileError = error.localizedDescription
             return
         }
 
-        // 2. Get config path for the new profile
-        guard let configPath = ProfileManager.shared.configPath(for: name) else {
+        // 2. Get config path for the new profile (by ID)
+        guard let configPath = ProfileManager.shared.configPath(forID: profile.id) else {
             profileError = "Unable to access profile directory"
-            try? ProfileManager.shared.removeProfile(name)
+            try? ProfileManager.shared.removeProfile(id: profile.id)
             return
         }
 
@@ -66,7 +68,7 @@ class AddProfileViewModel: ObservableObject {
                 setupKeyError = serverVM.viewErrors.setupKeyError
                 generalError = serverVM.viewErrors.generalError
                 ssoNotSupportedError = serverVM.viewErrors.ssoNotSupportedError
-                try? ProfileManager.shared.removeProfile(name)
+                try? ProfileManager.shared.removeProfile(id: profile.id)
             }
         }
     }

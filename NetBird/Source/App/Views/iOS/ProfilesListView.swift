@@ -86,7 +86,7 @@ struct ProfilesListView: View {
                             }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            if profile.name != "default" {
+                            if !profile.isDefault {
                                 Button(role: .destructive) {
                                     selectedProfile = profile
                                     showRemoveAlert = true
@@ -170,7 +170,7 @@ struct ProfilesListView: View {
     /// filesystem, and a body may be evaluated any number of times.
     @ViewBuilder
     private func profileSubtitle(for profile: Profile) -> some View {
-        let details = profileDetails[profile.name]
+        let details = profileDetails[profile.id]
         if let url = details?.serverURL {
             Text(url)
                 .font(.footnote)
@@ -189,14 +189,15 @@ struct ProfilesListView: View {
 
     private func loadProfiles() {
         let loaded = ProfileManager.shared.listProfiles()
-        // Resolved here, not while a row renders: managementURL(for:) reads the
-        // profile's config and writes the resolved URL back to the server-URL file
-        // and the connection cache, and accountEmail(for:) goes through the SDK to
-        // disk. Doing either inside `body` turns every redraw into file I/O.
+        // Resolved here, not while a row renders: managementURL(forID:) reads the
+        // profile's config and writes the resolved URL back to the connection
+        // cache, so calling it inside `body` turns every redraw into file I/O.
+        // The account comes free with the listing — the Go core returns it on the
+        // profile itself, so it costs no extra lookup.
         profileDetails = Dictionary(uniqueKeysWithValues: loaded.map { profile in
-            (profile.name, ProfileDisplayDetails(
-                serverURL: ProfileManager.shared.managementURL(for: profile.name),
-                account: ProfileManager.shared.accountEmail(for: profile.name)
+            (profile.id, ProfileDisplayDetails(
+                serverURL: ProfileManager.shared.managementURL(forID: profile.id),
+                account: profile.email.isEmpty ? nil : profile.email
             ))
         })
         profiles = loaded
@@ -206,11 +207,11 @@ struct ProfilesListView: View {
         viewModel.performClose()
 
         do {
-            try ProfileManager.shared.switchProfile(profile.name)
-            viewModel.switchConnectionInfo(to: profile.name)
+            try ProfileManager.shared.switchProfile(id: profile.id)
+            viewModel.switchConnectionInfo(toID: profile.id)
             viewModel.reloadConfiguration()
             viewModel.activeProfileName = ProfileManager.shared.getActiveProfileName()
-            if let url = ProfileManager.shared.managementURL(for: profile.name) {
+            if let url = ProfileManager.shared.managementURL(forID: profile.id) {
                 Preferences.saveManagementURL(url)
             }
             loadProfiles()
@@ -222,7 +223,7 @@ struct ProfilesListView: View {
 
     private func removeProfile(_ profile: Profile) {
         do {
-            try ProfileManager.shared.removeProfile(profile.name)
+            try ProfileManager.shared.removeProfile(id: profile.id)
             loadProfiles()
         } catch {
             errorMessage = error.localizedDescription
@@ -235,7 +236,7 @@ struct ProfilesListView: View {
             viewModel.performClose()
         }
         do {
-            try ProfileManager.shared.logoutProfile(profile.name)
+            try ProfileManager.shared.logoutProfile(id: profile.id)
             loadProfiles()
         } catch {
             errorMessage = error.localizedDescription

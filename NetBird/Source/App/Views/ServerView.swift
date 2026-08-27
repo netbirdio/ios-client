@@ -28,7 +28,7 @@ struct ServerView: View {
                 footer: HStack(spacing: 6) {
                     Text("Current:")
                         .foregroundColor(Color("TextSecondary"))
-                    Text(ProfileManager.shared.managementURL(for: ProfileManager.shared.getActiveProfileName()) ?? defaultManagementServerUrl)
+                    Text(ProfileManager.shared.managementURL(forID: ProfileManager.shared.getActiveProfileID()) ?? defaultManagementServerUrl)
                         .foregroundColor(Color("TextPrimary"))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)

@@ -171,11 +171,11 @@ class ServerViewModel : ObservableObject {
                             Preferences.saveManagementURL(managementServerUrl)
                             #else
                             // The Go SDK already wrote the management URL into the active
-                            // profile's netbird.cfg. Also persist it to the dedicated,
-                            // logout-surviving server URL file and shared UserDefaults so
-                            // the chosen server cannot later fall back to the default cloud.
-                            let profile = ProfileManager.shared.getActiveProfileName()
-                            ProfileManager.shared.saveServerURL(managementServerUrl, for: profile)
+                            // profile's netbird.cfg. Also record it in the connection cache
+                            // and shared UserDefaults so the chosen server is available
+                            // before the config can be read back.
+                            let profileID = ProfileManager.shared.getActiveProfileID()
+                            ProfileManager.shared.saveServerURL(managementServerUrl, forID: profileID)
                             Preferences.saveManagementURL(managementServerUrl)
                             #endif
                             self?.isOperationSuccessful = true

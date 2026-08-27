@@ -273,8 +273,15 @@ public class NetBirdAdapter {
 
         #if os(tvOS)
         // On tvOS, the filesystem is blocked for the App Group container.
-        // Create the client with empty paths and load config from local storage instead.
-        guard let client = NetBirdSDKNewClient("", "", Preferences.cacheDirectory(), "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
+        // Create the client with an empty config path and load config from local storage instead.
+        // State path must be writable: the Go state manager persists next to it and fails
+        // with EPERM if it is empty or read-only. Log path stays empty here; engine logging
+        // is wired in a follow-up PR.
+        guard let statePath = Preferences.stateFile(), !statePath.isEmpty else {
+            adapterLogger.error("init: tvOS - writable state path is unavailable")
+            return nil
+        }
+        guard let client = NetBirdSDKNewClient("", statePath, Preferences.cacheDirectory(), "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
             adapterLogger.error("init: tvOS - Failed to create NetBird SDK client")
             return nil
         }
@@ -424,6 +431,21 @@ public class NetBirdAdapter {
                     #if os(tvOS)
                     let correctDeviceName = Device.getName()
                     configJSON = Self.updateDeviceNameInConfig(configJSON, newName: correctDeviceName)
+
+                    // Persist where adapter.init reads it: extension-local
+                    // standard UserDefaults (App Group storage is not shared
+                    // between app and extension on tvOS).
+                    UserDefaults.standard.set(configJSON, forKey: "netbird_config_json_local")
+                    UserDefaults.standard.synchronize()
+
+                    // Load the fresh config into the already-running client so a
+                    // parked startTunnel can proceed with adapter.start().
+                    do {
+                        try self?.client.setConfigFromJSON(configJSON)
+                        adapterLogger.info("loginAsync: tvOS - loaded post-login config into client")
+                    } catch {
+                        adapterLogger.error("loginAsync: tvOS - failed to load post-login config: \(error.localizedDescription)")
+                    }
                     #endif
 
                     _ = Preferences.saveConfigToUserDefaults(configJSON)

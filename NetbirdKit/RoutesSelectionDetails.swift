@@ -14,6 +14,25 @@ struct LoginDiagnostics: Codable {
     var stateExists: Bool
     var lastResult: String
     var lastError: String
+    /// Post-login config returned by the extension after device authentication.
+    /// The main app and extension have separate UserDefaults containers on tvOS,
+    /// so the app must persist this copy for subsequent login preflight checks.
+    var configJSON: String? = nil
+}
+
+extension LoginDiagnostics {
+    /// User-facing error message, or nil if login hasn't failed
+    var friendlyError: String? {
+        guard lastResult == "error", !lastError.isEmpty else { return nil }
+        if lastError.contains("no peer auth method provided") {
+            return "This server doesn't support device code authentication. Please use a setup key instead."
+        } else if lastError.contains("expired") || lastError.contains("token") {
+            return "The device code has expired. Please try again."
+        } else if lastError.contains("denied") || lastError.contains("rejected") {
+            return "Authentication was denied. Please try again."
+        }
+        return lastError
+    }
 }
 
 struct DeviceAuthResponse: Codable {

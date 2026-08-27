@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0C71C019350D42AB8F110336 /* iOSSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */; };
 		1C4E6A81CD33FF6D2DEFF8D5 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91FA1F06D3375864C74EAB3B /* Foundation.framework */; };
+		AA000C012F22000C00000001 /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
 		1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */; };
 		36F90EF57603411B9916FDD6 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 		3A9A981B20EF47C1907CC877 /* TVServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8BCB110545747678AA5A9C2 /* TVServerView.swift */; };
@@ -18,6 +19,7 @@
 		443782C52EDF288A00F9FA94 /* TVSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C32EDF288A00F9FA94 /* TVSettingsView.swift */; };
 		443782C62EDF288A00F9FA94 /* TVPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C22EDF288A00F9FA94 /* TVPeersView.swift */; };
 		443782C72EDF288A00F9FA94 /* TVNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C12EDF288A00F9FA94 /* TVNetworksView.swift */; };
+		E1E0F0012F90000100000001 /* TVExitNodeSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */; };
 		443782C82EDF288A00F9FA94 /* TVMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C02EDF288A00F9FA94 /* TVMainView.swift */; };
 		443782C92EDF293400F9FA94 /* NetBirdApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911A2A792A15007C48FC /* NetBirdApp.swift */; };
 		443782CA2EDF296500F9FA94 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911C2A792A15007C48FC /* MainView.swift */; };
@@ -174,6 +176,12 @@
 		AA0001022F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001032F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001042F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
+		AA000A012F22000A00000001 /* ProfileLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */; };
+		AA000A022F22000A00000001 /* ProfileLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */; };
+		AA000A032F22000A00000001 /* ProfileLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */; };
+		AA000A042F22000A00000001 /* ProfileLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */; };
+		AA000B012F22000B00000001 /* ProfileMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000B002F22000B00000001 /* ProfileMigrationTests.swift */; };
+		AA000B032F22000B00000003 /* ProfileConnectionCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */; };
 		AA0002052F22000200000001 /* ProfileBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002012F22000200000001 /* ProfileBadge.swift */; };
 		AA0002062F22000200000001 /* ProfilesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002022F22000200000001 /* ProfilesListView.swift */; };
 		AA0002072F22000200000001 /* AddProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002032F22000200000001 /* AddProfileSheet.swift */; };
@@ -286,6 +294,7 @@
 		443782BD2EDF284A00F9FA94 /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
 		443782C02EDF288A00F9FA94 /* TVMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVMainView.swift; sourceTree = "<group>"; };
 		443782C12EDF288A00F9FA94 /* TVNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVNetworksView.swift; sourceTree = "<group>"; };
+		E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVExitNodeSelector.swift; sourceTree = "<group>"; };
 		443782C22EDF288A00F9FA94 /* TVPeersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPeersView.swift; sourceTree = "<group>"; };
 		443782C32EDF288A00F9FA94 /* TVSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVSettingsView.swift; sourceTree = "<group>"; };
 		4483B26C2F19331A00BD9F66 /* TVColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVColors.swift; sourceTree = "<group>"; };
@@ -365,6 +374,9 @@
 		A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiOnDemandPolicy.swift; sourceTree = "<group>"; };
 		A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellularOnDemandPolicy.swift; sourceTree = "<group>"; };
 		AA0001002F22000100000001 /* ProfileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileManager.swift; sourceTree = "<group>"; };
+		AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileLayoutMigration.swift; sourceTree = "<group>"; };
+		AA000B002F22000B00000001 /* ProfileMigrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileMigrationTests.swift; sourceTree = "<group>"; };
+		AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileConnectionCacheTests.swift; sourceTree = "<group>"; };
 		AA0002012F22000200000001 /* ProfileBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileBadge.swift; sourceTree = "<group>"; };
 		AA0002022F22000200000001 /* ProfilesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesListView.swift; sourceTree = "<group>"; };
 		AA0002032F22000200000001 /* AddProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProfileSheet.swift; sourceTree = "<group>"; };
@@ -474,6 +486,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1C4E6A81CD33FF6D2DEFF8D5 /* Foundation.framework in Frameworks */,
+				AA000C012F22000C00000001 /* NetBirdSDK.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -495,6 +508,7 @@
 				44F3E39A2EE2F9FA00C87FEC /* TVAuthView.swift */,
 				443782C02EDF288A00F9FA94 /* TVMainView.swift */,
 				443782C12EDF288A00F9FA94 /* TVNetworksView.swift */,
+				E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */,
 				443782C22EDF288A00F9FA94 /* TVPeersView.swift */,
 				443782C32EDF288A00F9FA94 /* TVSettingsView.swift */,
 				AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */,
@@ -615,6 +629,7 @@
 				50245A292A7BDB590034792B /* Preferences.swift */,
 				AA0001002F22000100000001 /* ProfileManager.swift */,
 				AA0009002F22000900000001 /* ProfileConnectionCache.swift */,
+				AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */,
 				A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */,
 				50245A2D2A7BDC470034792B /* NetworkChangeListener.swift */,
 				50CD81612AD0595E00CF830B /* DNSManager.swift */,
@@ -710,6 +725,8 @@
 				3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */,
 				8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */,
 				53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */,
+				AA000B002F22000B00000001 /* ProfileMigrationTests.swift */,
+				AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */,
 			);
 			path = NetBirdTests;
 			sourceTree = "<group>";
@@ -1067,6 +1084,7 @@
 				443782D02EDF29A800F9FA94 /* Device.swift in Sources */,
 				443782D12EDF29A800F9FA94 /* Preferences.swift in Sources */,
 				AA0001012F22000100000001 /* ProfileManager.swift in Sources */,
+				AA000A012F22000A00000001 /* ProfileLayoutMigration.swift in Sources */,
 				AA0009012F22000900000001 /* ProfileConnectionCache.swift in Sources */,
 				A1B2C3D52EEDF501001A2B3C /* ConfigurationProvider.swift in Sources */,
 				443782D42EDF29A800F9FA94 /* RoutesSelectionDetails.swift in Sources */,
@@ -1084,6 +1102,7 @@
 				443782C92EDF293400F9FA94 /* NetBirdApp.swift in Sources */,
 				443782C62EDF288A00F9FA94 /* TVPeersView.swift in Sources */,
 				443782C72EDF288A00F9FA94 /* TVNetworksView.swift in Sources */,
+				E1E0F0012F90000100000001 /* TVExitNodeSelector.swift in Sources */,
 				44F3E39B2EE2F9FA00C87FEC /* TVAuthView.swift in Sources */,
 				4483B26D2F19331A00BD9F66 /* TVColors.swift in Sources */,
 				443782C82EDF288A00F9FA94 /* TVMainView.swift in Sources */,
@@ -1111,6 +1130,7 @@
 				44F3E3912EE2151100C87FEC /* ClientState.swift in Sources */,
 				44F3E3922EE2151100C87FEC /* Preferences.swift in Sources */,
 				AA0001022F22000100000001 /* ProfileManager.swift in Sources */,
+				AA000A022F22000A00000001 /* ProfileLayoutMigration.swift in Sources */,
 				AA0009022F22000900000001 /* ProfileConnectionCache.swift in Sources */,
 				A1B2C3D72EEDF503001A2B3C /* ConfigurationProvider.swift in Sources */,
 				44F3E3932EE2151100C87FEC /* NetworkExtensionAdapter.swift in Sources */,
@@ -1131,6 +1151,7 @@
 				505118D12AD96ECA003027D3 /* key.c in Sources */,
 				50213A2D2A8D0AA30031D993 /* Preferences.swift in Sources */,
 				AA0001032F22000100000001 /* ProfileManager.swift in Sources */,
+				AA000A032F22000A00000001 /* ProfileLayoutMigration.swift in Sources */,
 				AA0009032F22000900000001 /* ProfileConnectionCache.swift in Sources */,
 				50CD81A82AD5504B00CF830B /* StatusDetails.swift in Sources */,
 				F1B2920B2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */,
@@ -1185,6 +1206,7 @@
 				50CD81622AD0595E00CF830B /* DNSManager.swift in Sources */,
 				50216D892ACB18EE009574C9 /* Preferences.swift in Sources */,
 				AA0001042F22000100000001 /* ProfileManager.swift in Sources */,
+				AA000A042F22000A00000001 /* ProfileLayoutMigration.swift in Sources */,
 				AA0009042F22000900000001 /* ProfileConnectionCache.swift in Sources */,
 				A1B2C3D62EEDF502001A2B3C /* ConfigurationProvider.swift in Sources */,
 				50CD81B02AD5B94D00CF830B /* PeerCard.swift in Sources */,
@@ -1225,6 +1247,8 @@
 				94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */,
 				9CC0E000AE3F165CA72FD465 /* AppLoggerTests.swift in Sources */,
 				1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */,
+				AA000B012F22000B00000001 /* ProfileMigrationTests.swift in Sources */,
+				AA000B032F22000B00000003 /* ProfileConnectionCacheTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1275,6 +1299,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NetBird.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NetBird";
+				FRAMEWORK_SEARCH_PATHS = ("$(inherited)", "$(PROJECT_DIR)");
 			};
 			name = Debug;
 		};
@@ -1808,6 +1833,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NetBird.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NetBird";
+				FRAMEWORK_SEARCH_PATHS = ("$(inherited)", "$(PROJECT_DIR)");
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;

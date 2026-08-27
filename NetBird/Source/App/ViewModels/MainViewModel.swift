@@ -167,12 +167,12 @@ class ViewModel: ObservableObject {
 
     /// Loads cached ip/fqdn for the given profile into the published properties.
     /// Shows empty strings if no data has been saved for that profile yet.
-    func loadConnectionInfoForProfile(_ profileName: String) {
+    func loadConnectionInfoForProfile(forID id: String) {
         #if os(iOS)
-        let entry = profileConnectionCache.entry(for: profileName)
-        ip    = entry?.ip    ?? ""
-        fqdn  = entry?.fqdn  ?? ""
-        ipv6  = entry?.ipv6  ?? ""
+        let entry = profileConnectionCache.entry(forID: id)
+        ip   = entry?.ip   ?? ""
+        fqdn = entry?.fqdn ?? ""
+        ipv6 = entry?.ipv6 ?? ""
         #endif
     }
 
@@ -197,12 +197,12 @@ class ViewModel: ObservableObject {
 
         // Load cached connection info for the active profile
         #if os(iOS)
-        let activeProfile = ProfileManager.shared.getActiveProfileName()
+        let activeProfileID = ProfileManager.shared.getActiveProfileID()
         let cache = ProfileConnectionCache()
-        let cached = cache.entry(for: activeProfile)
-        self.ip    = cached?.ip    ?? ""
-        self.fqdn  = cached?.fqdn  ?? ""
-        self.ipv6  = cached?.ipv6  ?? ""
+        let cached = cache.entry(forID: activeProfileID)
+        self.ip   = cached?.ip   ?? ""
+        self.fqdn = cached?.fqdn ?? ""
+        self.ipv6 = cached?.ipv6 ?? ""
         #endif
 
         // Don't load rosenpass settings during init - they trigger expensive SDK initialization.
@@ -310,9 +310,16 @@ class ViewModel: ObservableObject {
     }
 
     /// Disables On Demand and connects (user chose to override conflicting rules).
+    /// Connects only once the disarm has been written, otherwise a Disconnect rule that is
+    /// still in force tears the new tunnel down again. The connect runs even if the manager
+    /// refused the change — the user asked for a connection, and the rule conflict is
+    /// reported by the alert that led here.
     func connectWithOnDemandDisabled() {
-        setConnectOnDemand(isEnabled: false)
-        performConnect()
+        setConnectOnDemand(isEnabled: false) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.performConnect()
+            }
+        }
     }
 
     #if os(iOS)
@@ -418,6 +425,13 @@ class ViewModel: ObservableObject {
             showOnDemandDisconnectAlert = true
             return
         }
+        #else
+        // tvOS runs a single always-connect rule, so an armed On Demand reconnects
+        // immediately on any interface — always warn before a manual disconnect.
+        if connectOnDemand {
+            showOnDemandDisconnectAlert = true
+            return
+        }
         #endif
 
         performClose()
@@ -456,9 +470,20 @@ class ViewModel: ObservableObject {
     }
 
     /// Disables On Demand and disconnects (user chose to prevent auto-reconnect).
+    /// The disconnect waits for the disarm to be persisted: stopping the tunnel while a rule
+    /// is still in force just has the system bring it back, which reads as a failed
+    /// disconnect. If the manager refuses the change, the tunnel is left up rather than
+    /// dropped into an immediate reconnect.
     func closeWithOnDemandDisabled() {
-        setConnectOnDemand(isEnabled: false)
-        performClose()
+        setConnectOnDemand(isEnabled: false) { [weak self] inForce in
+            guard inForce else {
+                AppLogger.shared.log("closeWithOnDemandDisabled: On Demand still armed, keeping the tunnel up")
+                return
+            }
+            DispatchQueue.main.async {
+                self?.performClose()
+            }
+        }
     }
 
     func updateVPNDisplayState(priorExtensionState: NEVPNStatus? = nil) {
@@ -585,8 +610,8 @@ class ViewModel: ObservableObject {
                     self.ip   = newIp
                     self.ipv6 = newIpv6
                     #if os(iOS)
-                    let profile = ProfileManager.shared.getActiveProfileName()
-                    self.profileConnectionCache.save(ip: newIp, fqdn: newFqdn, ipv6: newIpv6, for: profile)
+                    let activeID = ProfileManager.shared.getActiveProfileID()
+                    self.profileConnectionCache.save(ip: newIp, fqdn: newFqdn, ipv6: newIpv6, forID: activeID)
                     #endif
                 }
 
@@ -637,11 +662,22 @@ class ViewModel: ObservableObject {
         extensionState = status
         updateVPNDisplayState(priorExtensionState: priorState)
 
+        applyRouteSideEffects(for: status)
+
+        if status == .connected, connectOnDemand {
+            networkExtensionAdapter.setOnDemandEnabled(true)
+        }
+    }
+
+    /// Brings the cached route list in line with `status`.
+    ///
+    /// Separate from `applyExtensionStatus` so that callers which assign `extensionState`
+    /// themselves — and therefore trip its `extensionState != status` guard — can still
+    /// apply this part. Idempotent: re-running it for an unchanged status costs one
+    /// GetRoutes round-trip while connected, and nothing at all while disconnected.
+    func applyRouteSideEffects(for status: NEVPNStatus) {
         if status == .connected {
             routeViewModel.getRoutes()
-            if connectOnDemand {
-                networkExtensionAdapter.setOnDemandEnabled(true)
-            }
         } else if status == .disconnected {
             // Routes only exist while the extension is up. Drop them so the exit node
             // selector on the connection screen falls back to its disabled state instead
@@ -658,22 +694,54 @@ class ViewModel: ObservableObject {
         defaults.removeObject(forKey: "ip")
         defaults.removeObject(forKey: "fqdn")
 
-        // Disable and persist On Demand off to keep UI/storage/manager in sync
-        setConnectOnDemand(isEnabled: false)
-
-        // Clear config JSON (contains server credentials and all settings)
-        Preferences.removeConfigFromUserDefaults()
+        // Disable and persist On Demand off to keep UI/storage/manager in sync, and wipe the
+        // config only once that disarm has actually landed — a rule still in force would have
+        // the system restart the tunnel against the configuration being removed.
+        if connectOnDemand {
+            setConnectOnDemand(isEnabled: false) { [weak self] inForce in
+                if !inForce {
+                    AppLogger.shared.log("clearDetails: On Demand disarm failed, clearing the config anyway")
+                }
+                DispatchQueue.main.async {
+                    self?.wipeStoredConfig()
+                }
+            }
+        } else {
+            wipeStoredConfig()
+        }
 
         // Reset @Published properties to reflect cleared state in UI
         self.rosenpassEnabled = false
         self.rosenpassPermissive = false
         self.presharedKey = ""
         self.presharedKeySecure = false
+    }
+
+    /// Removes the stored configuration — server credentials and all settings.
+    private func wipeStoredConfig() {
+        Preferences.removeConfigFromUserDefaults()
 
         #if os(tvOS)
         // Also clear extension-local config to prevent stale credentials
         networkExtensionAdapter.clearExtensionConfig()
         #endif
+    }
+
+    /// Server change: disarm On Demand, then disconnect and clear local state, in that order.
+    /// Proceeds even when the disarm fails — the user asked to leave this server, and stale
+    /// credentials must not be kept just because the tunnel manager refused a rule change.
+    func resetForServerChange(completion: @escaping () -> Void) {
+        setConnectOnDemand(isEnabled: false) { [weak self] inForce in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if !inForce {
+                    AppLogger.shared.log("resetForServerChange: On Demand disarm failed, resetting anyway")
+                }
+                self.performClose()
+                self.clearDetails()
+                completion()
+            }
+        }
     }
     
     // MARK: - Configuration Methods (via ConfigurationProvider)
@@ -681,7 +749,15 @@ class ViewModel: ObservableObject {
     func updatePreSharedKey() {
         configProvider.preSharedKey = presharedKey
         if configProvider.commit() {
+            // tvOS: bypass the On Demand disconnect prompt. The user changed a setting that
+            // needs a reconnect, not asked to stay offline — letting On Demand bring the
+            // tunnel back with the new key is the intended outcome (and the prompt would be
+            // hidden behind the pre-shared key cover anyway).
+            #if os(tvOS)
+            self.performClose()
+            #else
             self.close()
+            #endif
             self.presharedKeySecure = true
             self.showPreSharedKeyChangedInfo = true
         } else {
@@ -693,7 +769,11 @@ class ViewModel: ObservableObject {
         presharedKey = ""
         configProvider.preSharedKey = ""
         if configProvider.commit() {
+            #if os(tvOS)
+            self.performClose()
+            #else
             self.close()
+            #endif
             self.presharedKeySecure = false
         } else {
             print("Failed to remove preshared key")
@@ -761,9 +841,9 @@ class ViewModel: ObservableObject {
 
     /// Switches connection display data to the given profile's cached values.
     /// Call this when switching profiles so the new profile's last known info is shown immediately.
-    func switchConnectionInfo(to profileName: String) {
+    func switchConnectionInfo(toID id: String) {
         // Load cached data for the target profile so the UI shows it right away.
-        loadConnectionInfoForProfile(profileName)
+        loadConnectionInfoForProfile(forID: id)
         peerViewModel.peerInfo = []
         managementStatus = .disconnected
         updateVPNDisplayState()
@@ -811,11 +891,35 @@ class ViewModel: ObservableObject {
         #endif
     }
     
-    func setConnectOnDemand(isEnabled: Bool) {
+    /// Stores the user's On Demand choice and asks the tunnel manager to apply it.
+    ///
+    /// The preference is written up front because it is the user's *intent*: when there is
+    /// nothing to arm yet (no manager, or no login), the choice has to survive so
+    /// `applyExtensionStatus` can arm it after the next successful connection. Only a manager
+    /// that actively rejects the change rolls the stored value back, so UI, storage and the
+    /// tunnel manager never disagree about what is in force.
+    ///
+    /// - Parameter completion: called with `true` when the requested state is in force
+    ///   (applied, or nothing needed arming), `false` when the manager refused it. Callers
+    ///   that depend on the change — disconnecting, wiping the config — must wait for it.
+    func setConnectOnDemand(isEnabled: Bool, completion: ((Bool) -> Void)? = nil) {
+        let previous = connectOnDemand
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         userDefaults?.set(isEnabled, forKey: GlobalConstants.keyConnectOnDemand)
         self.connectOnDemand = isEnabled
-        networkExtensionAdapter.setOnDemandEnabled(isEnabled)
+        networkExtensionAdapter.setOnDemandEnabled(isEnabled) { [weak self] result in
+            switch result {
+            case .applied, .deferred:
+                completion?(true)
+            case .failed(let error):
+                AppLogger.shared.log("On Demand change to \(isEnabled) failed (\(error?.localizedDescription ?? "unknown error")), reverting to \(previous)")
+                DispatchQueue.main.async {
+                    userDefaults?.set(previous, forKey: GlobalConstants.keyConnectOnDemand)
+                    self?.connectOnDemand = previous
+                    completion?(false)
+                }
+            }
+        }
         if isEnabled {
             self.showOnDemandAlert = true
         }
@@ -1004,7 +1108,7 @@ class ViewModel: ObservableObject {
 
     /// Checks shared app-group container for login required flag set by the network extension.
     /// Shows the authentication UI. Notification was already delivered via NEVPNStatusDidChange observer.
-    /// iOS only — tvOS uses IPC via `checkLoginError` in TVAuthView.
+    /// iOS only — tvOS uses IPC via `checkLoginDiagnostics` in TVAuthView.
     func checkLoginRequiredFlag() {
         #if os(iOS)
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
