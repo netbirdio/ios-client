@@ -155,12 +155,20 @@ struct iOSConnectionView: View {
                 SafariView(
                     isPresented: $viewModel.networkExtensionAdapter.showBrowser,
                     url: loginURL,
-                    didFinish: {
+                    didFinish: { interruptedByBackgrounding in
                         if viewModel.networkExtensionAdapter.loginSucceeded {
                             print("Finish login")
                             // The SDK just completed the management login, so the extension
                             // can skip its own needs-login check (one Login RPC) when it starts.
                             viewModel.networkExtensionAdapter.startVPNConnection(loginVerified: true)
+                        } else if interruptedByBackgrounding {
+                            // Not a cancellation: iOS ended the session because the app went
+                            // to the background, which is what any login involving another
+                            // app looks like. The flow is still running and its redirect is
+                            // still on its way, so give it time rather than killing it.
+                            viewModel.networkExtensionAdapter.deferLoginCancellation {
+                                viewModel.cancelPendingLogin()
+                            }
                         } else {
                             // User closed the browser without completing login. Do NOT start
                             // the VPN — that would launch the extension, trip its needs-login
