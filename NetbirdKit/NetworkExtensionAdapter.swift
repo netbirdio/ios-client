@@ -134,16 +134,15 @@ public class NetworkExtensionAdapter: ObservableObject {
         guard let configPath = Preferences.configFile() else { return }
         guard !FileManager.default.fileExists(atPath: configPath) else { return }
 
-        let profileName = ProfileManager.shared.getActiveProfileName()
-        // Prefer the dedicated server URL file (survives logout) over the in-memory cache
-        let managementURL = ProfileManager.shared.savedServerURL(for: profileName)
-            ?? ProfileConnectionCache().managementURL(for: profileName)
-        guard let url = managementURL, !url.isEmpty else {
-            logger.info("restoreConfigIfMissing: no saved URL for '\(profileName)', will use default server")
+        let activeID = ProfileManager.shared.getActiveProfileID()
+        // managementURL(forID:) reads the profile config first (which survives
+        // logout in the ID-based model) and falls back to the connection cache.
+        guard let url = ProfileManager.shared.managementURL(forID: activeID), !url.isEmpty else {
+            logger.info("restoreConfigIfMissing: no saved URL for '\(activeID)', will use default server")
             return
         }
 
-        logger.info("restoreConfigIfMissing: writing minimal config for '\(profileName)' with URL '\(url)'")
+        logger.info("restoreConfigIfMissing: writing minimal config for '\(activeID)' with URL '\(url)'")
         // The Go SDK serializes url.URL as a nested JSON object {Scheme, Host, Path, ...}.
         // Writing ManagementURL as a plain string causes Go's json.Unmarshal to fail silently,
         // leaving ManagementURL nil and falling back to the default api.netbird.io server.
@@ -492,8 +491,8 @@ public class NetworkExtensionAdapter: ObservableObject {
         // back to the default cloud server (api.netbird.io), so login would run against
         // — and be written back to — the wrong server. Pass the active profile's real
         // management URL so login targets the user's own server and the config keeps it.
-        let activeProfile = ProfileManager.shared.getActiveProfileName()
-        // managementURL(for:) already recovers the URL from the config file, the
+        let activeProfileID = ProfileManager.shared.getActiveProfileID()
+        // managementURL(forID:) already recovers the URL from the config file, the
         // logout-surviving server URL file, and the connection cache in turn. A nil
         // result therefore means no server URL is persisted anywhere — which only
         // happens on a genuine first-time login, where falling back to the default
@@ -502,12 +501,12 @@ public class NetworkExtensionAdapter: ObservableObject {
         // config URL when a non-empty one is provided). Log the nil case so a rare
         // corrupted state (own-server profile that lost every URL source, which would
         // silently fall back to the default cloud) is visible in diagnostics.
-        let resolvedURL = ProfileManager.shared.managementURL(for: activeProfile)
+        let resolvedURL = ProfileManager.shared.managementURL(forID: activeProfileID)
         if resolvedURL == nil {
-            logger.warning("performLogin: no persisted management URL for '\(activeProfile, privacy: .public)' — login will use the default cloud server")
+            logger.warning("performLogin: no persisted management URL for '\(activeProfileID, privacy: .public)' — login will use the default cloud server")
         }
         let activeManagementURL = resolvedURL ?? ""
-        logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfile, privacy: .public)'")
+        logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfileID, privacy: .public)'")
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
            let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
             self.pendingAuth = auth
@@ -549,7 +548,7 @@ public class NetworkExtensionAdapter: ObservableObject {
                     // the shared UserDefaults so the user's own server cannot later fall back
                     // to the default cloud server (e.g. when the config file is recreated).
                     if !activeManagementURL.isEmpty {
-                        ProfileManager.shared.saveServerURL(activeManagementURL, for: activeProfile)
+                        ProfileManager.shared.saveServerURL(activeManagementURL, forID: activeProfileID)
                         Preferences.saveManagementURL(activeManagementURL)
                     }
                     // onSuccess runs on a background goroutine. Mark success on the main
@@ -920,8 +919,8 @@ public class NetworkExtensionAdapter: ObservableObject {
             var messageString = "Login"
             if let configPath = Preferences.configFile(), let statePath = Preferences.stateFile() {
                 messageString = "Login:\(configPath)|\(statePath)"
-                let profileName = ProfileManager.shared.getActiveProfileName()
-                if let cachedURL = ProfileConnectionCache().managementURL(for: profileName),
+                let activeID = ProfileManager.shared.getActiveProfileID()
+                if let cachedURL = ProfileConnectionCache().managementURL(forID: activeID),
                    !cachedURL.isEmpty {
                     messageString += "|\(cachedURL)"
                 }
