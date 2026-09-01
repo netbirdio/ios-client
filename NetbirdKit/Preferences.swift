@@ -80,7 +80,24 @@ class Preferences {
     static func configFile() -> String? {
         #if os(iOS)
         // Use profile-aware paths on iOS
-        return ProfileManager.shared.activeConfigPath()
+        guard let path = ProfileManager.shared.activeConfigPath() else {
+            return nil
+        }
+
+        // A development reinstall or app-group container migration can preserve
+        // shared defaults while leaving the file-backed SDK configuration absent.
+        // Restore the authenticated legacy snapshot before the first login/status
+        // check so the tunnel is not started with a non-existent config path.
+        if !FileManager.default.fileExists(atPath: path),
+           let configJSON = loadConfigFromUserDefaults() {
+            do {
+                try configJSON.write(toFile: path, atomically: true, encoding: .utf8)
+                AppLogger.shared.log("Restored missing active profile configuration from shared defaults")
+            } catch {
+                AppLogger.shared.log("Failed to restore active profile configuration: \(error)")
+            }
+        }
+        return path
         #elseif os(tvOS)
         // App Group container is not writable on tvOS, so the config path handed
         // to NetBirdSDKNewAuth must live in a writable directory — otherwise the

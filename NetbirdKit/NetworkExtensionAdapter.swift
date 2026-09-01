@@ -92,7 +92,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     var extensionName = "NetBird"
     private let loginRetryState = LoginRetryState()
     #else
-    var extensionID = "io.netbird.app.NetbirdNetworkExtension"
+    var extensionID = "\(Bundle.main.bundleIdentifier ?? "io.netbird.app").NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
     #endif
 
