@@ -657,6 +657,12 @@ public class NetworkExtensionAdapter: ObservableObject {
                     // onError runs on a background goroutine; mutate state on the main
                     // queue to stay consistent with onSuccess and cancelLogin().
                     DispatchQueue.main.async {
+                        // Resume on the main queue, like onOpen does. `resumed` is a plain
+                        // captured var: resuming from the callback's own goroutine thread
+                        // while onOpen's queued block is still pending races it, and two
+                        // resumes of a checked continuation trap rather than fail softly.
+                        // Deferred so every exit path below still resumes.
+                        defer { resume(nil) }
                         guard let self else { return }
                         self.logger.error("performLogin: SDK login failed: \(message, privacy: .public)")
                         self.pendingAuth = nil
@@ -681,7 +687,6 @@ public class NetworkExtensionAdapter: ObservableObject {
                         }
                         self.showBrowser = false
                     }
-                    resume(nil)
                 }
                 // Pass the device name explicitly. The plain login() path uses an empty
                 // device name, which makes the management server register the peer under
@@ -780,8 +785,16 @@ public class NetworkExtensionAdapter: ObservableObject {
             logger.error("performLogin: no login URL received from extension, aborting")
             return
         }
-        self.loginURL = url
-        self.showBrowser = true
+        // performLogin() is a nonisolated async method, so its body runs on the
+        // cooperative pool even when start() called it from the main actor — a
+        // nonisolated function does not inherit the caller's actor. loginURL and
+        // showBrowser are @Published, and publishing off the main thread is
+        // undefined behaviour in SwiftUI. Same ordering as the main-app path above:
+        // showBrowser is committed together with the URL it belongs to.
+        await MainActor.run {
+            self.loginURL = url
+            self.showBrowser = true
+        }
     }
 
 
