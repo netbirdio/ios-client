@@ -1313,7 +1313,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     func startTimer(completion: @escaping (StatusDetails) -> Void) {
         self.timer.invalidate()
         self.fetchData(completion: completion)
-        self.timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true, block: { [weak self] _ in
+        self.timer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true, block: { [weak self] _ in
             self?.fetchData(completion: completion)
         })
     }
