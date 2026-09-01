@@ -244,6 +244,15 @@ class ViewModel: ObservableObject {
             }
             .assign(to: &$showInvalidSetupKeyHint)
     }
+
+    deinit {
+        networkMonitor.cancel()
+        #if os(iOS)
+        if let vpnStatusObserver {
+            NotificationCenter.default.removeObserver(vpnStatusObserver)
+        }
+        #endif
+    }
     
     func connect()  {
         logger.info("connect: ENTRY POINT - function called")
@@ -575,7 +584,8 @@ class ViewModel: ObservableObject {
         #if os(iOS)
         refreshCurrentSSID()
         #endif
-        networkExtensionAdapter.startTimer { details in
+        networkExtensionAdapter.startTimer { [weak self] details in
+            guard let self else { return }
             self.checkExtensionState()
             self.checkNetworkUnavailableFlag()
             self.checkLoginRequiredFlag()

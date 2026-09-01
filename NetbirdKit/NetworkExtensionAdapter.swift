@@ -1258,13 +1258,17 @@ public class NetworkExtensionAdapter: ObservableObject {
         // This is to make sure completion is called only once
         let safeCompletion: (StatusDetails) -> Void = { [weak self] status in
             completionLock.lock()
-            defer { completionLock.unlock() }
-            
-            guard !hasCompleted else { return }
+            guard !hasCompleted else {
+                completionLock.unlock()
+                return
+            }
             hasCompleted = true
-            
-            self?.isFetchingStatus = false
-            completion(status)
+            completionLock.unlock()
+
+            DispatchQueue.main.async {
+                self?.isFetchingStatus = false
+                completion(status)
+            }
         }
         
         // Timeout after 10 seconds to reset fetching status to false
@@ -1309,8 +1313,8 @@ public class NetworkExtensionAdapter: ObservableObject {
     func startTimer(completion: @escaping (StatusDetails) -> Void) {
         self.timer.invalidate()
         self.fetchData(completion: completion)
-        self.timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true, block: { _ in
-            self.fetchData(completion: completion)
+        self.timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true, block: { [weak self] _ in
+            self?.fetchData(completion: completion)
         })
     }
     

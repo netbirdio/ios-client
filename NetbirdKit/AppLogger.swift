@@ -16,6 +16,10 @@ public class AppLogger {
     private var fileHandle: FileHandle?
     private var logFileURL: URL?
     private var isReady = false
+    private var bytesSinceLastSync = 0
+    private var lastSyncDate = Date()
+    private let syncByteThreshold = 16 * 1024
+    private let syncInterval: TimeInterval = 2
     private let setupSemaphore = DispatchSemaphore(value: 0)
 
     private let iso8601Formatter: ISO8601DateFormatter = {
@@ -103,7 +107,12 @@ public class AppLogger {
         rotateLogIfNeeded()
 
         fileHandle?.write(data)
-        try? fileHandle?.synchronize()
+        bytesSinceLastSync += data.count
+        if bytesSinceLastSync >= syncByteThreshold || Date().timeIntervalSince(lastSyncDate) >= syncInterval {
+            try? fileHandle?.synchronize()
+            bytesSinceLastSync = 0
+            lastSyncDate = Date()
+        }
     }
 
     private func rotateLogIfNeeded() {
@@ -120,6 +129,8 @@ public class AppLogger {
                     return
                 }
                 fileHandle = try FileHandle(forWritingTo: url)
+                bytesSinceLastSync = 0
+                lastSyncDate = Date()
             }
         } catch {
             print("AppLogger: Failed to rotate log: \(error)")
@@ -140,6 +151,8 @@ public class AppLogger {
                     return
                 }
                 self?.fileHandle = try FileHandle(forWritingTo: url)
+                self?.bytesSinceLastSync = 0
+                self?.lastSyncDate = Date()
             } catch {
                 print("AppLogger: Failed to clear logs: \(error)")
                 self?.isReady = false
