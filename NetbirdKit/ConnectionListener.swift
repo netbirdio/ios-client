@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Network
 import NetBirdSDK
 
 class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
@@ -14,9 +15,38 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
 
     var adapter: NetBirdAdapter
 
+    private let pathMonitor = NWPathMonitor()
+    private let pathMonitorQueue = DispatchQueue(label: "io.netbird.connection-listener.path")
+    private let pathStatusLock = NSLock()
+    private var currentPathStatus: NWPath.Status?
+
     init(adapter: NetBirdAdapter, completionHandler: @escaping (Error?) -> Void) {
         self.completionHandler = completionHandler
         self.adapter = adapter
+        super.init()
+
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            self?.pathStatusLock.lock()
+            self?.currentPathStatus = path.status
+            self?.pathStatusLock.unlock()
+        }
+        pathMonitor.start(queue: pathMonitorQueue)
+    }
+
+    deinit {
+        pathMonitor.cancel()
+    }
+
+    private var isNetworkUnavailableOrUnknown: Bool {
+        if adapter.isNetworkUnavailable {
+            return true
+        }
+
+        pathStatusLock.lock()
+        defer { pathStatusLock.unlock() }
+        // Until the monitor publishes its first path, avoid turning a transient SDK
+        // disconnect into a terminal state. Authentication failures are handled first.
+        return currentPathStatus != .satisfied
     }
 
     func onAddressChanged(_ p0: String?, p1: String?) {
@@ -44,7 +74,7 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
 
     func onDisconnected() {
         let wasRestarting = adapter.isRestarting
-        let isNetworkUnavailableFlag = adapter.isNetworkUnavailable
+        let shouldKeepTunnelAlive = isNetworkUnavailableOrUnknown
 
         // Session expiry takes priority over the keep-alive-on-network-loss logic below.
         // If the last management error was an auth failure there is nothing to reconnect
@@ -63,10 +93,10 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
 
         // When network is unavailable, keep the tunnel alive by staying in "connecting" state
         // instead of "disconnected". This allows automatic reconnection when network returns.
-        // PacketTunnelProvider owns the long-lived NWPathMonitor and publishes its result
-        // through this flag. Creating another monitor here and waiting only 100 ms often
-        // timed out before its first update, falsely reporting an available path as down.
-        if isNetworkUnavailableFlag {
+        // Prefer the provider's published flag and use this listener's long-lived cached
+        // path as a fallback. That closes the callback-ordering window without blocking
+        // an SDK callback while waiting for a newly-created monitor's first update.
+        if shouldKeepTunnelAlive {
             adapter.clientState = .connecting
             AppLogger.shared.log("onDisconnected: network unavailable - staying in connecting state for auto-reconnect, wasRestarting=\(wasRestarting)")
         } else {

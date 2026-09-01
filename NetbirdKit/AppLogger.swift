@@ -17,7 +17,7 @@ public class AppLogger {
     private var logFileURL: URL?
     private var isReady = false
     private var bytesSinceLastSync = 0
-    private var lastSyncDate = Date()
+    private var syncWorkItem: DispatchWorkItem?
     private let syncByteThreshold = 16 * 1024
     private let syncInterval: TimeInterval = 2
     private let setupSemaphore = DispatchSemaphore(value: 0)
@@ -108,10 +108,35 @@ public class AppLogger {
 
         fileHandle?.write(data)
         bytesSinceLastSync += data.count
-        if bytesSinceLastSync >= syncByteThreshold || Date().timeIntervalSince(lastSyncDate) >= syncInterval {
-            try? fileHandle?.synchronize()
+        if bytesSinceLastSync >= syncByteThreshold {
+            synchronizePendingData()
+        } else if syncWorkItem == nil {
+            scheduleSync()
+        }
+    }
+
+    private func scheduleSync() {
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.syncWorkItem = nil
+            self?.synchronizePendingData()
+        }
+        syncWorkItem = workItem
+        queue.asyncAfter(deadline: .now() + syncInterval, execute: workItem)
+    }
+
+    private func synchronizePendingData() {
+        guard bytesSinceLastSync > 0, let fileHandle else { return }
+
+        do {
+            try fileHandle.synchronize()
             bytesSinceLastSync = 0
-            lastSyncDate = Date()
+            syncWorkItem?.cancel()
+            syncWorkItem = nil
+        } catch {
+            // Keep the pending byte count intact and retry even if no more logs arrive.
+            if syncWorkItem == nil {
+                scheduleSync()
+            }
         }
     }
 
@@ -129,8 +154,9 @@ public class AppLogger {
                     return
                 }
                 fileHandle = try FileHandle(forWritingTo: url)
+                syncWorkItem?.cancel()
+                syncWorkItem = nil
                 bytesSinceLastSync = 0
-                lastSyncDate = Date()
             }
         } catch {
             print("AppLogger: Failed to rotate log: \(error)")
@@ -151,8 +177,9 @@ public class AppLogger {
                     return
                 }
                 self?.fileHandle = try FileHandle(forWritingTo: url)
+                self?.syncWorkItem?.cancel()
+                self?.syncWorkItem = nil
                 self?.bytesSinceLastSync = 0
-                self?.lastSyncDate = Date()
             } catch {
                 print("AppLogger: Failed to clear logs: \(error)")
                 self?.isReady = false
