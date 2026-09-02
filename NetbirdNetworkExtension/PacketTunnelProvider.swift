@@ -91,6 +91,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     
     private var networkChangeWorkItem: DispatchWorkItem?
 
+    /// Starts the selected profile's NetBird engine and completes Network Extension startup.
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
@@ -200,6 +201,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// Stops monitoring and the NetBird engine before completing tunnel teardown.
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         monitorQueue.async { [weak self] in
             self?.networkChangeWorkItem?.cancel()
@@ -304,6 +306,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// Starts a long-lived path monitor used to reconcile Wi-Fi and cellular transitions.
     func startMonitoringNetworkChanges() {
         pathMonitor?.cancel()
         let monitor = NWPathMonitor()
@@ -315,6 +318,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         pathMonitor = monitor
     }
 
+    /// Debounces and reconciles physical path loss, recovery, and interface changes.
+    /// - Parameter path: The latest path published by the provider's network monitor.
     func handleNetworkChange(path: Network.NWPath) {
         guard !isTunnelStopping else { return }
         latestPathIsSatisfied = path.status == .satisfied
@@ -413,6 +418,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// Runs one serialized engine stop/start transaction against the latest usable path.
     func restartClient() {
         networkChangeWorkItem = nil
 

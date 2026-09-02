@@ -89,6 +89,7 @@ public class AppLogger {
         setupSemaphore.signal()
     }
 
+    /// Enqueues a timestamped diagnostic message for persistent logging.
     public func log(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
         let fileName = (file as NSString).lastPathComponent
         let timestamp = iso8601Formatter.string(from: Date())
@@ -101,6 +102,7 @@ public class AppLogger {
         }
     }
 
+    /// Appends one encoded message and schedules or performs a durability sync.
     private func writeToFile(_ message: String) {
         guard isReady, let data = message.data(using: .utf8) else { return }
 
@@ -115,6 +117,7 @@ public class AppLogger {
         }
     }
 
+    /// Schedules a delayed file sync when the byte threshold has not been reached.
     private func scheduleSync() {
         let workItem = DispatchWorkItem { [weak self] in
             self?.syncWorkItem = nil
@@ -124,6 +127,7 @@ public class AppLogger {
         queue.asyncAfter(deadline: .now() + syncInterval, execute: workItem)
     }
 
+    /// Flushes buffered log bytes to durable storage and retains failed work for retry.
     private func synchronizePendingData() {
         guard bytesSinceLastSync > 0, let fileHandle else { return }
 
@@ -140,6 +144,7 @@ public class AppLogger {
         }
     }
 
+    /// Recreates the log file when it exceeds the configured size limit.
     private func rotateLogIfNeeded() {
         guard let url = logFileURL else { return }
 
@@ -165,6 +170,7 @@ public class AppLogger {
         }
     }
 
+    /// Removes existing log contents and creates a fresh writable log file.
     public func clearLogs() {
         queue.async { [weak self] in
             guard let url = self?.logFileURL else { return }

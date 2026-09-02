@@ -20,6 +20,7 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
     private let pathStatusLock = NSLock()
     private var currentPathStatus: NWPath.Status?
 
+    /// Creates a listener that mirrors engine and physical-network state into the adapter.
     init(adapter: NetBirdAdapter, completionHandler: @escaping (Error?) -> Void) {
         self.completionHandler = completionHandler
         self.adapter = adapter
@@ -33,10 +34,12 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         pathMonitor.start(queue: pathMonitorQueue)
     }
 
+    /// Stops monitoring the physical network path.
     deinit {
         pathMonitor.cancel()
     }
 
+    /// Whether the physical network is unavailable or has not produced an initial path yet.
     private var isNetworkUnavailableOrUnknown: Bool {
         if adapter.isNetworkUnavailable {
             return true
@@ -49,10 +52,12 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         return currentPathStatus != .satisfied
     }
 
+    /// Receives address changes; no additional state update is required by the iOS client.
     func onAddressChanged(_ p0: String?, p1: String?) {
         // do nothing
     }
 
+    /// Publishes a successful engine connection and completes tunnel startup.
     func onConnected() {
         let wasRestarting = adapter.isRestarting
         adapter.clientState = .connected
@@ -63,6 +68,7 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         }
     }
 
+    /// Publishes an engine connection attempt unless a controlled restart is underway.
     func onConnecting() {
         if adapter.isRestarting {
             AppLogger.shared.log("onConnecting: suppressed (isRestarting=true)")
@@ -72,6 +78,7 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         }
     }
 
+    /// Reconciles an engine disconnect with authentication, network loss, and restart state.
     func onDisconnected() {
         let wasRestarting = adapter.isRestarting
         let shouldKeepTunnelAlive = isNetworkUnavailableOrUnknown
@@ -117,6 +124,7 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         adapter.notifyStopCompleted()
     }
 
+    /// Publishes an engine disconnect transition unless a controlled restart is underway.
     func onDisconnecting() {
         if adapter.isRestarting {
             AppLogger.shared.log("onDisconnecting: suppressed (isRestarting=true)")
@@ -126,6 +134,7 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         }
     }
     
+    /// Receives peer-count changes; peer details are loaded through the status endpoint.
     func onPeersListChanged(_ p0: Int) {
         // do nothing
     }

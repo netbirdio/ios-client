@@ -1239,6 +1239,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
 
+    /// Requests current tunnel status, completing once even when IPC times out or fails.
     func fetchData(completion: @escaping (StatusDetails) -> Void) {
         guard !isFetchingStatus else {
             return
@@ -1310,6 +1311,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
     
+    /// Starts status polling and delivers an immediate first result.
     func startTimer(completion: @escaping (StatusDetails) -> Void) {
         self.timer.invalidate()
         self.fetchData(completion: completion)
@@ -1318,6 +1320,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         })
     }
     
+    /// Stops periodic status polling.
     func stopTimer() {
         self.timer.invalidate()
     }
@@ -1393,6 +1396,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     #endif
 
+    /// Loads the manager matching this build flavor and returns its connection status.
     func getExtensionStatus(completion: @escaping (NEVPNStatus) -> Void) {
         Task {
             do {

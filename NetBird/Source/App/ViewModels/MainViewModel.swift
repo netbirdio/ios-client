@@ -186,6 +186,7 @@ class ViewModel: ObservableObject {
     @Published var peerViewModel: PeerViewModel
     @Published var routeViewModel: RoutesViewModel
     
+    /// Initializes VPN state, profile caches, network monitoring, and status observers.
     init() {
         let networkExtensionAdapter = NetworkExtensionAdapter()
         self.networkExtensionAdapter = networkExtensionAdapter
@@ -251,6 +252,7 @@ class ViewModel: ObservableObject {
             .assign(to: &$showInvalidSetupKeyHint)
     }
 
+    /// Stops long-lived monitors and removes the VPN status observer.
     deinit {
         networkMonitor.cancel()
         #if os(iOS)
@@ -505,6 +507,9 @@ class ViewModel: ObservableObject {
         }
     }
 
+    /// Reconciles the user-visible VPN state with the extension state and pending user intent.
+    /// - Parameter priorExtensionState: The preceding extension state, used to suppress transient
+    ///   disconnecting events that iOS emits while starting a tunnel.
     func updateVPNDisplayState(priorExtensionState: NEVPNStatus? = nil) {
         let newState: VPNDisplayState
 
@@ -601,6 +606,7 @@ class ViewModel: ObservableObject {
     }
     #endif
 
+    /// Starts periodic extension-status polling and performs an immediate refresh.
     func startPollingDetails() {
         #if os(iOS)
         refreshCurrentSSID()
@@ -674,6 +680,7 @@ class ViewModel: ObservableObject {
     // completion can arrive after a newer .disconnected one, causing a spurious Disconnecting flash.
     private var isCheckingExtensionState = false
 
+    /// Refreshes the status of the flavor-scoped Network Extension manager.
     func checkExtensionState() {
         guard !isCheckingExtensionState else { return }
         isCheckingExtensionState = true
@@ -685,6 +692,8 @@ class ViewModel: ObservableObject {
         }
     }
 
+    /// Applies a newly loaded extension status and updates dependent UI state.
+    /// - Parameter status: The current status reported by Network Extension.
     private func applyExtensionStatus(_ status: NEVPNStatus) {
         let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .disconnecting]
         guard knownStatuses.contains(status), extensionState != status else { return }
