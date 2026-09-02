@@ -468,8 +468,17 @@ class ViewModel: ObservableObject {
                 self.buttonLock = false
             }
             self.networkExtensionAdapter.stop()
-            self.updateVPNDisplayState()
+            self.publishPendingDisconnectState()
         }
+    }
+
+    /// Publishes immediate disconnect feedback while Network Extension processes the request.
+    private func publishPendingDisconnectState() {
+        vpnDisplayState = .disconnecting
+        extensionStateText = "Disconnecting..."
+        #if os(iOS)
+        updateWidgetState()
+        #endif
     }
 
     /// Called when the user dismisses the interactive login browser without completing
@@ -518,23 +527,20 @@ class ViewModel: ObservableObject {
         // between button press and extension state change.
         switch extensionState {
         case .connected:
-            if disconnectPressed {
-                newState = .disconnecting
-            } else {
-                // Extension confirmed connected — clear stale connect intent.
-                connectPressed = false
-                newState = .connected
-            }
+            // A connected extension is authoritative. On Demand may have reconnected
+            // between polls without the app ever sampling .disconnected.
+            connectPressed = false
+            disconnectPressed = false
+            newState = .connected
         case .connecting:
-            if disconnectPressed {
-                newState = .disconnecting
-            } else {
-                // Do NOT clear connectPressed here — iOS can emit .disconnecting right after
-                // .connecting during tunnel startup (cleanup of old instance). Keeping
-                // connectPressed=true lets the .disconnecting handler suppress that noise.
-                // connectPressed is cleared only on .connected or .disconnected.
-                newState = .connecting
-            }
+            // A connecting extension after a disconnect request represents an On Demand
+            // reconnect, so the stale disconnect intent must no longer override it.
+            disconnectPressed = false
+            // Do NOT clear connectPressed here — iOS can emit .disconnecting right after
+            // .connecting during tunnel startup (cleanup of old instance). Keeping
+            // connectPressed=true lets the .disconnecting handler suppress that noise.
+            // connectPressed is cleared only on .connected or .disconnected.
+            newState = .connecting
         case .disconnecting:
             // Ignore transient .disconnecting emitted by iOS VPN framework during tunnel startup.
             // When startVPNTunnel() is called, iOS briefly reports .disconnecting while cleaning
@@ -696,11 +702,18 @@ class ViewModel: ObservableObject {
     /// - Parameter status: The current status reported by Network Extension.
     private func applyExtensionStatus(_ status: NEVPNStatus) {
         let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .disconnecting]
-        guard knownStatuses.contains(status), extensionState != status else { return }
+        guard knownStatuses.contains(status) else { return }
 
         let priorState = extensionState
-        extensionState = status
+        let statusChanged = priorState != status
+        if statusChanged {
+            extensionState = status
+        }
         updateVPNDisplayState(priorExtensionState: priorState)
+
+        // Even an unchanged status is an authoritative refresh. Reconciling it above is
+        // important when a short On Demand cycle skipped .disconnected between polls.
+        guard statusChanged else { return }
 
         applyRouteSideEffects(for: status)
 
