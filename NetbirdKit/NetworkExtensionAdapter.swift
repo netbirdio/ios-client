@@ -1397,7 +1397,10 @@ public class NetworkExtensionAdapter: ObservableObject {
         Task {
             do {
                 let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-                if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
+                if let manager = managers.first(where: {
+                    $0.localizedDescription == self.extensionName &&
+                    ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.extensionID
+                }) {
                     completion(manager.connection.status)
                 } else {
                     // No VPN manager exists yet (e.g. first connect before the iOS permission

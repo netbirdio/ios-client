@@ -37,7 +37,10 @@ private func configureFirebaseIfNeeded() {
           let apiKey = configuration["API_KEY"] as? String,
           apiKey.hasPrefix("AIza"),
           let appID = configuration["GOOGLE_APP_ID"] as? String,
-          appID.contains(":ios:"),
+          appID.range(
+              of: #"^1:[0-9]+:ios:[0-9a-fA-F]+$"#,
+              options: .regularExpression
+          ) != nil,
           let options = FirebaseOptions(contentsOfFile: path) else {
         // Firebase throws an Objective-C exception (which Swift cannot catch)
         // for placeholder or malformed values. Firebase is optional, so local
