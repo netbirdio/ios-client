@@ -7,9 +7,17 @@ import SwiftUI
 
 #if os(iOS)
 
+/// Per-profile display values shown under a profile's name. Resolved when the
+/// list is loaded rather than while a row renders — see `loadProfiles()`.
+private struct ProfileDisplayDetails {
+    let serverURL: String?
+    let account: String?
+}
+
 struct ProfilesListView: View {
     @EnvironmentObject var viewModel: ViewModel
     @State private var profiles: [Profile] = []
+    @State private var profileDetails: [String: ProfileDisplayDetails] = [:]
     @State private var showAddSheet = false
     @State private var showSwitchAlert = false
     @State private var showRemoveAlert = false
@@ -116,11 +124,7 @@ struct ProfilesListView: View {
                         Text(active.name)
                             .font(.body.bold())
                             .foregroundColor(Color("TextPrimary"))
-                        if let url = ProfileManager.shared.managementURL(forID: active.id) {
-                            Text(url)
-                                .font(.footnote)
-                                .foregroundColor(Color("TextSecondary"))
-                        }
+                        profileSubtitle(for: active)
                     }
                     Spacer()
                     Text("Active")
@@ -174,11 +178,6 @@ struct ProfilesListView: View {
         .padding(.vertical, 16)
     }
 
-    // MARK: - Rows
-
-    /// Extracted from the List body: inline, the combination of the button,
-    /// the lock modifier and the swipe actions pushed the enclosing
-    /// expression past what the SwiftUI type-checker will resolve.
     @ViewBuilder
     private func inactiveProfileRow(_ profile: Profile) -> some View {
         Button {
@@ -190,11 +189,7 @@ struct ProfilesListView: View {
                 Text(profile.name)
                     .font(.body)
                     .foregroundColor(Color("TextPrimary"))
-                if let url = ProfileManager.shared.managementURL(forID: profile.id) {
-                    Text(url)
-                        .font(.footnote)
-                        .foregroundColor(Color("TextSecondary"))
-                }
+                profileSubtitle(for: profile)
             }
         }
         .mdmLocked(profilesManaged)
@@ -218,10 +213,48 @@ struct ProfilesListView: View {
         }
     }
 
+    // MARK: - Rows
+
+    /// Server and account lines under a profile's name. The account is the one the
+    /// profile last signed in with — it is also what goes out as the login_hint on
+    /// the next login, so showing it makes visible which account a re-login returns
+    /// to. A profile that never completed an SSO login, or was logged out, has none.
+    ///
+    /// Reads only what `loadProfiles()` already resolved: both lookups touch the
+    /// filesystem, and a body may be evaluated any number of times.
+    @ViewBuilder
+    private func profileSubtitle(for profile: Profile) -> some View {
+        let details = profileDetails[profile.id]
+        if let url = details?.serverURL {
+            Text(url)
+                .font(.footnote)
+                .foregroundColor(Color("TextSecondary"))
+        }
+        if let email = details?.account {
+            Text(email)
+                .font(.footnote)
+                .foregroundColor(Color("TextSecondary"))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+    }
+
     // MARK: - Actions
 
     private func loadProfiles() {
-        profiles = ProfileManager.shared.listProfiles()
+        let loaded = ProfileManager.shared.listProfiles()
+        // Resolved here, not while a row renders: managementURL(forID:) reads the
+        // profile's config and writes the resolved URL back to the connection
+        // cache, so calling it inside `body` turns every redraw into file I/O.
+        // The account comes free with the listing — the Go core returns it on the
+        // profile itself, so it costs no extra lookup.
+        profileDetails = Dictionary(uniqueKeysWithValues: loaded.map { profile in
+            (profile.id, ProfileDisplayDetails(
+                serverURL: ProfileManager.shared.managementURL(forID: profile.id),
+                account: profile.email.isEmpty ? nil : profile.email
+            ))
+        })
+        profiles = loaded
     }
 
     private func switchToProfile(_ profile: Profile) {

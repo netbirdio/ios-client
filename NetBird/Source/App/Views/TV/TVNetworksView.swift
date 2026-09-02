@@ -23,7 +23,7 @@ struct TVNetworksView: View {
 
             if viewModel.extensionStateText == "Connected" &&
                viewModel.routeViewModel.routeInfo.count > 0 {
-                TVNetworkListContent()
+                TVNetworkListContent(routeViewModel: viewModel.routeViewModel)
             } else {
                 TVNoNetworksView()
             }
@@ -35,7 +35,7 @@ struct TVNetworksView: View {
 }
 
 struct TVNetworkListContent: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @ObservedObject var routeViewModel: RoutesViewModel
     
     /// Refresh animation state
     @State private var isRefreshing = false
@@ -62,7 +62,7 @@ struct TVNetworkListContent: View {
             HStack {
                 TVFilterBar(
                     options: ["All", "Enabled", "Disabled"],
-                    selected: $viewModel.routeViewModel.selectionFilter
+                    selected: $routeViewModel.selectionFilter
                 )
 
                 Spacer()
@@ -88,10 +88,10 @@ struct TVNetworkListContent: View {
             // Network list
             ScrollView {
                 LazyVStack(spacing: 4) {
-                    ForEach(viewModel.routeViewModel.filteredResourceRoutes, id: \.id) { route in
+                    ForEach(routeViewModel.filteredResourceRoutes, id: \.id) { route in
                         TVNetworkCard(
                             route: route,
-                            routeViewModel: viewModel.routeViewModel
+                            routeViewModel: routeViewModel
                         )
                     }
                 }
@@ -112,18 +112,18 @@ struct TVNetworkListContent: View {
 
     // Exit nodes are counted by their own selector, not by this list.
     private var activeCount: Int {
-        viewModel.routeViewModel.resourceRouteInfo.filter { $0.selected }.count
+        routeViewModel.resourceRouteInfo.filter { $0.selected }.count
     }
 
     private var totalCount: Int {
-        viewModel.routeViewModel.resourceRouteInfo.count
+        routeViewModel.resourceRouteInfo.count
     }
     
     // Actions
     
     private func refresh() {
         isRefreshing = true
-        viewModel.routeViewModel.getRoutes()
+        routeViewModel.getRoutes()
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             isRefreshing = false
@@ -133,7 +133,9 @@ struct TVNetworkListContent: View {
 
 // Individual Network Card
 struct TVNetworkCard: View {
-    let route: RoutesSelectionInfo
+    // Must be @ObservedObject: `selected` is a plain var on RoutesSelectionInfo,
+    // so the view only re-renders when objectWillChange fires.
+    @ObservedObject var route: RoutesSelectionInfo
     @ObservedObject var routeViewModel: RoutesViewModel
 
     @FocusState private var isFocused: Bool
@@ -251,5 +253,3 @@ struct TVNetworksView_Previews: PreviewProvider {
 }
 
 #endif
-
-

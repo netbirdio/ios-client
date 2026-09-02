@@ -27,6 +27,10 @@ struct Profile: Identifiable, Equatable {
     let id: String
     /// Human-readable display name.
     let name: String
+    /// Account this profile last logged in with, or "" if it never completed an
+    /// SSO login. Recorded by the Go core next to the profile config and kept
+    /// across logouts so the next login can pass it as an OIDC login_hint.
+    let email: String
     let isActive: Bool
 
     var isDefault: Bool { id == ProfileManager.defaultProfileID }
@@ -83,7 +87,7 @@ class ProfileManager {
             var profiles: [Profile] = []
             for i in 0..<array.length() {
                 if let p = array.get(i) {
-                    profiles.append(Profile(id: p.id_, name: p.name, isActive: p.isActive))
+                    profiles.append(Profile(id: p.id_, name: p.name, email: p.email, isActive: p.isActive))
                 }
             }
             return profiles.isEmpty ? [ProfileManager.fallbackDefault()] : profiles
@@ -100,7 +104,7 @@ class ProfileManager {
     func activeProfile() -> Profile? {
 #if os(iOS)
         guard let p = try? go.getActiveProfile() else { return nil }
-        return Profile(id: p.id_, name: p.name, isActive: true)
+        return Profile(id: p.id_, name: p.name, email: p.email, isActive: true)
 #else
         return ProfileManager.fallbackDefault()
 #endif
@@ -156,39 +160,29 @@ class ProfileManager {
 
     // MARK: - Management URL
 
-    /// Returns the management URL for a profile. In the ID-based model the
-    /// config file survives logout (only the keys are cleared), so the URL is
-    /// read from the config first; the dedicated server URL file and the
-    /// connection cache are fallbacks for the case where the config is gone.
+    /// Returns the management URL for a profile, read from the profile config
+    /// and falling back to the connection cache.
+    ///
+    /// The config is the source of truth: in the ID-based layout it survives
+    /// logout (only the keys are cleared), and the core merges into it rather
+    /// than rebuilding it, so the URL cannot be dropped by a write. The cache
+    /// covers the window where the config is not readable yet — it lives in the
+    /// App Group suite, so the extension sees what the app wrote.
     func managementURL(forID id: String) -> String? {
         if let cfgPath = configPath(forID: id),
            fileManager.fileExists(atPath: cfgPath),
            let url = ProfileManager.readManagementURL(fromConfigAt: cfgPath) {
-            saveServerURL(url, forID: id)
             ProfileConnectionCache().saveManagementURL(url, forID: id)
-            return url
-        }
-        if let url = savedServerURL(forID: id) {
             return url
         }
         return ProfileConnectionCache().managementURL(forID: id)
     }
 
-    /// Saves the management URL to a dedicated file alongside the profile
-    /// config. Neither logout nor a config rewrite touches it, so the chosen
-    /// server cannot silently fall back to the default cloud.
-    func saveServerURL(_ url: String, forID id: String) {
-        guard let path = serverURLPath(forID: id) else { return }
-        try? url.write(toFile: path, atomically: true, encoding: .utf8)
-    }
+    /// Records the management URL for a profile so it is available before the
+    /// profile config can be read back.
 
-    /// Reads the management URL from the dedicated server URL file.
-    func savedServerURL(forID id: String) -> String? {
-        guard let path = serverURLPath(forID: id),
-              fileManager.fileExists(atPath: path),
-              let url = try? String(contentsOfFile: path, encoding: .utf8),
-              !url.isEmpty else { return nil }
-        return url
+    func saveServerURL(_ url: String, forID id: String) {
+        ProfileConnectionCache().saveManagementURL(url, forID: id)
     }
 
 #if os(iOS)
@@ -202,7 +196,7 @@ class ProfileManager {
         // gomobile maps (*Profile, error) to a non-optional throwing call: a
         // failure surfaces as a thrown error, not a nil return.
         let p = try go.addProfile(name)
-        return Profile(id: p.id_, name: p.name, isActive: false)
+        return Profile(id: p.id_, name: p.name, email: p.email, isActive: false)
     }
 
     /// Switches the active profile. The caller must stop the VPN before calling.
@@ -232,20 +226,7 @@ class ProfileManager {
     // MARK: - Helpers
 
     private static func fallbackDefault() -> Profile {
-        Profile(id: defaultProfileID, name: defaultProfileID, isActive: true)
-    }
-
-    /// Path of the dedicated server URL file, derived from the profile's config
-    /// path so it follows the same layout: netbird.cfg -> netbird_server_url in
-    /// the container root, profiles/<id>.json -> profiles/<id>.server_url.
-    private func serverURLPath(forID id: String) -> String? {
-        guard let cfgPath = configPath(forID: id) else { return nil }
-        let url = URL(fileURLWithPath: cfgPath)
-        if id == ProfileManager.defaultProfileID {
-            return url.deletingLastPathComponent()
-                .appendingPathComponent(GlobalConstants.serverURLFileName).path
-        }
-        return url.deletingPathExtension().appendingPathExtension("server_url").path
+        Profile(id: defaultProfileID, name: defaultProfileID, email: "", isActive: true)
     }
 
     /// Parses the management URL from a profile config file. The Go SDK may
@@ -299,6 +280,8 @@ class ProfileManager {
         try? fm.createDirectory(at: profilesDir, withIntermediateDirectories: true)
         excludeFromBackup(profilesDir)
 
+        // serverURLFileName is no longer written, but earlier versions left one
+        // behind; keep excluding it until the leftovers are cleaned up.
         let rootFiles = [
             GlobalConstants.configFileName,
             GlobalConstants.stateFileName,
