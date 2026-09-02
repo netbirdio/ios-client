@@ -9,6 +9,10 @@ import SwiftUI
 
 struct AddProfileSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// Shared rather than a one-off read: a policy that arrives while this
+    /// sheet is open must not leave the form showing - or submitting - a
+    /// management URL the policy has since replaced.
+    @EnvironmentObject var viewModel: ViewModel
     @StateObject private var addVM = AddProfileViewModel()
 
     @State private var profileName = ""
@@ -16,10 +20,6 @@ struct AddProfileSheet: View {
     @State private var setupKey = ""
     @State private var showSetupKeyField = false
     @State private var showNameValidationAlert = false
-    /// Read locally rather than through the environment: sheets are presented
-    /// outside the parent's view tree and this screen must not depend on the
-    /// environment object reaching it.
-    @State private var restrictions: MDMRestrictions = .empty
 
     var onCreated: (() -> Void)?
 
@@ -52,9 +52,9 @@ struct AddProfileSheet: View {
 
                 // Server URL - an MDM-enforced URL is shown, not asked for.
                 Section {
-                    if restrictions.mdm.managesManagementURL {
+                    if viewModel.mdmRestrictions.mdm.managesManagementURL {
                     HStack {
-                        Text(restrictions.mdm.managementURL)
+                        Text(viewModel.mdmRestrictions.mdm.managementURL)
                             .foregroundColor(Color("TextSecondary"))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
@@ -82,7 +82,7 @@ struct AddProfileSheet: View {
                 } header: {
                     Text("Server")
                 } footer: {
-                    if restrictions.mdm.managesManagementURL {
+                    if viewModel.mdmRestrictions.mdm.managesManagementURL {
                         MDMManagedFooter()
                     }
                 }
@@ -117,7 +117,7 @@ struct AddProfileSheet: View {
                 }
 
                 // Use NetBird server shortcut
-                if !restrictions.mdm.managesManagementURL {
+                if !viewModel.mdmRestrictions.mdm.managesManagementURL {
                 Section {
                     Button {
                         managementServerUrl = defaultManagementServerUrl
@@ -137,7 +137,7 @@ struct AddProfileSheet: View {
                 }
             }
             .onAppear {
-                restrictions = MDMRestrictions.current()
+                viewModel.refreshMDMRestrictions()
             }
             .listStyle(.insetGrouped)
             .navigationTitle("New Profile")
@@ -164,8 +164,8 @@ struct AddProfileSheet: View {
                                 // Go overrides this anyway; submitting the
                                 // enforced value keeps a stale local one from
                                 // reaching the reachability check at all.
-                                serverUrl: restrictions.mdm.managesManagementURL
-                                    ? restrictions.mdm.managementURL
+                                serverUrl: viewModel.mdmRestrictions.mdm.managesManagementURL
+                                    ? viewModel.mdmRestrictions.mdm.managementURL
                                     : managementServerUrl,
                                 setupKey: setupKey
                             )
@@ -197,6 +197,7 @@ struct AddProfileSheet: View {
 
 #Preview {
     AddProfileSheet()
+        .environmentObject(ViewModel())
 }
 
 #endif

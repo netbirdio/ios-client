@@ -84,11 +84,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Config.apply → applyMDMPolicy on the next Run.
     private var mdmConfigObserver: NSObjectProtocol?
 
-    /// Flag preventing concurrent MDM restarts. The restartClient()
-    /// path already has its own isRestartInProgress guard; this is
-    /// purely to avoid re-entering mdmConfigChanged while a previous
-    /// restart is still in flight.
-    private var isMDMRestartScheduled = false
+    /// Set when a policy change arrived while a restart was already in
+    /// flight. Go's detector records the newer policy the moment it is
+    /// observed, so it will not report the change again - if this restart
+    /// were simply dropped, that policy would never be applied. The flag
+    /// makes the handler come back for it.
+    private var pendingMDMRestart = false
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
@@ -123,13 +124,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.startMonitoringNetworkChanges()
         }
 
-        // Register the MDM fetcher on the gomobile Client instance so
-        // every Run() that triggers Config.apply consults it via the
-        // Client-held mdm.Loader. Per-Client DI on the Go side — no
-        // process-wide state. Called every startTunnel; if the
-        // adapter was just recreated for a profile switch the fresh
-        // Client picks up the same fetcher.
-        adapter?.client.setMDMPolicyFetcher(MDMPolicyFetcher())
         startObservingMDMConfigChanges()
 
         guard let adapter = adapter else {
@@ -787,7 +781,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             mdmConfigObserver = nil
             AppLogger.shared.log("MDM: unsubscribed from managed-configuration changes")
         }
-        isMDMRestartScheduled = false
+        pendingMDMRestart = false
     }
 
     /// Called from the UserDefaults notification. The dedup this shared
@@ -801,20 +795,33 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        if isMDMRestartScheduled {
-            AppLogger.shared.log("MDM: change detected while a previous restart is in flight; new state will be picked up by that run")
-            return
-        }
-        isMDMRestartScheduled = true
         AppLogger.shared.log("MDM: managed configuration changed; restarting client")
         signalMDMPolicyApplied()
-        // Hand off to the existing restart pipeline. It already
-        // serialises against the network-change restart and drives
-        // the UI through ConnectionListener — exactly the flow we
-        // want for an MDM-triggered restart.
+        requestMDMRestart()
+    }
+
+    /// Drives the restart for a policy change, deferring around one already
+    /// in flight.
+    ///
+    /// restartClient() returns immediately and does its work asynchronously,
+    /// and it refuses to start while another restart runs. Calling it during
+    /// one would therefore be a silent no-op for a policy Go has already
+    /// marked as seen. Retry instead until the pipeline is free; its own
+    /// 30-second timeout bounds the wait.
+    private func requestMDMRestart() {
         DispatchQueue.main.async { [weak self] in
-            self?.restartClient()
-            self?.isMDMRestartScheduled = false
+            guard let self = self else { return }
+            guard !self.isRestartInProgress else {
+                self.pendingMDMRestart = true
+                AppLogger.shared.log("MDM: restart already in flight; will retry once it finishes")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                    guard let self = self, self.pendingMDMRestart else { return }
+                    self.requestMDMRestart()
+                }
+                return
+            }
+            self.pendingMDMRestart = false
+            self.restartClient()
         }
     }
 }

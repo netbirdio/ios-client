@@ -835,13 +835,47 @@ class ViewModel: ObservableObject {
         let snapshot = MDMRestrictions.current()
         // Equatable guards against republishing an identical snapshot and
         // redrawing every settings screen on unrelated UserDefaults writes.
-        if snapshot != mdmRestrictions {
-            mdmRestrictions = snapshot
+        guard snapshot != mdmRestrictions else { return }
+        let autoConnectWasManaged = mdmRestrictions.mdm.disableAutoConnect
+        mdmRestrictions = snapshot
+
+        if snapshot.mdm.disableAutoConnect != autoConnectWasManaged {
+            applyAutoConnectPolicy(snapshot.mdm.disableAutoConnect)
         }
+
+        // The lock flags alone are not enough: a policy that starts enforcing
+        // Rosenpass or a pre-shared key while a settings screen is open would
+        // leave the now-locked control showing the user's old value. The
+        // getters return the enforced value once a key is managed, so re-read
+        // them here rather than waiting for the next onAppear.
+        loadRosenpassSettings()
+        presharedKeySecure = configProvider.hasPreSharedKey
     }
 
     // Only iOS subscribes to the managed-config change channel; the tvOS
     // screens re-read the snapshot in onAppear instead.
+    /// Arms or disarms the VPN profile's On Demand rules to match the policy.
+    ///
+    /// `disableAutoConnect` forbids connecting without the user asking, but On
+    /// Demand lives in the OS VPN profile, not in the engine - locking the
+    /// toggle changes nothing for a device whose rules are already armed, and
+    /// it would keep reconnecting. The user's saved preference is left alone
+    /// so it can be restored if the policy is lifted.
+    private func applyAutoConnectPolicy(_ managed: Bool) {
+        if managed {
+            guard networkExtensionAdapter.isOnDemandEnabled else { return }
+            AppLogger.shared.log("MDM: disableAutoConnect enforced — disarming On Demand rules")
+            networkExtensionAdapter.setOnDemandEnabled(false)
+            return
+        }
+
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        let saved = userDefaults?.bool(forKey: GlobalConstants.keyConnectOnDemand) ?? false
+        guard saved, !networkExtensionAdapter.isOnDemandEnabled else { return }
+        AppLogger.shared.log("MDM: disableAutoConnect lifted — restoring the user's On Demand setting")
+        networkExtensionAdapter.setOnDemandEnabled(true)
+    }
+
     #if os(iOS)
     private func scheduleMDMRestrictionsRefresh() {
         mdmRefreshWorkItem?.cancel()

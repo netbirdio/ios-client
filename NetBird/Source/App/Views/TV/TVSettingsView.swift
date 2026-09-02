@@ -33,6 +33,12 @@ struct TVSettingsView: View {
     private var rosenpassPermissiveLocked: Bool {
         viewModel.mdmRestrictions.mdm.rosenpassPermissive || editingDisabled
     }
+
+    /// tvOS rows carry their explanation in the subtitle - there is no footer
+    /// to put it in, and a row that is merely dimmed gives the user no reason.
+    private func subtitle(_ text: String, managed: Bool) -> String {
+        managed ? "Managed by your organization" : text
+    }
     @State private var showDocsQRCode = false
 
     var body: some View {
@@ -52,7 +58,8 @@ struct TVSettingsView: View {
                             TVSettingsToggleRow(
                                 icon: "bolt.horizontal.circle.fill",
                                 title: "Connect On Demand",
-                                subtitle: "Reconnect automatically after a reboot or network change",
+                                subtitle: subtitle("Reconnect automatically after a reboot or network change",
+                                                   managed: viewModel.mdmRestrictions.mdm.disableAutoConnect || editingDisabled),
                                 isOn: Binding(
                                     get: { viewModel.connectOnDemand },
                                     set: { newValue in
@@ -84,7 +91,7 @@ struct TVSettingsView: View {
                             TVSettingsToggleRow(
                                 icon: "shield.lefthalf.filled",
                                 title: "Rosenpass",
-                                subtitle: "Post-quantum secure encryption",
+                                subtitle: subtitle("Post-quantum secure encryption", managed: rosenpassLocked),
                                 isOn: Binding(
                                     get: { viewModel.rosenpassEnabled },
                                     set: { newValue in
@@ -101,7 +108,8 @@ struct TVSettingsView: View {
                             TVSettingsToggleRow(
                                 icon: "shield.checkerboard",
                                 title: "Rosenpass Permissive",
-                                subtitle: "Allow connections with non-Rosenpass peers",
+                                subtitle: subtitle("Allow connections with non-Rosenpass peers",
+                                                   managed: rosenpassPermissiveLocked),
                                 isOn: Binding(
                                     get: { viewModel.rosenpassPermissive },
                                     set: { newValue in
@@ -117,7 +125,7 @@ struct TVSettingsView: View {
                             TVSettingsToggleRow(
                                 icon: "network",
                                 title: "Disable IPv6",
-                                subtitle: "Disable IPv6 overlay addressing on the tunnel",
+                                subtitle: subtitle("Disable IPv6 overlay addressing on the tunnel", managed: editingDisabled),
                                 isOn: Binding(
                                     get: { viewModel.disableIPv6 },
                                     set: { newValue in
@@ -130,7 +138,7 @@ struct TVSettingsView: View {
                             TVSettingsToggleRow(
                                 icon: "arrow.triangle.branch",
                                 title: "Force Relay",
-                                subtitle: "Force all connections through relay servers",
+                                subtitle: subtitle("Force all connections through relay servers", managed: editingDisabled),
                                 isOn: Binding(
                                     get: { viewModel.forceRelayConnection },
                                     set: { newValue in

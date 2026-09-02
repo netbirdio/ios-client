@@ -224,6 +224,14 @@ struct iOSMainView: View {
             .onChange(of: viewModel.showOnDemandDisconnectAlert) { show in
                 if show { activeAlert = .onDemandDisconnect; viewModel.showOnDemandDisconnectAlert = false }
             }
+            .onChange(of: viewModel.mdmRestrictions.features.disableNetworks) { hidden in
+                // Removing the tab tagged 2 while it is selected leaves the
+                // TabView with a selection no tab matches, and the screen goes
+                // blank. Move off it first.
+                if hidden && selectedTab == 2 {
+                    selectedTab = 0
+                }
+            }
             .onChange(of: viewModel.showSettingsRejectedAlert) { show in
                 if show { activeAlert = .settingsRejected; viewModel.showSettingsRejectedAlert = false }
             }
