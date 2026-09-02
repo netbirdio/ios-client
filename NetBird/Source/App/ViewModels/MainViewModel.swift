@@ -232,7 +232,13 @@ class ViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.handleVPNStatusChangeForNotification()
+            guard let self else { return }
+            self.handleVPNStatusChangeForNotification()
+            // The regular details poll runs every 10 seconds. Refresh the
+            // flavor-scoped manager immediately on each NE status event so
+            // transitions such as .disconnecting -> .disconnected do not wait
+            // for the next polling tick before updating the UI.
+            self.checkExtensionState()
         }
         #endif
 
@@ -448,6 +454,10 @@ class ViewModel: ObservableObject {
 
     /// Performs the actual VPN disconnect.
     func performClose() {
+        // A disconnect also cancels any in-progress connect intent. Keep the
+        // disconnect intent set until iOS confirms .disconnected so the UI can
+        // respond immediately instead of waiting for the next NE status update.
+        self.connectPressed = false
         self.disconnectPressed = true
         DispatchQueue.main.async {
             print("Stopping extension")
@@ -503,16 +513,23 @@ class ViewModel: ObservableObject {
         // between button press and extension state change.
         switch extensionState {
         case .connected:
-            // Extension confirmed connected — clear both flags
-            connectPressed = false
-            disconnectPressed = false
-            newState = .connected
+            if disconnectPressed {
+                newState = .disconnecting
+            } else {
+                // Extension confirmed connected — clear stale connect intent.
+                connectPressed = false
+                newState = .connected
+            }
         case .connecting:
-            // Do NOT clear connectPressed here — iOS can emit .disconnecting right after
-            // .connecting during tunnel startup (cleanup of old instance). Keeping
-            // connectPressed=true lets the .disconnecting handler suppress that noise.
-            // connectPressed is cleared only on .connected or .disconnected.
-            newState = .connecting
+            if disconnectPressed {
+                newState = .disconnecting
+            } else {
+                // Do NOT clear connectPressed here — iOS can emit .disconnecting right after
+                // .connecting during tunnel startup (cleanup of old instance). Keeping
+                // connectPressed=true lets the .disconnecting handler suppress that noise.
+                // connectPressed is cleared only on .connected or .disconnected.
+                newState = .connecting
+            }
         case .disconnecting:
             // Ignore transient .disconnecting emitted by iOS VPN framework during tunnel startup.
             // When startVPNTunnel() is called, iOS briefly reports .disconnecting while cleaning
@@ -520,19 +537,23 @@ class ViewModel: ObservableObject {
             // connectPressed handles this for app-initiated connects.
             // priorExtensionState handles widget-initiated connects where connectPressed is never set.
             let wasConnecting = priorExtensionState == .connecting
-            if connectPressed || wasConnecting {
+            if disconnectPressed {
+                newState = .disconnecting
+            } else if connectPressed || wasConnecting {
                 newState = .connecting
             } else {
-                disconnectPressed = false
                 newState = .disconnecting
             }
         case .disconnected:
             // Extension confirmed disconnected — clear both flags,
             // unless a flag was JUST set (immediate feedback)
-            if connectPressed {
+            if disconnectPressed {
+                connectPressed = false
+                disconnectPressed = false
+                newState = .disconnected
+            } else if connectPressed {
                 newState = .connecting
             } else {
-                disconnectPressed = false
                 newState = .disconnected
             }
         default:
