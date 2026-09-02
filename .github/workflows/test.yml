@@ -26,10 +26,22 @@ jobs:
           path: ios-client
           submodules: recursive
 
+      # TEMPORARY: builds the core from netbirdio/netbird#7193, which adds the iOS
+      # login_hint wiring this branch depends on. The submodule pointer stays on an
+      # upstream commit so a plain clone still works — only the SDK build uses the PR.
+      # Runs before the core-sha step on purpose: the cache key is derived from the
+      # checked-out commit, so a framework built from the pinned commit is not reused.
+      # Remove this step and re-pin the submodule once #7193 is merged.
+      - name: Use pending netbird-core PR 7193
+        working-directory: ios-client/netbird-core
+        run: |
+          git fetch --no-tags https://github.com/netbirdio/netbird.git refs/pull/7193/head
+          git checkout --detach FETCH_HEAD
+
       - name: Get netbird-core commit
         id: core-sha
-        working-directory: ios-client
-        run: echo "sha=$(git rev-parse HEAD:netbird-core)" >> "$GITHUB_OUTPUT"
+        working-directory: ios-client/netbird-core
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Cache NetBirdSDK xcframework
         id: sdk-cache
