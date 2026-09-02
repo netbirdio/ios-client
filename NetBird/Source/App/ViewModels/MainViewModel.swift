@@ -443,6 +443,16 @@ class ViewModel: ObservableObject {
     #endif
     
     func close() -> Void {
+        // The policy holds the rules disarmed, so nothing will reconnect and
+        // there is nothing to warn about. Prompting here would also route the
+        // user into closeWithOnDemandDisabled(), which writes the saved
+        // preference to false - the one value the policy is deliberately
+        // preserving so it can be restored when the restriction lifts.
+        guard !autoConnectForbiddenByPolicy else {
+            performClose()
+            return
+        }
+
         #if os(iOS)
         // Warn user that On Demand will reconnect if rules match
         if connectOnDemand && onDemandRulesAllowConnect() {
