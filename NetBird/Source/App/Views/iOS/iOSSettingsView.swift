@@ -15,6 +15,9 @@ struct iOSSettingsView: View {
 
     var body: some View {
         List {
+            // Feature gates hide the whole section: with profile management
+            // disabled there is nothing left in it to show.
+            if !viewModel.mdmRestrictions.features.disableProfiles {
             Section {
                 NavigationLink {
                     ProfilesListView()
@@ -32,7 +35,11 @@ struct iOSSettingsView: View {
                     }
                 }
             }
+            }
 
+            // A managed management URL removes the point of the server
+            // picker: the engine targets the enforced URL regardless.
+            if !viewModel.mdmRestrictions.mdm.managesManagementURL {
             Section(header: Text("Connection")) {
                     Button {
                         viewModel.showChangeServerAlert = true
@@ -45,6 +52,7 @@ struct iOSSettingsView: View {
                                 .foregroundColor(Color("TextPrimary"))
                         }
                     }
+                }
                 }
 
                 Section(header: Text("Settings")) {
@@ -60,15 +68,17 @@ struct iOSSettingsView: View {
                         }
                     }
 
-                    NavigationLink {
-                        AdvancedView()
-                    } label: {
-                        HStack {
-                            Image(systemName: "gearshape.2")
-                                .foregroundColor(.accentColor)
-                                .frame(width: 24)
-                            Text("Advanced")
-                                .foregroundColor(Color("TextPrimary"))
+                    if !viewModel.mdmRestrictions.mdm.disableAdvancedView {
+                        NavigationLink {
+                            AdvancedView()
+                        } label: {
+                            HStack {
+                                Image(systemName: "gearshape.2")
+                                    .foregroundColor(.accentColor)
+                                    .frame(width: 24)
+                                Text("Advanced")
+                                    .foregroundColor(Color("TextPrimary"))
+                            }
                         }
                     }
 
@@ -125,6 +135,9 @@ struct iOSSettingsView: View {
                     }
                 }
             }
+        .onAppear {
+            viewModel.refreshMDMRestrictions()
+        }
         .listStyle(InsetGroupedListStyle())
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)

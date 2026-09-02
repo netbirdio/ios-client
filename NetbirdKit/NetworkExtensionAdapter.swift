@@ -508,7 +508,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         let activeManagementURL = resolvedURL ?? ""
         logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfileID, privacy: .public)'")
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
-           let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
+           let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, MDMPolicyFetcher(), nil) {
             self.pendingAuth = auth
             self.loginSucceeded = false
             let urlOpener = MainAppLoginURLOpener()

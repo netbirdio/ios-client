@@ -84,12 +84,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Config.apply → applyMDMPolicy on the next Run.
     private var mdmConfigObserver: NSObjectProtocol?
 
-    /// Last-observed snapshot of the managed-config dictionary. Used to
-    /// dedup UserDefaults.didChangeNotification, which fires on ANY
-    /// UserDefaults change — without dedup, every preference write
-    /// would trigger a spurious engine restart.
-    private var lastManagedConfigSnapshot: NSDictionary?
-
     /// Flag preventing concurrent MDM restarts. The restartClient()
     /// path already has its own isRestartInProgress guard; this is
     /// purely to avoid re-entering mdmConfigChanged while a previous
@@ -486,6 +480,31 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// Signals that a policy change was applied, using the same two-path
+    /// delivery as the login-required signal: a flag in the shared app-group
+    /// container that the main app picks up when it becomes active, plus a
+    /// best-effort local notification for the case where it does not.
+    private func signalMDMPolicyApplied() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(true, forKey: GlobalConstants.keyMDMPolicyApplied)
+        userDefaults?.synchronize()
+
+        let content = UNMutableNotificationContent()
+        content.title = "MDM policy applied"
+        content.body = "NetBird configuration was updated by your IT policy."
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: GlobalConstants.notificationMDMPolicyApplied,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                AppLogger.shared.log("MDM: policy-applied notification not delivered from extension: \(error)")
+            }
+        }
+    }
+
     /// Signals login required by persisting a flag to the shared app-group container.
     /// The main app reads this flag when it becomes active and handles notification scheduling.
     /// Direct notification from extension is best-effort only since NEPacketTunnelProvider
@@ -745,17 +764,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// the OS-pushed MDM managed-config dictionary
     /// (UserDefaults["com.apple.configuration.managed"]) trigger an
     /// engine restart. iOS does NOT fire a dedicated MDM notification
-    /// — the entire UserDefaults change channel is shared — so the
-    /// handler reads the current managed-config snapshot and compares
-    /// it against the last-observed one before restarting; otherwise
-    /// every unrelated UserDefaults write would cause a spurious
-    /// restart.
+    /// — the entire UserDefaults change channel is shared, so this
+    /// fires on every unrelated preference write too. Deciding whether
+    /// the policy actually changed is Go's job; see the handler.
     private func startObservingMDMConfigChanges() {
-        // Seed the snapshot so the first post-startup change is what
-        // triggers a restart, not the initial appearance.
-        lastManagedConfigSnapshot = UserDefaults.standard
-            .dictionary(forKey: MDMPolicyFetcher.managedConfigKey) as NSDictionary?
-
         if mdmConfigObserver != nil {
             return
         }
@@ -775,23 +787,19 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             mdmConfigObserver = nil
             AppLogger.shared.log("MDM: unsubscribed from managed-configuration changes")
         }
-        lastManagedConfigSnapshot = nil
         isMDMRestartScheduled = false
     }
 
-    /// Called from the UserDefaults notification. Diff vs the last
-    /// snapshot; only on an actual managed-config change do we trigger
-    /// restartClient.
+    /// Called from the UserDefaults notification. The dedup this shared
+    /// channel needs lives in Go: hasMDMPolicyChanged() re-reads through
+    /// the registered fetcher, diffs against its last observation, logs
+    /// the per-key delta and returns true only on a real change. The
+    /// detector is created by setMDMPolicyFetcher, so with no fetcher
+    /// registered this is always false and nothing restarts.
     private func handleManagedConfigDidChangeIfRelevant() {
-        let current = UserDefaults.standard
-            .dictionary(forKey: MDMPolicyFetcher.managedConfigKey) as NSDictionary?
-
-        // Pointer-and-content equality via NSDictionary == handles
-        // nil-vs-nil, empty-vs-empty, and key/value diffs uniformly.
-        if current == lastManagedConfigSnapshot {
+        guard let client = adapter?.client, client.hasMDMPolicyChanged() else {
             return
         }
-        lastManagedConfigSnapshot = current
 
         if isMDMRestartScheduled {
             AppLogger.shared.log("MDM: change detected while a previous restart is in flight; new state will be picked up by that run")
@@ -799,6 +807,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         isMDMRestartScheduled = true
         AppLogger.shared.log("MDM: managed configuration changed; restarting client")
+        signalMDMPolicyApplied()
         // Hand off to the existing restart pipeline. It already
         // serialises against the network-change restart and drives
         // the UI through ConnectionListener — exactly the flow we

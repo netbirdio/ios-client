@@ -532,7 +532,7 @@ public class NetBirdAdapter {
             return
         }
         #endif
-        if let auth = NetBirdSDKNewAuth(configPath, managementURL, nil) {
+        if let auth = NetBirdSDKNewAuth(configPath, managementURL, MDMPolicyFetcher(), nil) {
             authRef = auth
 
             // Always pass the device name so the peer registers under the user's

@@ -204,6 +204,7 @@ struct NetBirdApp: App {
             viewModel.checkExtensionState()
             #if os(iOS)
             viewModel.checkLoginRequiredFlag()
+            viewModel.checkMDMPolicyAppliedFlag()
             #endif
             viewModel.startPollingDetails()
         }

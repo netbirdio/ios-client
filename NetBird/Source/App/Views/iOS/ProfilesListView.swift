@@ -26,101 +26,29 @@ struct ProfilesListView: View {
         profiles.filter { !$0.isActive }
     }
 
+    /// The Go profile manager rejects switch/add/rename/remove under this
+    /// gate, so the UI mirrors it: the entries that would fail are removed
+    /// rather than left to error out. Logout is not gated and stays.
+    private var profilesManaged: Bool {
+        viewModel.mdmRestrictions.features.disableProfiles
+    }
+
     var body: some View {
         List {
-            if let active = activeProfile {
-                Section("Active") {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(active.name)
-                                .font(.body.bold())
-                                .foregroundColor(Color("TextPrimary"))
-                            if let url = ProfileManager.shared.managementURL(forID: active.id) {
-                                Text(url)
-                                    .font(.footnote)
-                                    .foregroundColor(Color("TextSecondary"))
-                            }
-                        }
-                        Spacer()
-                        Text("Active")
-                            .font(.caption2.bold())
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.green)
-                            .clipShape(Capsule())
-                    }
-                }
-            }
-
-            Section("All Profiles") {
-                if inactiveProfiles.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "person.2.slash")
-                            .font(.title2)
-                            .foregroundColor(Color("TextSecondary"))
-                        Text("No Additional Profiles")
-                            .font(.subheadline.bold())
-                            .foregroundColor(Color("TextPrimary"))
-                        Text("Tap + to add a new profile")
-                            .font(.footnote)
-                            .foregroundColor(Color("TextSecondary"))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                } else {
-                    ForEach(inactiveProfiles) { profile in
-                        Button {
-                            selectedProfile = profile
-                            showSwitchAlert = true
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(profile.name)
-                                    .font(.body)
-                                    .foregroundColor(Color("TextPrimary"))
-                                if let url = ProfileManager.shared.managementURL(forID: profile.id) {
-                                    Text(url)
-                                        .font(.footnote)
-                                        .foregroundColor(Color("TextSecondary"))
-                                }
-                            }
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            if !profile.isDefault {
-                                Button(role: .destructive) {
-                                    selectedProfile = profile
-                                    showRemoveAlert = true
-                                } label: {
-                                    Label("Remove", systemImage: "trash")
-                                }
-                            }
-
-                            Button {
-                                selectedProfile = profile
-                                showLogoutAlert = true
-                            } label: {
-                                Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
-                            }
-                            .tint(.gray)
-                        }
-                    }
-                }
-            }
+            activeSection
+            managedNoticeSection
+            allProfilesSection
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Profiles")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showAddSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                        .foregroundColor(.accentColor)
-                }
+                addProfileButton
             }
         }
         .onAppear {
+            viewModel.refreshMDMRestrictions()
             loadProfiles()
         }
         .sheet(isPresented: $showAddSheet) {
@@ -156,6 +84,137 @@ struct ProfilesListView: View {
             Button("OK") {}
         } message: {
             Text(errorMessage)
+        }
+    }
+
+    /// Kept out of the toolbar builder: a conditional inside
+    /// ToolbarContentBuilder is markedly more expensive to type-check than
+    /// the same conditional in a plain ViewBuilder.
+    @ViewBuilder
+    private var addProfileButton: some View {
+        if !profilesManaged {
+            Button {
+                showAddSheet = true
+            } label: {
+                Image(systemName: "plus")
+                    .foregroundColor(.accentColor)
+            }
+        }
+    }
+
+    // MARK: - Sections
+    //
+    // Split out of `body` deliberately: as one expression the List exceeded
+    // what the SwiftUI type-checker will resolve in reasonable time.
+
+    @ViewBuilder
+    private var activeSection: some View {
+        if let active = activeProfile {
+            Section("Active") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(active.name)
+                            .font(.body.bold())
+                            .foregroundColor(Color("TextPrimary"))
+                        if let url = ProfileManager.shared.managementURL(forID: active.id) {
+                            Text(url)
+                                .font(.footnote)
+                                .foregroundColor(Color("TextSecondary"))
+                        }
+                    }
+                    Spacer()
+                    Text("Active")
+                        .font(.caption2.bold())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.green)
+                        .clipShape(Capsule())
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var managedNoticeSection: some View {
+        if profilesManaged {
+            Section {
+                MDMManagedFooter()
+                    .font(.footnote)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var allProfilesSection: some View {
+        Section("All Profiles") {
+            if inactiveProfiles.isEmpty {
+                emptyProfilesPlaceholder
+            } else {
+                ForEach(inactiveProfiles) { profile in
+                    inactiveProfileRow(profile)
+                }
+            }
+        }
+    }
+
+    private var emptyProfilesPlaceholder: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "person.2.slash")
+                .font(.title2)
+                .foregroundColor(Color("TextSecondary"))
+            Text("No Additional Profiles")
+                .font(.subheadline.bold())
+                .foregroundColor(Color("TextPrimary"))
+            Text(profilesManaged ? "Profile management is disabled" : "Tap + to add a new profile")
+                .font(.footnote)
+                .foregroundColor(Color("TextSecondary"))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+    }
+
+    // MARK: - Rows
+
+    /// Extracted from the List body: inline, the combination of the button,
+    /// the lock modifier and the swipe actions pushed the enclosing
+    /// expression past what the SwiftUI type-checker will resolve.
+    @ViewBuilder
+    private func inactiveProfileRow(_ profile: Profile) -> some View {
+        Button {
+            guard !profilesManaged else { return }
+            selectedProfile = profile
+            showSwitchAlert = true
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(profile.name)
+                    .font(.body)
+                    .foregroundColor(Color("TextPrimary"))
+                if let url = ProfileManager.shared.managementURL(forID: profile.id) {
+                    Text(url)
+                        .font(.footnote)
+                        .foregroundColor(Color("TextSecondary"))
+                }
+            }
+        }
+        .mdmLocked(profilesManaged)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if !profile.isDefault && !profilesManaged {
+                Button(role: .destructive) {
+                    selectedProfile = profile
+                    showRemoveAlert = true
+                } label: {
+                    Label("Remove", systemImage: "trash")
+                }
+            }
+
+            Button {
+                selectedProfile = profile
+                showLogoutAlert = true
+            } label: {
+                Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
+            }
+            .tint(.gray)
         }
     }
 

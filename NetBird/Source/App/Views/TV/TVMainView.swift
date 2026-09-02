@@ -40,11 +40,13 @@ struct TVMainView: View {
                 }
                 .tag(1)
 
-            TVNetworksView()
-                .tabItem {
-                    Label("Resources", systemImage: "globe")
-                }
-                .tag(2)
+            if !viewModel.mdmRestrictions.features.disableNetworks {
+                TVNetworksView()
+                    .tabItem {
+                        Label("Resources", systemImage: "globe")
+                    }
+                    .tag(2)
+            }
 
             TVSettingsView()
                 .tabItem {

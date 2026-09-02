@@ -143,6 +143,14 @@ class ViewModel: ObservableObject {
     @Published var onDemandWiFiNetworks: [String] = []
     @Published var knownSSIDs: [String] = []
     @Published var showRosenpassChangedAlert = false
+    /// MDM enforcement snapshot rendered by the Go layer. `.empty` means no
+    /// policy is in force, which is also the state on any read failure - a
+    /// broken policy must not lock the user out of their own settings.
+    @Published var mdmRestrictions: MDMRestrictions = .empty
+    @Published var showSettingsRejectedAlert = false
+    @Published var showMDMPolicyAppliedToast = false
+    /// Reason shown by the settings-rejected alert.
+    var settingsRejectedMessage = ""
     @Published var networkUnavailable = false
     @Published var isInternetConnected = true
 
@@ -181,6 +189,8 @@ class ViewModel: ObservableObject {
     private let monitorQueue = DispatchQueue(label: "io.netbird.networkMonitor")
     #if os(iOS)
     private var vpnStatusObserver: NSObjectProtocol?
+    private var mdmConfigObserver: NSObjectProtocol?
+    private var mdmRefreshWorkItem: DispatchWorkItem?
     #endif
     
     @Published var peerViewModel: PeerViewModel
@@ -233,6 +243,20 @@ class ViewModel: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             self?.handleVPNStatusChangeForNotification()
+        }
+
+        // The OS delivers MDM managed-configuration pushes through the shared
+        // UserDefaults change channel, which also fires on every unrelated
+        // preference write. The main app has no restart decision to make - it
+        // only re-reads the snapshot - so a short debounce is enough here. The
+        // engine-restart decision lives in the extension, where Go's
+        // hasMDMPolicyChanged() does the real diffing.
+        mdmConfigObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.scheduleMDMRestrictionsRefresh()
         }
         #endif
 
@@ -747,8 +771,8 @@ class ViewModel: ObservableObject {
     // MARK: - Configuration Methods (via ConfigurationProvider)
 
     func updatePreSharedKey() {
-        configProvider.preSharedKey = presharedKey
-        if configProvider.commit() {
+        configProvider.setPreSharedKey(presharedKey)
+        if commitSettings() {
             // tvOS: bypass the On Demand disconnect prompt. The user changed a setting that
             // needs a reconnect, not asked to stay offline — letting On Demand bring the
             // tunnel back with the new key is the intended outcome (and the prompt would be
@@ -767,8 +791,8 @@ class ViewModel: ObservableObject {
 
     func removePreSharedKey() {
         presharedKey = ""
-        configProvider.preSharedKey = ""
-        if configProvider.commit() {
+        configProvider.setPreSharedKey("")
+        if commitSettings() {
             #if os(tvOS)
             self.performClose()
             #else
@@ -780,8 +804,60 @@ class ViewModel: ObservableObject {
         }
     }
 
+    /// Commits staged settings and turns an MDM rejection into an explanation.
+    ///
+    /// Preferences.commit() refuses a staged value that diverges from a
+    /// managed key. That is a backstop, not the primary UX - the control
+    /// should already have been locked - so reaching it means this process
+    /// held a stale view of the policy, and the snapshot is re-read.
+    @discardableResult
+    private func commitSettings() -> Bool {
+        if configProvider.commit() {
+            return true
+        }
+        let reason = configProvider.lastCommitError ?? ""
+        refreshMDMRestrictions()
+        if reason.localizedCaseInsensitiveContains("managed by MDM") {
+            settingsRejectedMessage = "This setting is managed by your organization and cannot be changed."
+        } else {
+            settingsRejectedMessage = reason.isEmpty
+                ? "The setting could not be saved."
+                : reason
+        }
+        showSettingsRejectedAlert = true
+        return false
+    }
+
+    /// Re-reads the MDM enforcement snapshot. Cheap: getRestrictionsJSON()
+    /// consults only the policy loader and never touches the config file.
+    /// Call it from onAppear of any screen that hides or locks controls.
+    func refreshMDMRestrictions() {
+        let snapshot = MDMRestrictions.current()
+        // Equatable guards against republishing an identical snapshot and
+        // redrawing every settings screen on unrelated UserDefaults writes.
+        if snapshot != mdmRestrictions {
+            mdmRestrictions = snapshot
+        }
+    }
+
+    // Only iOS subscribes to the managed-config change channel; the tvOS
+    // screens re-read the snapshot in onAppear instead.
+    #if os(iOS)
+    private func scheduleMDMRestrictionsRefresh() {
+        mdmRefreshWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            self?.refreshMDMRestrictions()
+        }
+        mdmRefreshWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
+    }
+    #endif
+
     func loadPreSharedKey() {
-        self.presharedKey = configProvider.preSharedKey
+        // The key itself is no longer readable across the bridge - the screen
+        // shows only whether one is configured, and the staging field starts
+        // empty so a save always submits a value the user just typed.
+        self.presharedKey = ""
         self.presharedKeySecure = configProvider.hasPreSharedKey
     }
 
@@ -791,7 +867,7 @@ class ViewModel: ObservableObject {
 
         // Persist to storage (on tvOS this writes directly to config JSON)
         configProvider.rosenpassEnabled = enabled
-        if !configProvider.commit() {
+        if !commitSettings() {
             print("Failed to update rosenpass settings")
         }
 
@@ -826,7 +902,7 @@ class ViewModel: ObservableObject {
 
         // Persist to storage (on tvOS this writes directly to config JSON)
         configProvider.rosenpassPermissive = permissive
-        if !configProvider.commit() {
+        if !commitSettings() {
             print("Failed to update rosenpass permissive settings")
         }
     }
@@ -861,7 +937,7 @@ class ViewModel: ObservableObject {
         let previous = self.disableIPv6
         self.disableIPv6 = disabled
         configProvider.disableIPv6 = disabled
-        if !configProvider.commit() {
+        if !commitSettings() {
             print("Failed to update IPv6 settings")
             self.disableIPv6 = previous
             configProvider.disableIPv6 = previous
@@ -1107,6 +1183,27 @@ class ViewModel: ObservableObject {
     #endif
 
     /// Checks shared app-group container for login required flag set by the network extension.
+    /// Picks up the policy-applied flag the extension sets when an MDM change
+    /// forced an engine restart, and tells the user their configuration was
+    /// updated. The snapshot is re-read at the same time: the restart means
+    /// the policy this process last saw is stale.
+    func checkMDMPolicyAppliedFlag() {
+        #if os(iOS)
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        guard userDefaults?.bool(forKey: GlobalConstants.keyMDMPolicyApplied) == true else { return }
+
+        userDefaults?.set(false, forKey: GlobalConstants.keyMDMPolicyApplied)
+        userDefaults?.synchronize()
+
+        AppLogger.shared.log("MDM: policy-applied flag detected from extension")
+        refreshMDMRestrictions()
+        showMDMPolicyAppliedToast = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            self?.showMDMPolicyAppliedToast = false
+        }
+        #endif
+    }
+
     /// Shows the authentication UI. Notification was already delivered via NEVPNStatusDidChange observer.
     /// iOS only — tvOS uses IPC via `checkLoginError` in TVAuthView.
     func checkLoginRequiredFlag() {

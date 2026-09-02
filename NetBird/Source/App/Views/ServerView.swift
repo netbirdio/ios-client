@@ -22,6 +22,44 @@ struct ServerView: View {
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
 
     var body: some View {
+        Group {
+            if viewModel.mdmRestrictions.mdm.managesManagementURL {
+                // Reachable only through a stale navigation path - the entry
+                // point is hidden under this policy. Fail closed rather than
+                // offer a change the daemon would reject.
+                managedServerNotice
+            } else {
+                serverForm
+                    .mdmLocked(viewModel.mdmRestrictions.features.disableUpdateSettings)
+            }
+        }
+        .navigationTitle("Change Server")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            viewModel.refreshMDMRestrictions()
+        }
+    }
+
+    private var managedServerNotice: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "lock.fill")
+                .font(.largeTitle)
+                .foregroundColor(Color("TextSecondary"))
+            Text("The server for this device is set by your organization.")
+                .multilineTextAlignment(.center)
+                .foregroundColor(Color("TextPrimary"))
+            Text(viewModel.mdmRestrictions.mdm.managementURL)
+                .font(.footnote)
+                .foregroundColor(Color("TextSecondary"))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color("BgMenu"))
+    }
+
+    private var serverForm: some View {
         Form {
             Section(
                 header: Text("Server"),
@@ -127,8 +165,6 @@ struct ServerView: View {
                 .disabled(isButtonDisabled)
             }
         }
-        .navigationTitle("Change Server")
-        .navigationBarTitleDisplayMode(.inline)
         .onChange(of: serverViewModel.viewErrors.ssoNotSupportedError) { error in
             if error != nil {
                 showSetupKeyField = true

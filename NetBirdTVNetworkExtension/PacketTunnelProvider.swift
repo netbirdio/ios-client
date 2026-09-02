@@ -311,7 +311,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         logger.info("initializeConfig: No config file found, initializing with management URL: \(managementURL, privacy: .public)")
 
         // Create Auth object with the management URL
-        guard let auth = NetBirdSDKNewAuth(configPath, managementURL, nil) else {
+        guard let auth = NetBirdSDKNewAuth(configPath, managementURL, MDMPolicyFetcher(), nil) else {
             logger.error("initializeConfig: Failed to create Auth object")
             let data = "false".data(using: .utf8)
             completionHandler(data)

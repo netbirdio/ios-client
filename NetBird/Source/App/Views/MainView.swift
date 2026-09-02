@@ -34,6 +34,7 @@ enum MainAlertType: String, Identifiable {
     case authenticationRequired
     case onDemandConflict
     case onDemandDisconnect
+    case settingsRejected
 
     var id: String { rawValue }
 }
@@ -66,6 +67,11 @@ struct iOSMainView: View {
             if !hasCompletedOnboarding {
                 FirstLaunchView(
                     hasCompletedOnboarding: $hasCompletedOnboarding,
+                    // With a management URL enforced by policy the server
+                    // choice is not the user's to make, so the onboarding
+                    // drops the "change server" step rather than offering a
+                    // route that would be rejected.
+                    serverPickerAvailable: !viewModel.mdmRestrictions.mdm.managesManagementURL,
                     onChangeServer: {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             activeAlert = .changeServer
@@ -75,6 +81,9 @@ struct iOSMainView: View {
             } else {
                 mainContent
             }
+        }
+        .onAppear {
+            viewModel.refreshMDMRestrictions()
         }
         .alert(item: $activeAlert) { alertType in
             switch alertType {
@@ -130,6 +139,12 @@ struct iOSMainView: View {
                         selectedTab = 3 // Switch to Settings tab
                     }
                 )
+            case .settingsRejected:
+                return Alert(
+                    title: Text("Setting not applied"),
+                    message: Text(viewModel.settingsRejectedMessage),
+                    dismissButton: .default(Text("OK"))
+                )
             case .onDemandDisconnect:
                 return Alert(
                     title: Text("VPN On Demand Active"),
@@ -166,14 +181,16 @@ struct iOSMainView: View {
                 }
                 .tag(1)
 
-                NavigationView {
-                    iOSNetworksView()
+                if !viewModel.mdmRestrictions.features.disableNetworks {
+                    NavigationView {
+                        iOSNetworksView()
+                    }
+                    .navigationViewStyle(StackNavigationViewStyle())
+                    .tabItem {
+                        Label("Resources", systemImage: "globe")
+                    }
+                    .tag(2)
                 }
-                .navigationViewStyle(StackNavigationViewStyle())
-                .tabItem {
-                    Label("Resources", systemImage: "globe")
-                }
-                .tag(2)
 
                 NavigationView {
                     iOSSettingsView()
@@ -206,6 +223,9 @@ struct iOSMainView: View {
             }
             .onChange(of: viewModel.showOnDemandDisconnectAlert) { show in
                 if show { activeAlert = .onDemandDisconnect; viewModel.showOnDemandDisconnectAlert = false }
+            }
+            .onChange(of: viewModel.showSettingsRejectedAlert) { show in
+                if show { activeAlert = .settingsRejected; viewModel.showSettingsRejectedAlert = false }
             }
 
             // Toast alerts
@@ -242,6 +262,24 @@ struct iOSMainView: View {
                     .cornerRadius(8)
                     .transition(AnyTransition.opacity.combined(with: .move(edge: .top)))
                     .animation(.default, value: viewModel.showIpCopiedAlert)
+                    .zIndex(1)
+                }
+
+                if viewModel.showMDMPolicyAppliedToast {
+                    HStack(spacing: 8) {
+                        Image(systemName: "lock.fill")
+                            .foregroundColor(.white)
+                        Text("NetBird configuration was updated by your IT policy.")
+                            .foregroundColor(.white)
+                            .font(.subheadline)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .padding(10)
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(8)
+                    .padding(.horizontal, 24)
+                    .transition(AnyTransition.opacity.combined(with: .move(edge: .top)))
+                    .animation(.default, value: viewModel.showMDMPolicyAppliedToast)
                     .zIndex(1)
                 }
                 Spacer().frame(height: 80)
