@@ -35,21 +35,9 @@ public enum GoCrashCapture {
     }
 
     private static let redirectOnce: Void = {
-        let fileManager = FileManager.default
         guard let errLogURL = fileURL else {
             AppLogger.shared.log("stderr redirect: app group container unavailable")
             return
-        }
-
-        if let attrs = try? fileManager.attributesOfItem(atPath: errLogURL.path),
-           let size = attrs[.size] as? UInt64, size > 0 {
-            // Surface a previous session's crash output before appending to it.
-            AppLogger.shared.log("stderr redirect: netbird.err has \(size) bytes from a previous session (possible crash dump)")
-            // Cap growth across sessions: reset once it grows beyond 5 MB.
-            if size > maxFileSize {
-                AppLogger.shared.log("stderr redirect: netbird.err exceeds 5 MB cap, resetting")
-                try? fileManager.removeItem(at: errLogURL)
-            }
         }
 
         let fd = open(errLogURL.path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
@@ -57,6 +45,23 @@ public enum GoCrashCapture {
             AppLogger.shared.log("stderr redirect: failed to open \(errLogURL.path), errno=\(errno)")
             return
         }
+
+        var info = stat()
+        if fstat(fd, &info) == 0, info.st_size > 0 {
+            let size = UInt64(info.st_size)
+            // Surface a previous session's crash output before appending to it.
+            AppLogger.shared.log("stderr redirect: netbird.err has \(size) bytes from a previous session (possible crash dump)")
+            // Cap growth across sessions once it grows beyond 5 MB. Truncate in place
+            // rather than unlinking: the other process may hold fd 2 on this inode, and
+            // unlinking would send its future writes into an orphan nobody can read.
+            if size > maxFileSize {
+                AppLogger.shared.log("stderr redirect: netbird.err exceeds 5 MB cap, truncating")
+                if ftruncate(fd, 0) != 0 {
+                    AppLogger.shared.log("stderr redirect: failed to truncate netbird.err, errno=\(errno)")
+                }
+            }
+        }
+
         dup2(fd, STDERR_FILENO)
         if fd != STDERR_FILENO {
             close(fd)
@@ -74,10 +79,13 @@ public enum GoCrashCapture {
         _ = redirectOnce
     }
 
-    /// Returns the crash output appended to netbird.err since the previous call,
-    /// or nil when nothing new looks like a Go panic or fatal error. The consumed
-    /// range is remembered so the same dump is never reported twice, even though
-    /// the file itself is left untouched.
+    /// Returns the next chunk of crash output appended to netbird.err since the
+    /// previous call, or nil when nothing new looks like a Go panic or fatal
+    /// error. The consumed range is remembered so the same dump is never reported
+    /// twice, even though the file itself is left untouched. Only the returned
+    /// chunk is consumed: anything after it stays unread for the next call, so a
+    /// backlog of several dumps is reported one launch at a time instead of being
+    /// skipped past.
     public static func takeUnreportedCrashOutput() -> String? {
         guard let errLogURL = fileURL,
               let handle = try? FileHandle(forReadingFrom: errLogURL) else {
@@ -87,21 +95,26 @@ public enum GoCrashCapture {
 
         guard let fileSize = try? handle.seekToEnd() else { return nil }
         let defaults = UserDefaults.standard
-        var reportedOffset = UInt64(max(0, defaults.integer(forKey: reportedOffsetKey)))
+        var offset = UInt64(max(0, defaults.integer(forKey: reportedOffsetKey)))
         // The file was reset (or replaced) since the last report; start over.
-        if reportedOffset > fileSize {
-            reportedOffset = 0
+        if offset > fileSize {
+            offset = 0
         }
-        defaults.set(Int(fileSize), forKey: reportedOffsetKey)
+        defer { defaults.set(Int(offset), forKey: reportedOffsetKey) }
 
-        guard fileSize > reportedOffset,
-              (try? handle.seek(toOffset: reportedOffset)) != nil,
-              let data = try? handle.read(upToCount: min(Int(fileSize - reportedOffset), maxReportSize)),
-              let output = String(data: data, encoding: .utf8) else {
-            return nil
+        while offset < fileSize {
+            guard (try? handle.seek(toOffset: offset)) != nil,
+                  let data = try? handle.read(upToCount: min(Int(fileSize - offset), maxReportSize)),
+                  !data.isEmpty else {
+                return nil
+            }
+            offset += UInt64(data.count)
+
+            let output = String(decoding: data, as: UTF8.self)
+            if crashMarkers.contains(where: output.contains) {
+                return output
+            }
         }
-
-        guard crashMarkers.contains(where: output.contains) else { return nil }
-        return output
+        return nil
     }
 }
