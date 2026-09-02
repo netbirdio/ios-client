@@ -688,7 +688,10 @@ class ViewModel: ObservableObject {
 
         applyRouteSideEffects(for: status)
 
-        if status == .connected, connectOnDemand {
+        // `connectOnDemand` is the user's saved preference, which the policy
+        // deliberately leaves intact so it can be restored later - so it is
+        // not on its own permission to arm the rules.
+        if status == .connected, connectOnDemand, !autoConnectForbiddenByPolicy {
             networkExtensionAdapter.setOnDemandEnabled(true)
         }
     }
@@ -854,6 +857,16 @@ class ViewModel: ObservableObject {
 
     // Only iOS subscribes to the managed-config change channel; the tvOS
     // screens re-read the snapshot in onAppear instead.
+    /// Whether the policy forbids the daemon from connecting on its own.
+    ///
+    /// Every path that arms the VPN profile's On Demand rules has to consult
+    /// this, not just the user's preference: the rules live in the OS profile
+    /// and outlive any single connection, so one unguarded re-arm restores
+    /// automatic connection for good.
+    private var autoConnectForbiddenByPolicy: Bool {
+        mdmRestrictions.mdm.disableAutoConnect
+    }
+
     /// Arms or disarms the VPN profile's On Demand rules to match the policy.
     ///
     /// `disableAutoConnect` forbids connecting without the user asking, but On
@@ -1013,6 +1026,14 @@ class ViewModel: ObservableObject {
     ///   (applied, or nothing needed arming), `false` when the manager refused it. Callers
     ///   that depend on the change — disconnecting, wiping the config — must wait for it.
     func setConnectOnDemand(isEnabled: Bool, completion: ((Bool) -> Void)? = nil) {
+        // Backstop behind the locked control: the rules must not be armed
+        // while the policy forbids automatic connection, whatever route got
+        // here.
+        if isEnabled, autoConnectForbiddenByPolicy {
+            AppLogger.shared.log("MDM: refusing to arm On Demand while disableAutoConnect is enforced")
+            completion?(false)
+            return
+        }
         let previous = connectOnDemand
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         userDefaults?.set(isEnabled, forKey: GlobalConstants.keyConnectOnDemand)
