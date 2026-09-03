@@ -91,6 +91,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// makes the handler come back for it.
     private var pendingMDMRestart = false
 
+    /// The deferred retry that waits out an in-flight restart. Tracked so
+    /// teardown can cancel it: otherwise it fires afterwards, passes a guard
+    /// that stopTunnel has just reset, and calls adapter.start() on a tunnel
+    /// that is going away.
+    private var mdmRetryWorkItem: DispatchWorkItem?
+
+    /// Set once stopTunnel begins, so anything still queued on monitorQueue
+    /// can tell that starting the client is no longer wanted.
+    private var isTearingDown = false
+
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
@@ -124,6 +134,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.startMonitoringNetworkChanges()
         }
 
+        monitorQueue.async { [weak self] in
+            self?.isTearingDown = false
+        }
         startObservingMDMConfigChanges()
 
         guard let adapter = adapter else {
@@ -198,8 +211,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         monitorQueue.async { [weak self] in
+            self?.isTearingDown = true
             self?.networkChangeWorkItem?.cancel()
             self?.networkChangeWorkItem = nil
+            self?.mdmRetryWorkItem?.cancel()
+            self?.mdmRetryWorkItem = nil
+            self?.pendingMDMRestart = false
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
@@ -818,16 +835,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // shared state. Running the two on different queues lets both pass the
         // guard and start their own stop/start pipelines.
         monitorQueue.async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, !self.isTearingDown else { return }
             guard !self.isRestartInProgress else {
                 self.pendingMDMRestart = true
                 AppLogger.shared.log("MDM: restart already in flight; will retry once it finishes")
-                self.monitorQueue.asyncAfter(deadline: .now() + 2) { [weak self] in
-                    guard let self = self, self.pendingMDMRestart else { return }
+                self.mdmRetryWorkItem?.cancel()
+                let retry = DispatchWorkItem { [weak self] in
+                    guard let self = self, self.pendingMDMRestart, !self.isTearingDown else { return }
                     self.requestMDMRestart()
                 }
+                self.mdmRetryWorkItem = retry
+                self.monitorQueue.asyncAfter(deadline: .now() + 2, execute: retry)
                 return
             }
+            self.mdmRetryWorkItem = nil
             self.pendingMDMRestart = false
             // Only a restart that actually brought the engine back up means the
             // policy is in force; a deferred or failed one must not tell the

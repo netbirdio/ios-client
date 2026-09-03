@@ -258,6 +258,16 @@ struct ProfilesListView: View {
     }
 
     private func switchToProfile(_ profile: Profile) {
+        // Re-read first: a policy that arrived while the confirmation alert was
+        // open would otherwise disconnect the user here and only then have the
+        // switch rejected by the Go manager.
+        viewModel.refreshMDMRestrictions()
+        guard !profilesManaged else {
+            errorMessage = "Profile management is disabled by your organization."
+            showErrorAlert = true
+            return
+        }
+
         viewModel.performClose()
 
         do {

@@ -791,7 +791,22 @@ class ViewModel: ObservableObject {
     
     // MARK: - Configuration Methods (via ConfigurationProvider)
 
+    /// Whether the policy owns the pre-shared key, by managing it directly or
+    /// by forbidding settings edits at all.
+    private var preSharedKeyForbiddenByPolicy: Bool {
+        mdmRestrictions.mdm.preSharedKey || mdmRestrictions.features.disableUpdateSettings
+    }
+
     func updatePreSharedKey() {
+        // The only backstop on tvOS: commit() there writes straight to the
+        // config JSON and always reports success, so a policy that arrives
+        // while a key-entry alert is open would otherwise be overwritten.
+        guard !preSharedKeyForbiddenByPolicy else {
+            AppLogger.shared.log("MDM: refusing to change the pre-shared key while it is managed")
+            settingsRejectedMessage = "This setting is managed by your organization and cannot be changed."
+            showSettingsRejectedAlert = true
+            return
+        }
         configProvider.setPreSharedKey(presharedKey)
         if commitSettings() {
             // tvOS: bypass the On Demand disconnect prompt. The user changed a setting that
@@ -811,6 +826,12 @@ class ViewModel: ObservableObject {
     }
 
     func removePreSharedKey() {
+        guard !preSharedKeyForbiddenByPolicy else {
+            AppLogger.shared.log("MDM: refusing to remove the pre-shared key while it is managed")
+            settingsRejectedMessage = "This setting is managed by your organization and cannot be changed."
+            showSettingsRejectedAlert = true
+            return
+        }
         presharedKey = ""
         configProvider.setPreSharedKey("")
         if commitSettings() {
