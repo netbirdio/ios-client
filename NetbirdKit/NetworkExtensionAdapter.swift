@@ -93,7 +93,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     var extensionName = "NetBird"
     private let loginRetryState = LoginRetryState()
     #else
-    var extensionID = "io.netbird.app.NetbirdNetworkExtension"
+    var extensionID = "\(Bundle.main.bundleIdentifier ?? "io.netbird.app").NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
     #endif
 
@@ -1436,6 +1436,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
 
+    /// Requests current tunnel status, completing once even when IPC times out or fails.
     func fetchData(completion: @escaping (StatusDetails) -> Void) {
         guard !isFetchingStatus else {
             return
@@ -1455,13 +1456,17 @@ public class NetworkExtensionAdapter: ObservableObject {
         // This is to make sure completion is called only once
         let safeCompletion: (StatusDetails) -> Void = { [weak self] status in
             completionLock.lock()
-            defer { completionLock.unlock() }
-            
-            guard !hasCompleted else { return }
+            guard !hasCompleted else {
+                completionLock.unlock()
+                return
+            }
             hasCompleted = true
-            
-            self?.isFetchingStatus = false
-            completion(status)
+            completionLock.unlock()
+
+            DispatchQueue.main.async {
+                self?.isFetchingStatus = false
+                completion(status)
+            }
         }
         
         // Timeout after 10 seconds to reset fetching status to false
@@ -1503,14 +1508,16 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
     
+    /// Starts status polling and delivers an immediate first result.
     func startTimer(completion: @escaping (StatusDetails) -> Void) {
         self.timer.invalidate()
         self.fetchData(completion: completion)
-        self.timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true, block: { _ in
-            self.fetchData(completion: completion)
+        self.timer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true, block: { [weak self] _ in
+            self?.fetchData(completion: completion)
         })
     }
     
+    /// Stops periodic status polling.
     func stopTimer() {
         self.timer.invalidate()
     }
@@ -1586,11 +1593,15 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     #endif
 
+    /// Loads the manager matching this build flavor and returns its connection status.
     func getExtensionStatus(completion: @escaping (NEVPNStatus) -> Void) {
         Task {
             do {
                 let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-                if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
+                if let manager = managers.first(where: {
+                    $0.localizedDescription == self.extensionName &&
+                    ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.extensionID
+                }) {
                     completion(manager.connection.status)
                 } else {
                     // No VPN manager exists yet (e.g. first connect before the iOS permission

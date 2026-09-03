@@ -33,10 +33,24 @@ private var isRunningUnitTests: Bool {
 /// invalid app ID, aborting the test host before the runner can connect.
 private func configureFirebaseIfNeeded() {
     guard !isRunningUnitTests else { return }
-    if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-       let options = FirebaseOptions(contentsOfFile: path) {
-        FirebaseApp.configure(options: options)
+    guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+          let configuration = NSDictionary(contentsOfFile: path) as? [String: Any],
+          let apiKey = configuration["API_KEY"] as? String,
+          apiKey.hasPrefix("AIza"),
+          let appID = configuration["GOOGLE_APP_ID"] as? String,
+          appID.range(
+              of: #"^1:[0-9]+:ios:[0-9a-fA-F]+$"#,
+              options: .regularExpression
+          ) != nil,
+          let options = FirebaseOptions(contentsOfFile: path) else {
+        // Firebase throws an Objective-C exception (which Swift cannot catch)
+        // for placeholder or malformed values. Firebase is optional, so local
+        // and CI builds should continue without analytics instead of aborting.
+        NSLog("NetBird: Firebase configuration is absent or invalid; skipping Firebase startup")
+        return
     }
+
+    FirebaseApp.configure(options: options)
 }
 
 /// Forwards Go crash output left behind by a previous run to Crashlytics.

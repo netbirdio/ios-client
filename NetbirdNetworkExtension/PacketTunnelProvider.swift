@@ -33,9 +33,24 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var currentNetworkType: NWInterface.InterfaceType?
     private var wasStoppedDueToNoNetwork = false
     private var isRestartInProgress = false
+    /// A path change that arrived while a stop/start transaction was in flight.
+    /// Handoffs commonly emit several path updates; dropping the later update can
+    /// leave the newly-started client bound to an intermediate path indefinitely.
+    private var restartPending = false
+    private var latestPathIsSatisfied = false
+    /// Identifies the only restart transaction whose asynchronous callbacks may
+    /// mutate state. Incrementing this invalidates callbacks from a timed-out or
+    /// stopped transaction so they cannot overlap a newer engine instance.
+    private var restartGeneration: UInt64 = 0
+    private var activeRestartGeneration: UInt64?
+    private var isTunnelStopping = false
+    private var restartRetryCount = 0
+    private static let restartMaxRetries = 4
+    private static let restartRetryBaseDelay: TimeInterval = 2.0
     
     private var networkChangeWorkItem: DispatchWorkItem?
 
+    /// Starts the selected profile's NetBird engine and completes Network Extension startup.
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
@@ -65,6 +80,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
+            self?.restartPending = false
+            self?.latestPathIsSatisfied = false
+            self?.restartGeneration &+= 1
+            self?.activeRestartGeneration = nil
+            self?.isTunnelStopping = false
+            self?.restartRetryCount = 0
             self?.adapter?.isNetworkUnavailable = false
             self?.startMonitoringNetworkChanges()
         }
@@ -139,6 +160,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// Stops monitoring and the NetBird engine before completing tunnel teardown.
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         monitorQueue.async { [weak self] in
             self?.networkChangeWorkItem?.cancel()
@@ -146,6 +168,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
+            self?.restartPending = false
+            self?.latestPathIsSatisfied = false
+            self?.restartGeneration &+= 1
+            self?.activeRestartGeneration = nil
+            self?.isTunnelStopping = true
+            self?.restartRetryCount = 0
+            self?.adapter?.isRestarting = false
         }
         // Reset network unavailable flag when tunnel stops
         adapter?.isNetworkUnavailable = false
@@ -236,7 +265,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// Starts a long-lived path monitor used to reconcile Wi-Fi and cellular transitions.
     func startMonitoringNetworkChanges() {
+        pathMonitor?.cancel()
         let monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { [weak self] path in
             self?.handleNetworkChange(path: path)
@@ -246,7 +277,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         pathMonitor = monitor
     }
 
+    /// Debounces and reconciles physical path loss, recovery, and interface changes.
+    /// - Parameter path: The latest path published by the provider's network monitor.
     func handleNetworkChange(path: Network.NWPath) {
+        guard !isTunnelStopping else { return }
+        latestPathIsSatisfied = path.status == .satisfied
         AppLogger.shared.log("""
                   Path update:
                   - status: \(path.status)
@@ -262,6 +297,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // Cancel any pending restart
             networkChangeWorkItem?.cancel()
             networkChangeWorkItem = nil
+
+            // If the physical path disappears during a restart, do not let the
+            // in-flight transaction be considered final. Recovery must reconcile
+            // once more against the path that eventually becomes usable.
+            if isRestartInProgress {
+                restartPending = true
+            }
 
             // Signal UI to show disconnecting animation via shared flag
             // We don't call adapter.stop() to avoid race conditions with Go SDK callbacks
@@ -314,17 +356,19 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         if networkTypeChanged || shouldRestartDueToRecovery {
             AppLogger.shared.log("Scheduling restart: networkTypeChanged=\(networkTypeChanged), shouldRestartDueToRecovery=\(shouldRestartDueToRecovery)")
 
-            // Cancel any pending restart from previous rapid change
-            networkChangeWorkItem?.cancel()
-            networkChangeWorkItem = nil
-
-            // Debounce: schedule restart after 1 second
-            let workItem = DispatchWorkItem { [weak self] in
-                self?.restartClient()
+            // A restart already in progress cannot absorb a new path. Remember it
+            // and run another reconciliation after the current transaction ends.
+            if isRestartInProgress {
+                restartPending = true
+                if let newType = newNetworkType {
+                    currentNetworkType = newType
+                }
+                return
             }
 
-            networkChangeWorkItem = workItem
-            monitorQueue.asyncAfter(deadline: .now() + 1.0, execute: workItem)
+            // Cancel any pending restart from previous rapid change
+            restartRetryCount = 0
+            scheduleRestart(after: 1.0)
         }
 
         // Update current network type only if known
@@ -333,31 +377,68 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// Runs one serialized engine stop/start transaction against the latest usable path.
     func restartClient() {
+        networkChangeWorkItem = nil
+
+        guard !isTunnelStopping else {
+            AppLogger.shared.log("restartClient: ignored while tunnel is stopping")
+            return
+        }
+
         guard let adapter = adapter else {
             AppLogger.shared.log("restartClient: adapter is nil")
             return
         }
 
         if isRestartInProgress {
-            AppLogger.shared.log("restartClient: skipping - restart already in progress")
+            AppLogger.shared.log("restartClient: queuing follow-up - restart already in progress")
+            restartPending = true
             return
         }
         AppLogger.shared.log("restartClient: starting restart sequence")
         isRestartInProgress = true
         adapter.isRestarting = true
+        restartGeneration &+= 1
+        let generation = restartGeneration
+        activeRestartGeneration = generation
 
-        // Timeout after 30 seconds to reset flags if restart hangs
+        // A hung Go stop/start must fail closed. Merely clearing the flags would
+        // allow another restart to overlap it, and its late callback could revive
+        // an engine attached to a stale network path.
         let timeoutWorkItem = DispatchWorkItem { [weak self] in
-            guard let self = self, self.isRestartInProgress else { return }
-            AppLogger.shared.log("restartClient: timeout - resetting flags")
-            self.adapter?.isRestarting = false
-            self.isRestartInProgress = false
+            guard let self = self,
+                  self.activeRestartGeneration == generation else { return }
+            AppLogger.shared.log("restartClient[\(generation)]: timeout - tearing down stale tunnel")
+            self.restartPending = false
+            self.finishRestartTransaction(generation: generation, schedulePending: false)
+            self.updateWidgetStatus("disconnected")
+            self.cancelTunnelWithError(NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1002,
+                userInfo: [NSLocalizedDescriptionKey: "VPN restart timed out."]
+            ))
         }
         monitorQueue.asyncAfter(deadline: .now() + 30, execute: timeoutWorkItem)
 
         adapter.stop { [weak self] in
-            AppLogger.shared.log("restartClient: stop completed, checking login status")
+            self?.monitorQueue.async { [weak self] in
+                guard let self = self else { return }
+                guard self.activeRestartGeneration == generation else {
+                    AppLogger.shared.log("restartClient[\(generation)]: ignoring stale stop completion")
+                    return
+                }
+                AppLogger.shared.log("restartClient[\(generation)]: stop completed, checking path and login status")
+
+                // Never start the engine against an unavailable path. The next
+                // satisfied NWPath update will schedule the pending reconciliation.
+                guard self.latestPathIsSatisfied else {
+                    AppLogger.shared.log("restartClient: path unavailable after stop - waiting for recovery")
+                    self.restartPending = true
+                    timeoutWorkItem.cancel()
+                    self.finishRestartTransaction(generation: generation)
+                    return
+                }
 
             // Tokens may have expired during a network change (common with self-hosted servers
             // that have shorter token lifetimes). Check before restarting; if login is required
@@ -366,29 +447,27 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // change no longer costs a Login RPC. An expiry the recorder has not seen yet is
             // still caught one step later: the restarted engine's own login fails with
             // PermissionDenied and drives onLoginRequired from the connection listener.
-            if self?.adapter?.needsLoginCached() == true {
+            if self.adapter?.needsLoginCached() == true {
                 AppLogger.shared.log("restartClient: login required — signaling main app, skipping restart")
-                self?.signalLoginRequired()
-                self?.updateWidgetStatus("disconnected")
-                self?.monitorQueue.async {
-                    self?.adapter?.isRestarting = false
-                    self?.isRestartInProgress = false
-                }
+                self.signalLoginRequired()
+                self.updateWidgetStatus("disconnected")
                 timeoutWorkItem.cancel()
+                self.finishRestartTransaction(generation: generation, schedulePending: false)
                 return
             }
 
             AppLogger.shared.log("restartClient: starting client")
-            self?.adapter?.start { [weak self] error in
+            self.adapter?.start { [weak self] error in
                 // Cancel timeout whether start succeeds or not
                 timeoutWorkItem.cancel()
 
-                self?.monitorQueue.async {
-                    self?.adapter?.isRestarting = false
-                    self?.isRestartInProgress = false
-                }
-
-                if let error = error {
+                self?.monitorQueue.async { [weak self] in
+                    guard let self = self else { return }
+                    guard self.activeRestartGeneration == generation else {
+                        AppLogger.shared.log("restartClient[\(generation)]: ignoring stale start completion")
+                        return
+                    }
+                    if let error = error {
                     AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
                     // If the start failed because the session expired, the connection
                     // listener may have suppressed its login-required signalling: it skips
@@ -398,22 +477,99 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     // recorder here — the engine marks it with PermissionDenied before
                     // Run() returns — and signal + tear down so the dead tunnel doesn't
                     // linger and black-hole traffic.
-                    if self?.adapter?.needsLoginCached() == true {
+                    if self.adapter?.needsLoginCached() == true {
                         AppLogger.shared.log("restartClient: start failed due to expired login — signaling and tearing down")
-                        self?.signalLoginRequired()
-                        self?.cancelTunnelWithError(NSError(
+                        self.signalLoginRequired()
+                        self.cancelTunnelWithError(NSError(
                             domain: "io.netbird.NetbirdNetworkExtension",
                             code: 1001,
                             userInfo: [NSLocalizedDescriptionKey: "Login required."]
                         ))
+                        self.updateWidgetStatus("disconnected")
+                        self.finishRestartTransaction(generation: generation, schedulePending: false)
+                        return
                     }
-                    self?.updateWidgetStatus("disconnected")
+                    self.updateWidgetStatus("disconnected")
+                    let pathChangedAgain = self.restartPending && self.latestPathIsSatisfied
+                    self.finishRestartTransaction(generation: generation)
+                    if !pathChangedAgain {
+                        self.scheduleRestartRetry(afterFailureOf: generation)
+                    }
                 } else {
                     AppLogger.shared.log("restartClient: start completed successfully")
-                    self?.updateWidgetStatus("connected")
+                    self.restartRetryCount = 0
+                    self.updateWidgetStatus("connected")
+                    self.finishRestartTransaction(generation: generation)
+                }
                 }
             }
+            }
         }
+    }
+
+    /// Completes one serialized stop/start transaction and, if the path changed
+    /// while it was running, schedules exactly one follow-up reconciliation.
+    /// Must be called on monitorQueue.
+    private func finishRestartTransaction(generation: UInt64, schedulePending: Bool = true) {
+        guard activeRestartGeneration == generation else { return }
+        adapter?.isRestarting = false
+        isRestartInProgress = false
+        activeRestartGeneration = nil
+
+        guard schedulePending else {
+            restartPending = false
+            return
+        }
+        guard restartPending, latestPathIsSatisfied else { return }
+        restartPending = false
+        scheduleRestart(after: 1.0)
+    }
+
+    /// Replaces any not-yet-started reconciliation with one debounce timer.
+    /// Must be called on monitorQueue.
+    private func scheduleRestart(after delay: TimeInterval) {
+        networkChangeWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.networkChangeWorkItem = nil
+            self?.restartClient()
+        }
+        networkChangeWorkItem = workItem
+        monitorQueue.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    /// Retries a failed engine start with bounded exponential backoff. A stop,
+    /// newer path change, or newer restart invalidates/cancels the queued work.
+    /// Must be called on monitorQueue.
+    private func scheduleRestartRetry(afterFailureOf generation: UInt64) {
+        guard !isTunnelStopping, latestPathIsSatisfied else { return }
+
+        guard restartRetryCount < Self.restartMaxRetries else {
+            AppLogger.shared.log("restartClient: exhausted \(Self.restartMaxRetries) retries - tearing down tunnel")
+            restartRetryCount = 0
+            cancelTunnelWithError(NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1005,
+                userInfo: [NSLocalizedDescriptionKey: "Could not restart NetBird after a network change."]
+            ))
+            return
+        }
+
+        restartRetryCount += 1
+        let attempt = restartRetryCount
+        let delay = Self.restartRetryBaseDelay * pow(2.0, Double(attempt - 1))
+        AppLogger.shared.log("restartClient: scheduling retry \(attempt)/\(Self.restartMaxRetries) in \(delay)s")
+
+        networkChangeWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self,
+                  !self.isTunnelStopping,
+                  self.latestPathIsSatisfied,
+                  self.restartGeneration == generation else { return }
+            self.networkChangeWorkItem = nil
+            self.restartClient()
+        }
+        networkChangeWorkItem = workItem
+        monitorQueue.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     /// Signals login required by persisting a flag to the shared app-group container.
@@ -673,7 +829,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 func initializeLogging(loglevel: String) {
     let fileManager = FileManager.default
 
-    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
+    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)
     let logURL = groupURL?.appendingPathComponent("logfile.log")
 
     var error: NSError?
