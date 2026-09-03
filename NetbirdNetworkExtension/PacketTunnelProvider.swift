@@ -146,6 +146,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         return _tunnelGeneration
     }
 
+    /// True from the moment startTunnel hands off to adapter.start until that
+    /// call completes.
+    ///
+    /// Initial startup does not set isRestartInProgress, so without this an
+    /// MDM restart arriving in that window would pass the guard and call
+    /// adapter.stop() while client.run() was still being dispatched — the
+    /// adapter does not serialise the two. Deferring instead of dropping means
+    /// the policy is applied as soon as startup finishes.
+    private var _isStartingTunnel = false
+    private var isStartingTunnel: Bool {
+        get {
+            tearDownLock.lock()
+            defer { tearDownLock.unlock() }
+            return _isStartingTunnel
+        }
+        set {
+            tearDownLock.lock()
+            _isStartingTunnel = newValue
+            tearDownLock.unlock()
+        }
+    }
+
     /// True only while `generation` is still the live lifecycle and no
     /// teardown has begun.
     private func isCurrentGeneration(_ generation: Int) -> Bool {
@@ -250,7 +272,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             ))
         }
 
+        isStartingTunnel = true
         adapter.start { [weak self] error in
+            self?.isStartingTunnel = false
             completionHandler(error)
             if error == nil {
                 self?.updateWidgetStatus("connected")
@@ -265,6 +289,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // existing stop handler inline, which would otherwise read the old
         // value and restart into the teardown.
         isTearingDown = true
+        isStartingTunnel = false
         monitorQueue.async { [weak self] in
             self?.networkChangeWorkItem?.cancel()
             self?.networkChangeWorkItem = nil
@@ -917,9 +942,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // guard and start their own stop/start pipelines.
         monitorQueue.async { [weak self] in
             guard let self = self, !self.isTearingDown else { return }
-            guard !self.isRestartInProgress else {
+            guard !self.isRestartInProgress, !self.isStartingTunnel else {
                 self.pendingMDMRestart = true
-                AppLogger.shared.log("MDM: restart already in flight; will retry once it finishes")
+                AppLogger.shared.log("MDM: a start or restart is in flight; will retry once it finishes")
                 self.mdmRetryWorkItem?.cancel()
                 let retry = DispatchWorkItem { [weak self] in
                     guard let self = self, self.pendingMDMRestart, !self.isTearingDown else { return }
