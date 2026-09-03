@@ -54,6 +54,13 @@ struct TVMainView: View {
                 }
                 .tag(3)
         }
+        .onChange(of: viewModel.mdmRestrictions.features.disableNetworks) { _, hidden in
+            // Leaving the selection on a tab that no longer exists shows a
+            // blank screen; the iOS side does the same.
+            if hidden && selectedTab == 2 {
+                selectedTab = 0
+            }
+        }
         .overlay(alignment: .topLeading) {
             Image("netbird-logo-menu")
                 .resizable()

@@ -245,12 +245,16 @@ class ViewModel: ObservableObject {
             self?.handleVPNStatusChangeForNotification()
         }
 
-        // The OS delivers MDM managed-configuration pushes through the shared
-        // UserDefaults change channel, which also fires on every unrelated
-        // preference write. The main app has no restart decision to make - it
-        // only re-reads the snapshot - so a short debounce is enough here. The
-        // engine-restart decision lives in the extension, where Go's
-        // hasMDMPolicyChanged() does the real diffing.
+        // Catches policy writes this process makes itself. It will NOT fire
+        // for the OS writing managed configuration from another process -
+        // UserDefaults.didChangeNotification is process-local, and KVO cannot
+        // help either because the key contains dots and would be read as a
+        // key path. An externally pushed policy is therefore picked up on the
+        // next activation (see startActivation) or when a screen appears.
+        //
+        // The channel is shared with every other preference write, so the
+        // refresh is debounced. The main app has no restart decision to make;
+        // that lives in the extension, where hasMDMPolicyChanged() diffs.
         mdmConfigObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification,
             object: nil,

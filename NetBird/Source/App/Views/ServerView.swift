@@ -29,8 +29,15 @@ struct ServerView: View {
                 // offer a change the daemon would reject.
                 managedServerNotice
             } else {
-                serverForm
-                    .mdmLocked(viewModel.mdmRestrictions.features.disableUpdateSettings)
+                VStack(spacing: 0) {
+                    serverForm
+                        .mdmLocked(viewModel.mdmRestrictions.features.disableUpdateSettings)
+                    if viewModel.mdmRestrictions.features.disableUpdateSettings {
+                        MDMManagedFooter()
+                            .font(.footnote)
+                            .padding(.bottom, 12)
+                    }
+                }
             }
         }
         .navigationTitle("Change Server")

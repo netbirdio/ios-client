@@ -391,7 +391,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
-    func restartClient() {
+    /// - Parameter onRestarted: run only when the engine is back up. Callers
+    ///   that must not report success early — an applied MDM policy, say —
+    ///   hang their side effect here rather than on the call returning, which
+    ///   happens long before the restart finishes.
+    func restartClient(onRestarted: (() -> Void)? = nil) {
         guard let adapter = adapter else {
             AppLogger.shared.log("restartClient: adapter is nil")
             return
@@ -468,6 +472,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     self?.updateWidgetStatus("disconnected")
                 } else {
                     AppLogger.shared.log("restartClient: start completed successfully")
+                    onRestarted?()
                     self?.updateWidgetStatus("connected")
                 }
             }
@@ -796,7 +801,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         AppLogger.shared.log("MDM: managed configuration changed; restarting client")
-        signalMDMPolicyApplied()
         requestMDMRestart()
     }
 
@@ -809,19 +813,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// marked as seen. Retry instead until the pipeline is free; its own
     /// 30-second timeout bounds the wait.
     private func requestMDMRestart() {
-        DispatchQueue.main.async { [weak self] in
+        // monitorQueue, not the main queue: the network-change path already
+        // drives restartClient() from here, and isRestartInProgress is plain
+        // shared state. Running the two on different queues lets both pass the
+        // guard and start their own stop/start pipelines.
+        monitorQueue.async { [weak self] in
             guard let self = self else { return }
             guard !self.isRestartInProgress else {
                 self.pendingMDMRestart = true
                 AppLogger.shared.log("MDM: restart already in flight; will retry once it finishes")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                self.monitorQueue.asyncAfter(deadline: .now() + 2) { [weak self] in
                     guard let self = self, self.pendingMDMRestart else { return }
                     self.requestMDMRestart()
                 }
                 return
             }
             self.pendingMDMRestart = false
-            self.restartClient()
+            // Only a restart that actually brought the engine back up means the
+            // policy is in force; a deferred or failed one must not tell the
+            // user otherwise.
+            self.restartClient { [weak self] in
+                self?.signalMDMPolicyApplied()
+            }
         }
     }
 }

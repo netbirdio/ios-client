@@ -153,9 +153,10 @@ struct TVSettingsView: View {
                             TVSettingsRow(
                                 icon: "key.fill",
                                 title: "Pre-Shared Key",
-                                subtitle: pskManaged
-                                    ? "Managed by your organization"
-                                    : (viewModel.presharedKeySecure ? "Configured" : "Not configured"),
+                                subtitle: subtitle(
+                                    viewModel.presharedKeySecure ? "Configured" : "Not configured",
+                                    managed: pskManaged || editingDisabled
+                                ),
                                 action: (pskManaged || editingDisabled)
                                     ? nil
                                     : { showPreSharedKeyAlert = true }
