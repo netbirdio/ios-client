@@ -120,6 +120,40 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// Bumped by every startTunnel, so work begun for one tunnel lifecycle can
+    /// tell that it is finishing into another.
+    ///
+    /// The teardown latch alone is not enough: adapter.stop() cannot cancel a
+    /// stop callback that is already executing, and a following startTunnel
+    /// clears the latch — so a callback from the previous lifecycle would pass
+    /// the check and start the engine, or report a policy applied, for the new
+    /// one. The generation makes that callback identifiable as stale.
+    private var _tunnelGeneration = 0
+
+    /// Opens a new lifecycle: clears the latch and invalidates every callback
+    /// still in flight from the previous one.
+    private func beginTunnelGeneration() -> Int {
+        tearDownLock.lock()
+        defer { tearDownLock.unlock() }
+        _isTearingDown = false
+        _tunnelGeneration += 1
+        return _tunnelGeneration
+    }
+
+    private var tunnelGeneration: Int {
+        tearDownLock.lock()
+        defer { tearDownLock.unlock() }
+        return _tunnelGeneration
+    }
+
+    /// True only while `generation` is still the live lifecycle and no
+    /// teardown has begun.
+    private func isCurrentGeneration(_ generation: Int) -> Bool {
+        tearDownLock.lock()
+        defer { tearDownLock.unlock() }
+        return !_isTearingDown && _tunnelGeneration == generation
+    }
+
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
@@ -153,7 +187,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.startMonitoringNetworkChanges()
         }
 
-        isTearingDown = false
+        _ = beginTunnelGeneration()
         startObservingMDMConfigChanges()
 
         guard let adapter = adapter else {
@@ -443,6 +477,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
         AppLogger.shared.log("restartClient: starting restart sequence")
+        let generation = tunnelGeneration
         isRestartInProgress = true
         adapter.isRestarting = true
 
@@ -481,9 +516,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // phase. The scheduling-time guard cannot see that, and cancelling
             // the retry work item cannot stop work already past it — so check
             // again here, immediately before bringing the engine back up.
-            if self?.isTearingDown == true {
-                AppLogger.shared.log("restartClient: tunnel is tearing down — abandoning restart")
-                self?.monitorQueue.async {
+            if let self = self, !self.isCurrentGeneration(generation) {
+                AppLogger.shared.log("restartClient: tunnel lifecycle moved on — abandoning restart")
+                self.monitorQueue.async { [weak self] in
                     self?.adapter?.isRestarting = false
                     self?.isRestartInProgress = false
                 }
@@ -525,7 +560,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     AppLogger.shared.log("restartClient: start completed successfully")
                     // A restart that finished into a teardown has not put any
                     // policy into force, so it must not report that it did.
-                    if self?.isTearingDown != true {
+                    if self?.isCurrentGeneration(generation) == true {
                         onRestarted?()
                     }
                     self?.updateWidgetStatus("connected")
