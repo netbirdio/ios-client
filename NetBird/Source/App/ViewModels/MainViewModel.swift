@@ -192,6 +192,9 @@ class ViewModel: ObservableObject {
     private var mdmConfigObserver: NSObjectProtocol?
     private var mdmRefreshWorkItem: DispatchWorkItem?
     #endif
+    /// Outside the iOS-only block above: both platforms poll for a policy the
+    /// OS may have pushed from another process.
+    private var lastMDMPolicyCheck = Date.distantPast
     
     @Published var peerViewModel: PeerViewModel
     @Published var routeViewModel: RoutesViewModel
@@ -617,6 +620,7 @@ class ViewModel: ObservableObject {
             self.checkExtensionState()
             self.checkNetworkUnavailableFlag()
             self.checkLoginRequiredFlag()
+            self.refreshMDMRestrictionsIfStale()
 
             let currentState = self.extensionState
 
@@ -849,6 +853,7 @@ class ViewModel: ObservableObject {
     /// consults only the policy loader and never touches the config file.
     /// Call it from onAppear of any screen that hides or locks controls.
     func refreshMDMRestrictions() {
+        lastMDMPolicyCheck = Date()
         let snapshot = MDMRestrictions.current()
         // Equatable guards against republishing an identical snapshot and
         // redrawing every settings screen on unrelated UserDefaults writes.
@@ -871,6 +876,20 @@ class ViewModel: ObservableObject {
 
     // Only iOS subscribes to the managed-config change channel; the tvOS
     // screens re-read the snapshot in onAppear instead.
+    /// Bounds how long an externally pushed policy can go unnoticed while the
+    /// app stays in the foreground.
+    ///
+    /// The OS writes managed configuration from another process, so the
+    /// in-process change notification never fires for it, and KVO cannot stand
+    /// in because the key's dots would be read as a key path. Activation
+    /// covers a policy that arrived while the app was away; this covers one
+    /// that arrives while it is open. Throttled well below the three-second
+    /// tick it rides on - the read crosses into Go.
+    private func refreshMDMRestrictionsIfStale() {
+        guard Date().timeIntervalSince(lastMDMPolicyCheck) >= 30 else { return }
+        refreshMDMRestrictions()
+    }
+
     /// Whether the policy forbids the daemon from connecting on its own.
     ///
     /// Every path that arms the VPN profile's On Demand rules has to consult
