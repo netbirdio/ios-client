@@ -199,6 +199,12 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     }
 
     var hasPreSharedKey: Bool {
+        // A policy-supplied key never reaches the local config JSON, so
+        // reading only that would report "Not configured" for a device the
+        // policy has in fact given a key.
+        if MDMRestrictions.current().mdm.preSharedKey {
+            return true
+        }
         return !(extractJSONString(field: "PreSharedKey") ?? "").isEmpty
     }
 

@@ -97,9 +97,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// that is going away.
     private var mdmRetryWorkItem: DispatchWorkItem?
 
-    /// Set once stopTunnel begins, so anything still queued on monitorQueue
-    /// can tell that starting the client is no longer wanted.
-    private var isTearingDown = false
+    /// Set once stopTunnel begins, so anything still in flight can tell that
+    /// starting the client is no longer wanted.
+    ///
+    /// Lock-guarded rather than confined to monitorQueue: adapter.stop() can
+    /// run an existing stop handler synchronously, and the restart pipeline's
+    /// completions arrive on a global queue, so both the write and the reads
+    /// happen off that queue. Queueing the write would let a reader see the
+    /// stale value and start the engine into a teardown.
+    private let tearDownLock = NSLock()
+    private var _isTearingDown = false
+    private var isTearingDown: Bool {
+        get {
+            tearDownLock.lock()
+            defer { tearDownLock.unlock() }
+            return _isTearingDown
+        }
+        set {
+            tearDownLock.lock()
+            _isTearingDown = newValue
+            tearDownLock.unlock()
+        }
+    }
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
@@ -134,9 +153,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.startMonitoringNetworkChanges()
         }
 
-        monitorQueue.async { [weak self] in
-            self?.isTearingDown = false
-        }
+        isTearingDown = false
         startObservingMDMConfigChanges()
 
         guard let adapter = adapter else {
@@ -210,8 +227,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        // Synchronously, and before adapter.stop(): that call can invoke an
+        // existing stop handler inline, which would otherwise read the old
+        // value and restart into the teardown.
+        isTearingDown = true
         monitorQueue.async { [weak self] in
-            self?.isTearingDown = true
             self?.networkChangeWorkItem?.cancel()
             self?.networkChangeWorkItem = nil
             self?.mdmRetryWorkItem?.cancel()
@@ -768,6 +788,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Called from start/stop completion so the widget reflects the real tunnel state
     /// without waiting for the widget's own polling cycle.
     private func updateWidgetStatus(_ status: String) {
+        // adapter.start completions land on a global queue, so one can arrive
+        // after stopTunnel has already written "disconnected". Guarding here
+        // rather than at each call site covers startTunnel and every restart
+        // path at once.
+        if status == "connected", isTearingDown {
+            AppLogger.shared.log("updateWidgetStatus: ignoring \"connected\" during teardown")
+            return
+        }
         let defaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         defaults?.set(status, forKey: GlobalConstants.keyWidgetVPNStatus)
         AppLogger.shared.log("updateWidgetStatus: \(status)")

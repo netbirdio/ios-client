@@ -71,7 +71,10 @@ struct iOSMainView: View {
                     // choice is not the user's to make, so the onboarding
                     // drops the "change server" step rather than offering a
                     // route that would be rejected.
-                    serverPickerAvailable: !viewModel.mdmRestrictions.mdm.managesManagementURL,
+                    // Also pointless under disableUpdateSettings: the link
+                    // leads to a form the policy has already locked.
+                    serverPickerAvailable: !viewModel.mdmRestrictions.mdm.managesManagementURL
+                        && !viewModel.mdmRestrictions.features.disableUpdateSettings,
                     onChangeServer: {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             activeAlert = .changeServer

@@ -776,6 +776,14 @@ class ViewModel: ObservableObject {
     /// Proceeds even when the disarm fails — the user asked to leave this server, and stale
     /// credentials must not be kept just because the tunnel manager refused a rule change.
     func resetForServerChange(completion: @escaping () -> Void) {
+        refreshMDMRestrictions()
+        guard !mdmRestrictions.mdm.managesManagementURL,
+              !mdmRestrictions.features.disableUpdateSettings else {
+            AppLogger.shared.log("MDM: refusing to reset for a server change while the server is managed")
+            settingsRejectedMessage = "The server for this device is set by your organization."
+            showSettingsRejectedAlert = true
+            return
+        }
         setConnectOnDemand(isEnabled: false) { [weak self] inForce in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -1188,6 +1196,18 @@ class ViewModel: ObservableObject {
 
     /// Handles server change completion by stopping the engine and resetting all connection state.
     func handleServerChanged() {
+        // The confirmation alert stays presented across a policy change, so
+        // re-read before acting: clearDetails() below erases the stored
+        // configuration, which must not happen once the server is enforced.
+        refreshMDMRestrictions()
+        guard !mdmRestrictions.mdm.managesManagementURL,
+              !mdmRestrictions.features.disableUpdateSettings else {
+            AppLogger.shared.log("MDM: refusing a server change while the management URL is managed")
+            settingsRejectedMessage = "The server for this device is set by your organization."
+            showSettingsRejectedAlert = true
+            return
+        }
+
         AppLogger.shared.log("Server changed - stopping engine and resetting state")
 
         // Stop polling to prevent transitional states from updating UI
