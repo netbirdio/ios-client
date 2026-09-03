@@ -457,6 +457,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
 
+            // stopTunnel may have begun while this pipeline sat in its stop
+            // phase. The scheduling-time guard cannot see that, and cancelling
+            // the retry work item cannot stop work already past it — so check
+            // again here, immediately before bringing the engine back up.
+            if self?.isTearingDown == true {
+                AppLogger.shared.log("restartClient: tunnel is tearing down — abandoning restart")
+                self?.monitorQueue.async {
+                    self?.adapter?.isRestarting = false
+                    self?.isRestartInProgress = false
+                }
+                timeoutWorkItem.cancel()
+                return
+            }
+
             AppLogger.shared.log("restartClient: starting client")
             self?.adapter?.start { [weak self] error in
                 // Cancel timeout whether start succeeds or not
@@ -489,7 +503,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     self?.updateWidgetStatus("disconnected")
                 } else {
                     AppLogger.shared.log("restartClient: start completed successfully")
-                    onRestarted?()
+                    // A restart that finished into a teardown has not put any
+                    // policy into force, so it must not report that it did.
+                    if self?.isTearingDown != true {
+                        onRestarted?()
+                    }
                     self?.updateWidgetStatus("connected")
                 }
             }
