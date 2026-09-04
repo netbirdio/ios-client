@@ -163,7 +163,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         adapter.start { [weak self] error in
-            self?.completeTunnelStart(with: error)
+            if self?.completeTunnelStart(with: error) == false {
+                AppLogger.shared.log("startTunnel: engine reported connected again, start outcome stays as first reported")
+            }
             self?.monitorQueue.async {
                 self?.endInitialStart()
             }
@@ -188,21 +190,35 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     /// Reports the tunnel's start outcome to NE, at most once per startTunnel.
-    private func completeTunnelStart(with error: Error?) {
+    /// Returns true when this call is the one that delivered it.
+    @discardableResult
+    private func completeTunnelStart(with error: Error?) -> Bool {
         startCompletionLock.lock()
         let handler = startCompletionHandler
         startCompletionHandler = nil
         startCompletionLock.unlock()
 
-        guard let handler = handler else {
-            let outcome = error?.localizedDescription ?? "success"
-            AppLogger.shared.log("completeTunnelStart: outcome already reported, dropping '\(outcome)'")
-            return
-        }
+        guard let handler = handler else { return false }
         handler(error)
+        return true
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        // A stop that lands before the engine ever reported connected would otherwise leave
+        // NE waiting on the start outcome forever: the outcome is delivered from the
+        // connection listener's onConnected, and stopping just makes the engine's run loop
+        // return without connecting — nothing calls it. Close it out here, bound to the end
+        // of the start attempt rather than to its success. Latched, so a start that already
+        // reported is untouched.
+        let stoppedBeforeConnect = completeTunnelStart(with: NSError(
+            domain: "io.netbird.NetbirdNetworkExtension",
+            code: 1005,
+            userInfo: [NSLocalizedDescriptionKey: "Tunnel stopped before the connection was established (reason \(reason.rawValue))."]
+        ))
+        if stoppedBeforeConnect {
+            AppLogger.shared.log("stopTunnel: stopped before the connection was established, reported the start failure to NE")
+        }
+
         monitorQueue.async { [weak self] in
             guard let self = self else { return }
             self.networkChangeWorkItem?.cancel()
