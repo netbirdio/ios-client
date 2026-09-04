@@ -18,6 +18,27 @@ import NetBirdSDK
 struct TVSettingsView: View {
     @EnvironmentObject var viewModel: ViewModel
     @State private var showPreSharedKeyAlert = false
+
+    // tvOS rows use their own `isDisabled` flag rather than SwiftUI's
+    // .disabled(), which breaks focus navigation here (see TVSettingsToggleRow).
+    private var editingDisabled: Bool {
+        viewModel.mdmRestrictions.features.disableUpdateSettings
+    }
+    private var pskManaged: Bool {
+        viewModel.mdmRestrictions.mdm.preSharedKey
+    }
+    private var rosenpassLocked: Bool {
+        viewModel.mdmRestrictions.mdm.rosenpassEnabled || editingDisabled
+    }
+    private var rosenpassPermissiveLocked: Bool {
+        viewModel.mdmRestrictions.mdm.rosenpassPermissive || editingDisabled
+    }
+
+    /// tvOS rows carry their explanation in the subtitle - there is no footer
+    /// to put it in, and a row that is merely dimmed gives the user no reason.
+    private func subtitle(_ text: String, managed: Bool) -> String {
+        managed ? "Managed by your organization" : text
+    }
     @State private var showDocsQRCode = false
 
     var body: some View {
@@ -37,23 +58,28 @@ struct TVSettingsView: View {
                             TVSettingsToggleRow(
                                 icon: "bolt.horizontal.circle.fill",
                                 title: "Connect On Demand",
-                                subtitle: "Reconnect automatically after a reboot or network change",
+                                subtitle: subtitle("Reconnect automatically after a reboot or network change",
+                                                   managed: viewModel.mdmRestrictions.mdm.disableAutoConnect || editingDisabled),
                                 isOn: Binding(
                                     get: { viewModel.connectOnDemand },
                                     set: { newValue in
                                         viewModel.setConnectOnDemand(isEnabled: newValue)
                                     }
-                                )
+                                ),
+                                isDisabled: viewModel.mdmRestrictions.mdm.disableAutoConnect || editingDisabled
                             )
 
-                            TVSettingsRow(
-                                icon: "server.rack",
-                                title: "Change Server",
-                                subtitle: "Switch to a different NetBird server",
-                                action: { viewModel.showChangeServerAlert = true }
-                            )
+                            if !viewModel.mdmRestrictions.mdm.managesManagementURL {
+                                TVSettingsRow(
+                                    icon: "server.rack",
+                                    title: "Change Server",
+                                    subtitle: "Switch to a different NetBird server",
+                                    action: { viewModel.showChangeServerAlert = true }
+                                )
+                            }
                         }
 
+                        if !viewModel.mdmRestrictions.mdm.disableAdvancedView {
                         TVSettingsSection(title: "Advanced") {
                             TVSettingsToggleRow(
                                 icon: "ant.fill",
@@ -65,7 +91,7 @@ struct TVSettingsView: View {
                             TVSettingsToggleRow(
                                 icon: "shield.lefthalf.filled",
                                 title: "Rosenpass",
-                                subtitle: "Post-quantum secure encryption",
+                                subtitle: subtitle("Post-quantum secure encryption", managed: rosenpassLocked),
                                 isOn: Binding(
                                     get: { viewModel.rosenpassEnabled },
                                     set: { newValue in
@@ -75,46 +101,51 @@ struct TVSettingsView: View {
                                         }
                                         viewModel.setRosenpassEnabled(enabled: newValue)
                                     }
-                                )
+                                ),
+                                isDisabled: rosenpassLocked
                             )
 
                             TVSettingsToggleRow(
                                 icon: "shield.checkerboard",
                                 title: "Rosenpass Permissive",
-                                subtitle: "Allow connections with non-Rosenpass peers",
+                                subtitle: subtitle("Allow connections with non-Rosenpass peers",
+                                                   managed: rosenpassPermissiveLocked),
                                 isOn: Binding(
                                     get: { viewModel.rosenpassPermissive },
                                     set: { newValue in
                                         viewModel.setRosenpassPermissive(permissive: newValue)
                                     }
                                 ),
-                                isDisabled: !viewModel.rosenpassEnabled
+                                isDisabled: !viewModel.rosenpassEnabled || rosenpassPermissiveLocked
                             )
+                        }
                         }
 
                         TVSettingsSection(title: "Network") {
                             TVSettingsToggleRow(
                                 icon: "network",
                                 title: "Disable IPv6",
-                                subtitle: "Disable IPv6 overlay addressing on the tunnel",
+                                subtitle: subtitle("Disable IPv6 overlay addressing on the tunnel", managed: editingDisabled),
                                 isOn: Binding(
                                     get: { viewModel.disableIPv6 },
                                     set: { newValue in
                                         viewModel.setDisableIPv6(disabled: newValue)
                                     }
-                                )
+                                ),
+                                isDisabled: editingDisabled
                             )
 
                             TVSettingsToggleRow(
                                 icon: "arrow.triangle.branch",
                                 title: "Force Relay",
-                                subtitle: "Force all connections through relay servers",
+                                subtitle: subtitle("Force all connections through relay servers", managed: editingDisabled),
                                 isOn: Binding(
                                     get: { viewModel.forceRelayConnection },
                                     set: { newValue in
                                         viewModel.setForcedRelayConnection(isEnabled: newValue)
                                     }
-                                )
+                                ),
+                                isDisabled: editingDisabled
                             )
                         }
 
@@ -122,8 +153,13 @@ struct TVSettingsView: View {
                             TVSettingsRow(
                                 icon: "key.fill",
                                 title: "Pre-Shared Key",
-                                subtitle: viewModel.presharedKeySecure ? "Configured" : "Not configured",
-                                action: { showPreSharedKeyAlert = true }
+                                subtitle: subtitle(
+                                    viewModel.presharedKeySecure ? "Configured" : "Not configured",
+                                    managed: pskManaged || editingDisabled
+                                ),
+                                action: (pskManaged || editingDisabled)
+                                    ? nil
+                                    : { showPreSharedKeyAlert = true }
                             )
                         }
 
@@ -161,6 +197,7 @@ struct TVSettingsView: View {
 
         }
         .onAppear {
+            viewModel.refreshMDMRestrictions()
             // Load settings from storage to sync UI with actual values
             viewModel.loadRosenpassSettings()
             viewModel.loadPreSharedKey()

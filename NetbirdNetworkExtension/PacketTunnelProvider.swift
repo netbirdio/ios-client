@@ -33,8 +33,107 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var currentNetworkType: NWInterface.InterfaceType?
     private var wasStoppedDueToNoNetwork = false
     private var isRestartInProgress = false
-    
+
     private var networkChangeWorkItem: DispatchWorkItem?
+
+    /// Observer token for UserDefaults.didChangeNotification — used to
+    /// catch MDM managed-configuration pushes
+    /// (UserDefaults["com.apple.configuration.managed"]) and trigger an
+    /// engine restart so the new policy values flow through
+    /// Config.apply → applyMDMPolicy on the next Run.
+    private var mdmConfigObserver: NSObjectProtocol?
+
+    /// Set when a policy change arrived while a restart was already in
+    /// flight. Go's detector records the newer policy the moment it is
+    /// observed, so it will not report the change again - if this restart
+    /// were simply dropped, that policy would never be applied. The flag
+    /// makes the handler come back for it.
+    private var pendingMDMRestart = false
+
+    /// The deferred retry that waits out an in-flight restart. Tracked so
+    /// teardown can cancel it: otherwise it fires afterwards, passes a guard
+    /// that stopTunnel has just reset, and calls adapter.start() on a tunnel
+    /// that is going away.
+    private var mdmRetryWorkItem: DispatchWorkItem?
+
+    /// Set once stopTunnel begins, so anything still in flight can tell that
+    /// starting the client is no longer wanted.
+    ///
+    /// Lock-guarded rather than confined to monitorQueue: adapter.stop() can
+    /// run an existing stop handler synchronously, and the restart pipeline's
+    /// completions arrive on a global queue, so both the write and the reads
+    /// happen off that queue. Queueing the write would let a reader see the
+    /// stale value and start the engine into a teardown.
+    private let tearDownLock = NSLock()
+    private var _isTearingDown = false
+    private var isTearingDown: Bool {
+        get {
+            tearDownLock.lock()
+            defer { tearDownLock.unlock() }
+            return _isTearingDown
+        }
+        set {
+            tearDownLock.lock()
+            _isTearingDown = newValue
+            tearDownLock.unlock()
+        }
+    }
+
+    /// Bumped by every startTunnel, so work begun for one tunnel lifecycle can
+    /// tell that it is finishing into another.
+    ///
+    /// The teardown latch alone is not enough: adapter.stop() cannot cancel a
+    /// stop callback that is already executing, and a following startTunnel
+    /// clears the latch — so a callback from the previous lifecycle would pass
+    /// the check and start the engine, or report a policy applied, for the new
+    /// one. The generation makes that callback identifiable as stale.
+    private var _tunnelGeneration = 0
+
+    /// Opens a new lifecycle: clears the latch and invalidates every callback
+    /// still in flight from the previous one.
+    private func beginTunnelGeneration() -> Int {
+        tearDownLock.lock()
+        defer { tearDownLock.unlock() }
+        _isTearingDown = false
+        _tunnelGeneration += 1
+        return _tunnelGeneration
+    }
+
+    private var tunnelGeneration: Int {
+        tearDownLock.lock()
+        defer { tearDownLock.unlock() }
+        return _tunnelGeneration
+    }
+
+    /// True from the moment startTunnel hands off to adapter.start until that
+    /// call completes.
+    ///
+    /// Initial startup does not set isRestartInProgress, so without this an
+    /// MDM restart arriving in that window would pass the guard and call
+    /// adapter.stop() while client.run() was still being dispatched — the
+    /// adapter does not serialise the two. Deferring instead of dropping means
+    /// the policy is applied as soon as startup finishes.
+    private var _isStartingTunnel = false
+    private var isStartingTunnel: Bool {
+        get {
+            tearDownLock.lock()
+            defer { tearDownLock.unlock() }
+            return _isStartingTunnel
+        }
+        set {
+            tearDownLock.lock()
+            _isStartingTunnel = newValue
+            tearDownLock.unlock()
+        }
+    }
+
+    /// True only while `generation` is still the live lifecycle and no
+    /// teardown has begun.
+    private func isCurrentGeneration(_ generation: Int) -> Bool {
+        tearDownLock.lock()
+        defer { tearDownLock.unlock() }
+        return !_isTearingDown && _tunnelGeneration == generation
+    }
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
@@ -68,6 +167,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.adapter?.isNetworkUnavailable = false
             self?.startMonitoringNetworkChanges()
         }
+
+        _ = beginTunnelGeneration()
+        startObservingMDMConfigChanges()
 
         guard let adapter = adapter else {
             let error = NSError(
@@ -129,7 +231,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             ))
         }
 
+        isStartingTunnel = true
         adapter.start { [weak self] error in
+            self?.isStartingTunnel = false
             completionHandler(error)
             if error == nil {
                 self?.updateWidgetStatus("connected")
@@ -140,13 +244,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        // Synchronously, and before adapter.stop(): that call can invoke an
+        // existing stop handler inline, which would otherwise read the old
+        // value and restart into the teardown.
+        isTearingDown = true
+        isStartingTunnel = false
         monitorQueue.async { [weak self] in
             self?.networkChangeWorkItem?.cancel()
             self?.networkChangeWorkItem = nil
+            self?.mdmRetryWorkItem?.cancel()
+            self?.mdmRetryWorkItem = nil
+            self?.pendingMDMRestart = false
             self?.currentNetworkType = nil
             self?.wasStoppedDueToNoNetwork = false
             self?.isRestartInProgress = false
         }
+        stopObservingMDMConfigChanges()
         // Reset network unavailable flag when tunnel stops
         adapter?.isNetworkUnavailable = false
         setNetworkUnavailableFlag(false)
@@ -333,7 +446,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
-    func restartClient() {
+    /// - Parameter onRestarted: run only when the engine is back up. Callers
+    ///   that must not report success early — an applied MDM policy, say —
+    ///   hang their side effect here rather than on the call returning, which
+    ///   happens long before the restart finishes.
+    func restartClient(onRestarted: (() -> Void)? = nil) {
         guard let adapter = adapter else {
             AppLogger.shared.log("restartClient: adapter is nil")
             return
@@ -344,6 +461,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
         AppLogger.shared.log("restartClient: starting restart sequence")
+        let generation = tunnelGeneration
         isRestartInProgress = true
         adapter.isRestarting = true
 
@@ -371,6 +489,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 self?.signalLoginRequired()
                 self?.updateWidgetStatus("disconnected")
                 self?.monitorQueue.async {
+                    self?.adapter?.isRestarting = false
+                    self?.isRestartInProgress = false
+                }
+                timeoutWorkItem.cancel()
+                return
+            }
+
+            // stopTunnel may have begun while this pipeline sat in its stop
+            // phase. The scheduling-time guard cannot see that, and cancelling
+            // the retry work item cannot stop work already past it — so check
+            // again here, immediately before bringing the engine back up.
+            if let self = self, !self.isCurrentGeneration(generation) {
+                AppLogger.shared.log("restartClient: tunnel lifecycle moved on — abandoning restart")
+                self.monitorQueue.async { [weak self] in
                     self?.adapter?.isRestarting = false
                     self?.isRestartInProgress = false
                 }
@@ -410,8 +542,38 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     self?.updateWidgetStatus("disconnected")
                 } else {
                     AppLogger.shared.log("restartClient: start completed successfully")
+                    // A restart that finished into a teardown has not put any
+                    // policy into force, so it must not report that it did.
+                    if self?.isCurrentGeneration(generation) == true {
+                        onRestarted?()
+                    }
                     self?.updateWidgetStatus("connected")
                 }
+            }
+        }
+    }
+
+    /// Signals that a policy change was applied, using the same two-path
+    /// delivery as the login-required signal: a flag in the shared app-group
+    /// container that the main app picks up when it becomes active, plus a
+    /// best-effort local notification for the case where it does not.
+    private func signalMDMPolicyApplied() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(true, forKey: GlobalConstants.keyMDMPolicyApplied)
+        userDefaults?.synchronize()
+
+        let content = UNMutableNotificationContent()
+        content.title = "MDM policy applied"
+        content.body = "NetBird configuration was updated by your IT policy."
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: GlobalConstants.notificationMDMPolicyApplied,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                AppLogger.shared.log("MDM: policy-applied notification not delivered from extension: \(error)")
             }
         }
     }
@@ -645,6 +807,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Called from start/stop completion so the widget reflects the real tunnel state
     /// without waiting for the widget's own polling cycle.
     private func updateWidgetStatus(_ status: String) {
+        // adapter.start completions land on a global queue, so one can arrive
+        // after stopTunnel has already written "disconnected". Guarding here
+        // rather than at each call site covers startTunnel and every restart
+        // path at once.
+        if status == "connected", isTearingDown {
+            AppLogger.shared.log("updateWidgetStatus: ignoring \"connected\" during teardown")
+            return
+        }
         let defaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         defaults?.set(status, forKey: GlobalConstants.keyWidgetVPNStatus)
         AppLogger.shared.log("updateWidgetStatus: \(status)")
@@ -666,6 +836,91 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
             AppLogger.shared.log("Routes set successfully.")
+        }
+    }
+
+    // MARK: - MDM managed-configuration observer
+
+    /// Subscribes to UserDefaults.didChangeNotification so changes to
+    /// the OS-pushed MDM managed-config dictionary
+    /// (UserDefaults["com.apple.configuration.managed"]) trigger an
+    /// engine restart. iOS does NOT fire a dedicated MDM notification
+    /// — the entire UserDefaults change channel is shared, so this
+    /// fires on every unrelated preference write too. Deciding whether
+    /// the policy actually changed is Go's job; see the handler.
+    private func startObservingMDMConfigChanges() {
+        if mdmConfigObserver != nil {
+            return
+        }
+        mdmConfigObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleManagedConfigDidChangeIfRelevant()
+        }
+        AppLogger.shared.log("MDM: subscribed to managed-configuration changes")
+    }
+
+    private func stopObservingMDMConfigChanges() {
+        if let token = mdmConfigObserver {
+            NotificationCenter.default.removeObserver(token)
+            mdmConfigObserver = nil
+            AppLogger.shared.log("MDM: unsubscribed from managed-configuration changes")
+        }
+        pendingMDMRestart = false
+    }
+
+    /// Called from the UserDefaults notification. The dedup this shared
+    /// channel needs lives in Go: hasMDMPolicyChanged() re-reads through
+    /// the registered fetcher, diffs against its last observation, logs
+    /// the per-key delta and returns true only on a real change. The
+    /// detector is created by setMDMPolicyFetcher, so with no fetcher
+    /// registered this is always false and nothing restarts.
+    private func handleManagedConfigDidChangeIfRelevant() {
+        guard let client = adapter?.client, client.hasMDMPolicyChanged() else {
+            return
+        }
+
+        AppLogger.shared.log("MDM: managed configuration changed; restarting client")
+        requestMDMRestart()
+    }
+
+    /// Drives the restart for a policy change, deferring around one already
+    /// in flight.
+    ///
+    /// restartClient() returns immediately and does its work asynchronously,
+    /// and it refuses to start while another restart runs. Calling it during
+    /// one would therefore be a silent no-op for a policy Go has already
+    /// marked as seen. Retry instead until the pipeline is free; its own
+    /// 30-second timeout bounds the wait.
+    private func requestMDMRestart() {
+        // monitorQueue, not the main queue: the network-change path already
+        // drives restartClient() from here, and isRestartInProgress is plain
+        // shared state. Running the two on different queues lets both pass the
+        // guard and start their own stop/start pipelines.
+        monitorQueue.async { [weak self] in
+            guard let self = self, !self.isTearingDown else { return }
+            guard !self.isRestartInProgress, !self.isStartingTunnel else {
+                self.pendingMDMRestart = true
+                AppLogger.shared.log("MDM: a start or restart is in flight; will retry once it finishes")
+                self.mdmRetryWorkItem?.cancel()
+                let retry = DispatchWorkItem { [weak self] in
+                    guard let self = self, self.pendingMDMRestart, !self.isTearingDown else { return }
+                    self.requestMDMRestart()
+                }
+                self.mdmRetryWorkItem = retry
+                self.monitorQueue.asyncAfter(deadline: .now() + 2, execute: retry)
+                return
+            }
+            self.mdmRetryWorkItem = nil
+            self.pendingMDMRestart = false
+            // Only a restart that actually brought the engine back up means the
+            // policy is in force; a deferred or failed one must not tell the
+            // user otherwise.
+            self.restartClient { [weak self] in
+                self?.signalMDMPolicyApplied()
+            }
         }
     }
 }

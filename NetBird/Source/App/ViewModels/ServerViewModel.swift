@@ -121,7 +121,7 @@ class ServerViewModel : ObservableObject {
         let configPath = self.configurationFilePath
         let detachedTask = Task.detached(priority: .background) { () -> (NetBirdSDKAuth?, String?) in
             var error: NSError?
-            let authenticator = NetBirdSDKNewAuth(configPath, managementServerUrl, &error)
+            let authenticator = NetBirdSDKNewAuth(configPath, managementServerUrl, MDMPolicyFetcher(), &error)
 
             if let error = error {
                 print(error.domain, error.code, error.description)

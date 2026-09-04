@@ -234,6 +234,14 @@ struct NetBirdApp: App {
             viewModel.checkExtensionState()
             #if os(iOS)
             viewModel.checkLoginRequiredFlag()
+            viewModel.checkMDMPolicyAppliedFlag()
+            // The OS writes managed configuration from another process, and
+            // UserDefaults.didChangeNotification does not cross that boundary,
+            // so the in-process observer never fires for it. Re-read on every
+            // activation, which is when a policy pushed while the app was away
+            // has to take effect - not least so disableAutoConnect disarms the
+            // On Demand rules.
+            viewModel.refreshMDMRestrictions()
             #endif
             viewModel.startPollingDetails()
         }
