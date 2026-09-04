@@ -1057,21 +1057,23 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
 
     /// Writes the On Demand state and matching rules to the given manager.
+    ///
+    /// A request that matches what the manager already holds is answered without a write:
+    /// saveToPreferences on a configured manager makes NE emit NEVPNStatusDidChange — a
+    /// transient .disconnecting among them — and rewriting the rules of a live tunnel can
+    /// have the system reassert it. applyExtensionStatus arms On Demand on every transition
+    /// to .connected, so an unconditional write added a spurious disconnect to every connect.
     private func applyOnDemandState(_ enabled: Bool, to manager: NETunnelProviderManager, completion: ((OnDemandUpdate) -> Void)? = nil) {
-        if enabled {
-            // Build rules from saved settings
-            let rules = buildOnDemandRules()
-            if rules.isEmpty {
-                // All policies are "Do Nothing" — don't interfere with connection state
-                let ignoreRule = NEOnDemandRuleIgnore()
-                ignoreRule.interfaceTypeMatch = .any
-                manager.onDemandRules = [ignoreRule]
-            } else {
-                manager.onDemandRules = rules
-            }
-        } else {
-            manager.onDemandRules = []
+        let rules = enabled ? onDemandRulesForStoredSettings() : []
+
+        if manager.isOnDemandEnabled == enabled,
+           onDemandRulesMatch(manager.onDemandRules ?? [], rules) {
+            logger.info("setOnDemandEnabled: already \(enabled ? "enabled" : "disabled") with the same rules, skipping write")
+            completion?(.applied)
+            return
         }
+
+        manager.onDemandRules = rules
         manager.isOnDemandEnabled = enabled
 
         manager.saveToPreferences { error in
@@ -1082,6 +1084,38 @@ public class NetworkExtensionAdapter: ObservableObject {
                 self.logger.info("setOnDemandEnabled: On Demand \(enabled ? "enabled" : "disabled") successfully")
                 completion?(.applied)
             }
+        }
+    }
+
+    /// Rules to arm On Demand with, built from the persisted policies. An explicit Ignore
+    /// rule stands in for "all policies are Do Nothing" so the system does not interfere
+    /// with the connection state.
+    private func onDemandRulesForStoredSettings() -> [NEOnDemandRule] {
+        let rules = buildOnDemandRules()
+        guard rules.isEmpty else { return rules }
+
+        let ignoreRule = NEOnDemandRuleIgnore()
+        ignoreRule.interfaceTypeMatch = .any
+        return [ignoreRule]
+    }
+
+    /// Compares two rule sets by their archived form. NEOnDemandRule has no value-based
+    /// isEqual, so comparing the objects would report every freshly built set as different
+    /// and defeat the skip above. An archive that cannot be produced counts as "different",
+    /// which falls back to writing — the old, always-write behaviour.
+    private func onDemandRulesMatch(_ lhs: [NEOnDemandRule], _ rhs: [NEOnDemandRule]) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        guard let lhsData = archivedOnDemandRules(lhs),
+              let rhsData = archivedOnDemandRules(rhs) else { return false }
+        return lhsData == rhsData
+    }
+
+    private func archivedOnDemandRules(_ rules: [NEOnDemandRule]) -> Data? {
+        do {
+            return try NSKeyedArchiver.archivedData(withRootObject: rules, requiringSecureCoding: true)
+        } catch {
+            logger.debug("archivedOnDemandRules: could not archive rules: \(error.localizedDescription)")
+            return nil
         }
     }
 
