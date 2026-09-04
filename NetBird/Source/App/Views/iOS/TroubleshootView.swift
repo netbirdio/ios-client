@@ -24,11 +24,13 @@ struct TroubleshootView: View {
                 Toggle("Anonymize sensitive data", isOn: $viewModel.anonymizeDebugBundle)
                     .toggleStyle(SwitchToggleStyle(tint: .accentColor))
 
-                Toggle("Allow remote debug bundles", isOn: $viewModel.remoteJobsAllowed)
-                    .toggleStyle(SwitchToggleStyle(tint: .accentColor))
-                    .onChange(of: viewModel.remoteJobsAllowed) { value in
-                        viewModel.setRemoteJobsAllowed(allowed: value)
+                Toggle("Allow remote debug bundles", isOn: Binding(
+                    get: { viewModel.remoteJobsAllowed },
+                    set: { newValue in
+                        viewModel.setRemoteJobsAllowed(allowed: newValue)
                     }
+                ))
+                    .toggleStyle(SwitchToggleStyle(tint: .accentColor))
 
                 bundleActionContent
             }
