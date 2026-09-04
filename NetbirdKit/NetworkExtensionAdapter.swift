@@ -1001,6 +1001,16 @@ public class NetworkExtensionAdapter: ObservableObject {
         set { onDemandLock.lock(); defer { onDemandLock.unlock() }; _requestedOnDemandState = newValue }
     }
 
+    /// Set when a save fails, cleared when one succeeds. A failed save leaves the requested
+    /// values on the retained manager while the system preferences still hold the old ones,
+    /// so the manager can no longer be trusted to answer "is this already in force?". While
+    /// set, the no-write path is closed and every request writes.
+    private var _onDemandWriteFailed = false
+    private var onDemandWriteFailed: Bool {
+        get { onDemandLock.lock(); defer { onDemandLock.unlock() }; return _onDemandWriteFailed }
+        set { onDemandLock.lock(); defer { onDemandLock.unlock() }; _onDemandWriteFailed = newValue }
+    }
+
     /// Updates the VPN On Demand configuration on the current manager.
     /// When enabled, iOS will automatically reconnect the VPN after network changes or reboot.
     /// Should only be enabled when the user is logged in to avoid reconnect loops.
@@ -1063,10 +1073,14 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// transient .disconnecting among them — and rewriting the rules of a live tunnel can
     /// have the system reassert it. applyExtensionStatus arms On Demand on every transition
     /// to .connected, so an unconditional write added a spurious disconnect to every connect.
+    ///
+    /// The skip trusts the manager to reflect what the system holds, which is only true while
+    /// saves keep succeeding — hence `onDemandWriteFailed`.
     private func applyOnDemandState(_ enabled: Bool, to manager: NETunnelProviderManager, completion: ((OnDemandUpdate) -> Void)? = nil) {
         let rules = enabled ? onDemandRulesForStoredSettings() : []
 
-        if manager.isOnDemandEnabled == enabled,
+        if !onDemandWriteFailed,
+           manager.isOnDemandEnabled == enabled,
            onDemandRulesMatch(manager.onDemandRules ?? [], rules) {
             logger.info("setOnDemandEnabled: already \(enabled ? "enabled" : "disabled") with the same rules, skipping write")
             completion?(.applied)
@@ -1077,13 +1091,33 @@ public class NetworkExtensionAdapter: ObservableObject {
         manager.isOnDemandEnabled = enabled
 
         manager.saveToPreferences { error in
-            if let error = error {
-                self.logger.error("setOnDemandEnabled: Failed to save preferences: \(error.localizedDescription)")
-                completion?(.failed(error))
-            } else {
+            guard let error = error else {
+                self.onDemandWriteFailed = false
                 self.logger.info("setOnDemandEnabled: On Demand \(enabled ? "enabled" : "disabled") successfully")
                 completion?(.applied)
+                return
             }
+
+            self.logger.error("setOnDemandEnabled: Failed to save preferences: \(error.localizedDescription)")
+            self.recoverFromFailedOnDemandWrite(on: manager) {
+                completion?(.failed(error))
+            }
+        }
+    }
+
+    /// Restores the manager to what the system actually holds after a save failed, then
+    /// reports the failure. The assignments that were not persisted stay on the retained
+    /// manager otherwise, and a reload is also what clears NEVPNError.configurationStale —
+    /// the documented cause when another process wrote the configuration in between.
+    /// The write latch stays closed until a save succeeds, so the next request writes even
+    /// if this reload fails too.
+    private func recoverFromFailedOnDemandWrite(on manager: NETunnelProviderManager, completion: @escaping () -> Void) {
+        onDemandWriteFailed = true
+        manager.loadFromPreferences { loadError in
+            if let loadError = loadError {
+                self.logger.error("setOnDemandEnabled: reload after a failed save also failed: \(loadError.localizedDescription)")
+            }
+            completion()
         }
     }
 
