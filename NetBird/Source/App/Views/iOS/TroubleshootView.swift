@@ -20,8 +20,16 @@ struct TroubleshootView: View {
                     .toggleStyle(SwitchToggleStyle(tint: .accentColor))
             }
 
-            Section(header: Text("Debug Bundle"), footer: Text("Sensitive data includes IP addresses, domain names, and private keys.")) {
+            Section(header: Text("Debug Bundle"), footer: Text("Sensitive data includes IP addresses, domain names, and private keys. Allowing remote debug bundles lets your administrator request one from this device through the management server; this takes effect on the next connection.")) {
                 Toggle("Anonymize sensitive data", isOn: $viewModel.anonymizeDebugBundle)
+                    .toggleStyle(SwitchToggleStyle(tint: .accentColor))
+
+                Toggle("Allow remote debug bundles", isOn: Binding(
+                    get: { viewModel.remoteJobsAllowed },
+                    set: { newValue in
+                        viewModel.setRemoteJobsAllowed(allowed: newValue)
+                    }
+                ))
                     .toggleStyle(SwitchToggleStyle(tint: .accentColor))
 
                 bundleActionContent
@@ -29,6 +37,9 @@ struct TroubleshootView: View {
         }
         .navigationTitle("Troubleshoot")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            viewModel.loadRemoteJobsSettings()
+        }
         .alert(isPresented: $viewModel.showLogLevelChangedAlert) {
             Alert(
                 title: Text("Changing Log Level"),

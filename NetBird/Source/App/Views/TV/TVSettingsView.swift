@@ -127,6 +127,20 @@ struct TVSettingsView: View {
                             )
                         }
 
+                        TVSettingsSection(title: "Troubleshooting") {
+                            TVSettingsToggleRow(
+                                icon: "doc.zipper",
+                                title: "Remote Debug Bundles",
+                                subtitle: "Let your administrator request a debug bundle from this device",
+                                isOn: Binding(
+                                    get: { viewModel.remoteJobsAllowed },
+                                    set: { newValue in
+                                        viewModel.setRemoteJobsAllowed(allowed: newValue)
+                                    }
+                                )
+                            )
+                        }
+
                         TVSettingsSection(title: "Info") {
                             TVSettingsRow(
                                 icon: "qrcode.viewfinder",
@@ -165,6 +179,7 @@ struct TVSettingsView: View {
             viewModel.loadRosenpassSettings()
             viewModel.loadPreSharedKey()
             viewModel.loadIPv6Settings()
+            viewModel.loadRemoteJobsSettings()
         }
         .sheet(isPresented: $showDocsQRCode) {
             TVQRCodeSheet(
