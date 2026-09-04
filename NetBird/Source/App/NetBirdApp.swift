@@ -10,6 +10,7 @@
 
 import SwiftUI
 import FirebaseCore
+import FirebaseCrashlytics
 import Combine
 import UserNotifications
 import NetBirdSDK
@@ -38,6 +39,31 @@ private func configureFirebaseIfNeeded() {
     }
 }
 
+/// Forwards Go crash output left behind by a previous run to Crashlytics.
+///
+/// A Go panic aborts the process, and the crash Crashlytics records for it ends
+/// at the Go stack switch with no panicking frames. The panic text and goroutine
+/// dump only exist in netbird.err (see GoCrashCapture), so on the next launch
+/// they are attached to a non-fatal whose headline is the panic line itself.
+private func reportPreviousGoCrashIfNeeded() {
+    guard FirebaseApp.app() != nil,
+          let output = GoCrashCapture.takeUnreportedCrashOutput() else { return }
+
+    let headline = output
+        .split(whereSeparator: \.isNewline)
+        .first { $0.hasPrefix("panic:") || $0.hasPrefix("fatal error:") }
+        .map(String.init) ?? "Go runtime crash"
+
+    let crashlytics = Crashlytics.crashlytics()
+    crashlytics.log(output)
+    crashlytics.record(error: NSError(
+        domain: "io.netbird.GoCrash",
+        code: 1,
+        userInfo: [NSLocalizedDescriptionKey: headline]
+    ))
+    AppLogger.shared.log("Reported Go crash output from a previous session to Crashlytics: \(headline)")
+}
+
 #if os(iOS)
 extension Notification.Name {
     static let netbirdLoginNotificationTapped = Notification.Name("io.netbird.loginNotificationTapped")
@@ -49,6 +75,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         configureFirebaseIfNeeded()
+        reportPreviousGoCrashIfNeeded()
 
         let center = UNUserNotificationCenter.current()
         center.delegate = self
@@ -98,9 +125,12 @@ struct NetBirdApp: App {
     #endif
 
     init() {
+        // Must run before any Go SDK call so a Go panic during startup is captured too.
+        GoCrashCapture.redirect()
         // Configure Firebase on main thread as required by Firebase
         #if os(tvOS)
         configureFirebaseIfNeeded()
+        reportPreviousGoCrashIfNeeded()
         #endif
     }
 
