@@ -168,10 +168,13 @@ struct FileSendView: View {
                     .frame(minHeight: 88)
                     .font(.body)
 
+                // Same treatment as "Choose files" on the other tab: a row
+                // action in the text colour, not an accent-tinted link.
                 Button {
                     paste()
                 } label: {
                     Label("Paste from clipboard", systemImage: "doc.on.clipboard")
+                        .foregroundColor(Color("TextPrimary"))
                 }
                 .buttonStyle(.borderless)
                 .disabled(!UIPasteboard.general.hasStrings)
