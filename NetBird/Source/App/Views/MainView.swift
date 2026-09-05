@@ -127,7 +127,7 @@ struct iOSMainView: View {
                         viewModel.connectWithOnDemandDisabled()
                     },
                     secondaryButton: .cancel(Text("Edit Rules")) {
-                        selectedTab = 3 // Switch to Settings tab
+                        selectedTab = 4 // Switch to Settings tab
                     }
                 )
             case .onDemandDisconnect:
@@ -176,13 +176,22 @@ struct iOSMainView: View {
                 .tag(2)
 
                 NavigationView {
+                    iOSFilesView()
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .tabItem {
+                    Label("Files", systemImage: "folder.fill")
+                }
+                .tag(3)
+
+                NavigationView {
                     iOSSettingsView()
                 }
                 .navigationViewStyle(StackNavigationViewStyle())
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
-                .tag(3)
+                .tag(4)
             }
             .onChange(of: viewModel.navigateToServerView) { newValue in
                 if newValue {

@@ -83,6 +83,18 @@ struct iOSSettingsView: View {
                                 .foregroundColor(Color("TextPrimary"))
                         }
                     }
+
+                    NavigationLink {
+                        FileDropSettingsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.down.doc")
+                                .foregroundColor(.accentColor)
+                                .frame(width: 24)
+                            Text("Receiving files")
+                                .foregroundColor(Color("TextPrimary"))
+                        }
+                    }
                 }
 
                 Section(header: Text("Information")) {
@@ -138,6 +150,58 @@ struct iOSSettingsView: View {
     private var goVersion: String {
         let version = NetBirdSDKGoClientVersion()
         return version.isEmpty ? "unknown" : version
+    }
+}
+
+/// The base policy for incoming transfers of the active profile. Per-sender
+/// exceptions stay in Go and apply on top of it.
+struct FileDropSettingsView: View {
+    @EnvironmentObject var viewModel: ViewModel
+    @ObservedObject private var filesVM = FilesViewModel.shared
+
+    var body: some View {
+        List {
+            Section(footer: Text(footerText)) {
+                ForEach(FileDropMode.allCases, id: \.self) { mode in
+                    Button {
+                        guard filesVM.mode != mode else { return }
+                        UISelectionFeedbackGenerator().selectionChanged()
+                        filesVM.setMode(mode)
+                    } label: {
+                        HStack {
+                            Text(label(for: mode))
+                                .foregroundColor(Color("TextPrimary"))
+                            Spacer()
+                            if filesVM.mode == mode {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .accessibilityAddTraits(filesVM.mode == mode ? .isSelected : [])
+                }
+            }
+        }
+        .listStyle(InsetGroupedListStyle())
+        .navigationTitle("Receiving files")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            filesVM.bind(adapter: viewModel.networkExtensionAdapter)
+            filesVM.refreshMode()
+        }
+    }
+
+    private func label(for mode: FileDropMode) -> LocalizedStringKey {
+        switch mode {
+        case .off: return "Off"
+        case .ask: return "Ask every time"
+        case .autoAccept: return "Accept automatically"
+        }
+    }
+
+    private var footerText: LocalizedStringKey {
+        "Other peers can send you files over NetBird. Received files show up in the Files tab, where you can save or share them."
     }
 }
 

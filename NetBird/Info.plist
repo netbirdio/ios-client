@@ -7,6 +7,10 @@
 		<string>inter-variable.ttf</string>
 		<string>jetbrains-mono-variable.ttf</string>
 	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

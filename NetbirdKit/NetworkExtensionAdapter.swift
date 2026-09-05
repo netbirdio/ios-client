@@ -1408,6 +1408,84 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
     
+    /// Sends one file drop command to the extension. Completion gets nil when
+    /// the extension is unreachable, so callers can fall back to reading the
+    /// shared state directly.
+    private func sendFileDropMessage(_ command: String, completion: @escaping (Data?) -> Void) {
+        guard let session = self.session,
+              let messageData = "FileDrop:\(command)".data(using: .utf8) else {
+            completion(nil)
+            return
+        }
+        do {
+            try session.sendProviderMessage(messageData) { response in
+                completion(response)
+            }
+        } catch {
+            completion(nil)
+        }
+    }
+
+    func fileDropTransfers(completion: @escaping ([FileDropTransferInfo]?) -> Void) {
+        sendFileDropMessage("List") { response in
+            guard let response = response,
+                  let transfers = try? self.decoder.decode([FileDropTransferInfo].self, from: response) else {
+                completion(nil)
+                return
+            }
+            completion(transfers)
+        }
+    }
+
+    func fileDropSend(_ request: FileDropSendRequest, completion: @escaping (FileDropSendResponse?) -> Void) {
+        guard let requestData = try? JSONEncoder().encode(request),
+              let requestJSON = String(data: requestData, encoding: .utf8) else {
+            completion(nil)
+            return
+        }
+        sendFileDropMessage("Send:\(requestJSON)") { response in
+            guard let response = response,
+                  let result = try? self.decoder.decode(FileDropSendResponse.self, from: response) else {
+                completion(nil)
+                return
+            }
+            completion(result)
+        }
+    }
+
+    /// verb is one of Accept, Decline, Stop, Remove.
+    func fileDropAction(_ verb: String, id: String, completion: @escaping (Bool) -> Void) {
+        sendFileDropMessage("\(verb):\(id)") { response in
+            guard let response = response else {
+                completion(false)
+                return
+            }
+            completion(String(data: response, encoding: .utf8) == "true")
+        }
+    }
+
+    func fileDropGetMode(completion: @escaping (Int?) -> Void) {
+        sendFileDropMessage("GetMode") { response in
+            guard let response = response,
+                  let text = String(data: response, encoding: .utf8),
+                  let mode = Int(text) else {
+                completion(nil)
+                return
+            }
+            completion(mode)
+        }
+    }
+
+    func fileDropSetMode(_ mode: Int, completion: @escaping (Bool) -> Void) {
+        sendFileDropMessage("SetMode:\(mode)") { response in
+            guard let response = response else {
+                completion(false)
+                return
+            }
+            completion(String(data: response, encoding: .utf8) == "true")
+        }
+    }
+
     func uploadDebugBundle(anonymize: Bool, completion: @escaping (Result<String, Error>) -> Void) {
         guard let session = self.session else {
             completion(.failure(NSError(domain: "NetBird", code: -1, userInfo: [NSLocalizedDescriptionKey: "VPN session not available. Connect first."])))
