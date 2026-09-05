@@ -22,5 +22,15 @@
 			</array>
 		</dict>
 	</array>
+	<!-- The PKCE login flow redirects to the SDK's loopback listener over plain
+	     http. When the system auth session captures that redirect instead of
+	     letting the browser follow it, the app has to replay the request to hand
+	     the authorization code over; ATS would otherwise block it. Scoped to
+	     local networking only — no general cleartext exception. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

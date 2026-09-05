@@ -2,9 +2,22 @@
 //  SafariView.swift
 //  NetBird
 //
-//  iOS-only: Wraps ASWebAuthenticationSession for in-app web authentication.
-//  Uses ephemeral session so each login starts fresh (no shared cookies),
-//  which is required for multi-profile support.
+//  iOS-only: runs the interactive OAuth/SSO login in ASWebAuthenticationSession —
+//  the system authentication session, i.e. an external user-agent in the sense of
+//  RFC 8252. The page runs in Safari's own process, outside the app's reach, which
+//  is what keeps IdP-side features working: Google refuses OAuth in embedded
+//  webviews (disallowed_useragent), passkeys/WebAuthn and hardware security keys
+//  need a Safari-class agent, and enterprise policies (Okta, Entra conditional
+//  access) may block embedded webviews.
+//
+//  The session is NOT ephemeral: it shares Safari's cookie jar, so the IdP's
+//  trusted-device cookie survives and a re-login does not re-prompt for the second
+//  factor. That single jar is shared by every profile, and the app deliberately
+//  does not try to partition it. Which account a login lands on is decided on the
+//  request instead: the SDK sends the profile's own account as an OIDC login_hint,
+//  and the adapter adds prompt=select_account when the login targets a different
+//  profile than the session last signed in as (see NetworkExtensionAdapter's
+//  authorizeURL(_:selectingAccount:)).
 //
 
 import SwiftUI
@@ -13,15 +26,27 @@ import SwiftUI
 #if os(iOS)
 import AuthenticationServices
 
+/// How the login browser ended. The session cannot report whether the login as a
+/// whole succeeded — the OAuth code is only the first half, the SDK still has to
+/// exchange it and register with the management server — so the caller resolves
+/// the final outcome through the SDK's callbacks.
+enum LoginBrowserOutcome {
+    /// The session captured the loopback redirect itself instead of letting the
+    /// browser follow it. The URL carries the authorization code and has been
+    /// replayed to the SDK's local server, so the flow continues.
+    case redirectCaptured
+    /// The browser was dismissed. Either the user cancelled, or they closed the
+    /// SDK's success page after the redirect already went through — the two are
+    /// indistinguishable here.
+    case closed
+    /// The session itself failed (could not present, or an OAuth error came back).
+    case failed(Error)
+}
+
 struct SafariView: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
     let url: URL
-    /// Called when the web auth session ends (success, user cancel, or error).
-    /// Note: with the NetBird PKCE loopback flow the completion fires with a nil
-    /// callbackURL even on success — the loopback redirect is consumed by the Go HTTP
-    /// server, not the auth session — so the caller must determine success from the
-    /// SDK's login callback, not from this handler.
-    let didFinish: () -> Void
+    let didFinish: (LoginBrowserOutcome) -> Void
 
     func makeUIViewController(context: Context) -> UIViewController {
         let vc = UIViewController()
@@ -33,6 +58,12 @@ struct SafariView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+
+    static func dismantleUIViewController(_ uiViewController: UIViewController, coordinator: Coordinator) {
+        // Programmatic teardown (e.g. the login was aborted elsewhere): the session
+        // presents its own window, which outlives this hosting VC unless cancelled.
+        coordinator.cancelSession()
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -47,27 +78,52 @@ struct SafariView: UIViewControllerRepresentable {
         }
 
         func startSession(from viewController: UIViewController) {
-            // The NetBird SDK uses a PKCE flow with an http://localhost redirect URI.
-            // ASWebAuthenticationSession intercepts that navigation before the browser
-            // follows it, so "http" works as a callback scheme in practice.
-            // A proper long-term fix requires the SDK to expose a custom-scheme
-            // redirect URI (e.g. "netbird://") for mobile OAuth flows.
             let completionHandler: ASWebAuthenticationSession.CompletionHandler = { [weak self] callbackURL, error in
                 guard let self else { return }
 
+                let outcome: LoginBrowserOutcome
+                if let callbackURL {
+                    // The session matched the loopback redirect and swallowed it, so
+                    // the SDK's local HTTP server never saw the authorization code.
+                    // Replay the request to hand the code over; without this the PKCE
+                    // flow would wait until it expires. Harmless when the browser
+                    // already delivered it — the SDK's server is gone by then and the
+                    // request simply fails.
+                    Self.replayToLoopback(callbackURL)
+                    outcome = .redirectCaptured
+                } else if let error = error as? ASWebAuthenticationSessionError,
+                          error.code == .canceledLogin {
+                    outcome = .closed
+                } else if let error {
+                    outcome = .failed(error)
+                } else {
+                    outcome = .closed
+                }
+
                 DispatchQueue.main.async {
-                    if let callbackURL = callbackURL {
-                        print("Auth callback URL: \(callbackURL.absoluteString)")
-                    }
-                    if let error = error as? ASWebAuthenticationSessionError,
-                       error.code == .canceledLogin {
-                        print("User cancelled login")
-                    }
+                    self.session = nil
                     self.parent.isPresented = false
-                    self.parent.didFinish()
+                    self.parent.didFinish(outcome)
                 }
             }
 
+            // The SDK's PKCE flow uses a loopback redirect (RFC 8252 §7.3): the
+            // authorization code arrives at an HTTP server the SDK runs on
+            // 127.0.0.1. That server is the primary path and needs no interception —
+            // the browser simply follows the redirect to it, and this session then
+            // ends via .closed when the user dismisses the SDK's success page.
+            //
+            // A session must still declare a callback, and "http" is the closest
+            // match for that redirect. Should the session capture the navigation
+            // instead of letting the browser follow it, the completion handler
+            // replays the URL to the same local server, so the code still arrives.
+            // Neither path leaves the flow hanging: resolveLoginAfterBrowserClose
+            // probes the loopback listener and resolves the login either way.
+            //
+            // Apple intends this API for custom schemes or (iOS 17.4+) HTTPS
+            // host/path callbacks. Moving to either would mean the management server
+            // issuing a different redirect URI — a core/server change, not one the
+            // app can make on its own.
             let session: ASWebAuthenticationSession
             if #available(iOS 17.4, *) {
                 session = ASWebAuthenticationSession(
@@ -83,28 +139,49 @@ struct SafariView: UIViewControllerRepresentable {
                 )
             }
 
-            // An ephemeral session hands the IdP an empty cookie jar on every login.
-            // Keycloak's login theme reacts to that by starting the session poll in
-            // authChecker.js — it only skips it when a KEYCLOAK_SESSION cookie is
-            // already present ("if (initialSession) return"). That poll races the
-            // redirect carrying the authorization code and bounces the browser to
-            // /login-actions/restart, which answers ALREADY_LOGGED_IN and fails the
-            // login with authentication_expired. Safari on iOS never fires
-            // beforeunload (WebKit bug 219102), so Keycloak's own safeguard against
-            // that race never applies, and every login becomes a race against a
-            // two-second timer.
+            // Never ephemeral. Sharing Safari's cookie jar is the whole point: the
+            // IdP's trusted-device cookie survives between logins, so the second
+            // factor is not re-prompted on every re-login — for every profile, not
+            // just one. Which account the session resolves to is decided by the
+            // login_hint in the authorize URL, so an empty jar buys no isolation
+            // here, it only throws the trusted-device state away.
             //
-            // Persisting cookies avoids that, but it also means a logout no longer
-            // clears the IdP session — which is what keeps profiles signed into
-            // different accounts apart. So keep the ephemeral session exactly where it
-            // still buys something: when the server does not already force a fresh
-            // authentication. With prompt=login or max_age=0 the IdP re-authenticates
-            // regardless of any live session, so the empty jar protects nothing and
-            // only costs reliability.
-            session.prefersEphemeralWebBrowserSession = !parent.url.forcesReauthentication
+            // This also covers what #204 fixed, and covers more of it. An empty jar
+            // makes Keycloak's login theme start the authChecker.js session poll —
+            // it only skips it when a KEYCLOAK_SESSION cookie is already present —
+            // and that poll races the redirect carrying the authorization code,
+            // failing the login with authentication_expired. #204 dropped the
+            // ephemeral session only when the authorize URL already carries
+            // prompt=login or max_age=0; where the server sends neither, the race
+            // stayed. Dropping it unconditionally removes the race everywhere.
+            session.prefersEphemeralWebBrowserSession = false
             session.presentationContextProvider = self
             self.session = session
             session.start()
+        }
+
+        /// Dismisses the session UI. Safe to call after it already completed.
+        func cancelSession() {
+            session?.cancel()
+            session = nil
+        }
+
+        /// Hands an intercepted authorization code to the SDK's loopback server.
+        private static func replayToLoopback(_ callbackURL: URL) {
+            var request = URLRequest(url: callbackURL)
+            request.timeoutInterval = 10
+            URLSession.shared.dataTask(with: request) { _, _, error in
+                // Log the outcome without the URL — its query carries the live
+                // authorization code. A failure here is not fatal on its own: it also
+                // happens on the normal path, where the browser already delivered the
+                // code and the SDK's server is gone. It is the one signal that
+                // separates the two, so it is worth recording.
+                if let error {
+                    AppLogger.shared.log("Login redirect replay to the loopback server failed: \(error.localizedDescription)")
+                } else {
+                    AppLogger.shared.log("Login redirect replayed to the loopback server")
+                }
+            }.resume()
         }
 
         func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
@@ -121,21 +198,5 @@ struct SafariView: UIViewControllerRepresentable {
     }
 }
 
-private extension URL {
-    /// Whether this authorization request asks the IdP to authenticate the user afresh,
-    /// ignoring any existing session.
-    ///
-    /// The SDK adds `prompt=login` or `max_age=0` according to the login flag the
-    /// management server sends (`LoginFlagPromptLogin` by default), so the request URL
-    /// already carries the answer and nothing needs plumbing through the SDK.
-    var forcesReauthentication: Bool {
-        guard let items = URLComponents(url: self, resolvingAgainstBaseURL: false)?.queryItems else {
-            return false
-        }
-        return items.contains { item in
-            (item.name == "prompt" && item.value == "login") || (item.name == "max_age" && item.value == "0")
-        }
-    }
-}
 
 #endif

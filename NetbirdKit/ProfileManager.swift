@@ -27,6 +27,10 @@ struct Profile: Identifiable, Equatable {
     let id: String
     /// Human-readable display name.
     let name: String
+    /// Account this profile last logged in with, or "" if it never completed an
+    /// SSO login. Recorded by the Go core next to the profile config and kept
+    /// across logouts so the next login can pass it as an OIDC login_hint.
+    let email: String
     let isActive: Bool
 
     var isDefault: Bool { id == ProfileManager.defaultProfileID }
@@ -79,7 +83,7 @@ class ProfileManager {
             var profiles: [Profile] = []
             for i in 0..<array.length() {
                 if let p = array.get(i) {
-                    profiles.append(Profile(id: p.id_, name: p.name, isActive: p.isActive))
+                    profiles.append(Profile(id: p.id_, name: p.name, email: p.email, isActive: p.isActive))
                 }
             }
             return profiles.isEmpty ? [ProfileManager.fallbackDefault()] : profiles
@@ -96,7 +100,7 @@ class ProfileManager {
     func activeProfile() -> Profile? {
 #if os(iOS)
         guard let p = try? go.getActiveProfile() else { return nil }
-        return Profile(id: p.id_, name: p.name, isActive: true)
+        return Profile(id: p.id_, name: p.name, email: p.email, isActive: true)
 #else
         return ProfileManager.fallbackDefault()
 #endif
@@ -172,6 +176,7 @@ class ProfileManager {
 
     /// Records the management URL for a profile so it is available before the
     /// profile config can be read back.
+
     func saveServerURL(_ url: String, forID id: String) {
         ProfileConnectionCache().saveManagementURL(url, forID: id)
     }
@@ -187,7 +192,7 @@ class ProfileManager {
         // gomobile maps (*Profile, error) to a non-optional throwing call: a
         // failure surfaces as a thrown error, not a nil return.
         let p = try go.addProfile(name)
-        return Profile(id: p.id_, name: p.name, isActive: false)
+        return Profile(id: p.id_, name: p.name, email: p.email, isActive: false)
     }
 
     /// Switches the active profile. The caller must stop the VPN before calling.
@@ -217,7 +222,7 @@ class ProfileManager {
     // MARK: - Helpers
 
     private static func fallbackDefault() -> Profile {
-        Profile(id: defaultProfileID, name: defaultProfileID, isActive: true)
+        Profile(id: defaultProfileID, name: defaultProfileID, email: "", isActive: true)
     }
 
     /// Parses the management URL from a profile config file. The Go SDK may
