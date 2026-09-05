@@ -13,10 +13,16 @@
 
 import Foundation
 import Combine
+import UIKit
 import NetBirdSDK
 import UniformTypeIdentifiers
 
 class FilesViewModel: ObservableObject {
+
+    /// One instance backs the Files tab, the send sheet, the settings screen and
+    /// the notification actions, so they share a single poller and one view of
+    /// the receiving mode instead of each holding a copy that drifts.
+    static let shared = FilesViewModel()
 
     @Published var transfers: [FileDropTransferInfo] = []
     @Published var searchText: String = ""
@@ -24,12 +30,29 @@ class FilesViewModel: ObservableObject {
 
     private weak var adapter: NetworkExtensionAdapter?
     private var timer: Timer?
+    private var polling = false
+    private var lifecycleObservers: [NSObjectProtocol] = []
+    private var queuedAnswers: [(verb: String, id: String)] = []
     private let directQueue = DispatchQueue(label: "io.netbird.filedrop.direct")
 
     static let outboxSubdir = "filedrop-outbox"
 
+    init() {
+        observeLifecycle()
+    }
+
+    deinit {
+        lifecycleObservers.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
     func bind(adapter: NetworkExtensionAdapter) {
         self.adapter = adapter
+
+        let queued = queuedAnswers
+        queuedAnswers = []
+        for answer in queued {
+            action(answer.verb, id: answer.id)
+        }
     }
 
     // MARK: - Derived rows
@@ -66,10 +89,16 @@ class FilesViewModel: ObservableObject {
     }
 
     static func dayLabel(for date: Date?) -> String {
-        guard let date = date else { return "Earlier" }
+        guard let date = date else {
+            return NSLocalizedString("file_drop_group_earlier", value: "Earlier", comment: "")
+        }
         let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return "Today" }
-        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        if calendar.isDateInToday(date) {
+            return NSLocalizedString("file_drop_group_today", value: "Today", comment: "")
+        }
+        if calendar.isDateInYesterday(date) {
+            return NSLocalizedString("file_drop_group_yesterday", value: "Yesterday", comment: "")
+        }
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         return formatter.string(from: date)
@@ -124,26 +153,85 @@ class FilesViewModel: ObservableObject {
         }
     }
 
+    /// The log is polled rather than pushed, so the interval follows what is
+    /// actually happening: a transfer in flight moves a progress bar every
+    /// couple of seconds, while an idle log only has to notice a new offer.
+    /// Polling stops outside the foreground entirely, since waking the
+    /// extension for a list nobody is looking at is pure battery cost.
+    private static let activeInterval: TimeInterval = 2
+    private static let idleInterval: TimeInterval = 8
+
     func startPolling() {
-        stopPolling()
+        polling = true
         refresh()
         refreshMode()
-        timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.refresh()
-        }
+        scheduleTick()
     }
 
     func stopPolling() {
+        polling = false
         timer?.invalidate()
         timer = nil
     }
 
+    private func scheduleTick() {
+        timer?.invalidate()
+        guard polling else { return }
+
+        let interval = transfers.contains { !$0.isTerminal }
+            ? FilesViewModel.activeInterval
+            : FilesViewModel.idleInterval
+
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            self?.refresh()
+            self?.scheduleTick()
+        }
+    }
+
+    /// Backgrounding only parks the timer; `polling` stays set so returning to
+    /// the foreground resumes without the screen having to reappear.
+    private func observeLifecycle() {
+        let center = NotificationCenter.default
+
+        lifecycleObservers.append(center.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil, queue: .main) { [weak self] _ in
+                self?.timer?.invalidate()
+                self?.timer = nil
+            })
+
+        lifecycleObservers.append(center.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil, queue: .main) { [weak self] _ in
+                guard let self = self, self.polling else { return }
+                self.refresh()
+                self.scheduleTick()
+            })
+    }
+
     // MARK: - Actions
 
-    func accept(_ transfer: FileDropTransferInfo) { action("Accept", id: transfer.id) }
-    func decline(_ transfer: FileDropTransferInfo) { action("Decline", id: transfer.id) }
+    func accept(_ transfer: FileDropTransferInfo) { accept(id: transfer.id) }
+    func decline(_ transfer: FileDropTransferInfo) { decline(id: transfer.id) }
     func stop(_ transfer: FileDropTransferInfo) { action("Stop", id: transfer.id) }
     func remove(_ transfer: FileDropTransferInfo) { action("Remove", id: transfer.id) }
+
+    /// Answering by ID alone: a notification action carries the transfer ID and
+    /// nothing else, and the log may not even be loaded when it arrives.
+    func accept(id: String) { action("Accept", id: id) }
+    func decline(id: String) { action("Decline", id: id) }
+
+    /// A notification action can land before the app has an adapter at all, on
+    /// a cold launch straight into Accept. Those answers wait for the binding
+    /// instead of falling back to a second handle on the same store, which the
+    /// running engine would never see.
+    func answerFromNotification(verb: String, id: String) {
+        guard adapter != nil else {
+            queuedAnswers.append((verb: verb, id: id))
+            return
+        }
+        action(verb, id: id)
+    }
 
     private func action(_ verb: String, id: String) {
         if let adapter = adapter {
@@ -190,9 +278,12 @@ class FilesViewModel: ObservableObject {
 
         var errorDescription: String? {
             switch self {
-            case .notRunning: return "NetBird is not running"
-            case .sendFailed(let message): return message
-            case .unreadable: return "The selected files could not be read"
+            case .notRunning:
+                return NSLocalizedString("file_drop_share_not_running", value: "NetBird is not running", comment: "")
+            case .sendFailed(let message):
+                return message
+            case .unreadable:
+                return NSLocalizedString("file_drop_share_unreadable", value: "The selected files could not be read", comment: "")
             }
         }
     }
@@ -279,10 +370,21 @@ class FilesViewModel: ObservableObject {
     /// Returns where a transfer's received files live now: the relocated
     /// copies when the move already happened, the original delivery paths
     /// otherwise.
+    /// Paths that no longer resolve are dropped: a preview or a share sheet
+    /// handed a missing file shows an empty page rather than an error.
     func deliveredURLs(for transfer: FileDropTransferInfo) -> [URL] {
         let map = UserDefaults.standard.dictionary(forKey: FilesViewModel.relocatedKey) as? [String: [String]] ?? [:]
         let paths = map[transfer.id] ?? transfer.deliveredPaths
-        return paths.map { URL(fileURLWithPath: $0) }
+        return paths
+            .map { URL(fileURLWithPath: $0) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    /// True when the transfer has something a preview can actually open.
+    func isPreviewable(_ transfer: FileDropTransferInfo) -> Bool {
+        !transfer.outgoing && !transfer.isText
+            && transfer.transferState == .completed
+            && !deliveredURLs(for: transfer).isEmpty
     }
 
     private func relocateDelivered(_ list: [FileDropTransferInfo]) {

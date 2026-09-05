@@ -2,9 +2,13 @@
 //  FileSendView.swift
 //  NetBird
 //
-//  The send sheet: pick what to share, then tap a peer to send. The screen
-//  stays put so the same content can be fanned out to several peers, each row
-//  tracking its own transfer.
+//  The send sheet: pick what to share, then send it to one or more peers. The
+//  screen stays put so the same content can be fanned out, each row tracking
+//  its own transfer.
+//
+//  Sending is an explicit button on the row rather than a tap on the row
+//  itself: on iOS a tap is a navigation gesture, and a send is neither
+//  navigation nor something to trigger by accident.
 //
 
 import SwiftUI
@@ -17,16 +21,32 @@ struct FileSendView: View {
     @ObservedObject var filesVM: FilesViewModel
     @Environment(\.presentationMode) private var presentationMode
 
+    /// A sheet opened from a peer's own row carries that peer into the picker.
+    let presetPeer: String?
+
+    init(filesVM: FilesViewModel, presetPeer: String? = nil) {
+        self.filesVM = filesVM
+        self.presetPeer = presetPeer
+        _peerQuery = State(initialValue: presetPeer ?? "")
+    }
+
     enum ContentKind: String, CaseIterable {
-        case files = "Files"
-        case text = "Text"
+        case files
+        case text
+
+        var label: LocalizedStringKey {
+            switch self {
+            case .files: return "Files"
+            case .text: return "Text"
+            }
+        }
     }
 
     @State private var contentKind: ContentKind = .files
     @State private var stagedFiles: [FileDropSendFile] = []
     @State private var stagingFailed = false
     @State private var text: String = ""
-    @State private var peerQuery: String = ""
+    @State private var peerQuery: String
     @State private var showFilePicker = false
     @State private var rowStates: [String: SendRowState] = [:]
     @State private var targetToStop: SendTarget? = nil
@@ -54,21 +74,17 @@ struct FileSendView: View {
 
     var body: some View {
         NavigationView {
-            ZStack {
-                Color("BgMenu")
-                    .ignoresSafeArea()
-
-                VStack(spacing: 0) {
-                    contentPicker
-                    peerListHeader
-                    peerList
-                }
+            List {
+                contentSection
+                peerSection
             }
+            .listStyle(InsetGroupedListStyle())
             .navigationTitle("Send to")
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $peerQuery, prompt: "Search peers")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
                         presentationMode.wrappedValue.dismiss()
                     }
                 }
@@ -91,28 +107,33 @@ struct FileSendView: View {
                 stagingFailed = true
             }
         }
-        .alert(item: $targetToStop) { target in
-            Alert(
-                title: Text("Stop sending"),
-                message: Text("Stop sending to this peer?"),
-                primaryButton: .destructive(Text("Stop")) {
-                    stopSending(to: target)
-                },
-                secondaryButton: .cancel()
-            )
+        .confirmationDialog(
+            targetToStop?.name ?? "",
+            isPresented: Binding(
+                get: { targetToStop != nil },
+                set: { if !$0 { targetToStop = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: targetToStop
+        ) { target in
+            Button("Stop", role: .destructive) { stopSending(to: target) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Stop sending to this peer?")
         }
     }
 
     // MARK: - Content selection
 
-    private var contentPicker: some View {
-        VStack(spacing: 12) {
+    private var contentSection: some View {
+        Section(header: Text("What to send")) {
             Picker("", selection: $contentKind) {
                 ForEach(ContentKind.allCases, id: \.self) { kind in
-                    Text(kind.rawValue).tag(kind)
+                    Text(kind.label).tag(kind)
                 }
             }
             .pickerStyle(SegmentedPickerStyle())
+            .listRowSeparator(.hidden)
 
             switch contentKind {
             case .files:
@@ -121,27 +142,41 @@ struct FileSendView: View {
                 } label: {
                     HStack {
                         Image(systemName: "doc.badge.plus")
-                        Text(stagedFiles.isEmpty ? "Choose files" : filesSummary)
-                            .lineLimit(2)
+                        // The summary is composed from file names and a byte
+                        // count, so it is shown verbatim rather than looked up.
+                        if stagedFiles.isEmpty {
+                            Text("Choose files")
+                        } else {
+                            Text(verbatim: filesSummary)
+                                .lineLimit(2)
+                        }
                         Spacer()
                     }
-                    .padding(12)
-                    .background(Color("BgPeerCard"))
                     .foregroundColor(Color("TextPrimary"))
-                    .cornerRadius(8)
                 }
+                .buttonStyle(.borderless)
+
                 if stagingFailed {
                     Text("The selected files could not be read")
                         .font(.footnote)
-                        .foregroundColor(.red)
+                        .foregroundColor(Color(.systemRed))
                 }
             case .text:
-                TextField("Text to send", text: $text)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                // Multi-line: what people send is usually a snippet, not a word,
+                // and a one-line field hides everything past its width.
+                TextEditor(text: $text)
+                    .frame(minHeight: 88)
+                    .font(.body)
+
+                Button {
+                    paste()
+                } label: {
+                    Label("Paste from clipboard", systemImage: "doc.on.clipboard")
+                }
+                .buttonStyle(.borderless)
+                .disabled(!UIPasteboard.general.hasStrings)
             }
         }
-        .padding(.horizontal)
-        .padding(.top, 12)
     }
 
     private var filesSummary: String {
@@ -150,7 +185,9 @@ struct FileSendView: View {
         if stagedFiles.count == 1 {
             return "\(stagedFiles[0].name) · \(sizeLabel)"
         }
-        return "\(stagedFiles.count) files · \(sizeLabel)"
+        let format = NSLocalizedString("file_drop_send_files_summary", value: "%1$d files · %2$@",
+                                       comment: "file count, total size")
+        return String(format: format, stagedFiles.count, sizeLabel)
     }
 
     private var hasContent: Bool {
@@ -160,16 +197,14 @@ struct FileSendView: View {
         }
     }
 
-    // MARK: - Peers
-
-    private var peerListHeader: some View {
-        TextField("Search peers", text: $peerQuery)
-            .textFieldStyle(RoundedBorderTextFieldStyle())
-            .autocapitalization(.none)
-            .disableAutocorrection(true)
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+    private func paste() {
+        guard let clipboard = UIPasteboard.general.string,
+              !clipboard.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        text = clipboard
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
+
+    // MARK: - Peers
 
     /// Deliberately not filtered on connection status: an idle peer is the
     /// normal resting state under lazy connections, and the transfer's own
@@ -191,30 +226,32 @@ struct FileSendView: View {
     }
 
     @ViewBuilder
-    private var peerList: some View {
+    private var peerSection: some View {
         let shown = targets.filter { $0.matches(peerQuery) }
 
-        if viewModel.vpnDisplayState != .connected {
-            emptyState("NetBird is not running")
-        } else if shown.isEmpty {
-            emptyState(targets.isEmpty ? "No peers to send to" : "No matching peers")
-        } else {
-            List(shown) { target in
-                SendTargetRow(target: target, status: statusLabel(for: target))
-                    .contentShape(Rectangle())
-                    .onTapGesture { tapped(target) }
+        Section(header: Text("Send to")) {
+            if viewModel.vpnDisplayState != .connected {
+                emptyRow("NetBird is not running")
+            } else if shown.isEmpty {
+                emptyRow(targets.isEmpty ? "No peers to send to" : "No matching peers")
+            } else {
+                ForEach(shown) { target in
+                    SendTargetRow(target: target,
+                                  status: statusLabel(for: target),
+                                  action: rowAction(for: target),
+                                  enabled: hasContent,
+                                  onTap: { tapped(target) })
+                }
             }
-            .listStyle(InsetGroupedListStyle())
         }
     }
 
-    private func emptyState(_ message: String) -> some View {
-        VStack {
-            Spacer()
-            Text(message)
-                .foregroundColor(Color("TextSecondary"))
-            Spacer()
-        }
+    private func emptyRow(_ message: LocalizedStringKey) -> some View {
+        Text(message)
+            .font(.subheadline)
+            .foregroundColor(Color("TextSecondary"))
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 12)
     }
 
     // MARK: - Row state
@@ -224,39 +261,59 @@ struct FileSendView: View {
         return filesVM.transfers.first { $0.id == transferID }
     }
 
+    /// What the row's button offers right now. A live send can be stopped, a
+    /// finished one can be sent again, everything else is a plain send.
+    private func rowAction(for target: SendTarget) -> SendTargetRow.Action {
+        if let transfer = transfer(for: target), !transfer.isTerminal {
+            return .stop
+        }
+        if rowStates[target.pubKey]?.waiting == true {
+            return .inFlight
+        }
+        return .send
+    }
+
     private func statusLabel(for target: SendTarget) -> (String, Color) {
         guard let state = rowStates[target.pubKey] else {
             return ("", Color("TextSecondary"))
         }
         if let failure = state.failure {
-            return ("Could not send: \(failure)", .red)
+            let format = NSLocalizedString("file_drop_share_failed", value: "Could not send: %@",
+                                           comment: "error message")
+            return (String(format: format, failure), Color(.systemRed))
         }
         guard let transfer = transfer(for: target) else {
-            return (state.waiting ? "Waiting…" : "", Color("TextSecondary"))
+            let waiting = NSLocalizedString("file_drop_share_state_waiting", value: "Waiting…", comment: "")
+            return (state.waiting ? waiting : "", Color("TextSecondary"))
         }
         if transfer.transferState == .completed {
-            return ("✓ Sent", .green)
+            return (NSLocalizedString("file_drop_share_state_sent", value: "✓ Sent", comment: ""),
+                    Color(.systemGreen))
         }
         if transfer.transferState == .pending {
-            return ("Waiting…", Color("TextSecondary"))
+            return (NSLocalizedString("file_drop_share_state_waiting", value: "Waiting…", comment: ""),
+                    Color("TextSecondary"))
         }
         return (FileDropFormat.outcome(for: transfer), FileDropFormat.outcomeColor(for: transfer))
     }
 
     // MARK: - Sending
 
-    /// Tap is the send: no confirm step, and the row itself carries the whole
-    /// lifecycle. A second tap on a live send offers to stop it.
     private func tapped(_ target: SendTarget) {
-        if let transfer = transfer(for: target), !transfer.isTerminal {
+        switch rowAction(for: target) {
+        case .stop:
             targetToStop = target
+        case .inFlight:
             return
+        case .send:
+            send(to: target)
         }
-        if rowStates[target.pubKey]?.waiting == true {
-            return
-        }
+    }
+
+    private func send(to target: SendTarget) {
         guard hasContent else { return }
 
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         rowStates[target.pubKey] = SendRowState(waiting: true)
 
         let request = FileDropSendRequest(
@@ -273,6 +330,7 @@ struct FileSendView: View {
                 rowStates[target.pubKey] = SendRowState(transferID: transferID)
                 filesVM.refresh()
             case .failure(let error):
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
                 rowStates[target.pubKey] = SendRowState(failure: error.localizedDescription)
             }
         }
@@ -285,33 +343,62 @@ struct FileSendView: View {
 }
 
 private struct SendTargetRow: View {
+    enum Action {
+        case send
+        case stop
+        case inFlight
+    }
+
     let target: FileSendView.SendTarget
     let status: (String, Color)
+    let action: Action
+    let enabled: Bool
+    let onTap: () -> Void
 
     var body: some View {
-        HStack {
+        HStack(spacing: 10) {
             Circle()
-                .fill(target.connected ? Color.green : Color("TextSecondary"))
+                .fill(target.connected ? Color(.systemGreen) : Color("TextSecondary"))
                 .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(target.name)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.subheadline)
                     .foregroundColor(Color("TextPrimary"))
                     .lineLimit(1)
                 Text(target.ip)
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(Color("TextSecondary"))
+
+                if !status.0.isEmpty {
+                    Text(status.0)
+                        .font(.footnote)
+                        .foregroundColor(status.1)
+                        .lineLimit(2)
+                }
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
-            Text(status.0)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(status.1)
-                .lineLimit(1)
+            button
         }
         .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private var button: some View {
+        switch action {
+        case .send:
+            Button("Send", action: onTap)
+                .buttonStyle(.bordered)
+                .disabled(!enabled)
+        case .stop:
+            Button("Stop", role: .destructive, action: onTap)
+                .buttonStyle(.bordered)
+        case .inFlight:
+            ProgressView()
+        }
     }
 }
 

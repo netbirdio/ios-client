@@ -820,15 +820,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             switch Event(rawValue: kind) {
             case .offer:
                 guard transfer.state == 0 else { return }
+                let format = NSLocalizedString(
+                    "file_drop_notification_offer_body",
+                    value: "%1$@ wants to send you %2$@.",
+                    comment: "peer name, what is being offered")
                 post(id: offerID,
-                     title: "Incoming file",
-                     body: "\(transfer.peerName) wants to send you \(itemLabel(transfer)). Open NetBird to accept it.")
+                     title: NSLocalizedString("file_drop_notification_offer_title",
+                                              value: "Incoming file", comment: ""),
+                     body: String(format: format, transfer.peerName, itemLabel(transfer)),
+                     category: FileDropNotification.offerCategory,
+                     transferID: transfer.id_)
             case .completed:
                 center.removePendingNotificationRequests(withIdentifiers: [offerID])
                 center.removeDeliveredNotifications(withIdentifiers: [offerID])
+                let format = NSLocalizedString(
+                    "file_drop_notification_done_body",
+                    value: "%1$@ from %2$@. Open NetBird to save it.",
+                    comment: "what arrived, peer name")
                 post(id: doneID,
-                     title: "File received",
-                     body: "\(itemLabel(transfer)) from \(transfer.peerName). Open NetBird to save it.")
+                     title: NSLocalizedString("file_drop_notification_done_title",
+                                              value: "File received", comment: ""),
+                     body: String(format: format, itemLabel(transfer), transfer.peerName),
+                     transferID: transfer.id_)
             case .withdrawn, .failed:
                 center.removePendingNotificationRequests(withIdentifiers: [offerID])
                 center.removeDeliveredNotifications(withIdentifiers: [offerID])
@@ -839,20 +852,34 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         private func itemLabel(_ transfer: NetBirdSDKFileDropTransfer) -> String {
             if transfer.isText {
-                return "a text snippet"
+                return NSLocalizedString("file_drop_notification_item_text",
+                                         value: "a text snippet", comment: "")
             }
             let count = transfer.fileCount()
             if count > 1 {
-                return "\(count) files"
+                let format = NSLocalizedString("file_drop_notification_item_files",
+                                               value: "%d files", comment: "file count")
+                return String(format: format, count)
             }
-            return transfer.getFile(0)?.name ?? "a file"
+            return transfer.getFile(0)?.name
+                ?? NSLocalizedString("file_drop_notification_item_file", value: "a file", comment: "")
         }
 
-        private func post(id: String, title: String, body: String) {
+        /// The category carries the Accept and Decline buttons, which the app
+        /// registers: categories set from a Network Extension are not reliably
+        /// picked up by the system. The transfer ID rides along so the app can
+        /// answer the right offer straight from the notification.
+        private func post(id: String, title: String, body: String,
+                          category: String? = nil, transferID: String) {
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = body
             content.sound = .default
+            content.userInfo = [FileDropNotification.transferIDKey: transferID]
+            content.threadIdentifier = "io.netbird.filedrop"
+            if let category = category {
+                content.categoryIdentifier = category
+            }
 
             let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
             UNUserNotificationCenter.current().add(request) { error in

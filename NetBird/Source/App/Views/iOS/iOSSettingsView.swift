@@ -157,13 +157,15 @@ struct iOSSettingsView: View {
 /// exceptions stay in Go and apply on top of it.
 struct FileDropSettingsView: View {
     @EnvironmentObject var viewModel: ViewModel
-    @StateObject private var filesVM = FilesViewModel()
+    @ObservedObject private var filesVM = FilesViewModel.shared
 
     var body: some View {
         List {
             Section(footer: Text(footerText)) {
                 ForEach(FileDropMode.allCases, id: \.self) { mode in
                     Button {
+                        guard filesVM.mode != mode else { return }
+                        UISelectionFeedbackGenerator().selectionChanged()
                         filesVM.setMode(mode)
                     } label: {
                         HStack {
@@ -175,7 +177,9 @@ struct FileDropSettingsView: View {
                                     .foregroundColor(.accentColor)
                             }
                         }
+                        .contentShape(Rectangle())
                     }
+                    .accessibilityAddTraits(filesVM.mode == mode ? .isSelected : [])
                 }
             }
         }
@@ -188,7 +192,7 @@ struct FileDropSettingsView: View {
         }
     }
 
-    private func label(for mode: FileDropMode) -> String {
+    private func label(for mode: FileDropMode) -> LocalizedStringKey {
         switch mode {
         case .off: return "Off"
         case .ask: return "Ask every time"
@@ -196,7 +200,7 @@ struct FileDropSettingsView: View {
         }
     }
 
-    private var footerText: String {
+    private var footerText: LocalizedStringKey {
         "Other peers can send you files over NetBird. Received files show up in the Files tab, where you can save or share them."
     }
 }

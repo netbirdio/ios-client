@@ -52,6 +52,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
         let center = UNUserNotificationCenter.current()
         center.delegate = self
+        center.setNotificationCategories([AppDelegate.fileDropOfferCategory()])
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
                 AppLogger.shared.log("Notification authorization error: \(error.localizedDescription)")
@@ -81,7 +82,48 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         if response.notification.request.identifier == GlobalConstants.notificationLoginRequired {
             NotificationCenter.default.post(name: .netbirdLoginNotificationTapped, object: nil)
         }
+        handleFileDropResponse(response)
         completionHandler()
+    }
+
+    /// Accept and Decline on an incoming offer, so answering does not require
+    /// opening the app first. The category lives here rather than in the
+    /// extension: categories registered from a Network Extension are not
+    /// reliably picked up by the system.
+    private static func fileDropOfferCategory() -> UNNotificationCategory {
+        let accept = UNNotificationAction(
+            identifier: FileDropNotification.acceptAction,
+            title: NSLocalizedString("file_drop_accept", value: "Accept", comment: ""),
+            options: [])
+        let decline = UNNotificationAction(
+            identifier: FileDropNotification.declineAction,
+            title: NSLocalizedString("file_drop_decline", value: "Decline", comment: ""),
+            options: [.destructive])
+
+        return UNNotificationCategory(
+            identifier: FileDropNotification.offerCategory,
+            actions: [accept, decline],
+            intentIdentifiers: [],
+            options: [])
+    }
+
+    private func handleFileDropResponse(_ response: UNNotificationResponse) {
+        let verb: String
+        switch response.actionIdentifier {
+        case FileDropNotification.acceptAction:
+            verb = "Accept"
+        case FileDropNotification.declineAction:
+            verb = "Decline"
+        default:
+            return
+        }
+
+        guard let id = response.notification.request.content
+            .userInfo[FileDropNotification.transferIDKey] as? String, !id.isEmpty else { return }
+
+        DispatchQueue.main.async {
+            FilesViewModel.shared.answerFromNotification(verb: verb, id: id)
+        }
     }
 }
 #endif
@@ -114,6 +156,10 @@ struct NetBirdApp: App {
                         handleWidgetURL(url, viewModel: viewModel)
                     }
                     .onAppear {
+                        // Bound as early as the view model exists, so an answer
+                        // queued by a notification action is released before the
+                        // Files tab is ever opened.
+                        FilesViewModel.shared.bind(adapter: viewModel.networkExtensionAdapter)
                         if let url = pendingURL {
                             handleWidgetURL(url, viewModel: viewModel)
                             pendingURL = nil

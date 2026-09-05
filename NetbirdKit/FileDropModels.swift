@@ -126,3 +126,14 @@ struct FileDropSendResponse: Codable {
     var transferID: String
     var error: String
 }
+
+/// Identifiers for the local notification an incoming offer raises. The
+/// extension only stamps the category onto its notification; the category and
+/// its actions are registered by the app, since categories registered from a
+/// Network Extension are not reliably picked up by the system.
+enum FileDropNotification {
+    static let offerCategory = "io.netbird.filedrop.offer"
+    static let acceptAction = "io.netbird.filedrop.accept"
+    static let declineAction = "io.netbird.filedrop.decline"
+    static let transferIDKey = "transferID"
+}

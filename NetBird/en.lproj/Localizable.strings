@@ -1,0 +1,109 @@
+/*
+  Localizable.strings
+  NetBird
+
+  Base strings for the file drop screens. Keys prefixed with file_drop_ are
+  looked up explicitly from code where a value is built by format; the rest are
+  SwiftUI string literals, whose key is the English text itself.
+*/
+
+/* MARK: - Files tab */
+
+"Files" = "Files";
+"Send files" = "Send files";
+"Search by file or peer" = "Search by file or peer";
+"Incoming" = "Incoming";
+"No transfers yet" = "No transfers yet";
+"No matching transfers" = "No matching transfers";
+"Accept" = "Accept";
+"Decline" = "Decline";
+"Copy" = "Copy";
+"Preview" = "Preview";
+"Save or share" = "Save or share";
+"Stop" = "Stop";
+"Remove" = "Remove";
+"Cancel" = "Cancel";
+"Stop this transfer? It stays in the list so you can remove it afterwards." = "Stop this transfer? It stays in the list so you can remove it afterwards.";
+"Remove this transfer from the list?" = "Remove this transfer from the list?";
+
+/* MARK: - Send sheet */
+
+"Send to" = "Send to";
+"What to send" = "What to send";
+"Text" = "Text";
+"Choose files" = "Choose files";
+"Paste from clipboard" = "Paste from clipboard";
+"The selected files could not be read" = "The selected files could not be read";
+"Search peers" = "Search peers";
+"No peers to send to" = "No peers to send to";
+"No matching peers" = "No matching peers";
+"NetBird is not running" = "NetBird is not running";
+"Send" = "Send";
+"Stop sending to this peer?" = "Stop sending to this peer?";
+
+/* MARK: - Receiving files settings */
+
+"Receiving files" = "Receiving files";
+"Off" = "Off";
+"Ask every time" = "Ask every time";
+"Accept automatically" = "Accept automatically";
+"Other peers can send you files over NetBird. Received files show up in the Files tab, where you can save or share them." = "Other peers can send you files over NetBird. Received files show up in the Files tab, where you can save or share them.";
+
+/* MARK: - Composed labels */
+
+/* First file name, then how many further files the transfer carries. */
+"file_drop_title_multiple" = "%1$@ + %2$d more";
+"file_drop_title_file" = "File";
+/* Peer name. */
+"file_drop_offer_subtitle" = "%@ wants to send this";
+/* Peer name. */
+"file_drop_direction_sent" = "to %@";
+/* Peer name. */
+"file_drop_direction_received" = "from %@";
+/* Number of files, then their total size. */
+"file_drop_send_files_summary" = "%1$d files · %2$@";
+
+/* MARK: - Transfer outcomes */
+
+"file_drop_state_pending" = "Waiting";
+"file_drop_state_transferring" = "Transferring";
+"file_drop_state_sent" = "Sent";
+"file_drop_state_received" = "Received";
+"file_drop_state_declined" = "Declined";
+"file_drop_state_expired" = "No response";
+"file_drop_state_cancelled" = "Cancelled";
+"file_drop_state_failed" = "Failed";
+/* Percent complete. */
+"file_drop_state_progress" = "Sending %d%%";
+/* Percent complete. */
+"file_drop_state_progress_incoming" = "Receiving %d%%";
+
+/* MARK: - Send outcomes */
+
+"file_drop_share_state_waiting" = "Waiting…";
+"file_drop_share_state_sent" = "✓ Sent";
+"file_drop_share_not_running" = "NetBird is not running";
+"file_drop_share_unreadable" = "The selected files could not be read";
+/* Underlying error message. */
+"file_drop_share_failed" = "Could not send: %@";
+
+/* MARK: - Day groups */
+
+"file_drop_group_today" = "Today";
+"file_drop_group_yesterday" = "Yesterday";
+"file_drop_group_earlier" = "Earlier";
+
+/* MARK: - Notifications */
+
+"file_drop_accept" = "Accept";
+"file_drop_decline" = "Decline";
+"file_drop_notification_offer_title" = "Incoming file";
+/* Peer name, then what is being offered. */
+"file_drop_notification_offer_body" = "%1$@ wants to send you %2$@.";
+"file_drop_notification_done_title" = "File received";
+/* What arrived, then the peer name. */
+"file_drop_notification_done_body" = "%1$@ from %2$@. Open NetBird to save it.";
+"file_drop_notification_item_text" = "a text snippet";
+/* Number of files. */
+"file_drop_notification_item_files" = "%d files";
+"file_drop_notification_item_file" = "a file";
