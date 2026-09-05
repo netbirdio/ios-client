@@ -55,6 +55,10 @@ struct FileSendView: View {
         var transferID: String? = nil
         var waiting = false
         var failure: String? = nil
+        /// Set once the transfer list has shown this transfer. Until then an
+        /// ID with no matching entry means the list is still catching up, not
+        /// that the transfer is gone.
+        var seen = false
     }
 
     struct SendTarget: Identifiable {
@@ -91,6 +95,14 @@ struct FileSendView: View {
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
+        .onChange(of: filesVM.transfers) { transfers in
+            let ids = Set(transfers.map { $0.id })
+            for (key, state) in rowStates where !state.seen {
+                if let id = state.transferID, ids.contains(id) {
+                    rowStates[key]?.seen = true
+                }
+            }
+        }
         .fileImporter(isPresented: $showFilePicker,
                       allowedContentTypes: [.item],
                       allowsMultipleSelection: true) { result in
@@ -264,13 +276,25 @@ struct FileSendView: View {
         return filesVM.transfers.first { $0.id == transferID }
     }
 
+    /// The send is underway but there is no transfer to read yet: either the
+    /// call has not answered, or it has answered with an ID the polled list
+    /// has not caught up with. Without the second case the row would drop
+    /// back to idle for the length of one refresh and flash.
+    private func isInFlight(_ target: SendTarget) -> Bool {
+        guard let state = rowStates[target.pubKey], state.failure == nil else { return false }
+        if state.waiting {
+            return true
+        }
+        return state.transferID != nil && !state.seen
+    }
+
     /// What the row's button offers right now. A live send can be stopped, a
     /// finished one can be sent again, everything else is a plain send.
     private func rowAction(for target: SendTarget) -> SendTargetRow.Action {
         if let transfer = transfer(for: target), !transfer.isTerminal {
             return .stop
         }
-        if rowStates[target.pubKey]?.waiting == true {
+        if isInFlight(target) {
             return .inFlight
         }
         return .send
@@ -287,7 +311,7 @@ struct FileSendView: View {
         }
         guard let transfer = transfer(for: target) else {
             let waiting = NSLocalizedString("file_drop_share_state_waiting", value: "Waiting…", comment: "")
-            return (state.waiting ? waiting : "", Color("TextSecondary"))
+            return (isInFlight(target) ? waiting : "", Color("TextSecondary"))
         }
         if transfer.transferState == .completed {
             return (NSLocalizedString("file_drop_share_state_sent", value: "✓ Sent", comment: ""),
@@ -330,7 +354,10 @@ struct FileSendView: View {
         filesVM.send(request) { result in
             switch result {
             case .success(let transferID):
-                rowStates[target.pubKey] = SendRowState(transferID: transferID)
+                // A refresh may already have listed it, in which case there is
+                // no later change for onChange to catch.
+                let listed = filesVM.transfers.contains { $0.id == transferID }
+                rowStates[target.pubKey] = SendRowState(transferID: transferID, seen: listed)
                 filesVM.refresh()
             case .failure(let error):
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -384,7 +411,11 @@ private struct SendTargetRow: View {
 
             Spacer(minLength: 8)
 
+            // The control keeps one slot whether it shows Send, a spinner or
+            // Stop. Otherwise the narrow spinner hands the name column extra
+            // width for a moment and a truncated host name flashes to full.
             button
+                .frame(minWidth: 72, alignment: .trailing)
         }
         .padding(.vertical, 2)
     }
