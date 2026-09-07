@@ -79,7 +79,7 @@ struct TVSettingsView: View {
                             }
                         }
 
-                        if !viewModel.mdmRestrictions.mdm.disableAdvancedView {
+                        if !viewModel.mdmRestrictions.mdm.hidesAdvancedView {
                         TVSettingsSection(title: "Advanced") {
                             TVSettingsToggleRow(
                                 icon: "ant.fill",

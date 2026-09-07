@@ -36,7 +36,8 @@ struct ProfilesListView: View {
 
     /// The Go profile manager rejects switch/add/rename/remove under this
     /// gate, so the UI mirrors it: the entries that would fail are removed
-    /// rather than left to error out. Logout is not gated and stays.
+    /// rather than left to error out. Logout is gated too for every profile
+    /// but the active one, and only inactive profiles carry the action here.
     private var profilesManaged: Bool {
         viewModel.mdmRestrictions.features.disableProfiles
     }
@@ -194,22 +195,24 @@ struct ProfilesListView: View {
         }
         .mdmLocked(profilesManaged)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if !profile.isDefault && !profilesManaged {
-                Button(role: .destructive) {
-                    selectedProfile = profile
-                    showRemoveAlert = true
-                } label: {
-                    Label("Remove", systemImage: "trash")
+            if !profilesManaged {
+                if !profile.isDefault {
+                    Button(role: .destructive) {
+                        selectedProfile = profile
+                        showRemoveAlert = true
+                    } label: {
+                        Label("Remove", systemImage: "trash")
+                    }
                 }
-            }
 
-            Button {
-                selectedProfile = profile
-                showLogoutAlert = true
-            } label: {
-                Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
+                Button {
+                    selectedProfile = profile
+                    showLogoutAlert = true
+                } label: {
+                    Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+                .tint(.gray)
             }
-            .tint(.gray)
         }
     }
 

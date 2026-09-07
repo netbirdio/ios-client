@@ -48,7 +48,8 @@ final class MDMRestrictionsTests: XCTestCase {
         XCTAssertTrue(r.mdm.rosenpassEnabled)
         XCTAssertFalse(r.mdm.rosenpassPermissive)
         XCTAssertTrue(r.mdm.disableAutoConnect)
-        XCTAssertFalse(r.mdm.disableAdvancedView)
+        XCTAssertEqual(r.mdm.disableAdvancedView, false)
+        XCTAssertFalse(r.mdm.hidesAdvancedView)
         XCTAssertTrue(r.features.disableProfiles)
         XCTAssertFalse(r.features.disableNetworks)
         XCTAssertFalse(r.features.disableUpdateSettings)
@@ -61,6 +62,20 @@ final class MDMRestrictionsTests: XCTestCase {
         XCTAssertNil(MDMRestrictions.decode(#"{"mdm":{}}"#).mdm.allowServerSSH)
         XCTAssertEqual(MDMRestrictions.decode(#"{"mdm":{"allowServerSSH":true}}"#).mdm.allowServerSSH, true)
         XCTAssertEqual(MDMRestrictions.decode(#"{"mdm":{"allowServerSSH":false}}"#).mdm.allowServerSSH, false)
+    }
+
+    /// `disableAdvancedView` is tri-state like `allowServerSSH`: only an
+    /// explicit true hides the section, so an unmanaged or explicitly-allowed
+    /// key must leave it in place.
+    func testDisableAdvancedViewTriState() {
+        XCTAssertNil(MDMRestrictions.decode(#"{"mdm":{}}"#).mdm.disableAdvancedView)
+        XCTAssertFalse(MDMRestrictions.decode(#"{"mdm":{}}"#).mdm.hidesAdvancedView)
+
+        XCTAssertEqual(MDMRestrictions.decode(#"{"mdm":{"disableAdvancedView":null}}"#).mdm.disableAdvancedView, nil)
+        XCTAssertFalse(MDMRestrictions.decode(#"{"mdm":{"disableAdvancedView":null}}"#).mdm.hidesAdvancedView)
+
+        XCTAssertFalse(MDMRestrictions.decode(#"{"mdm":{"disableAdvancedView":false}}"#).mdm.hidesAdvancedView)
+        XCTAssertTrue(MDMRestrictions.decode(#"{"mdm":{"disableAdvancedView":true}}"#).mdm.hidesAdvancedView)
     }
 
     /// An empty policy must leave every control usable.

@@ -34,10 +34,17 @@ struct MDMRestrictions: Equatable {
         var disableMetricsCollection: Bool = false
         var splitTunnelMode: Bool = false
         var splitTunnelApps: Bool = false
-        var disableAdvancedView: Bool = false
+        /// Tri-state, like `allowServerSSH`: nil means the key is not managed,
+        /// and an explicit false means the section is allowed - only true
+        /// hides it.
+        var disableAdvancedView: Bool?
 
         /// True when a management URL is enforced by policy.
         var managesManagementURL: Bool { !managementURL.isEmpty }
+
+        /// Whether the advanced section must be hidden. Folds the tri-state so
+        /// callers do not each have to decide what nil means.
+        var hidesAdvancedView: Bool { disableAdvancedView == true }
     }
 
     struct Features: Equatable {
@@ -102,7 +109,8 @@ extension MDMRestrictions.Fields: Decodable {
         disableMetricsCollection = try flag(.disableMetricsCollection)
         splitTunnelMode = try flag(.splitTunnelMode)
         splitTunnelApps = try flag(.splitTunnelApps)
-        disableAdvancedView = try flag(.disableAdvancedView)
+        // Tri-state: absent and JSON null both mean "not managed".
+        disableAdvancedView = try c.decodeIfPresent(Bool.self, forKey: .disableAdvancedView)
     }
 }
 

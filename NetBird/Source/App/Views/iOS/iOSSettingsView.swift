@@ -68,7 +68,7 @@ struct iOSSettingsView: View {
                         }
                     }
 
-                    if !viewModel.mdmRestrictions.mdm.disableAdvancedView {
+                    if !viewModel.mdmRestrictions.mdm.hidesAdvancedView {
                         NavigationLink {
                             AdvancedView()
                         } label: {
