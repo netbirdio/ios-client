@@ -747,7 +747,7 @@ class ViewModel: ObservableObject {
     // MARK: - Configuration Methods (via ConfigurationProvider)
 
     func updatePreSharedKey() {
-        configProvider.preSharedKey = presharedKey
+        configProvider.setPreSharedKey(presharedKey)
         if configProvider.commit() {
             // tvOS: bypass the On Demand disconnect prompt. The user changed a setting that
             // needs a reconnect, not asked to stay offline — letting On Demand bring the
@@ -767,7 +767,7 @@ class ViewModel: ObservableObject {
 
     func removePreSharedKey() {
         presharedKey = ""
-        configProvider.preSharedKey = ""
+        configProvider.setPreSharedKey("")
         if configProvider.commit() {
             #if os(tvOS)
             self.performClose()
@@ -781,7 +781,9 @@ class ViewModel: ObservableObject {
     }
 
     func loadPreSharedKey() {
-        self.presharedKey = configProvider.preSharedKey
+        // The key itself is never readable back, only whether one is set - the
+        // field starts empty and turns into a SecureField once configured.
+        self.presharedKey = ""
         self.presharedKeySecure = configProvider.hasPreSharedKey
     }
 
