@@ -81,7 +81,7 @@
 /* MARK: - Send outcomes */
 
 "file_drop_share_state_waiting" = "Waiting…";
-"file_drop_share_state_sent" = "✓ Sent";
+"file_drop_share_state_sent" = "Sent";
 "file_drop_share_not_running" = "NetBird is not running";
 "file_drop_share_unreadable" = "The selected files could not be read";
 /* Underlying error message. */

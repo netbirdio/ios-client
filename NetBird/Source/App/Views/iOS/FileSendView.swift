@@ -19,7 +19,7 @@ import UniformTypeIdentifiers
 struct FileSendView: View {
     @EnvironmentObject var viewModel: ViewModel
     @ObservedObject var filesVM: FilesViewModel
-    @Environment(\.presentationMode) private var presentationMode
+    @Environment(\.dismiss) private var dismiss
 
     /// A sheet opened from a peer's own row carries that peer into the picker.
     let presetPeer: String?
@@ -50,6 +50,12 @@ struct FileSendView: View {
     @State private var showFilePicker = false
     @State private var rowStates: [String: SendRowState] = [:]
     @State private var targetToStop: SendTarget? = nil
+
+    struct SendStatus {
+        let text: String
+        let color: Color
+        var systemImage: String? = nil
+    }
 
     struct SendRowState {
         var transferID: String? = nil
@@ -85,11 +91,11 @@ struct FileSendView: View {
             .listStyle(InsetGroupedListStyle())
             .navigationTitle("Send to")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $peerQuery, prompt: "Search peers")
+            .searchable(text: $peerQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search peers")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
             }
@@ -300,28 +306,30 @@ struct FileSendView: View {
         return .send
     }
 
-    private func statusLabel(for target: SendTarget) -> (String, Color) {
+    private func statusLabel(for target: SendTarget) -> SendStatus {
         guard let state = rowStates[target.pubKey] else {
-            return ("", Color("TextSecondary"))
+            return SendStatus(text: "", color: Color("TextSecondary"))
         }
         if let failure = state.failure {
             let format = NSLocalizedString("file_drop_share_failed", value: "Could not send: %@",
                                            comment: "error message")
-            return (String(format: format, failure), Color(.systemRed))
+            return SendStatus(text: String(format: format, failure), color: Color(.systemRed))
         }
         guard let transfer = transfer(for: target) else {
             let waiting = NSLocalizedString("file_drop_share_state_waiting", value: "Waiting…", comment: "")
-            return (isInFlight(target) ? waiting : "", Color("TextSecondary"))
+            return SendStatus(text: isInFlight(target) ? waiting : "", color: Color("TextSecondary"))
         }
         if transfer.transferState == .completed {
-            return (NSLocalizedString("file_drop_share_state_sent", value: "✓ Sent", comment: ""),
-                    Color(.systemGreen))
+            return SendStatus(text: NSLocalizedString("file_drop_share_state_sent", value: "Sent", comment: ""),
+                              color: Color(.systemGreen),
+                              systemImage: "checkmark")
         }
         if transfer.transferState == .pending {
-            return (NSLocalizedString("file_drop_share_state_waiting", value: "Waiting…", comment: ""),
-                    Color("TextSecondary"))
+            return SendStatus(text: NSLocalizedString("file_drop_share_state_waiting", value: "Waiting…", comment: ""),
+                              color: Color("TextSecondary"))
         }
-        return (FileDropFormat.outcome(for: transfer), FileDropFormat.outcomeColor(for: transfer))
+        return SendStatus(text: FileDropFormat.outcome(for: transfer),
+                          color: FileDropFormat.outcomeColor(for: transfer))
     }
 
     // MARK: - Sending
@@ -380,7 +388,7 @@ private struct SendTargetRow: View {
     }
 
     let target: FileSendView.SendTarget
-    let status: (String, Color)
+    let status: FileSendView.SendStatus
     let action: Action
     let enabled: Bool
     let onTap: () -> Void
@@ -401,11 +409,17 @@ private struct SendTargetRow: View {
                     .font(.footnote)
                     .foregroundColor(Color("TextSecondary"))
 
-                if !status.0.isEmpty {
-                    Text(status.0)
-                        .font(.footnote)
-                        .foregroundColor(status.1)
-                        .lineLimit(2)
+                if !status.text.isEmpty {
+                    HStack(spacing: 4) {
+                        if let systemImage = status.systemImage {
+                            Image(systemName: systemImage)
+                                .font(.footnote.weight(.semibold))
+                        }
+                        Text(status.text)
+                            .font(.footnote)
+                            .lineLimit(2)
+                    }
+                    .foregroundColor(status.color)
                 }
             }
 
