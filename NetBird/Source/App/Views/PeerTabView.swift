@@ -81,10 +81,29 @@ struct NoPeersView: View {
     }
 }
 
+/// One sheet slot for the peer list: two `.sheet(item:)` modifiers on the same
+/// view are not reliably presented, so the detail and the send sheet share one
+/// piece of state.
+enum PeerSheet: Identifiable {
+    case detail(PeerInfo)
+    #if os(iOS)
+    case send(PeerInfo)
+    #endif
+
+    var id: String {
+        switch self {
+        case .detail(let peer): return "detail-\(peer.id)"
+        #if os(iOS)
+        case .send(let peer): return "send-\(peer.id)"
+        #endif
+        }
+    }
+}
+
 struct PeerListView: View {
     @ObservedObject var peerViewModel: PeerViewModel
     @ObservedObject var viewModel: ViewModel
-    @State private var selectedPeer: PeerInfo?
+    @State private var sheet: PeerSheet?
 
     var body: some View {
         List {
@@ -92,10 +111,21 @@ struct PeerListView: View {
                 PeerCard(peer: peer)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        selectedPeer = peer
+                        sheet = .detail(peer)
                     }
                     #if os(iOS)
                     .contextMenu {
+                        // Sending from the peer itself, the way the Android
+                        // client offers it on the peer's own screen.
+                        if !peer.pubKey.isEmpty && !peer.ip.isEmpty {
+                            Button {
+                                FilesViewModel.shared.bind(adapter: viewModel.networkExtensionAdapter)
+                                sheet = .send(peer)
+                            } label: {
+                                Label("Send files", systemImage: "square.and.arrow.up")
+                            }
+                        }
+
                         if !peer.fqdn.isEmpty {
                             Button("Copy FQDN") {
                                 UIPasteboard.general.string = peer.fqdn
@@ -124,8 +154,16 @@ struct PeerListView: View {
             .listRowBackground(Color("BgMenu"))
         }
         .listStyle(.plain)
-        .sheet(item: $selectedPeer) { peer in
-            PeerDetailSheet(peer: peer)
+        .sheet(item: $sheet) { item in
+            switch item {
+            case .detail(let peer):
+                PeerDetailSheet(peer: peer)
+            #if os(iOS)
+            case .send(let peer):
+                FileSendView(filesVM: FilesViewModel.shared, presetPeer: peer.fqdn)
+                    .environmentObject(viewModel)
+            #endif
+            }
         }
     }
 }

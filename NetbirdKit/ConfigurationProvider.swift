@@ -30,8 +30,9 @@ protocol ConfigurationProvider {
 
     // MARK: - Pre-Shared Key
 
-    /// The current pre-shared key (empty string if not set)
-    var preSharedKey: String { get set }
+    /// Stages a new pre-shared key, or clears it when given an empty string.
+    /// Write-only: the SDK never hands the key itself back to the native layer.
+    func setPreSharedKey(_ key: String)
 
     /// Whether a pre-shared key is configured
     var hasPreSharedKey: Bool { get }
@@ -110,17 +111,18 @@ final class iOSConfigurationProvider: ConfigurationProvider {
 
     // MARK: - Pre-Shared Key
 
-    var preSharedKey: String {
-        get {
-            return preferences.getPreSharedKey(nil)
-        }
-        set {
-            preferences.setPreSharedKey(newValue)
-        }
+    func setPreSharedKey(_ key: String) {
+        preferences.setPreSharedKey(key)
     }
 
     var hasPreSharedKey: Bool {
-        return !preSharedKey.isEmpty
+        var result = ObjCBool(false)
+        do {
+            try preferences.hasPreSharedKey(&result)
+        } catch {
+            print("ConfigurationProvider: Failed to read hasPreSharedKey - \(error)")
+        }
+        return result.boolValue
     }
 
     // MARK: - Lifecycle
@@ -181,13 +183,12 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
 
     // MARK: - Pre-Shared Key
 
-    var preSharedKey: String {
-        get { extractJSONString(field: "PreSharedKey") ?? "" }
-        set { updateJSONField(field: "PreSharedKey", value: newValue) }
+    func setPreSharedKey(_ key: String) {
+        updateJSONField(field: "PreSharedKey", value: key)
     }
 
     var hasPreSharedKey: Bool {
-        return !preSharedKey.isEmpty
+        return !(extractJSONString(field: "PreSharedKey") ?? "").isEmpty
     }
 
     // MARK: - Lifecycle

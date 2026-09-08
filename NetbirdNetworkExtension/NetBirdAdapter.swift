@@ -386,6 +386,18 @@ public class NetBirdAdapter {
         return self.client.isLoginRequiredCached()
     }
 
+    /// Returns the active profile's file drop handle, creating it on first use.
+    /// The same handle serves the engine and the app's provider messages, so
+    /// history and policy stay consistent across engine restarts.
+    public func fileDrop() -> NetBirdSDKFileDrop? {
+        do {
+            return try client.fileDropHandle()
+        } catch {
+            adapterLogger.error("file drop unavailable: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     /// Legacy synchronous login - returns URL string directly
     /// Used by iOS which opens Safari
     public func login() -> String {
@@ -547,7 +559,7 @@ public class NetBirdAdapter {
             return
         }
         #endif
-        if let auth = NetBirdSDKNewAuth(configPath, managementURL, nil) {
+        if let auth = NetBirdSDKNewAuth(configPath, managementURL, nil, nil) {
             authRef = auth
 
             // Always pass the device name so the peer registers under the user's
