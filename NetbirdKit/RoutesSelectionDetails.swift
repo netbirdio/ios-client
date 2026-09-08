@@ -52,10 +52,8 @@ class RoutesSelectionInfo: ObservableObject, Codable, Identifiable {
     var network: String?
     var domains: [DomainDetails]?
     var selected: Bool
-    // Connection status computed by the core ("Connected"/"Idle"). UI consumers read
-    // it directly (e.g. RouteCard.statusIndicatorColor uses route.status); there is no
-    // network-string fallback. A nil/empty value from an older core is treated as
-    // not-connected, so a selected route shows the yellow ("unknown") indicator.
+    // Connection status computed by the core ("Connected"/"Idle"). A nil/empty value
+    // from an older core is treated as not-connected.
     var status: String?
 
     init(id: UUID = UUID(), name: String, network: String?, domains: [DomainDetails]?, selected: Bool, status: String? = nil) {
