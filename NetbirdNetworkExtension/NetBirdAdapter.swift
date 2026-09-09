@@ -286,6 +286,7 @@ public class NetBirdAdapter {
             return nil
         }
         self.client = client
+        registerMDMPolicyFetcher()
 
         // Load config from extension-local storage (set via IPC from main app)
         // Note: Shared App Group UserDefaults does NOT work on tvOS between app and extension
@@ -316,6 +317,7 @@ public class NetBirdAdapter {
             return nil
         }
         self.client = client
+        registerMDMPolicyFetcher()
         self.initializedConfigPath = resolvedConfigPath
         #endif
     }
@@ -547,7 +549,7 @@ public class NetBirdAdapter {
             return
         }
         #endif
-        if let auth = NetBirdSDKNewAuth(configPath, managementURL, nil) {
+        if let auth = NetBirdSDKNewAuth(configPath, managementURL, MDMPolicyFetcher(), nil) {
             authRef = auth
 
             // Always pass the device name so the peer registers under the user's
@@ -627,6 +629,18 @@ public class NetBirdAdapter {
     }
 
     /// Update the device name in a config JSON string
+    /// Registers the policy fetcher on the Client at creation - the only
+    /// object whose Run() enforces the policy.
+    ///
+    /// Doing it here rather than in a caller covers every process and every
+    /// recreation: a profile switch builds a fresh Client, and the tvOS
+    /// extension had no registration site at all, so its engine ran
+    /// unmanaged. It also creates the change detector hasMDMPolicyChanged()
+    /// relies on.
+    private func registerMDMPolicyFetcher() {
+        client.setMDMPolicyFetcher(MDMPolicyFetcher())
+    }
+
     static func updateDeviceNameInConfig(_ configJSON: String, newName: String) -> String {
         // Escape special characters for JSON string
         let escapedName = newName

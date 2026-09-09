@@ -118,8 +118,14 @@ struct iOSConnectionView: View {
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
 
-                        ExitNodeSelectorCard(routeViewModel: viewModel.routeViewModel)
-                            .padding(.horizontal, 16)
+                        // With client routes disabled by policy the engine
+                        // installs none, so the selector would be a control
+                        // that cannot do anything - drop it rather than show
+                        // it dead.
+                        if !viewModel.mdmRestrictions.mdm.disableClientRoutes {
+                            ExitNodeSelectorCard(routeViewModel: viewModel.routeViewModel)
+                                .padding(.horizontal, 16)
+                        }
                     }
                     .padding(.bottom, 16)
                     .animation(.easeInOut(duration: 0.3), value: viewModel.isInternetConnected)

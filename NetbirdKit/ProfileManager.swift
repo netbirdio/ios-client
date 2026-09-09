@@ -65,6 +65,10 @@ class ProfileManager {
         guard let manager = NetBirdSDKNewProfileManager(configDir) else {
             preconditionFailure("Failed to create NetBirdSDKProfileManager at \(configDir)")
         }
+        // The Go manager rejects switch/add/rename/remove when the policy sets
+        // disableProfiles, so a missed UI check still fails closed — but only
+        // once the fetcher is registered here.
+        manager.setMDMPolicyFetcher(MDMPolicyFetcher())
         self.go = manager
         ProfileManager.excludeProfileStorageFromBackup(configDir: configDir)
     }

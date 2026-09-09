@@ -16,6 +16,10 @@ public class AppLogger {
     private var fileHandle: FileHandle?
     private var logFileURL: URL?
     private var isReady = false
+    private var bytesSinceLastSync = 0
+    private var syncWorkItem: DispatchWorkItem?
+    private let syncByteThreshold = 16 * 1024
+    private let syncInterval: TimeInterval = 2
     private let setupSemaphore = DispatchSemaphore(value: 0)
 
     private let iso8601Formatter: ISO8601DateFormatter = {
@@ -85,6 +89,7 @@ public class AppLogger {
         setupSemaphore.signal()
     }
 
+    /// Enqueues a timestamped diagnostic message for persistent logging.
     public func log(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
         let fileName = (file as NSString).lastPathComponent
         let timestamp = iso8601Formatter.string(from: Date())
@@ -97,15 +102,49 @@ public class AppLogger {
         }
     }
 
+    /// Appends one encoded message and schedules or performs a durability sync.
     private func writeToFile(_ message: String) {
         guard isReady, let data = message.data(using: .utf8) else { return }
 
         rotateLogIfNeeded()
 
         fileHandle?.write(data)
-        try? fileHandle?.synchronize()
+        bytesSinceLastSync += data.count
+        if bytesSinceLastSync >= syncByteThreshold {
+            synchronizePendingData()
+        } else if syncWorkItem == nil {
+            scheduleSync()
+        }
     }
 
+    /// Schedules a delayed file sync when the byte threshold has not been reached.
+    private func scheduleSync() {
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.syncWorkItem = nil
+            self?.synchronizePendingData()
+        }
+        syncWorkItem = workItem
+        queue.asyncAfter(deadline: .now() + syncInterval, execute: workItem)
+    }
+
+    /// Flushes buffered log bytes to durable storage and retains failed work for retry.
+    private func synchronizePendingData() {
+        guard bytesSinceLastSync > 0, let fileHandle else { return }
+
+        do {
+            try fileHandle.synchronize()
+            bytesSinceLastSync = 0
+            syncWorkItem?.cancel()
+            syncWorkItem = nil
+        } catch {
+            // Keep the pending byte count intact and retry even if no more logs arrive.
+            if syncWorkItem == nil {
+                scheduleSync()
+            }
+        }
+    }
+
+    /// Recreates the log file when it exceeds the configured size limit.
     private func rotateLogIfNeeded() {
         guard let url = logFileURL else { return }
 
@@ -120,6 +159,9 @@ public class AppLogger {
                     return
                 }
                 fileHandle = try FileHandle(forWritingTo: url)
+                syncWorkItem?.cancel()
+                syncWorkItem = nil
+                bytesSinceLastSync = 0
             }
         } catch {
             print("AppLogger: Failed to rotate log: \(error)")
@@ -128,6 +170,7 @@ public class AppLogger {
         }
     }
 
+    /// Removes existing log contents and creates a fresh writable log file.
     public func clearLogs() {
         queue.async { [weak self] in
             guard let url = self?.logFileURL else { return }
@@ -140,6 +183,9 @@ public class AppLogger {
                     return
                 }
                 self?.fileHandle = try FileHandle(forWritingTo: url)
+                self?.syncWorkItem?.cancel()
+                self?.syncWorkItem = nil
+                self?.bytesSinceLastSync = 0
             } catch {
                 print("AppLogger: Failed to clear logs: \(error)")
                 self?.isReady = false

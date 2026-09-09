@@ -37,6 +37,11 @@ class Preferences {
         guard let preferences = NetBirdSDKNewPreferences(configPath, statePath) else {
             preconditionFailure("Failed to create NetBirdSDKPreferences")
         }
+        // Register unconditionally: with no MDM profile installed the fetcher
+        // returns "", the policy is empty and every getter behaves exactly as
+        // before. Without this the settings screens read an empty policy and
+        // silently ignore MDM, and commit() cannot reject a managed key.
+        preferences.setMDMPolicyFetcher(MDMPolicyFetcher())
         return preferences
     }
     #else

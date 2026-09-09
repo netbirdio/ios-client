@@ -144,6 +144,14 @@ class ViewModel: ObservableObject {
     @Published var onDemandWiFiNetworks: [String] = []
     @Published var knownSSIDs: [String] = []
     @Published var showRosenpassChangedAlert = false
+    /// MDM enforcement snapshot rendered by the Go layer. `.empty` means no
+    /// policy is in force, which is also the state on any read failure - a
+    /// broken policy must not lock the user out of their own settings.
+    @Published var mdmRestrictions: MDMRestrictions = .empty
+    @Published var showSettingsRejectedAlert = false
+    @Published var showMDMPolicyAppliedToast = false
+    /// Reason shown by the settings-rejected alert.
+    var settingsRejectedMessage = ""
     @Published var networkUnavailable = false
     @Published var isInternetConnected = true
 
@@ -182,11 +190,17 @@ class ViewModel: ObservableObject {
     private let monitorQueue = DispatchQueue(label: "io.netbird.networkMonitor")
     #if os(iOS)
     private var vpnStatusObserver: NSObjectProtocol?
+    private var mdmConfigObserver: NSObjectProtocol?
+    private var mdmRefreshWorkItem: DispatchWorkItem?
     #endif
+    /// Outside the iOS-only block above: both platforms poll for a policy the
+    /// OS may have pushed from another process.
+    private var lastMDMPolicyCheck = Date.distantPast
     
     @Published var peerViewModel: PeerViewModel
     @Published var routeViewModel: RoutesViewModel
     
+    /// Initializes VPN state, profile caches, network monitoring, and status observers.
     init() {
         let networkExtensionAdapter = NetworkExtensionAdapter()
         self.networkExtensionAdapter = networkExtensionAdapter
@@ -233,7 +247,31 @@ class ViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.handleVPNStatusChangeForNotification()
+            guard let self else { return }
+            self.handleVPNStatusChangeForNotification()
+            // The regular details poll runs every 10 seconds. Refresh the
+            // flavor-scoped manager immediately on each NE status event so
+            // transitions such as .disconnecting -> .disconnected do not wait
+            // for the next polling tick before updating the UI.
+            self.checkExtensionState()
+        }
+
+        // Catches policy writes this process makes itself. It will NOT fire
+        // for the OS writing managed configuration from another process -
+        // UserDefaults.didChangeNotification is process-local, and KVO cannot
+        // help either because the key contains dots and would be read as a
+        // key path. An externally pushed policy is therefore picked up on the
+        // next activation (see startActivation) or when a screen appears.
+        //
+        // The channel is shared with every other preference write, so the
+        // refresh is debounced. The main app has no restart decision to make;
+        // that lives in the extension, where hasMDMPolicyChanged() diffs.
+        mdmConfigObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.scheduleMDMRestrictionsRefresh()
         }
         #endif
 
@@ -244,6 +282,16 @@ class ViewModel: ObservableObject {
                 !self.isValidSetupKey(setupKey)
             }
             .assign(to: &$showInvalidSetupKeyHint)
+    }
+
+    /// Stops long-lived monitors and removes the VPN status observer.
+    deinit {
+        networkMonitor.cancel()
+        #if os(iOS)
+        if let vpnStatusObserver {
+            NotificationCenter.default.removeObserver(vpnStatusObserver)
+        }
+        #endif
     }
     
     func connect()  {
@@ -420,6 +468,16 @@ class ViewModel: ObservableObject {
     #endif
     
     func close() -> Void {
+        // The policy holds the rules disarmed, so nothing will reconnect and
+        // there is nothing to warn about. Prompting here would also route the
+        // user into closeWithOnDemandDisabled(), which writes the saved
+        // preference to false - the one value the policy is deliberately
+        // preserving so it can be restored when the restriction lifts.
+        guard !autoConnectForbiddenByPolicy else {
+            performClose()
+            return
+        }
+
         #if os(iOS)
         // Warn user that On Demand will reconnect if rules match
         if connectOnDemand && onDemandRulesAllowConnect() {
@@ -440,6 +498,10 @@ class ViewModel: ObservableObject {
 
     /// Performs the actual VPN disconnect.
     func performClose() {
+        // A disconnect also cancels any in-progress connect intent. Keep the
+        // disconnect intent set until iOS confirms .disconnected so the UI can
+        // respond immediately instead of waiting for the next NE status update.
+        self.connectPressed = false
         self.disconnectPressed = true
         DispatchQueue.main.async {
             print("Stopping extension")
@@ -448,8 +510,17 @@ class ViewModel: ObservableObject {
                 self.buttonLock = false
             }
             self.networkExtensionAdapter.stop()
-            self.updateVPNDisplayState()
+            self.publishPendingDisconnectState()
         }
+    }
+
+    /// Publishes immediate disconnect feedback while Network Extension processes the request.
+    private func publishPendingDisconnectState() {
+        vpnDisplayState = .disconnecting
+        extensionStateText = "Disconnecting..."
+        #if os(iOS)
+        updateWidgetState()
+        #endif
     }
 
     /// Called when the user dismisses the interactive login browser without completing
@@ -487,6 +558,9 @@ class ViewModel: ObservableObject {
         }
     }
 
+    /// Reconciles the user-visible VPN state with the extension state and pending user intent.
+    /// - Parameter priorExtensionState: The preceding extension state, used to suppress transient
+    ///   disconnecting events that iOS emits while starting a tunnel.
     func updateVPNDisplayState(priorExtensionState: NEVPNStatus? = nil) {
         let newState: VPNDisplayState
 
@@ -495,11 +569,15 @@ class ViewModel: ObservableObject {
         // between button press and extension state change.
         switch extensionState {
         case .connected:
-            // Extension confirmed connected — clear both flags
+            // A connected extension is authoritative. On Demand may have reconnected
+            // between polls without the app ever sampling .disconnected.
             connectPressed = false
             disconnectPressed = false
             newState = .connected
         case .connecting:
+            // A connecting extension after a disconnect request represents an On Demand
+            // reconnect, so the stale disconnect intent must no longer override it.
+            disconnectPressed = false
             // Do NOT clear connectPressed here — iOS can emit .disconnecting right after
             // .connecting during tunnel startup (cleanup of old instance). Keeping
             // connectPressed=true lets the .disconnecting handler suppress that noise.
@@ -512,19 +590,23 @@ class ViewModel: ObservableObject {
             // connectPressed handles this for app-initiated connects.
             // priorExtensionState handles widget-initiated connects where connectPressed is never set.
             let wasConnecting = priorExtensionState == .connecting
-            if connectPressed || wasConnecting {
+            if disconnectPressed {
+                newState = .disconnecting
+            } else if connectPressed || wasConnecting {
                 newState = .connecting
             } else {
-                disconnectPressed = false
                 newState = .disconnecting
             }
         case .disconnected:
             // Extension confirmed disconnected — clear both flags,
             // unless a flag was JUST set (immediate feedback)
-            if connectPressed {
+            if disconnectPressed {
+                connectPressed = false
+                disconnectPressed = false
+                newState = .disconnected
+            } else if connectPressed {
                 newState = .connecting
             } else {
-                disconnectPressed = false
                 newState = .disconnected
             }
         default:
@@ -572,14 +654,17 @@ class ViewModel: ObservableObject {
     }
     #endif
 
+    /// Starts periodic extension-status polling and performs an immediate refresh.
     func startPollingDetails() {
         #if os(iOS)
         refreshCurrentSSID()
         #endif
-        networkExtensionAdapter.startTimer { details in
+        networkExtensionAdapter.startTimer { [weak self] details in
+            guard let self else { return }
             self.checkExtensionState()
             self.checkNetworkUnavailableFlag()
             self.checkLoginRequiredFlag()
+            self.refreshMDMRestrictionsIfStale()
 
             let currentState = self.extensionState
 
@@ -644,6 +729,7 @@ class ViewModel: ObservableObject {
     // completion can arrive after a newer .disconnected one, causing a spurious Disconnecting flash.
     private var isCheckingExtensionState = false
 
+    /// Refreshes the status of the flavor-scoped Network Extension manager.
     func checkExtensionState() {
         guard !isCheckingExtensionState else { return }
         isCheckingExtensionState = true
@@ -655,17 +741,29 @@ class ViewModel: ObservableObject {
         }
     }
 
+    /// Applies a newly loaded extension status and updates dependent UI state.
+    /// - Parameter status: The current status reported by Network Extension.
     private func applyExtensionStatus(_ status: NEVPNStatus) {
         let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .disconnecting]
-        guard knownStatuses.contains(status), extensionState != status else { return }
+        guard knownStatuses.contains(status) else { return }
 
         let priorState = extensionState
-        extensionState = status
+        let statusChanged = priorState != status
+        if statusChanged {
+            extensionState = status
+        }
         updateVPNDisplayState(priorExtensionState: priorState)
+
+        // Even an unchanged status is an authoritative refresh. Reconciling it above is
+        // important when a short On Demand cycle skipped .disconnected between polls.
+        guard statusChanged else { return }
 
         applyRouteSideEffects(for: status)
 
-        if status == .connected, connectOnDemand {
+        // `connectOnDemand` is the user's saved preference, which the policy
+        // deliberately leaves intact so it can be restored later - so it is
+        // not on its own permission to arm the rules.
+        if status == .connected, connectOnDemand, !autoConnectForbiddenByPolicy {
             networkExtensionAdapter.setOnDemandEnabled(true)
         }
     }
@@ -732,6 +830,14 @@ class ViewModel: ObservableObject {
     /// Proceeds even when the disarm fails — the user asked to leave this server, and stale
     /// credentials must not be kept just because the tunnel manager refused a rule change.
     func resetForServerChange(completion: @escaping () -> Void) {
+        refreshMDMRestrictions()
+        guard !mdmRestrictions.mdm.managesManagementURL,
+              !mdmRestrictions.features.disableUpdateSettings else {
+            AppLogger.shared.log("MDM: refusing to reset for a server change while the server is managed")
+            settingsRejectedMessage = "The server for this device is set by your organization."
+            showSettingsRejectedAlert = true
+            return
+        }
         setConnectOnDemand(isEnabled: false) { [weak self] inForce in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -747,9 +853,24 @@ class ViewModel: ObservableObject {
     
     // MARK: - Configuration Methods (via ConfigurationProvider)
 
+    /// Whether the policy owns the pre-shared key, by managing it directly or
+    /// by forbidding settings edits at all.
+    private var preSharedKeyForbiddenByPolicy: Bool {
+        mdmRestrictions.mdm.preSharedKey || mdmRestrictions.features.disableUpdateSettings
+    }
+
     func updatePreSharedKey() {
-        configProvider.preSharedKey = presharedKey
-        if configProvider.commit() {
+        // The only backstop on tvOS: commit() there writes straight to the
+        // config JSON and always reports success, so a policy that arrives
+        // while a key-entry alert is open would otherwise be overwritten.
+        guard !preSharedKeyForbiddenByPolicy else {
+            AppLogger.shared.log("MDM: refusing to change the pre-shared key while it is managed")
+            settingsRejectedMessage = "This setting is managed by your organization and cannot be changed."
+            showSettingsRejectedAlert = true
+            return
+        }
+        configProvider.setPreSharedKey(presharedKey)
+        if commitSettings() {
             // tvOS: bypass the On Demand disconnect prompt. The user changed a setting that
             // needs a reconnect, not asked to stay offline — letting On Demand bring the
             // tunnel back with the new key is the intended outcome (and the prompt would be
@@ -767,9 +888,15 @@ class ViewModel: ObservableObject {
     }
 
     func removePreSharedKey() {
+        guard !preSharedKeyForbiddenByPolicy else {
+            AppLogger.shared.log("MDM: refusing to remove the pre-shared key while it is managed")
+            settingsRejectedMessage = "This setting is managed by your organization and cannot be changed."
+            showSettingsRejectedAlert = true
+            return
+        }
         presharedKey = ""
-        configProvider.preSharedKey = ""
-        if configProvider.commit() {
+        configProvider.setPreSharedKey("")
+        if commitSettings() {
             #if os(tvOS)
             self.performClose()
             #else
@@ -781,8 +908,119 @@ class ViewModel: ObservableObject {
         }
     }
 
+    /// Commits staged settings and turns an MDM rejection into an explanation.
+    ///
+    /// Preferences.commit() refuses a staged value that diverges from a
+    /// managed key. That is a backstop, not the primary UX - the control
+    /// should already have been locked - so reaching it means this process
+    /// held a stale view of the policy, and the snapshot is re-read.
+    @discardableResult
+    private func commitSettings() -> Bool {
+        if configProvider.commit() {
+            return true
+        }
+        let reason = configProvider.lastCommitError ?? ""
+        refreshMDMRestrictions()
+        if reason.localizedCaseInsensitiveContains("managed by MDM") {
+            settingsRejectedMessage = "This setting is managed by your organization and cannot be changed."
+        } else {
+            settingsRejectedMessage = reason.isEmpty
+                ? "The setting could not be saved."
+                : reason
+        }
+        showSettingsRejectedAlert = true
+        return false
+    }
+
+    /// Re-reads the MDM enforcement snapshot. Cheap: getRestrictionsJSON()
+    /// consults only the policy loader and never touches the config file.
+    /// Call it from onAppear of any screen that hides or locks controls.
+    func refreshMDMRestrictions() {
+        lastMDMPolicyCheck = Date()
+        let snapshot = MDMRestrictions.current()
+        // Equatable guards against republishing an identical snapshot and
+        // redrawing every settings screen on unrelated UserDefaults writes.
+        guard snapshot != mdmRestrictions else { return }
+        let autoConnectWasManaged = mdmRestrictions.mdm.disableAutoConnect
+        mdmRestrictions = snapshot
+
+        if snapshot.mdm.disableAutoConnect != autoConnectWasManaged {
+            applyAutoConnectPolicy(snapshot.mdm.disableAutoConnect)
+        }
+
+        // The lock flags alone are not enough: a policy that starts enforcing
+        // Rosenpass or a pre-shared key while a settings screen is open would
+        // leave the now-locked control showing the user's old value. The
+        // getters return the enforced value once a key is managed, so re-read
+        // them here rather than waiting for the next onAppear.
+        loadRosenpassSettings()
+        presharedKeySecure = configProvider.hasPreSharedKey
+    }
+
+    // Only iOS subscribes to the managed-config change channel; the tvOS
+    // screens re-read the snapshot in onAppear instead.
+    /// Bounds how long an externally pushed policy can go unnoticed while the
+    /// app stays in the foreground.
+    ///
+    /// The OS writes managed configuration from another process, so the
+    /// in-process change notification never fires for it, and KVO cannot stand
+    /// in because the key's dots would be read as a key path. Activation
+    /// covers a policy that arrived while the app was away; this covers one
+    /// that arrives while it is open. Throttled well below the three-second
+    /// tick it rides on - the read crosses into Go.
+    private func refreshMDMRestrictionsIfStale() {
+        guard Date().timeIntervalSince(lastMDMPolicyCheck) >= 30 else { return }
+        refreshMDMRestrictions()
+    }
+
+    /// Whether the policy forbids the daemon from connecting on its own.
+    ///
+    /// Every path that arms the VPN profile's On Demand rules has to consult
+    /// this, not just the user's preference: the rules live in the OS profile
+    /// and outlive any single connection, so one unguarded re-arm restores
+    /// automatic connection for good.
+    private var autoConnectForbiddenByPolicy: Bool {
+        mdmRestrictions.mdm.disableAutoConnect
+    }
+
+    /// Arms or disarms the VPN profile's On Demand rules to match the policy.
+    ///
+    /// `disableAutoConnect` forbids connecting without the user asking, but On
+    /// Demand lives in the OS VPN profile, not in the engine - locking the
+    /// toggle changes nothing for a device whose rules are already armed, and
+    /// it would keep reconnecting. The user's saved preference is left alone
+    /// so it can be restored if the policy is lifted.
+    private func applyAutoConnectPolicy(_ managed: Bool) {
+        if managed {
+            guard networkExtensionAdapter.isOnDemandEnabled else { return }
+            AppLogger.shared.log("MDM: disableAutoConnect enforced — disarming On Demand rules")
+            networkExtensionAdapter.setOnDemandEnabled(false)
+            return
+        }
+
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        let saved = userDefaults?.bool(forKey: GlobalConstants.keyConnectOnDemand) ?? false
+        guard saved, !networkExtensionAdapter.isOnDemandEnabled else { return }
+        AppLogger.shared.log("MDM: disableAutoConnect lifted — restoring the user's On Demand setting")
+        networkExtensionAdapter.setOnDemandEnabled(true)
+    }
+
+    #if os(iOS)
+    private func scheduleMDMRestrictionsRefresh() {
+        mdmRefreshWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            self?.refreshMDMRestrictions()
+        }
+        mdmRefreshWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
+    }
+    #endif
+
     func loadPreSharedKey() {
-        self.presharedKey = configProvider.preSharedKey
+        // The key itself is no longer readable across the bridge - the screen
+        // shows only whether one is configured, and the staging field starts
+        // empty so a save always submits a value the user just typed.
+        self.presharedKey = ""
         self.presharedKeySecure = configProvider.hasPreSharedKey
     }
 
@@ -792,7 +1030,7 @@ class ViewModel: ObservableObject {
 
         // Persist to storage (on tvOS this writes directly to config JSON)
         configProvider.rosenpassEnabled = enabled
-        if !configProvider.commit() {
+        if !commitSettings() {
             print("Failed to update rosenpass settings")
         }
 
@@ -827,7 +1065,7 @@ class ViewModel: ObservableObject {
 
         // Persist to storage (on tvOS this writes directly to config JSON)
         configProvider.rosenpassPermissive = permissive
-        if !configProvider.commit() {
+        if !commitSettings() {
             print("Failed to update rosenpass permissive settings")
         }
     }
@@ -862,7 +1100,7 @@ class ViewModel: ObservableObject {
         let previous = self.disableIPv6
         self.disableIPv6 = disabled
         configProvider.disableIPv6 = disabled
-        if !configProvider.commit() {
+        if !commitSettings() {
             print("Failed to update IPv6 settings")
             self.disableIPv6 = previous
             configProvider.disableIPv6 = previous
@@ -919,6 +1157,14 @@ class ViewModel: ObservableObject {
     ///   (applied, or nothing needed arming), `false` when the manager refused it. Callers
     ///   that depend on the change — disconnecting, wiping the config — must wait for it.
     func setConnectOnDemand(isEnabled: Bool, completion: ((Bool) -> Void)? = nil) {
+        // Backstop behind the locked control: the rules must not be armed
+        // while the policy forbids automatic connection, whatever route got
+        // here.
+        if isEnabled, autoConnectForbiddenByPolicy {
+            AppLogger.shared.log("MDM: refusing to arm On Demand while disableAutoConnect is enforced")
+            completion?(false)
+            return
+        }
         let previous = connectOnDemand
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         userDefaults?.set(isEnabled, forKey: GlobalConstants.keyConnectOnDemand)
@@ -1019,6 +1265,18 @@ class ViewModel: ObservableObject {
 
     /// Handles server change completion by stopping the engine and resetting all connection state.
     func handleServerChanged() {
+        // The confirmation alert stays presented across a policy change, so
+        // re-read before acting: clearDetails() below erases the stored
+        // configuration, which must not happen once the server is enforced.
+        refreshMDMRestrictions()
+        guard !mdmRestrictions.mdm.managesManagementURL,
+              !mdmRestrictions.features.disableUpdateSettings else {
+            AppLogger.shared.log("MDM: refusing a server change while the management URL is managed")
+            settingsRejectedMessage = "The server for this device is set by your organization."
+            showSettingsRejectedAlert = true
+            return
+        }
+
         AppLogger.shared.log("Server changed - stopping engine and resetting state")
 
         // Stop polling to prevent transitional states from updating UI
@@ -1123,6 +1381,27 @@ class ViewModel: ObservableObject {
     #endif
 
     /// Checks shared app-group container for login required flag set by the network extension.
+    /// Picks up the policy-applied flag the extension sets when an MDM change
+    /// forced an engine restart, and tells the user their configuration was
+    /// updated. The snapshot is re-read at the same time: the restart means
+    /// the policy this process last saw is stale.
+    func checkMDMPolicyAppliedFlag() {
+        #if os(iOS)
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        guard userDefaults?.bool(forKey: GlobalConstants.keyMDMPolicyApplied) == true else { return }
+
+        userDefaults?.set(false, forKey: GlobalConstants.keyMDMPolicyApplied)
+        userDefaults?.synchronize()
+
+        AppLogger.shared.log("MDM: policy-applied flag detected from extension")
+        refreshMDMRestrictions()
+        showMDMPolicyAppliedToast = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            self?.showMDMPolicyAppliedToast = false
+        }
+        #endif
+    }
+
     /// Shows the authentication UI. Notification was already delivered via NEVPNStatusDidChange observer.
     /// iOS only — tvOS uses IPC via `checkLoginDiagnostics` in TVAuthView.
     func checkLoginRequiredFlag() {

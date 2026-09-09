@@ -93,7 +93,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     var extensionName = "NetBird"
     private let loginRetryState = LoginRetryState()
     #else
-    var extensionID = "io.netbird.app.NetbirdNetworkExtension"
+    var extensionID = "\(Bundle.main.bundleIdentifier ?? "io.netbird.app").NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
     #endif
 
@@ -564,7 +564,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         // management server's login flag decides whether the IdP is asked to
         // re-authenticate. Nothing here rewrites the authorize URL.
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
-           let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
+           let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, MDMPolicyFetcher(), nil) {
             // A stale flow from an abandoned attempt would keep its loopback port
             // bound and its WaitToken goroutine alive — stop it first.
             self.pendingAuth?.stop()
@@ -1001,6 +1001,16 @@ public class NetworkExtensionAdapter: ObservableObject {
         set { onDemandLock.lock(); defer { onDemandLock.unlock() }; _requestedOnDemandState = newValue }
     }
 
+    /// Set when a save fails, cleared when one succeeds. A failed save leaves the requested
+    /// values on the retained manager while the system preferences still hold the old ones,
+    /// so the manager can no longer be trusted to answer "is this already in force?". While
+    /// set, the no-write path is closed and every request writes.
+    private var _onDemandWriteFailed = false
+    private var onDemandWriteFailed: Bool {
+        get { onDemandLock.lock(); defer { onDemandLock.unlock() }; return _onDemandWriteFailed }
+        set { onDemandLock.lock(); defer { onDemandLock.unlock() }; _onDemandWriteFailed = newValue }
+    }
+
     /// Updates the VPN On Demand configuration on the current manager.
     /// When enabled, iOS will automatically reconnect the VPN after network changes or reboot.
     /// Should only be enabled when the user is logged in to avoid reconnect loops.
@@ -1057,31 +1067,89 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
 
     /// Writes the On Demand state and matching rules to the given manager.
+    ///
+    /// A request that matches what the manager already holds is answered without a write:
+    /// saveToPreferences on a configured manager makes NE emit NEVPNStatusDidChange — a
+    /// transient .disconnecting among them — and rewriting the rules of a live tunnel can
+    /// have the system reassert it. applyExtensionStatus arms On Demand on every transition
+    /// to .connected, so an unconditional write added a spurious disconnect to every connect.
+    ///
+    /// The skip trusts the manager to reflect what the system holds, which is only true while
+    /// saves keep succeeding — hence `onDemandWriteFailed`.
     private func applyOnDemandState(_ enabled: Bool, to manager: NETunnelProviderManager, completion: ((OnDemandUpdate) -> Void)? = nil) {
-        if enabled {
-            // Build rules from saved settings
-            let rules = buildOnDemandRules()
-            if rules.isEmpty {
-                // All policies are "Do Nothing" — don't interfere with connection state
-                let ignoreRule = NEOnDemandRuleIgnore()
-                ignoreRule.interfaceTypeMatch = .any
-                manager.onDemandRules = [ignoreRule]
-            } else {
-                manager.onDemandRules = rules
-            }
-        } else {
-            manager.onDemandRules = []
+        let rules = enabled ? onDemandRulesForStoredSettings() : []
+
+        if !onDemandWriteFailed,
+           manager.isOnDemandEnabled == enabled,
+           onDemandRulesMatch(manager.onDemandRules ?? [], rules) {
+            logger.info("setOnDemandEnabled: already \(enabled ? "enabled" : "disabled") with the same rules, skipping write")
+            completion?(.applied)
+            return
         }
+
+        manager.onDemandRules = rules
         manager.isOnDemandEnabled = enabled
 
         manager.saveToPreferences { error in
-            if let error = error {
-                self.logger.error("setOnDemandEnabled: Failed to save preferences: \(error.localizedDescription)")
-                completion?(.failed(error))
-            } else {
+            guard let error = error else {
+                self.onDemandWriteFailed = false
                 self.logger.info("setOnDemandEnabled: On Demand \(enabled ? "enabled" : "disabled") successfully")
                 completion?(.applied)
+                return
             }
+
+            self.logger.error("setOnDemandEnabled: Failed to save preferences: \(error.localizedDescription)")
+            self.recoverFromFailedOnDemandWrite(on: manager) {
+                completion?(.failed(error))
+            }
+        }
+    }
+
+    /// Restores the manager to what the system actually holds after a save failed, then
+    /// reports the failure. The assignments that were not persisted stay on the retained
+    /// manager otherwise, and a reload is also what clears NEVPNError.configurationStale —
+    /// the documented cause when another process wrote the configuration in between.
+    /// The write latch stays closed until a save succeeds, so the next request writes even
+    /// if this reload fails too.
+    private func recoverFromFailedOnDemandWrite(on manager: NETunnelProviderManager, completion: @escaping () -> Void) {
+        onDemandWriteFailed = true
+        manager.loadFromPreferences { loadError in
+            if let loadError = loadError {
+                self.logger.error("setOnDemandEnabled: reload after a failed save also failed: \(loadError.localizedDescription)")
+            }
+            completion()
+        }
+    }
+
+    /// Rules to arm On Demand with, built from the persisted policies. An explicit Ignore
+    /// rule stands in for "all policies are Do Nothing" so the system does not interfere
+    /// with the connection state.
+    private func onDemandRulesForStoredSettings() -> [NEOnDemandRule] {
+        let rules = buildOnDemandRules()
+        guard rules.isEmpty else { return rules }
+
+        let ignoreRule = NEOnDemandRuleIgnore()
+        ignoreRule.interfaceTypeMatch = .any
+        return [ignoreRule]
+    }
+
+    /// Compares two rule sets by their archived form. NEOnDemandRule has no value-based
+    /// isEqual, so comparing the objects would report every freshly built set as different
+    /// and defeat the skip above. An archive that cannot be produced counts as "different",
+    /// which falls back to writing — the old, always-write behaviour.
+    private func onDemandRulesMatch(_ lhs: [NEOnDemandRule], _ rhs: [NEOnDemandRule]) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        guard let lhsData = archivedOnDemandRules(lhs),
+              let rhsData = archivedOnDemandRules(rhs) else { return false }
+        return lhsData == rhsData
+    }
+
+    private func archivedOnDemandRules(_ rules: [NEOnDemandRule]) -> Data? {
+        do {
+            return try NSKeyedArchiver.archivedData(withRootObject: rules, requiringSecureCoding: true)
+        } catch {
+            logger.debug("archivedOnDemandRules: could not archive rules: \(error.localizedDescription)")
+            return nil
         }
     }
 
@@ -1436,6 +1504,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
 
+    /// Requests current tunnel status, completing once even when IPC times out or fails.
     func fetchData(completion: @escaping (StatusDetails) -> Void) {
         guard !isFetchingStatus else {
             return
@@ -1455,13 +1524,17 @@ public class NetworkExtensionAdapter: ObservableObject {
         // This is to make sure completion is called only once
         let safeCompletion: (StatusDetails) -> Void = { [weak self] status in
             completionLock.lock()
-            defer { completionLock.unlock() }
-            
-            guard !hasCompleted else { return }
+            guard !hasCompleted else {
+                completionLock.unlock()
+                return
+            }
             hasCompleted = true
-            
-            self?.isFetchingStatus = false
-            completion(status)
+            completionLock.unlock()
+
+            DispatchQueue.main.async {
+                self?.isFetchingStatus = false
+                completion(status)
+            }
         }
         
         // Timeout after 10 seconds to reset fetching status to false
@@ -1503,14 +1576,16 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
     
+    /// Starts status polling and delivers an immediate first result.
     func startTimer(completion: @escaping (StatusDetails) -> Void) {
         self.timer.invalidate()
         self.fetchData(completion: completion)
-        self.timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true, block: { _ in
-            self.fetchData(completion: completion)
+        self.timer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true, block: { [weak self] _ in
+            self?.fetchData(completion: completion)
         })
     }
     
+    /// Stops periodic status polling.
     func stopTimer() {
         self.timer.invalidate()
     }
@@ -1586,11 +1661,15 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     #endif
 
+    /// Loads the manager matching this build flavor and returns its connection status.
     func getExtensionStatus(completion: @escaping (NEVPNStatus) -> Void) {
         Task {
             do {
                 let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-                if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
+                if let manager = managers.first(where: {
+                    $0.localizedDescription == self.extensionName &&
+                    ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.extensionID
+                }) {
                     completion(manager.connection.status)
                 } else {
                     // No VPN manager exists yet (e.g. first connect before the iOS permission
