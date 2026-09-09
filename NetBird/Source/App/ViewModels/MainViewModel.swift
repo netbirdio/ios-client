@@ -1112,6 +1112,10 @@ class ViewModel: ObservableObject {
     }
 
     func setRemoteJobsAllowed(allowed: Bool) {
+        guard !mdmRestrictions.mdm.remoteJobsAllowed else {
+            self.remoteJobsAllowed = configProvider.remoteJobsAllowed
+            return
+        }
         let previous = self.remoteJobsAllowed
         self.remoteJobsAllowed = allowed
         configProvider.remoteJobsAllowed = allowed

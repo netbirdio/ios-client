@@ -34,6 +34,7 @@ struct MDMRestrictions: Equatable {
         var disableMetricsCollection: Bool = false
         var splitTunnelMode: Bool = false
         var splitTunnelApps: Bool = false
+        var remoteJobsAllowed: Bool = false
         /// Tri-state, like `allowServerSSH`: nil means the key is not managed,
         /// and an explicit false means the section is allowed - only true
         /// hides it.
@@ -86,7 +87,7 @@ extension MDMRestrictions.Fields: Decodable {
              rosenpassPermissive, disableClientRoutes, disableServerRoutes,
              allowServerSSH, disableAutoConnect, disableAutostart, blockInbound,
              disableMetricsCollection, splitTunnelMode, splitTunnelApps,
-             disableAdvancedView
+             remoteJobsAllowed, disableAdvancedView
     }
 
     init(from decoder: Decoder) throws {
@@ -109,6 +110,7 @@ extension MDMRestrictions.Fields: Decodable {
         disableMetricsCollection = try flag(.disableMetricsCollection)
         splitTunnelMode = try flag(.splitTunnelMode)
         splitTunnelApps = try flag(.splitTunnelApps)
+        remoteJobsAllowed = try flag(.remoteJobsAllowed)
         // Tri-state: absent and JSON null both mean "not managed".
         disableAdvancedView = try c.decodeIfPresent(Bool.self, forKey: .disableAdvancedView)
     }

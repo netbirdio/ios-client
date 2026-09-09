@@ -34,6 +34,10 @@ struct TVSettingsView: View {
         viewModel.mdmRestrictions.mdm.rosenpassPermissive || editingDisabled
     }
 
+    private var remoteJobsLocked: Bool {
+        viewModel.mdmRestrictions.mdm.remoteJobsAllowed || editingDisabled
+    }
+
     /// tvOS rows carry their explanation in the subtitle - there is no footer
     /// to put it in, and a row that is merely dimmed gives the user no reason.
     private func subtitle(_ text: String, managed: Bool) -> String {
@@ -167,13 +171,15 @@ struct TVSettingsView: View {
                             TVSettingsToggleRow(
                                 icon: "doc.zipper",
                                 title: "Remote Debug Bundles",
-                                subtitle: "Let your administrator request a debug bundle from this device",
+                                subtitle: subtitle("Let your administrator request a debug bundle from this device",
+                                                   managed: remoteJobsLocked),
                                 isOn: Binding(
                                     get: { viewModel.remoteJobsAllowed },
                                     set: { newValue in
                                         viewModel.setRemoteJobsAllowed(allowed: newValue)
                                     }
-                                )
+                                ),
+                                isDisabled: remoteJobsLocked
                             )
                         }
 
