@@ -118,7 +118,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             code: 1005,
             userInfo: [NSLocalizedDescriptionKey: "Login cancelled."]
         ))
-        adapter?.stop()
+        adapter?.stop(waitForExit: false)
         if let pathMonitor = self.pathMonitor {
             pathMonitor.cancel()
             self.pathMonitor = nil
@@ -332,12 +332,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     func restartClient() {
         logger.info("restartClient: Restarting client due to network change")
-        adapter?.stop()
-        adapter?.start { error in
-            if let error = error {
-                logger.error("restartClient: Error restarting client: \(error.localizedDescription)")
-            } else {
-                logger.info("restartClient: Client restarted successfully")
+        adapter?.stop { [weak self] in
+            self?.adapter?.start { error in
+                if let error = error {
+                    logger.error("restartClient: Error restarting client: \(error.localizedDescription, privacy: .public)")
+                } else {
+                    logger.info("restartClient: Client restarted successfully")
+                }
             }
         }
     }

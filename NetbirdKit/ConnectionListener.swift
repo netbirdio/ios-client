@@ -94,7 +94,6 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
             adapter.clientState = .disconnected
             AppLogger.shared.log("onDisconnected: login required — signalling teardown")
             adapter.onLoginRequired?()
-            adapter.notifyStopCompleted()
             return
         }
 
@@ -121,7 +120,6 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
                 adapter.onLoginRequired?()
             }
         }
-        adapter.notifyStopCompleted()
     }
 
     /// Publishes an engine disconnect transition unless a controlled restart is underway.

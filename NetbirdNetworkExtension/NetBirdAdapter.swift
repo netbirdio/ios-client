@@ -118,7 +118,7 @@ public class NetBirdAdapter {
     /// trigger flag + notification from the extension.
     var onLoginRequired: (() -> Void)?
 
-    private let stopLock = NSLock()
+    private let stopQueue = DispatchQueue(label: "io.netbird.adapter.stop")
 
     /// Tunnel device file descriptor.
     /// On iOS: searches for the utun control socket file descriptor by iterating through
@@ -250,8 +250,6 @@ public class NetBirdAdapter {
     }
     #endif
     
-    private var stopCompletionHandler: (() -> Void)?
-    
     // MARK: - Initialization
 
     /// Designated initializer.
@@ -371,8 +369,14 @@ public class NetBirdAdapter {
 
                 try self.client.run(fd, interfaceName: ifName, envList: envList)
             } catch {
-                completionHandler(NSError(domain: "io.netbird.NetbirdNetworkExtension", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Netbird client startup failed."]))
-                self.stop()
+                completionHandler(NSError(
+                    domain: "io.netbird.NetbirdNetworkExtension",
+                    code: 1001,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "Netbird client startup failed: \(error.localizedDescription)",
+                        NSUnderlyingErrorKey: error
+                    ]
+                ))
             }
         }
     }
@@ -573,43 +577,26 @@ public class NetBirdAdapter {
         self.dnsManager.invalidate()
     }
 
-    public func stop(completionHandler: (() -> Void)? = nil) {
-        stopLock.lock()
-
-        // Call any pending handler before setting a new one
-        if let existingHandler = self.stopCompletionHandler {
-            self.stopCompletionHandler = nil
-            stopLock.unlock()
-            existingHandler()
-        } else {
-            stopLock.unlock()
-        }
-
-        stopLock.lock()
-        self.stopCompletionHandler = completionHandler
-        stopLock.unlock()
-
-        self.client.stop()
-
-        // Fallback timeout (15 seconds) in case onDisconnected doesn't fire
-        if completionHandler != nil {
-            DispatchQueue.global().asyncAfter(deadline: .now() + 15) { [weak self] in
-                self?.notifyStopCompleted()
-            }
-        }
-    }
-
-    func notifyStopCompleted() {
-        stopLock.lock()
-
-        guard let handler = self.stopCompletionHandler else {
-            stopLock.unlock()
+    /// Stops the Go client. With `waitForExit` the Go side blocks until its run loop has
+    /// exited, so a start issued afterwards cannot overlap the outgoing run. A completion
+    /// handler moves that wait onto the adapter's stop queue and runs once the wait is
+    /// over. Pass `waitForExit: false` where the caller is on a deadline, such as stopTunnel.
+    public func stop(waitForExit: Bool = true, completionHandler: (() -> Void)? = nil) {
+        guard waitForExit else {
+            client.stopWithoutWait()
+            completionHandler?()
             return
         }
 
-        self.stopCompletionHandler = nil
-        stopLock.unlock()
-        handler()
+        guard let completionHandler = completionHandler else {
+            stopQueue.sync { self.client.stop() }
+            return
+        }
+
+        stopQueue.async { [client] in
+            client.stop()
+            completionHandler()
+        }
     }
 
     // MARK: - Config Helpers
