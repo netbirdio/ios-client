@@ -564,7 +564,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         // management server's login flag decides whether the IdP is asked to
         // re-authenticate. Nothing here rewrites the authorize URL.
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
-           let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
+           let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, MDMPolicyFetcher(), nil) {
             // A stale flow from an abandoned attempt would keep its loopback port
             // bound and its WaitToken goroutine alive — stop it first.
             self.pendingAuth?.stop()

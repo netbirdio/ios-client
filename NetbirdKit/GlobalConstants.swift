@@ -41,7 +41,12 @@ struct GlobalConstants {
     static let stateFileName = "state.json"
     static let serverURLFileName = "netbird_server_url"
 
+    /// Set by the extension when an MDM policy change triggered an engine
+    /// restart; the main app clears it and tells the user the configuration
+    /// was updated by their IT policy.
+    static let keyMDMPolicyApplied = "netbird.mdm.policyApplied"
 
     // Local notification identifiers
     static let notificationLoginRequired = "netbird.login.required"
+    static let notificationMDMPolicyApplied = "netbird.mdm.policyApplied"
 }
