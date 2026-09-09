@@ -98,10 +98,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Set once stopTunnel begins, so anything still in flight can tell that
     /// starting the client is no longer wanted.
     ///
-    /// Lock-guarded rather than confined to monitorQueue: adapter.stop() can
-    /// run an existing stop handler synchronously, and the restart pipeline's
-    /// completions arrive on a global queue, so both the write and the reads
-    /// happen off that queue. Queueing the write would let a reader see the
+    /// Lock-guarded rather than confined to monitorQueue: the restart
+    /// pipeline's stop completions arrive on the adapter's stop queue and its
+    /// start completions on a global queue, so both the write and the reads
+    /// happen off monitorQueue. Queueing the write would let a reader see the
     /// stale value and start the engine into a teardown.
     private let tearDownLock = NSLock()
     private var _isTearingDown = false
@@ -213,6 +213,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self.activeRestartGeneration = nil
             self.isTunnelStopping = false
             self.restartRetryCount = 0
+            self.adapter?.isRestarting = false
             self.networkChangeWorkItem?.cancel()
             self.networkChangeWorkItem = nil
             self.networkLossWorkItem?.cancel()
@@ -330,9 +331,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// Stops monitoring and the NetBird engine before completing tunnel teardown.
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        // Synchronously, and before adapter.stop(): that call can invoke an
-        // existing stop handler inline, which would otherwise read the old
-        // value and restart into the teardown.
+        // Synchronously, and before adapter.stop(): a restart whose stop
+        // completion is still in flight reads this latch off monitorQueue, and
+        // a queued write would let it see the old value and restart into the
+        // teardown.
         isTearingDown = true
         isStartingTunnel = false
 
@@ -376,7 +378,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // Reset network unavailable flag when tunnel stops
         adapter?.isNetworkUnavailable = false
         setNetworkUnavailableFlag(false)
-        adapter?.stop()
+        adapter?.stop(waitForExit: false)
         updateWidgetStatus("disconnected")
         stopMonitoringNetworkChanges()
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -748,9 +750,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
                     // If the start failed because the session expired, the connection
                     // listener may have suppressed its login-required signalling: it skips
-                    // both checks while isRestarting is still true, which happens when the
-                    // stop phase never fired onDisconnected (engine already dead) and the
-                    // stop completion arrived via the 15s fallback instead. Re-check the
+                    // both checks while isRestarting is still true, which covers every
+                    // onDisconnected delivered during the stop phase. Re-check the
                     // recorder here — the engine marks it with PermissionDenied before
                     // Run() returns — and signal + tear down so the dead tunnel doesn't
                     // linger and black-hole traffic.
