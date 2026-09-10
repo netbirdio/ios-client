@@ -173,28 +173,63 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
 
     init() {}
 
+    /// Reason the most recent write was refused, or nil.
+    private var refusal: String?
+
+    /// Refuses a write the policy owns.
+    ///
+    /// iOS reaches Go's CheckMDMConflicts through Preferences.commit(); tvOS
+    /// writes straight to the config JSON and never crosses that bridge, so
+    /// without this gate a managed field would stay writable here while iOS
+    /// rejects it. `key` names the field the way the Go error does, so the
+    /// message a user sees is the same on both platforms.
+    private func policyRefuses(_ key: String, managedBy: (MDMRestrictions.Fields) -> Bool) -> Bool {
+        // One snapshot per write. Reading the field's own flag separately from
+        // the blanket gate would let a policy landing between the two reads
+        // slip a managed write through on the stale value - and it costs a
+        // second trip across the bridge for nothing.
+        let restrictions = MDMRestrictions.current()
+        guard managedBy(restrictions.mdm) || restrictions.features.disableUpdateSettings else {
+            return false
+        }
+        refusal = "fields managed by MDM cannot be modified: [\(key)]"
+        AppLogger.shared.log("ConfigurationProvider: refused a write to \(key) — managed by MDM policy")
+        return true
+    }
+
     // MARK: - Rosenpass
 
     var rosenpassEnabled: Bool {
         get { extractJSONBool(field: "RosenpassEnabled") ?? false }
-        set { updateJSONField(field: "RosenpassEnabled", value: newValue) }
+        set {
+            guard !policyRefuses("rosenpassEnabled", managedBy: { $0.rosenpassEnabled }) else { return }
+            updateJSONField(field: "RosenpassEnabled", value: newValue)
+        }
     }
 
     var rosenpassPermissive: Bool {
         get { extractJSONBool(field: "RosenpassPermissive") ?? false }
-        set { updateJSONField(field: "RosenpassPermissive", value: newValue) }
+        set {
+            guard !policyRefuses("rosenpassPermissive", managedBy: { $0.rosenpassPermissive }) else { return }
+            updateJSONField(field: "RosenpassPermissive", value: newValue)
+        }
     }
 
     // MARK: - IPv6
 
     var disableIPv6: Bool {
         get { extractJSONBool(field: "DisableIPv6") ?? false }
-        set { updateJSONField(field: "DisableIPv6", value: newValue) }
+        set {
+            // No MDM key of its own; only the blanket settings gate applies.
+            guard !policyRefuses("disableIPv6", managedBy: { _ in false }) else { return }
+            updateJSONField(field: "DisableIPv6", value: newValue)
+        }
     }
 
     // MARK: - Pre-Shared Key
 
     func setPreSharedKey(_ key: String) {
+        guard !policyRefuses("preSharedKey", managedBy: { $0.preSharedKey }) else { return }
         updateJSONField(field: "PreSharedKey", value: key)
     }
 
@@ -212,11 +247,15 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
 
     @discardableResult
     func commit() -> Bool {
-        // Settings are written directly to config JSON, no separate commit needed
-        return true
+        // Settings are written straight to the config JSON, so there is no
+        // separate commit to make — but a write the policy refused must still
+        // be reported, since callers treat commit() as the success signal.
+        lastCommitError = refusal
+        defer { refusal = nil }
+        return refusal == nil
     }
 
-    var lastCommitError: String? { nil }
+    private(set) var lastCommitError: String?
 
     func reload() {
         // Config JSON is always read fresh from UserDefaults

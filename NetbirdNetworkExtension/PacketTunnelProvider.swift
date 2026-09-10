@@ -87,7 +87,25 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// observed, so it will not report the change again - if this restart
     /// were simply dropped, that policy would never be applied. The flag
     /// makes the handler come back for it.
-    private var pendingMDMRestart = false
+    private var _pendingMDMRestart = false
+    private var pendingMDMRestart: Bool {
+        get {
+            tearDownLock.lock()
+            defer { tearDownLock.unlock() }
+            return _pendingMDMRestart
+        }
+        set {
+            tearDownLock.lock()
+            _pendingMDMRestart = newValue
+            tearDownLock.unlock()
+        }
+    }
+
+    /// Attempts the deferred retry has already made. Bounded so a restart
+    /// pipeline that never clears its guard cannot leave a timer rescheduling
+    /// itself for the life of the tunnel.
+    private var mdmRetryAttempts = 0
+    private static let maxMDMRetryAttempts = 15
 
     /// The deferred retry that waits out an in-flight restart. Tracked so
     /// teardown can cancel it: otherwise it fires afterwards, passes a guard
@@ -142,28 +160,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         tearDownLock.lock()
         defer { tearDownLock.unlock() }
         return _tunnelGeneration
-    }
-
-    /// True from the moment startTunnel hands off to adapter.start until that
-    /// call completes.
-    ///
-    /// Initial startup does not set isRestartInProgress, so without this an
-    /// MDM restart arriving in that window would pass the guard and call
-    /// adapter.stop() while client.run() was still being dispatched — the
-    /// adapter does not serialise the two. Deferring instead of dropping means
-    /// the policy is applied as soon as startup finishes.
-    private var _isStartingTunnel = false
-    private var isStartingTunnel: Bool {
-        get {
-            tearDownLock.lock()
-            defer { tearDownLock.unlock() }
-            return _isStartingTunnel
-        }
-        set {
-            tearDownLock.lock()
-            _isStartingTunnel = newValue
-            tearDownLock.unlock()
-        }
     }
 
     /// True only while `generation` is still the live lifecycle and no
@@ -286,9 +282,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             ))
         }
 
-        isStartingTunnel = true
         adapter.start { [weak self] error in
-            self?.isStartingTunnel = false
             if self?.completeTunnelStart(with: error) == false {
                 AppLogger.shared.log("startTunnel: engine reported connected again, start outcome stays as first reported")
             }
@@ -336,7 +330,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // a queued write would let it see the old value and restart into the
         // teardown.
         isTearingDown = true
-        isStartingTunnel = false
 
         // A stop that lands before the engine ever reported connected would otherwise leave
         // NE waiting on the start outcome forever: the outcome is delivered from the
@@ -1185,6 +1178,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         AppLogger.shared.log("MDM: managed configuration changed; restarting client")
+        monitorQueue.async { [weak self] in
+            self?.mdmRetryAttempts = 0
+        }
         requestMDMRestart()
     }
 
@@ -1203,9 +1199,25 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // guard and start their own stop/start pipelines.
         monitorQueue.async { [weak self] in
             guard let self = self, !self.isTearingDown else { return }
-            guard !self.isRestartInProgress, !self.isStartingTunnel else {
+            // isInitialStartInFlight, not a latch of our own: restartClient()
+            // consults exactly this flag and returns early while it is set, so
+            // a second guard would leave a window where this request passes,
+            // clears pendingMDMRestart, and then finds the restart refused with
+            // nothing left to retry it.
+            guard !self.isRestartInProgress, !self.isInitialStartInFlight else {
+                guard self.mdmRetryAttempts < Self.maxMDMRetryAttempts else {
+                    // The pipeline should clear its guard within its own
+                    // 30-second timeout; past that something is wedged, and a
+                    // timer rescheduling itself forever would only hide it.
+                    AppLogger.shared.log("MDM: giving up after \(self.mdmRetryAttempts) retries — a start or restart never finished; the policy will apply on the next change or tunnel start")
+                    self.mdmRetryWorkItem = nil
+                    self.mdmRetryAttempts = 0
+                    self.pendingMDMRestart = false
+                    return
+                }
+                self.mdmRetryAttempts += 1
                 self.pendingMDMRestart = true
-                AppLogger.shared.log("MDM: a start or restart is in flight; will retry once it finishes")
+                AppLogger.shared.log("MDM: a start or restart is in flight; retry \(self.mdmRetryAttempts)/\(Self.maxMDMRetryAttempts)")
                 self.mdmRetryWorkItem?.cancel()
                 let retry = DispatchWorkItem { [weak self] in
                     guard let self = self, self.pendingMDMRestart, !self.isTearingDown else { return }
@@ -1216,6 +1228,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
             self.mdmRetryWorkItem = nil
+            self.mdmRetryAttempts = 0
             self.pendingMDMRestart = false
             // Only a restart that actually brought the engine back up means the
             // policy is in force; a deferred or failed one must not tell the
