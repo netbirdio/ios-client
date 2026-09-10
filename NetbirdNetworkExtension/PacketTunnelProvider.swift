@@ -162,28 +162,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         return _tunnelGeneration
     }
 
-    /// True from the moment startTunnel hands off to adapter.start until that
-    /// call completes.
-    ///
-    /// Initial startup does not set isRestartInProgress, so without this an
-    /// MDM restart arriving in that window would pass the guard and call
-    /// adapter.stop() while client.run() was still being dispatched — the
-    /// adapter does not serialise the two. Deferring instead of dropping means
-    /// the policy is applied as soon as startup finishes.
-    private var _isStartingTunnel = false
-    private var isStartingTunnel: Bool {
-        get {
-            tearDownLock.lock()
-            defer { tearDownLock.unlock() }
-            return _isStartingTunnel
-        }
-        set {
-            tearDownLock.lock()
-            _isStartingTunnel = newValue
-            tearDownLock.unlock()
-        }
-    }
-
     /// True only while `generation` is still the live lifecycle and no
     /// teardown has begun.
     private func isCurrentGeneration(_ generation: Int) -> Bool {
@@ -304,9 +282,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             ))
         }
 
-        isStartingTunnel = true
         adapter.start { [weak self] error in
-            self?.isStartingTunnel = false
             if self?.completeTunnelStart(with: error) == false {
                 AppLogger.shared.log("startTunnel: engine reported connected again, start outcome stays as first reported")
             }
@@ -354,7 +330,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // a queued write would let it see the old value and restart into the
         // teardown.
         isTearingDown = true
-        isStartingTunnel = false
 
         // A stop that lands before the engine ever reported connected would otherwise leave
         // NE waiting on the start outcome forever: the outcome is delivered from the
@@ -1224,7 +1199,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // guard and start their own stop/start pipelines.
         monitorQueue.async { [weak self] in
             guard let self = self, !self.isTearingDown else { return }
-            guard !self.isRestartInProgress, !self.isStartingTunnel else {
+            // isInitialStartInFlight, not a latch of our own: restartClient()
+            // consults exactly this flag and returns early while it is set, so
+            // a second guard would leave a window where this request passes,
+            // clears pendingMDMRestart, and then finds the restart refused with
+            // nothing left to retry it.
+            guard !self.isRestartInProgress, !self.isInitialStartInFlight else {
                 guard self.mdmRetryAttempts < Self.maxMDMRetryAttempts else {
                     // The pipeline should clear its guard within its own
                     // 30-second timeout; past that something is wedged, and a

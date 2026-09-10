@@ -171,3 +171,37 @@ extension MDMRestrictions {
         return decode(json)
     }
 }
+
+// MARK: - Reporting a refused change
+
+extension MDMRestrictions {
+
+    /// One wording for a policy refusal, so the app cannot drift into several
+    /// phrasings of the same condition.
+    static let managedSettingMessage = "This setting is managed by your organization and cannot be changed."
+
+    /// Turns a rejected commit into something the user can act on.
+    ///
+    /// Go wraps ErrMDMManagedFields with the offending keys -
+    /// "fields managed by MDM cannot be modified: [rosenpassEnabled]" - so
+    /// name them instead of discarding the half of the message that says which
+    /// setting was refused. Returns nil when the failure was not a policy
+    /// refusal, leaving the caller to report it as an ordinary error.
+    ///
+    /// Lives here rather than on the view model: it is pure text handling over
+    /// a bridge string, with no view state and no main-actor business.
+    static func rejectionMessage(from reason: String) -> String? {
+        guard reason.localizedCaseInsensitiveContains("managed by MDM") else {
+            return nil
+        }
+        guard let separator = reason.range(of: ": ", options: .backwards) else {
+            return managedSettingMessage
+        }
+        let keys = reason[separator.upperBound...]
+            .trimmingCharacters(in: CharacterSet(charactersIn: "[] "))
+        guard !keys.isEmpty else {
+            return managedSettingMessage
+        }
+        return "\(managedSettingMessage) (\(keys))"
+    }
+}

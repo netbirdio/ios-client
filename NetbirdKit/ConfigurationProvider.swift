@@ -183,9 +183,13 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     /// without this gate a managed field would stay writable here while iOS
     /// rejects it. `key` names the field the way the Go error does, so the
     /// message a user sees is the same on both platforms.
-    private func policyRefuses(_ key: String, managed: Bool) -> Bool {
+    private func policyRefuses(_ key: String, managedBy: (MDMRestrictions.Fields) -> Bool) -> Bool {
+        // One snapshot per write. Reading the field's own flag separately from
+        // the blanket gate would let a policy landing between the two reads
+        // slip a managed write through on the stale value - and it costs a
+        // second trip across the bridge for nothing.
         let restrictions = MDMRestrictions.current()
-        guard managed || restrictions.features.disableUpdateSettings else {
+        guard managedBy(restrictions.mdm) || restrictions.features.disableUpdateSettings else {
             return false
         }
         refusal = "fields managed by MDM cannot be modified: [\(key)]"
@@ -198,8 +202,7 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     var rosenpassEnabled: Bool {
         get { extractJSONBool(field: "RosenpassEnabled") ?? false }
         set {
-            let managed = MDMRestrictions.current().mdm.rosenpassEnabled
-            guard !policyRefuses("rosenpassEnabled", managed: managed) else { return }
+            guard !policyRefuses("rosenpassEnabled", managedBy: { $0.rosenpassEnabled }) else { return }
             updateJSONField(field: "RosenpassEnabled", value: newValue)
         }
     }
@@ -207,8 +210,7 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     var rosenpassPermissive: Bool {
         get { extractJSONBool(field: "RosenpassPermissive") ?? false }
         set {
-            let managed = MDMRestrictions.current().mdm.rosenpassPermissive
-            guard !policyRefuses("rosenpassPermissive", managed: managed) else { return }
+            guard !policyRefuses("rosenpassPermissive", managedBy: { $0.rosenpassPermissive }) else { return }
             updateJSONField(field: "RosenpassPermissive", value: newValue)
         }
     }
@@ -219,7 +221,7 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
         get { extractJSONBool(field: "DisableIPv6") ?? false }
         set {
             // No MDM key of its own; only the blanket settings gate applies.
-            guard !policyRefuses("disableIPv6", managed: false) else { return }
+            guard !policyRefuses("disableIPv6", managedBy: { _ in false }) else { return }
             updateJSONField(field: "DisableIPv6", value: newValue)
         }
     }
@@ -227,8 +229,7 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     // MARK: - Pre-Shared Key
 
     func setPreSharedKey(_ key: String) {
-        let managed = MDMRestrictions.current().mdm.preSharedKey
-        guard !policyRefuses("preSharedKey", managed: managed) else { return }
+        guard !policyRefuses("preSharedKey", managedBy: { $0.preSharedKey }) else { return }
         updateJSONField(field: "PreSharedKey", value: key)
     }
 
