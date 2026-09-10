@@ -852,6 +852,34 @@ class ViewModel: ObservableObject {
     
     // MARK: - Configuration Methods (via ConfigurationProvider)
 
+    /// One wording for a policy refusal, so the app cannot drift into several
+    /// phrasings of the same condition.
+    nonisolated static let managedSettingMessage = "This setting is managed by your organization and cannot be changed."
+
+    /// Turns a rejected commit into something the user can act on.
+    ///
+    /// Go wraps ErrMDMManagedFields with the offending keys —
+    /// "fields managed by MDM cannot be modified: [rosenpassEnabled]" — so
+    /// name them instead of throwing away the half of the message that says
+    /// which setting was refused. Returns nil when the failure was not a
+    /// policy refusal, leaving the caller to report it as an ordinary error.
+    /// nonisolated: pure text handling that touches no view-model state, so
+    /// it stays callable off the main actor - not least from tests.
+    nonisolated static func managedRejectionMessage(from reason: String) -> String? {
+        guard reason.localizedCaseInsensitiveContains("managed by MDM") else {
+            return nil
+        }
+        guard let separator = reason.range(of: ": ", options: .backwards) else {
+            return managedSettingMessage
+        }
+        let keys = reason[separator.upperBound...]
+            .trimmingCharacters(in: CharacterSet(charactersIn: "[] "))
+        guard !keys.isEmpty else {
+            return managedSettingMessage
+        }
+        return "\(managedSettingMessage) (\(keys))"
+    }
+
     /// Whether the policy owns the pre-shared key, by managing it directly or
     /// by forbidding settings edits at all.
     private var preSharedKeyForbiddenByPolicy: Bool {
@@ -864,7 +892,7 @@ class ViewModel: ObservableObject {
         // while a key-entry alert is open would otherwise be overwritten.
         guard !preSharedKeyForbiddenByPolicy else {
             AppLogger.shared.log("MDM: refusing to change the pre-shared key while it is managed")
-            settingsRejectedMessage = "This setting is managed by your organization and cannot be changed."
+            settingsRejectedMessage = Self.managedSettingMessage
             showSettingsRejectedAlert = true
             return
         }
@@ -889,7 +917,7 @@ class ViewModel: ObservableObject {
     func removePreSharedKey() {
         guard !preSharedKeyForbiddenByPolicy else {
             AppLogger.shared.log("MDM: refusing to remove the pre-shared key while it is managed")
-            settingsRejectedMessage = "This setting is managed by your organization and cannot be changed."
+            settingsRejectedMessage = Self.managedSettingMessage
             showSettingsRejectedAlert = true
             return
         }
@@ -920,8 +948,8 @@ class ViewModel: ObservableObject {
         }
         let reason = configProvider.lastCommitError ?? ""
         refreshMDMRestrictions()
-        if reason.localizedCaseInsensitiveContains("managed by MDM") {
-            settingsRejectedMessage = "This setting is managed by your organization and cannot be changed."
+        if let managed = Self.managedRejectionMessage(from: reason) {
+            settingsRejectedMessage = managed
         } else {
             settingsRejectedMessage = reason.isEmpty
                 ? "The setting could not be saved."
