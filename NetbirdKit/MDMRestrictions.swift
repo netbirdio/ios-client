@@ -87,7 +87,8 @@ extension MDMRestrictions.Fields: Decodable {
              rosenpassPermissive, disableClientRoutes, disableServerRoutes,
              allowServerSSH, disableAutoConnect, disableAutostart, blockInbound,
              disableMetricsCollection, splitTunnelMode, splitTunnelApps,
-             remoteJobsAllowed, disableAdvancedView
+             disableAdvancedView
+        case remoteJobsAllowed = "allowRemoteJobs"
     }
 
     init(from decoder: Decoder) throws {
