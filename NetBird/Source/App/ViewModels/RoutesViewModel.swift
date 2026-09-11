@@ -92,6 +92,7 @@ class RoutesViewModel: ObservableObject {
         // selector keeps showing the old value until the getRoutes round-trip lands.
         guard let exitNode else {
             guard let current = selectedExitNode else { return }
+            let revertPoint = beginSelectionMutation()
             objectWillChange.send()
             current.objectWillChange.send()
             current.selected = false
@@ -102,10 +103,19 @@ class RoutesViewModel: ObservableObject {
             // actually dropped the node. Hop to main before touching the generation and
             // @Published state: this completion runs on whatever queue the extension
             // replies on.
-            networkExtensionAdapter.deselectRoutes(id: current.name) { [weak self] _ in
+            networkExtensionAdapter.deselectRoutes(id: current.name) { [weak self] result in
                 DispatchQueue.main.async {
                     guard let self, self.exitNodeGeneration == generation else { return }
-                    self.getRoutes()
+                    switch result {
+                    case .success:
+                        self.getRoutes()
+                    case .failure(let error):
+                        // The request never reached the core, so the node is still in
+                        // force. Put the selector back rather than leaving it showing a
+                        // "None" the core never applied.
+                        print("Deselecting exit node failed: \(error.localizedDescription)")
+                        self.revert(to: revertPoint)
+                    }
                 }
             }
             return
@@ -139,17 +149,69 @@ class RoutesViewModel: ObservableObject {
         let generation = routeReadGeneration
         // Hop to main before touching the generation and @Published state: this completion
         // runs on whatever queue the extension replies on.
-        networkExtensionAdapter.getRoutes { [weak self] details in
+        networkExtensionAdapter.getRoutes { [weak self] result in
             DispatchQueue.main.async {
                 guard let self, self.routeReadGeneration == generation else { return }
-                self.routeInfo = details.routeSelectionInfo
-                print("Route count: \(details.routeSelectionInfo.count)")
+                switch result {
+                case .success(let details):
+                    self.routeInfo = details.routeSelectionInfo
+                    print("Route count: \(details.routeSelectionInfo.count)")
+                case .failure(let error):
+                    // A request that never reached the core says nothing about the network
+                    // map, so the cached list stands. Only an answer from the core — an
+                    // empty one included — is allowed to replace it. Views may therefore
+                    // call this unconditionally: with no tunnel session the read fails and
+                    // leaves valid routes alone, and `clearRoutes()` remains the one path
+                    // that empties them on a real disconnect.
+                    print("Failed to read routes, keeping the cached list: \(error.localizedDescription)")
+                }
             }
         }
+    }
+
+    /// The selection state before an optimistic mutation, tagged with the mutation that
+    /// took it, so a round-trip the user has already superseded reverts nothing.
+    private struct SelectionRevertPoint {
+        let generation: Int
+        let selection: [UUID: Bool]
+    }
+
+    /// Bumped by every optimistic selection change. `revert(to:)` compares against it, so a
+    /// failure arriving after the user has moved on is dropped instead of undoing the newer
+    /// choice. Main-thread only, matching every caller.
+    private var selectionGeneration = 0
+
+    /// Records a revert point covering every cached route and claims the next generation.
+    /// Call immediately before writing an optimistic selection.
+    private func beginSelectionMutation() -> SelectionRevertPoint {
+        selectionGeneration &+= 1
+        return SelectionRevertPoint(
+            generation: selectionGeneration,
+            selection: Dictionary(routeInfo.map { ($0.id, $0.selected) }, uniquingKeysWith: { first, _ in first })
+        )
+    }
+
+    /// Undoes the optimistic writes covered by `point`, skipping routes that are no longer
+    /// cached. `selected` is a plain property on a reference type held in a @Published
+    /// array, so every restored route has to announce its own change.
+    private func revert(to point: SelectionRevertPoint) {
+        guard selectionGeneration == point.generation else { return }
+        var changed = false
+        for route in routeInfo {
+            guard let wasSelected = point.selection[route.id], route.selected != wasSelected else { continue }
+            route.objectWillChange.send()
+            route.selected = wasSelected
+            changed = true
+        }
+        if changed { objectWillChange.send() }
     }
     
     func selectRoute(route: RoutesSelectionInfo) {
         guard let index = self.routeInfo.firstIndex(where: { $0.id == route.id }) else { return }
+
+        // Taken before the optimistic writes below so a rejected round-trip can undo all of
+        // them — this route's selection and, for an exit node, its siblings' deselection.
+        let revertPoint = beginSelectionMutation()
 
         // `selected` is not @Published (kept for Codable); notify both observers explicitly.
         self.objectWillChange.send()
@@ -158,7 +220,7 @@ class RoutesViewModel: ObservableObject {
 
         // Non-exit routes select independently.
         guard route.isExitNode else {
-            sendSelectAndReconcile(route: route)
+            sendSelectAndReconcile(route: route, revertingTo: revertPoint)
             return
         }
 
@@ -179,7 +241,7 @@ class RoutesViewModel: ObservableObject {
 
         let siblings = routeInfo.filter { $0.id != route.id && $0.selected && $0.isExitNode }
         guard !siblings.isEmpty else {
-            sendSelectAndReconcile(route: route)
+            sendSelectAndReconcile(route: route, revertingTo: revertPoint)
             return
         }
 
@@ -192,6 +254,10 @@ class RoutesViewModel: ObservableObject {
             sibling.objectWillChange.send()
             sibling.selected = false
             group.enter()
+            // A failed deselect is not fatal here: the select still goes out, and the
+            // GetRoutes reconcile below reports whatever the core actually ended up with.
+            // When there is no session at all the select fails too, and that failure is
+            // what reverts the whole optimistic change.
             networkExtensionAdapter.deselectRoutes(id: sibling.name) { _ in
                 group.leave()
             }
@@ -199,7 +265,7 @@ class RoutesViewModel: ObservableObject {
 
         group.notify(queue: .main) { [weak self] in
             guard let self, self.exitNodeGeneration == generation else { return }
-            self.sendSelectAndReconcile(route: route)
+            self.sendSelectAndReconcile(route: route, revertingTo: revertPoint)
         }
     }
 
@@ -208,36 +274,63 @@ class RoutesViewModel: ObservableObject {
     // extension swallows errors and always replies "true"), so re-read the truth via
     // GetRoutes: if the core rejected the change the toggle reverts instead of leaving a
     // stale optimistic selection in place.
-    private func sendSelectAndReconcile(route: RoutesSelectionInfo) {
-        networkExtensionAdapter.selectRoutes(id: route.name) { [weak self] _ in
+    //
+    // A select that never reached the core at all — no tunnel session, a send that threw —
+    // gets no reconcile to revert it, because GetRoutes would fail for the same reason and
+    // deliberately leaves the cache (optimistic writes included) untouched. So undo the
+    // optimistic writes here instead, from the revert point taken before them.
+    private func sendSelectAndReconcile(route: RoutesSelectionInfo, revertingTo revertPoint: SelectionRevertPoint) {
+        networkExtensionAdapter.selectRoutes(id: route.name) { [weak self] result in
             DispatchQueue.main.async {
-                self?.getRoutes()
+                guard let self else { return }
+                switch result {
+                case .success:
+                    self.getRoutes()
+                case .failure(let error):
+                    print("Selecting route failed: \(error.localizedDescription)")
+                    self.revert(to: revertPoint)
+                }
             }
         }
     }
     
     func selectAllRoutes() {
-        networkExtensionAdapter.selectRoutes(id: "All") { details in
-            print("selected all routes")
+        networkExtensionAdapter.selectRoutes(id: "All") { result in
+            switch result {
+            case .success: print("selected all routes")
+            case .failure(let error): print("Selecting all routes failed: \(error.localizedDescription)")
+            }
         }
     }
     
     func deselectRoute(route: RoutesSelectionInfo) {
         guard let index = self.routeInfo.firstIndex(where: { $0.id == route.id }) else { return }
+        let revertPoint = beginSelectionMutation()
         self.objectWillChange.send()
         self.routeInfo[index].objectWillChange.send()
         self.routeInfo[index].selected = false
-        // Reconcile with the core's real state, mirroring selectRoute.
-        networkExtensionAdapter.deselectRoutes(id: route.name) { [weak self] _ in
+        // Reconcile with the core's real state, mirroring selectRoute — and revert the
+        // optimistic write when the request never got there.
+        networkExtensionAdapter.deselectRoutes(id: route.name) { [weak self] result in
             DispatchQueue.main.async {
-                self?.getRoutes()
+                guard let self else { return }
+                switch result {
+                case .success:
+                    self.getRoutes()
+                case .failure(let error):
+                    print("Deselecting route failed: \(error.localizedDescription)")
+                    self.revert(to: revertPoint)
+                }
             }
         }
     }
     
     func deselectAllRoutes() {
-        networkExtensionAdapter.deselectRoutes(id: "All") { details in
-            print("deselect all routes")
+        networkExtensionAdapter.deselectRoutes(id: "All") { result in
+            switch result {
+            case .success: print("deselect all routes")
+            case .failure(let error): print("Deselecting all routes failed: \(error.localizedDescription)")
+            }
         }
     }
     

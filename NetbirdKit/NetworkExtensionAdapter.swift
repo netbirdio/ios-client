@@ -319,7 +319,7 @@ public class NetworkExtensionAdapter: ObservableObject {
             #if os(tvOS)
             // Stop the system from retry-looping the tunnel while the user works through the
             // device code flow — every unattended start would fail on "login required".
-            // applyExtensionStatus re-arms On Demand once the tunnel is up again.
+            // applyStatusSideEffects re-arms On Demand once the tunnel is up again.
             // Await the save: the login starts a tunnel of its own, and a rule that is still
             // in force would race it with an unauthenticated start.
             if isOnDemandEnabled {
@@ -984,7 +984,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         /// The rules were written to the tunnel manager.
         case applied
         /// There was nothing to arm — no manager exists yet, or no configuration to connect
-        /// with. The stored preference stands and `applyExtensionStatus` arms it after the
+        /// with. The stored preference stands and `applyStatusSideEffects` arms it after the
         /// next successful connection.
         case deferred
         /// The tunnel manager rejected the change; what is in force is still the old state.
@@ -1071,7 +1071,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// A request that matches what the manager already holds is answered without a write:
     /// saveToPreferences on a configured manager makes NE emit NEVPNStatusDidChange — a
     /// transient .disconnecting among them — and rewriting the rules of a live tunnel can
-    /// have the system reassert it. applyExtensionStatus arms On Demand on every transition
+    /// have the system reassert it. applyStatusSideEffects arms On Demand on every transition
     /// to .connected, so an unconditional write added a spurious disconnect to every connect.
     ///
     /// The skip trusts the manager to reflect what the system holds, which is only true while
@@ -1396,83 +1396,108 @@ public class NetworkExtensionAdapter: ObservableObject {
         #endif
     }
 
-    func getRoutes(completion: @escaping (RoutesSelectionDetails) -> Void) {
-        guard let session = self.session else {
-            let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
-            completion(defaultStatus)
-            return
-        }
-        
-        let messageString = "GetRoutes"
-        if let messageData = messageString.data(using: .utf8) {
-            do {
-                try session.sendProviderMessage(messageData) { response in
-                    if let response = response {
-                        do {
-                            let decodedStatus = try self.decoder.decode(RoutesSelectionDetails.self, from: response)
-                            completion(decodedStatus)
-                            return
-                        } catch {
-                            print("Failed to decode route selection details.")
-                        }
-                    } else {
-                        let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
-                        completion(defaultStatus)
-                        return
-                    }
-                }
-            } catch {
-                print("Failed to send Provider message")
+    /// Why a route request never reached the core, or never came back from it.
+    ///
+    /// Every one of these means "the answer is unknown", which is categorically different
+    /// from the core answering with an empty network map. Callers must not fold the two
+    /// together: an unknown answer leaves the cached routes standing, an empty answer
+    /// replaces them.
+    enum RouteRequestError: LocalizedError {
+        /// No tunnel session to talk to — the extension is not running.
+        case noSession
+        /// The message could not be encoded, so nothing was sent.
+        case encodingFailed
+        /// `sendProviderMessage` threw; the request never left the app.
+        case sendFailed(Error)
+        /// The extension answered with no payload.
+        case emptyResponse
+        /// The extension answered with something that is not a route selection.
+        case decodingFailed(Error)
+
+        var errorDescription: String? {
+            switch self {
+            case .noSession: return "No tunnel session"
+            case .encodingFailed: return "Failed to encode the request"
+            case .sendFailed(let error): return "Failed to send the request: \(error.localizedDescription)"
+            case .emptyResponse: return "No response from the extension"
+            case .decodingFailed(let error): return "Failed to decode the response: \(error.localizedDescription)"
             }
-        } else {
-            print("Error converting message to Data")
         }
     }
 
-    func selectRoutes(id: String, completion: @escaping (RoutesSelectionDetails) -> Void) {
-        guard let session = self.session else {
-            return
-        }
-
-        let messageString = "Select-\(id)"
-        if let messageData = messageString.data(using: .utf8) {
-            do {
-                try session.sendProviderMessage(messageData) { response in
-                    let routes = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
-                    completion(routes)
-                }
-            } catch {
-                print("Failed to send Provider message")
-            }
-        } else {
-            print("Error converting message to Data")
-        }
+    /// Reads the current network map from the extension.
+    ///
+    /// The completion fires on every path, success or failure, because callers both
+    /// reconcile optimistic UI against it and balance a `DispatchGroup` around it. A
+    /// failure carries no route list on purpose — see `RouteRequestError`.
+    func getRoutes(completion: @escaping (Result<RoutesSelectionDetails, RouteRequestError>) -> Void) {
+        sendRouteMessage("GetRoutes", decodeResponse: true, completion: completion)
     }
 
-    func deselectRoutes(id: String, completion: @escaping (RoutesSelectionDetails) -> Void) {
-        // Callers (e.g. RoutesViewModel.selectRoute) balance a DispatchGroup enter/leave
-        // around this call, so completion must fire on every exit path or the group hangs
-        // and the pending select is never sent.
-        let routes = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
+    /// Asks the core to select `id` — a route name, or "All".
+    ///
+    /// The extension answers select/deselect with a bare acknowledgement rather than a
+    /// route list, so success carries an empty `RoutesSelectionDetails` and callers
+    /// re-read the truth with `getRoutes`. What matters here is success vs. failure:
+    /// a failure is the signal to revert an optimistic selection.
+    func selectRoutes(id: String, completion: @escaping (Result<RoutesSelectionDetails, RouteRequestError>) -> Void) {
+        sendRouteMessage("Select-\(id)", decodeResponse: false, completion: completion)
+    }
+
+    /// Asks the core to deselect `id` — a route name, or "All". Same contract as
+    /// `selectRoutes`.
+    func deselectRoutes(id: String, completion: @escaping (Result<RoutesSelectionDetails, RouteRequestError>) -> Void) {
+        sendRouteMessage("Deselect-\(id)", decodeResponse: false, completion: completion)
+    }
+
+    /// Shared body of the three route IPC calls: one exit path per failure mode, and the
+    /// completion invoked on all of them.
+    ///
+    /// - Parameter decodeResponse: `true` for reads, which need the payload; `false` for
+    ///   select/deselect, whose reply is a bare acknowledgement.
+    private func sendRouteMessage(
+        _ messageString: String,
+        decodeResponse: Bool,
+        completion: @escaping (Result<RoutesSelectionDetails, RouteRequestError>) -> Void
+    ) {
+        let acknowledgement = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
 
         guard let session = self.session else {
-            completion(routes)
+            // Routine, not exceptional: views refresh the network map on appear whether or
+            // not a tunnel is up, and this is the answer that keeps a stale list from being
+            // mistaken for an empty one.
+            logger.debug("\(messageString): no tunnel session")
+            completion(.failure(.noSession))
             return
         }
 
-        let messageString = "Deselect-\(id)"
-        if let messageData = messageString.data(using: .utf8) {
-            do {
-                try session.sendProviderMessage(messageData) { response in
-                    completion(routes)
+        guard let messageData = messageString.data(using: .utf8) else {
+            logger.error("\(messageString): failed to encode the message")
+            completion(.failure(.encodingFailed))
+            return
+        }
+
+        do {
+            try session.sendProviderMessage(messageData) { response in
+                guard decodeResponse else {
+                    completion(.success(acknowledgement))
+                    return
                 }
-            } catch {
-                print("Failed to send Provider message")
-                completion(routes)
+                guard let response else {
+                    self.logger.error("\(messageString): no response from the extension")
+                    completion(.failure(.emptyResponse))
+                    return
+                }
+                do {
+                    completion(.success(try self.decoder.decode(RoutesSelectionDetails.self, from: response)))
+                } catch {
+                    self.logger.error("\(messageString): failed to decode the response: \(error.localizedDescription)")
+                    completion(.failure(.decodingFailed(error)))
+                }
             }
-        } else {
-            print("Error converting message to Data")
-            completion(routes)
+        } catch {
+            logger.error("\(messageString): failed to send the provider message: \(error.localizedDescription)")
+            completion(.failure(.sendFailed(error)))
         }
     }
     

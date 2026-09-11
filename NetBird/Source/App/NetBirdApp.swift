@@ -127,12 +127,31 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 }
 #endif
 
+#if os(tvOS)
+/// Live mirror of the tvOS scene phase.
+///
+/// `scenePhase` is an `@Environment` value on the App *struct*, so the activation task
+/// captures a copy of the struct and keeps reading the phase as it was when the closure
+/// was created — the guards after each `await` would re-check a snapshot, not the app.
+/// A reference type is read through, so those guards see the phase the app is actually in.
+/// iOS reads `UIApplication.shared.applicationState` live and needs none of this; tvOS has
+/// no equivalent. Written and read on the main thread only, from the scene callbacks and
+/// the `@MainActor` activation task.
+private final class ScenePhaseMirror {
+    var isActive = false
+}
+#endif
+
 @main
 struct NetBirdApp: App {
     @StateObject private var viewModelLoader = ViewModelLoader()
     @Environment(\.scenePhase) var scenePhase
     @State private var activationTask: Task<Void, Never>?
     @State private var pendingURL: URL?
+
+    #if os(tvOS)
+    @State private var scenePhaseMirror = ScenePhaseMirror()
+    #endif
 
     #if os(iOS)
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
@@ -178,11 +197,17 @@ struct NetBirdApp: App {
                     #endif
                     #if os(tvOS)
                     .onAppear {
+                        // Seed the mirror before anything can read it: the activation task
+                        // below bails out immediately if it still says inactive.
+                        scenePhaseMirror.isActive = scenePhase == .active
                         if scenePhase == .active {
                             startActivation(viewModel: viewModel)
                         }
                     }
                     .onChange(of: scenePhase) { _, newPhase in
+                        // Update the mirror first — it is what the in-flight activation
+                        // task re-checks after each await to notice it has been superseded.
+                        scenePhaseMirror.isActive = newPhase == .active
                         if newPhase == .active {
                             startActivation(viewModel: viewModel)
                         } else {
@@ -220,21 +245,25 @@ struct NetBirdApp: App {
 
                 // Assigning extensionState directly means the checkExtensionState() below
                 // hits applyExtensionStatus' `extensionState != status` guard and returns
-                // early — taking its route side effects with it. Apply them here instead.
+                // early — taking every side effect of the state with it. Apply them here
+                // instead.
                 //
                 // Launching (or foregrounding) onto an already-connected tunnel would
                 // otherwise leave the exit node selector stuck on "No exit nodes
                 // available" until the user visits the Resources tab, whose own onAppear
                 // does the fetch. Foregrounding onto a tunnel that dropped while the app
                 // was away is the mirror case: the routes are never cleared, so the
-                // selector stays enabled over nodes the core can no longer apply.
+                // selector stays enabled over nodes the core can no longer apply. And a
+                // tunnel that connected while the app was away — the usual end of a
+                // login-required cycle, which disarms On Demand at the manager — needs its
+                // On Demand rules put back, which is the other half of this call.
                 //
                 // loadCurrentConnectionState can await past this activation's lifetime:
                 // its 200 ms retry sleep uses `try?`, which swallows cancellation. The
-                // assignment above is a cheap local update, but the route sync below is
-                // an IPC round-trip — don't make it for an activation already superseded.
+                // assignment above is a cheap local update, but the work below is IPC —
+                // don't do it for an activation already superseded.
                 guard isAppActive, !Task.isCancelled else { return }
-                viewModel.applyRouteSideEffects(for: initialStatus)
+                viewModel.applyStatusSideEffects(for: initialStatus)
             } else {
                 // No matching VPN profile found — still force a widget timeline refresh so
                 // the widget doesn't stay stuck on a transitioning state from a prior
@@ -267,11 +296,13 @@ struct NetBirdApp: App {
         viewModel.stopPollingDetails()
     }
 
+    /// The app's *current* foreground state, safe to re-check after an `await`.
     private var isAppActive: Bool {
         #if os(iOS)
         UIApplication.shared.applicationState == .active
         #else
-        scenePhase == .active
+        // Not `scenePhase`: see ScenePhaseMirror.
+        scenePhaseMirror.isActive
         #endif
     }
 
