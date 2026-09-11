@@ -266,12 +266,10 @@ struct TVConnectionView: View {
         }
         .onAppear {
             // Coming back to this tab doesn't go through applyExtensionStatus, so refresh
-            // the network map here to keep the exit node selector current. Only while
-            // connected: GetRoutes answers with an empty list when there is no tunnel
-            // session and would wipe a list that is still valid.
-            if viewModel.vpnDisplayState == .connected {
-                viewModel.routeViewModel.getRoutes()
-            }
+            // the network map here to keep the exit node selector current. Unconditional: a
+            // read with no tunnel session fails instead of answering "zero routes", and a
+            // failed read leaves the cached list alone (see RoutesViewModel.getRoutes).
+            viewModel.routeViewModel.getRoutes()
         }
     }
 
