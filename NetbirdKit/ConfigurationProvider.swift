@@ -28,6 +28,11 @@ protocol ConfigurationProvider {
     /// Whether IPv6 overlay addressing is disabled
     var disableIPv6: Bool { get set }
 
+    // MARK: - Remote Jobs
+
+    /// Whether management may run remote jobs (debug bundle requests) on this peer
+    var remoteJobsAllowed: Bool { get set }
+
     // MARK: - Pre-Shared Key
 
     /// Stages a new pre-shared key; an empty string clears it. Write-only by
@@ -118,6 +123,23 @@ final class iOSConfigurationProvider: ConfigurationProvider {
         }
     }
 
+    // MARK: - Remote Jobs
+
+    var remoteJobsAllowed: Bool {
+        get {
+            var result = ObjCBool(false)
+            do {
+                try preferences.getRemoteJobsAllowed(&result)
+            } catch {
+                print("ConfigurationProvider: Failed to read remoteJobsAllowed - \(error)")
+            }
+            return result.boolValue
+        }
+        set {
+            preferences.setRemoteJobsAllowed(newValue)
+        }
+    }
+
     // MARK: - Pre-Shared Key
 
     func setPreSharedKey(_ key: String) {
@@ -190,6 +212,13 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     var disableIPv6: Bool {
         get { extractJSONBool(field: "DisableIPv6") ?? false }
         set { updateJSONField(field: "DisableIPv6", value: newValue) }
+    }
+
+    // MARK: - Remote Jobs
+
+    var remoteJobsAllowed: Bool {
+        get { extractJSONBool(field: "RemoteJobsAllowed") ?? false }
+        set { updateJSONField(field: "RemoteJobsAllowed", value: newValue) }
     }
 
     // MARK: - Pre-Shared Key

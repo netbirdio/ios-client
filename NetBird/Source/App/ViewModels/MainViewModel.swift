@@ -134,6 +134,7 @@ class ViewModel: ObservableObject {
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
     @Published var disableIPv6 = false
+    @Published var remoteJobsAllowed = false
     @Published var connectOnDemand = false
     @Published var showOnDemandAlert = false
     @Published var showOnDemandConflictAlert = false
@@ -1108,6 +1109,25 @@ class ViewModel: ObservableObject {
 
     func loadIPv6Settings() {
         self.disableIPv6 = configProvider.disableIPv6
+    }
+
+    func setRemoteJobsAllowed(allowed: Bool) {
+        guard !mdmRestrictions.mdm.remoteJobsAllowed else {
+            self.remoteJobsAllowed = configProvider.remoteJobsAllowed
+            return
+        }
+        let previous = self.remoteJobsAllowed
+        self.remoteJobsAllowed = allowed
+        configProvider.remoteJobsAllowed = allowed
+        if !configProvider.commit() {
+            print("Failed to update remote jobs settings")
+            self.remoteJobsAllowed = previous
+            configProvider.remoteJobsAllowed = previous
+        }
+    }
+
+    func loadRemoteJobsSettings() {
+        self.remoteJobsAllowed = configProvider.remoteJobsAllowed
     }
 
     func setForcedRelayConnection(isEnabled: Bool) {
