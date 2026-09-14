@@ -259,30 +259,30 @@ actor MDMZeroTouchEnrollment {
 
     private init() {}
 
-    static func enrollIfNeeded(userDefaults: UserDefaults = .standard) async {
+    func enrollIfNeeded(userDefaults: UserDefaults = .standard) async {
         guard let configuration = MDMEnrollmentConfiguration.current(userDefaults: userDefaults),
               let configPath = Preferences.configFile(),
               let statePath = Preferences.stateFile() else {
             return
         }
 
-        let profileID = digest(configPath)
-        let fingerprint = digest(
+        let profileID = Self.digest(configPath)
+        let fingerprint = Self.digest(
             [configuration.managementURL, configuration.adminURL ?? "", configuration.setupKey]
                 .joined(separator: "\u{0}")
         )
-        var completed = userDefaults.dictionary(forKey: completedEnrollmentsKey) as? [String: String] ?? [:]
+        var completed = userDefaults.dictionary(forKey: Self.completedEnrollmentsKey) as? [String: String] ?? [:]
         let configExists = FileManager.default.fileExists(atPath: configPath)
         if configExists, completed[profileID] == fingerprint {
             return
         }
 
-        if configExists, !await loginIsRequired(configPath: configPath, statePath: statePath) {
+        if configExists, !await Self.loginIsRequired(configPath: configPath, statePath: statePath) {
             guard persistAdminURL(configuration.adminURL, configPath: configPath, statePath: statePath) else {
                 return
             }
             completed[profileID] = fingerprint
-            userDefaults.set(completed, forKey: completedEnrollmentsKey)
+            userDefaults.set(completed, forKey: Self.completedEnrollmentsKey)
             return
         }
 
@@ -322,7 +322,7 @@ actor MDMZeroTouchEnrollment {
         ProfileManager.shared.saveServerURL(configuration.managementURL, forID: ProfileManager.shared.getActiveProfileID())
         Preferences.saveManagementURL(configuration.managementURL)
         completed[profileID] = fingerprint
-        userDefaults.set(completed, forKey: completedEnrollmentsKey)
+        userDefaults.set(completed, forKey: Self.completedEnrollmentsKey)
         AppLogger.shared.log("MDM enrollment: setup-key login completed")
     }
 
