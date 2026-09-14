@@ -1413,6 +1413,8 @@ public class NetworkExtensionAdapter: ObservableObject {
         case emptyResponse
         /// The extension answered with something that is not a route selection.
         case decodingFailed(Error)
+        /// The extension never answered at all, within `routeRequestTimeout`.
+        case timedOut
 
         var errorDescription: String? {
             switch self {
@@ -1421,15 +1423,21 @@ public class NetworkExtensionAdapter: ObservableObject {
             case .sendFailed(let error): return "Failed to send the request: \(error.localizedDescription)"
             case .emptyResponse: return "No response from the extension"
             case .decodingFailed(let error): return "Failed to decode the response: \(error.localizedDescription)"
+            case .timedOut: return "The extension did not reply in time"
             }
         }
     }
 
+    /// How long a route round-trip waits for the extension before it counts as failed.
+    /// Matches the bound `fetchData` puts on the status round-trip.
+    private static let routeRequestTimeout: TimeInterval = 10
+
     /// Reads the current network map from the extension.
     ///
-    /// The completion fires on every path, success or failure, because callers both
-    /// reconcile optimistic UI against it and balance a `DispatchGroup` around it. A
-    /// failure carries no route list on purpose — see `RouteRequestError`.
+    /// The completion fires on every path, success or failure — including an extension that
+    /// never replies — because callers both reconcile optimistic UI against it and balance a
+    /// `DispatchGroup` around it. A failure carries no route list on purpose — see
+    /// `RouteRequestError`.
     func getRoutes(completion: @escaping (Result<RoutesSelectionDetails, RouteRequestError>) -> Void) {
         sendRouteMessage("GetRoutes", decodeResponse: true, completion: completion)
     }
@@ -1477,27 +1485,55 @@ public class NetworkExtensionAdapter: ObservableObject {
             return
         }
 
+        // sendProviderMessage only calls its reply handler if the extension answers. One
+        // that never does — wedged in a synchronous Go call, gone, or returning out of
+        // handleAppMessage before replying — would strand this completion, and with it the
+        // DispatchGroup RoutesViewModel.selectRoute balances around the sibling deselects:
+        // the pending select would never be sent, and the optimistic selection never
+        // reverted. Bound the wait and let exactly one outcome through, the way fetchData
+        // already does for the status round-trip.
+        var hasCompleted = false
+        let completionLock = NSLock()
+        let deliverOnce: (Result<RoutesSelectionDetails, RouteRequestError>) -> Void = { result in
+            completionLock.lock()
+            guard !hasCompleted else {
+                completionLock.unlock()
+                return
+            }
+            hasCompleted = true
+            completionLock.unlock()
+            completion(result)
+        }
+
+        let timeoutWorkItem = DispatchWorkItem { [weak self] in
+            self?.logger.error("\(messageString): no reply from the extension, giving up")
+            deliverOnce(.failure(.timedOut))
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.routeRequestTimeout, execute: timeoutWorkItem)
+
         do {
             try session.sendProviderMessage(messageData) { response in
+                timeoutWorkItem.cancel()
                 guard decodeResponse else {
-                    completion(.success(acknowledgement))
+                    deliverOnce(.success(acknowledgement))
                     return
                 }
                 guard let response else {
                     self.logger.error("\(messageString): no response from the extension")
-                    completion(.failure(.emptyResponse))
+                    deliverOnce(.failure(.emptyResponse))
                     return
                 }
                 do {
-                    completion(.success(try self.decoder.decode(RoutesSelectionDetails.self, from: response)))
+                    deliverOnce(.success(try self.decoder.decode(RoutesSelectionDetails.self, from: response)))
                 } catch {
                     self.logger.error("\(messageString): failed to decode the response: \(error.localizedDescription)")
-                    completion(.failure(.decodingFailed(error)))
+                    deliverOnce(.failure(.decodingFailed(error)))
                 }
             }
         } catch {
+            timeoutWorkItem.cancel()
             logger.error("\(messageString): failed to send the provider message: \(error.localizedDescription)")
-            completion(.failure(.sendFailed(error)))
+            deliverOnce(.failure(.sendFailed(error)))
         }
     }
     

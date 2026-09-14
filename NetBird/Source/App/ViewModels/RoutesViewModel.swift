@@ -269,16 +269,23 @@ class RoutesViewModel: ObservableObject {
         }
     }
 
-    // Sends the select for `route`, then reconciles the optimistic UI selection with the
-    // core's real state. Select/Deselect messages don't report the applied result (the
-    // extension swallows errors and always replies "true"), so re-read the truth via
-    // GetRoutes: if the core rejected the change the toggle reverts instead of leaving a
-    // stale optimistic selection in place.
-    //
-    // A select that never reached the core at all — no tunnel session, a send that threw —
-    // gets no reconcile to revert it, because GetRoutes would fail for the same reason and
-    // deliberately leaves the cache (optimistic writes included) untouched. So undo the
-    // optimistic writes here instead, from the revert point taken before them.
+    /// Sends the select for `route`, then reconciles the optimistic UI selection with the
+    /// core's real state.
+    ///
+    /// Select/Deselect messages don't report the applied result (the extension swallows
+    /// errors and always replies "true"), so re-read the truth via GetRoutes: if the core
+    /// rejected the change the toggle reverts instead of leaving a stale optimistic
+    /// selection in place.
+    ///
+    /// A select that never reached the core at all — no tunnel session, a send that threw,
+    /// an extension that never answered — gets no reconcile to revert it, because GetRoutes
+    /// would fail for the same reason and deliberately leaves the cache (optimistic writes
+    /// included) untouched. So undo the optimistic writes here instead, from the revert
+    /// point taken before them.
+    ///
+    /// - Parameters:
+    ///   - route: the route whose selection was already written optimistically.
+    ///   - revertPoint: the selection state to restore if the core never accepted it.
     private func sendSelectAndReconcile(route: RoutesSelectionInfo, revertingTo revertPoint: SelectionRevertPoint) {
         networkExtensionAdapter.selectRoutes(id: route.name) { [weak self] result in
             DispatchQueue.main.async {
