@@ -553,7 +553,7 @@ public class NetBirdAdapter {
             return
         }
         #endif
-        if let auth = NetBirdSDKNewAuth(configPath, managementURL, MDMPolicyFetcher(), nil) {
+        if let auth = NetBirdSDKNewAuth(configPath, managementURL, MDMPolicyFetcher.mirrored(), nil) {
             authRef = auth
 
             // Always pass the device name so the peer registers under the user's
@@ -625,7 +625,7 @@ public class NetBirdAdapter {
     /// unmanaged. It also creates the change detector hasMDMPolicyChanged()
     /// relies on.
     private func registerMDMPolicyFetcher() {
-        client.setMDMPolicyFetcher(MDMPolicyFetcher())
+        client.setMDMPolicyFetcher(MDMPolicyFetcher.mirrored())
     }
 
     static func updateDeviceNameInConfig(_ configJSON: String, newName: String) -> String {

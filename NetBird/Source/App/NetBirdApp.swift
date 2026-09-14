@@ -88,6 +88,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        MDMPolicyMirror.synchronize()
         configureFirebaseIfNeeded()
         reportPreviousGoCrashIfNeeded()
 
@@ -102,6 +103,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         }
 
         return true
+    }
+
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        MDMPolicyMirror.synchronize()
     }
 
     // Show notification banner even when app is in foreground
@@ -206,6 +211,10 @@ struct NetBirdApp: App {
     private func startActivation(viewModel: ViewModel) {
         activationTask?.cancel()
         activationTask = Task { @MainActor in
+            guard isAppActive, !Task.isCancelled else { return }
+
+            MDMPolicyMirror.synchronize()
+            await MDMZeroTouchEnrollment.shared.enrollIfNeeded()
             guard isAppActive, !Task.isCancelled else { return }
 
             if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
@@ -318,6 +327,8 @@ class ViewModelLoader: ObservableObject {
 
     init() {
         Task { @MainActor in
+            MDMPolicyMirror.synchronize()
+            await MDMZeroTouchEnrollment.shared.enrollIfNeeded()
             self.viewModel = ViewModel()
         }
     }
