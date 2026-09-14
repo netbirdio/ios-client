@@ -9,6 +9,10 @@ import SwiftUI
 
 struct AddProfileSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// Shared rather than a one-off read: a policy that arrives while this
+    /// sheet is open must not leave the form showing - or submitting - a
+    /// management URL the policy has since replaced.
+    @EnvironmentObject var viewModel: ViewModel
     @StateObject private var addVM = AddProfileViewModel()
 
     @State private var profileName = ""
@@ -46,8 +50,18 @@ struct AddProfileSheet: View {
                     }
                 }
 
-                // Server URL
-                Section(header: Text("Server")) {
+                // Server URL - an MDM-enforced URL is shown, not asked for.
+                Section {
+                    if viewModel.mdmRestrictions.mdm.managesManagementURL {
+                    HStack {
+                        Text(viewModel.mdmRestrictions.mdm.managementURL)
+                            .foregroundColor(Color("TextSecondary"))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        Spacer()
+                        MDMManagedBadge()
+                    }
+                    } else {
                     TextField("https://api.netbird.io", text: $managementServerUrl)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
@@ -58,11 +72,18 @@ struct AddProfileSheet: View {
                             addVM.generalError = nil
                             addVM.ssoNotSupportedError = nil
                         }
+                    }
                     if let error = addVM.urlError {
                         Text(error).foregroundColor(.red).font(.footnote)
                     }
                     if let error = addVM.generalError {
                         Text(error).foregroundColor(.red).font(.footnote)
+                    }
+                } header: {
+                    Text("Server")
+                } footer: {
+                    if viewModel.mdmRestrictions.mdm.managesManagementURL {
+                        MDMManagedFooter()
                     }
                 }
 
@@ -96,6 +117,7 @@ struct AddProfileSheet: View {
                 }
 
                 // Use NetBird server shortcut
+                if !viewModel.mdmRestrictions.mdm.managesManagementURL {
                 Section {
                     Button {
                         managementServerUrl = defaultManagementServerUrl
@@ -112,6 +134,10 @@ struct AddProfileSheet: View {
                     }
                     .disabled(addVM.isLoading)
                 }
+                }
+            }
+            .onAppear {
+                viewModel.refreshMDMRestrictions()
             }
             .listStyle(.insetGrouped)
             .navigationTitle("New Profile")
@@ -135,7 +161,12 @@ struct AddProfileSheet: View {
                             }
                             addVM.create(
                                 name: profileName,
-                                serverUrl: managementServerUrl,
+                                // Go overrides this anyway; submitting the
+                                // enforced value keeps a stale local one from
+                                // reaching the reachability check at all.
+                                serverUrl: viewModel.mdmRestrictions.mdm.managesManagementURL
+                                    ? viewModel.mdmRestrictions.mdm.managementURL
+                                    : managementServerUrl,
                                 setupKey: setupKey
                             )
                         }
@@ -166,6 +197,7 @@ struct AddProfileSheet: View {
 
 #Preview {
     AddProfileSheet()
+        .environmentObject(ViewModel())
 }
 
 #endif

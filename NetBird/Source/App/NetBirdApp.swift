@@ -10,23 +10,119 @@
 
 import SwiftUI
 import FirebaseCore
+import FirebaseCrashlytics
 import Combine
+import UserNotifications
+import NetBirdSDK
 
 #if os(iOS)
 import FirebasePerformance
+import WidgetKit
 #endif
 
+/// True when the app was launched solely to host unit tests. XCTest sets this
+/// environment variable on the test host process.
+private var isRunningUnitTests: Bool {
+    ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+}
+
+/// Configures Firebase from the bundled GoogleService-Info.plist.
+///
+/// Skipped under unit tests: the CI test plist is a dummy and
+/// FirebaseApp.configure() raises an uncaught Objective-C exception on an
+/// invalid app ID, aborting the test host before the runner can connect.
+private func configureFirebaseIfNeeded() {
+    guard !isRunningUnitTests else { return }
+    guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+          let configuration = NSDictionary(contentsOfFile: path) as? [String: Any],
+          let apiKey = configuration["API_KEY"] as? String,
+          apiKey.hasPrefix("AIza"),
+          let appID = configuration["GOOGLE_APP_ID"] as? String,
+          appID.range(
+              of: #"^1:[0-9]+:ios:[0-9a-fA-F]+$"#,
+              options: .regularExpression
+          ) != nil,
+          let options = FirebaseOptions(contentsOfFile: path) else {
+        // Firebase throws an Objective-C exception (which Swift cannot catch)
+        // for placeholder or malformed values. Firebase is optional, so local
+        // and CI builds should continue without analytics instead of aborting.
+        NSLog("NetBird: Firebase configuration is absent or invalid; skipping Firebase startup")
+        return
+    }
+
+    FirebaseApp.configure(options: options)
+}
+
+/// Forwards Go crash output left behind by a previous run to Crashlytics.
+///
+/// A Go panic aborts the process, and the crash Crashlytics records for it ends
+/// at the Go stack switch with no panicking frames. The panic text and goroutine
+/// dump only exist in netbird.err (see GoCrashCapture), so on the next launch
+/// they are attached to a non-fatal whose headline is the panic line itself.
+private func reportPreviousGoCrashIfNeeded() {
+    guard FirebaseApp.app() != nil,
+          let output = GoCrashCapture.takeUnreportedCrashOutput() else { return }
+
+    let headline = output
+        .split(whereSeparator: \.isNewline)
+        .first { $0.hasPrefix("panic:") || $0.hasPrefix("fatal error:") }
+        .map(String.init) ?? "Go runtime crash"
+
+    let crashlytics = Crashlytics.crashlytics()
+    crashlytics.log(output)
+    crashlytics.record(error: NSError(
+        domain: "io.netbird.GoCrash",
+        code: 1,
+        userInfo: [NSLocalizedDescriptionKey: headline]
+    ))
+    AppLogger.shared.log("Reported Go crash output from a previous session to Crashlytics: \(headline)")
+}
+
 #if os(iOS)
-class AppDelegate: NSObject, UIApplicationDelegate {
+extension Notification.Name {
+    static let netbirdLoginNotificationTapped = Notification.Name("io.netbird.loginNotificationTapped")
+}
+
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-           let options = FirebaseOptions(contentsOfFile: path) {
-            FirebaseApp.configure(options: options)
+        configureFirebaseIfNeeded()
+        reportPreviousGoCrashIfNeeded()
+
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if let error = error {
+                AppLogger.shared.log("Notification authorization error: \(error.localizedDescription)")
+            } else {
+                AppLogger.shared.log("Notification authorization granted: \(granted)")
+            }
         }
+
         return true
+    }
+
+    // Show notification banner even when app is in foreground
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+
+    // Handle tap on notification — post event so the app navigates to auth flow
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if response.notification.request.identifier == GlobalConstants.notificationLoginRequired {
+            NotificationCenter.default.post(name: .netbirdLoginNotificationTapped, object: nil)
+        }
+        completionHandler()
     }
 }
 #endif
@@ -43,12 +139,12 @@ struct NetBirdApp: App {
     #endif
 
     init() {
+        // Must run before any Go SDK call so a Go panic during startup is captured too.
+        GoCrashCapture.redirect()
         // Configure Firebase on main thread as required by Firebase
         #if os(tvOS)
-        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-           let options = FirebaseOptions(contentsOfFile: path) {
-            FirebaseApp.configure(options: options)
-        }
+        configureFirebaseIfNeeded()
+        reportPreviousGoCrashIfNeeded()
         #endif
     }
 
@@ -75,6 +171,9 @@ struct NetBirdApp: App {
                     }
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                         stopActivation(viewModel: viewModel)
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .netbirdLoginNotificationTapped)) { _ in
+                        viewModel.showAuthenticationRequired = true
                     }
                     #endif
                     #if os(tvOS)
@@ -109,19 +208,54 @@ struct NetBirdApp: App {
         activationTask = Task { @MainActor in
             guard isAppActive, !Task.isCancelled else { return }
 
-            #if os(iOS)
-            viewModel.networkExtensionAdapter.applyManagedConfig()
-            #endif
-
             if let initialStatus = await viewModel.networkExtensionAdapter.loadCurrentConnectionState() {
+                // Clear stale button-press flags before applying the fresh NE state.
+                // These flags are only valid for the brief gap between a button tap and
+                // the corresponding NE state change; any external change (widget action,
+                // On Demand trigger) makes them stale when returning to the foreground.
+                viewModel.connectPressed = false
+                viewModel.disconnectPressed = false
                 viewModel.extensionState = initialStatus
                 viewModel.updateVPNDisplayState()
+
+                // Assigning extensionState directly means the checkExtensionState() below
+                // hits applyExtensionStatus' `extensionState != status` guard and returns
+                // early — taking its route side effects with it. Apply them here instead.
+                //
+                // Launching (or foregrounding) onto an already-connected tunnel would
+                // otherwise leave the exit node selector stuck on "No exit nodes
+                // available" until the user visits the Resources tab, whose own onAppear
+                // does the fetch. Foregrounding onto a tunnel that dropped while the app
+                // was away is the mirror case: the routes are never cleared, so the
+                // selector stays enabled over nodes the core can no longer apply.
+                //
+                // loadCurrentConnectionState can await past this activation's lifetime:
+                // its 200 ms retry sleep uses `try?`, which swallows cancellation. The
+                // assignment above is a cheap local update, but the route sync below is
+                // an IPC round-trip — don't make it for an activation already superseded.
+                guard isAppActive, !Task.isCancelled else { return }
+                viewModel.applyRouteSideEffects(for: initialStatus)
+            } else {
+                // No matching VPN profile found — still force a widget timeline refresh so
+                // the widget doesn't stay stuck on a transitioning state from a prior
+                // widget-initiated disconnect/connect while the app was closed.
+                #if os(iOS)
+                WidgetCenter.shared.reloadAllTimelines()
+                #endif
             }
 
             guard isAppActive, !Task.isCancelled else { return }
             viewModel.checkExtensionState()
             #if os(iOS)
             viewModel.checkLoginRequiredFlag()
+            viewModel.checkMDMPolicyAppliedFlag()
+            // The OS writes managed configuration from another process, and
+            // UserDefaults.didChangeNotification does not cross that boundary,
+            // so the in-process observer never fires for it. Re-read on every
+            // activation, which is when a policy pushed while the app was away
+            // has to take effect - not least so disableAutoConnect disarms the
+            // On Demand rules.
+            viewModel.refreshMDMRestrictions()
             #endif
             viewModel.startPollingDetails()
         }

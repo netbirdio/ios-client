@@ -14,6 +14,25 @@ struct LoginDiagnostics: Codable {
     var stateExists: Bool
     var lastResult: String
     var lastError: String
+    /// Post-login config returned by the extension after device authentication.
+    /// The main app and extension have separate UserDefaults containers on tvOS,
+    /// so the app must persist this copy for subsequent login preflight checks.
+    var configJSON: String? = nil
+}
+
+extension LoginDiagnostics {
+    /// User-facing error message, or nil if login hasn't failed
+    var friendlyError: String? {
+        guard lastResult == "error", !lastError.isEmpty else { return nil }
+        if lastError.contains("no peer auth method provided") {
+            return "This server doesn't support device code authentication. Please use a setup key instead."
+        } else if lastError.contains("expired") || lastError.contains("token") {
+            return "The device code has expired. Please try again."
+        } else if lastError.contains("denied") || lastError.contains("rejected") {
+            return "Authentication was denied. Please try again."
+        }
+        return lastError
+    }
 }
 
 struct DeviceAuthResponse: Codable {
@@ -33,17 +52,31 @@ class RoutesSelectionInfo: ObservableObject, Codable, Identifiable {
     var network: String?
     var domains: [DomainDetails]?
     var selected: Bool
+    // Connection status computed by the core ("Connected"/"Idle"). A nil/empty value
+    // from an older core is treated as not-connected.
+    var status: String?
 
-    init(id: UUID = UUID(), name: String, network: String?, domains: [DomainDetails]?, selected: Bool) {
+    init(id: UUID = UUID(), name: String, network: String?, domains: [DomainDetails]?, selected: Bool, status: String? = nil) {
         self.id = id
         self.name = name
         self.network = network
         self.selected = selected
         self.domains = domains
+        self.status = status
+    }
+
+    // A route that covers all traffic (0.0.0.0/0 or ::/0) is an exit node. The core
+    // may merge a v4+v6 pair into a single comma-joined range string.
+    var isExitNode: Bool {
+        guard let network else { return false }
+        return network.split(separator: ",").contains { part in
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+            return trimmed == "0.0.0.0/0" || trimmed == "::/0"
+        }
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, network, domains, selected
+        case id, name, network, domains, selected, status
     }
 }
 
@@ -53,18 +86,19 @@ extension RoutesSelectionInfo: Equatable {
         lhs.name == rhs.name &&
         lhs.network == rhs.network &&
         lhs.domains == rhs.domains &&
-        lhs.selected == rhs.selected
+        lhs.selected == rhs.selected &&
+        lhs.status == rhs.status
     }
 }
 
 struct DomainDetails: Codable, Hashable {
     let domain: String
-    let resolvedips: String?
+    let resolvedIPs: [String]
 }
 
 extension DomainDetails: Equatable {
     static func == (lhs: DomainDetails, rhs: DomainDetails) -> Bool {
         return lhs.domain == rhs.domain &&
-        lhs.resolvedips == rhs.resolvedips
+        lhs.resolvedIPs == rhs.resolvedIPs
     }
 }

@@ -13,15 +13,16 @@ class PacketTunnelProviderSettingsManager {
     private weak var packetTunnelProvider: PacketTunnelProvider?
     
     private var interfaceIP: String?
+    private var interfaceIPv6: String?
     private var ipv4Routes: [NEIPv4Route]?
     private var ipv6Routes: [NEIPv6Route]?
     private var dnsSettings: NEDNSSettings?
     private var needFallbackNS: Bool = false
     private var containsDefaultRoute: Bool = false
 
-    // Link-local dummy IPv6 used to satisfy NEIPv6Settings when we install a
-    // ::/0 blackhole route to prevent IPv6 leaks while the IPv4 default
-    // route is in the tunnel and IPv6 is not yet supported on the interface.
+    // Link-local dummy IPv6 used to satisfy NEIPv6Settings when the
+    // interface has no IPv6 address but we still need a ::/0 blackhole route
+    // to prevent IPv6 leaks while the IPv4 default route is in the tunnel.
     private static let ipv6BlackholeAddress = "fe80::1"
     private static let ipv6BlackholePrefix: NSNumber = 64
 
@@ -64,8 +65,20 @@ class PacketTunnelProviderSettingsManager {
     
     func setInterfaceIP(interfaceIP: String) {
         self.interfaceIP = interfaceIP
+        // A new engine session always pushes setInterfaceIP first, then setInterfaceIPv6
+        // only when the session actually has a v6 address. Drop any previous session's v6
+        // here so a v4-only session (IPv6 disabled or a v4-only profile) can't keep applying
+        // a stale interfaceIPv6 — which would send createTunnelSettings down the dual-stack
+        // branch and skip the ::/0 blackhole, leaking IPv6 past a selected exit node. This
+        // manager outlives individual engine sessions (it is owned by the extension process),
+        // so the reset has to happen at the session boundary rather than on teardown.
+        self.interfaceIPv6 = nil
     }
-    
+
+    func setInterfaceIPv6(interfaceIPv6: String) {
+        self.interfaceIPv6 = interfaceIPv6
+    }
+
     func getInterfaceIP() -> String? {
         return self.interfaceIP
     }
@@ -95,20 +108,35 @@ class PacketTunnelProviderSettingsManager {
                 }
                 tunnelNetworkSettings.ipv4Settings = ipv4Settings
                 
-                if self.containsDefaultRoute {
-                    let ipv6Settings = NEIPv6Settings(
-                        addresses: [Self.ipv6BlackholeAddress],
-                        networkPrefixLengths: [Self.ipv6BlackholePrefix]
-                    )
-                    var v6Routes: [NEIPv6Route] = self.ipv6Routes ?? []
-                    v6Routes.append(NEIPv6Route(destinationAddress: "::", networkPrefixLength: 0))
-                    ipv6Settings.includedRoutes = v6Routes
+                var v6Addresses: [String] = []
+                var v6PrefixLengths: [NSNumber] = []
+                var v6Routes: [NEIPv6Route] = []
+
+                if let ipv6CIDR = self.interfaceIPv6,
+                   let (v6Addr, v6Prefix) = extractIPv6AddressAndPrefix(from: ipv6CIDR) {
+                    v6Addresses.append(v6Addr)
+                    v6PrefixLengths.append(NSNumber(value: v6Prefix))
+                    v6Routes = self.ipv6Routes ?? []
+                } else if self.containsDefaultRoute {
+                    v6Addresses.append(Self.ipv6BlackholeAddress)
+                    v6PrefixLengths.append(Self.ipv6BlackholePrefix)
+                    v6Routes = [NEIPv6Route(destinationAddress: "::", networkPrefixLength: 0)]
+                }
+
+                if !v6Addresses.isEmpty {
+                    let ipv6Settings = NEIPv6Settings(addresses: v6Addresses, networkPrefixLengths: v6PrefixLengths)
+                    if !v6Routes.isEmpty {
+                        ipv6Settings.includedRoutes = v6Routes
+                    }
                     tunnelNetworkSettings.ipv6Settings = ipv6Settings
                 } else {
-                    let ipv6Settings = NEIPv6Settings(addresses: [], networkPrefixLengths: [])
-                    if self.ipv6Routes != nil {
-                        ipv6Settings.includedRoutes = self.ipv6Routes
-                    }
+                    // Always assign IPv6 settings explicitly: leaving the property nil
+                    // makes setTunnelNetworkSettings KEEP the previously applied IPv6
+                    // config, so the ::/0 blackhole installed while an exit node was
+                    // selected would linger after deselect and keep black-holing traffic.
+                    let ipv6Settings = NEIPv6Settings(addresses: [Self.ipv6BlackholeAddress], networkPrefixLengths: [Self.ipv6BlackholePrefix])
+                    // Explicitly clear any previously-applied IPv6 routes.
+                    ipv6Settings.includedRoutes = []
                     tunnelNetworkSettings.ipv6Settings = ipv6Settings
                 }
                 
@@ -121,8 +149,18 @@ class PacketTunnelProviderSettingsManager {
                 return tunnelNetworkSettings
             }
         }
-        
+
         return nil
     }
-    
+
+    private func extractIPv6AddressAndPrefix(from cidr: String) -> (String, Int)? {
+        let parts = cidr.split(separator: "/")
+        guard parts.count == 2,
+              let prefix = Int(parts[1]),
+              (0...128).contains(prefix) else {
+            return nil
+        }
+        return (String(parts[0]), prefix)
+    }
+
 }

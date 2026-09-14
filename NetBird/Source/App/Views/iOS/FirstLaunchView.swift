@@ -11,6 +11,9 @@ import SwiftUI
 
 struct FirstLaunchView: View {
     @Binding var hasCompletedOnboarding: Bool
+    /// False when an MDM policy enforces the management URL - the server
+    /// step is then dropped from the onboarding copy entirely.
+    var serverPickerAvailable: Bool = true
     var onChangeServer: () -> Void
 
     var body: some View {
@@ -40,7 +43,18 @@ struct FirstLaunchView: View {
         }
     }
 
+    @ViewBuilder
     private var onboardingText: some View {
+        if serverPickerAvailable {
+            serverPickerText
+        } else {
+            Text("Your organization has configured the server this device connects to.")
+                .font(.system(size: 17))
+                .foregroundColor(Color("TextPrimary"))
+        }
+    }
+
+    private var serverPickerText: some View {
         let attributed: AttributedString = {
             let fullText = "By default you will connect to NetBird's cloud servers. Visit the Change server menu to use another server."
             var result = AttributedString(fullText)

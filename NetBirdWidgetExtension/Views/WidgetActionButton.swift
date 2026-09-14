@@ -11,10 +11,17 @@ struct WidgetActionButton<TransitionContent: View, Label: View>: View {
     let label: (_ isConnected: Bool) -> Label
 
     var body: some View {
-        if entry.status.isTransitioning {
+        if entry.loginRequired && !entry.isConnected {
+            // Login required — open the app immediately even during a transitioning
+            // state so the user is never stuck on a spinner waiting for re-auth.
+            openAppLink(url: WidgetConstants.deepLinkLogin) {
+                label(false)
+            }
+        } else if entry.status.isTransitioning {
             transitionContent()
         } else if entry.needsAppSetup && !entry.isConnected {
-            openAppLink {
+            // VPN profile not configured yet — open the app for initial setup.
+            openAppLink(url: WidgetConstants.deepLinkConnect) {
                 label(false)
             }
         } else {
@@ -26,8 +33,10 @@ struct WidgetActionButton<TransitionContent: View, Label: View>: View {
     }
 
     @ViewBuilder
-    private func openAppLink<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        let url = entry.loginRequired ? WidgetConstants.deepLinkLogin : WidgetConstants.deepLinkConnect
+    private func openAppLink<Content: View>(
+        url: URL?,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         if let url {
             Link(destination: url, label: content)
         } else {

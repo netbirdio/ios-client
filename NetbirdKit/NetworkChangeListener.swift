@@ -18,30 +18,79 @@ enum IPAddressType {
 }
 
 class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
-    func onNetworkChanged(_ p0: String?) {
-        let routesString = p0 ?? ""
-        let (v4Routes, v6Routes, containsDefault) = parseRoutesToNESettings(routesString: routesString)
-        if v4Routes.isEmpty && v6Routes.isEmpty && self.interfaceIP == nil {
-            return
-        }
-        self.tunnelManager.setRoutes(v4Routes: v4Routes, v6Routes: v6Routes, containsDefault: containsDefault)
-    }
-    
-    private var tunnelManager: PacketTunnelProviderSettingsManager
-    
+    // The Go engine retains this listener for the lifetime of the SDK client it was
+    // created with. When the adapter is swapped/torn down (e.g. profile switch or a
+    // restart triggered by wifi<->cellular flapping) the OLD client can still be
+    // spinning down and fire a late callback into THIS (now-stale) listener. Without
+    // a guard that callback would reach into a tunnelManager whose owning provider has
+    // already been deallocated, dereferencing a freed object -> EXC_BAD_ACCESS (0x28).
+    //
+    // `invalidate()` is called before the adapter is discarded so any in-flight or
+    // late Go callback becomes a no-op. All Go callbacks are serialized onto a single
+    // queue so invalidation and callback handling can't race.
+    private let callbackQueue = DispatchQueue(label: "io.netbird.NetworkChangeListener")
+    private var isValid = true
+
+    private var tunnelManager: PacketTunnelProviderSettingsManager?
+
     var interfaceIP: String?
-    
+    var interfaceIPv6: String?
+
     init(with tunnelManager: PacketTunnelProviderSettingsManager) {
         self.tunnelManager = tunnelManager
     }
-    
-    func setInterfaceIP(_ p0: String?) {
-        guard let validIP = p0, !validIP.isEmpty else {
-            return
+
+    /// Detach this listener from its tunnel manager. After this call every Go callback
+    /// is dropped. Must be called before the owning adapter/provider is torn down.
+    func invalidate() {
+        callbackQueue.sync {
+            self.isValid = false
+            self.tunnelManager = nil
         }
-        
-        self.interfaceIP = validIP
-        self.tunnelManager.setInterfaceIP(interfaceIP: validIP)
+    }
+
+    func onNetworkChanged(_ p0: String?) {
+        callbackQueue.sync {
+            guard self.isValid, let tunnelManager = self.tunnelManager else {
+                return
+            }
+            let routesString = p0 ?? ""
+            let (v4Routes, v6Routes, containsDefault) = parseRoutesToNESettings(routesString: routesString)
+            if v4Routes.isEmpty && v6Routes.isEmpty && self.interfaceIP == nil {
+                return
+            }
+            tunnelManager.setRoutes(v4Routes: v4Routes, v6Routes: v6Routes, containsDefault: containsDefault)
+        }
+    }
+
+    func setInterfaceIP(_ p0: String?) {
+        callbackQueue.sync {
+            guard self.isValid, let tunnelManager = self.tunnelManager else {
+                return
+            }
+            guard let validIP = p0, !validIP.isEmpty else {
+                return
+            }
+            self.interfaceIP = validIP
+            // New engine session boundary: drop the previous session's v6 address. The
+            // engine re-announces it via setInterfaceIPv6 only when the session actually
+            // has one, so a v4-only session must not keep a stale value around.
+            self.interfaceIPv6 = nil
+            tunnelManager.setInterfaceIP(interfaceIP: validIP)
+        }
+    }
+
+    func setInterfaceIPv6(_ p0: String?) {
+        callbackQueue.sync {
+            guard self.isValid, let tunnelManager = self.tunnelManager else {
+                return
+            }
+            guard let validIPv6 = p0, !validIPv6.isEmpty else {
+                return
+            }
+            self.interfaceIPv6 = validIPv6
+            tunnelManager.setInterfaceIPv6(interfaceIPv6: validIPv6)
+        }
     }
     
     func parseRoutesToNESettings(routesString: String) -> ([NEIPv4Route], [NEIPv6Route], Bool) {
@@ -75,6 +124,9 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
         if let interfaceIP = self.interfaceIP, let interfaceRoute = createIPv4RouteFromCIDR(cidr: interfaceIP) {
             v4Routes.append(interfaceRoute)
         }
+        if let interfaceIPv6 = self.interfaceIPv6, let interfaceRoute = createIPv6RouteFromCIDR(cidr: interfaceIPv6) {
+            v6Routes.append(interfaceRoute)
+        }
         return (v4Routes, v6Routes, containsDefault)
     }
     
@@ -102,22 +154,17 @@ class NetworkChangeListener: NSObject, NetBirdSDKNetworkChangeListenerProtocol {
 }
 
 func detectIPAddressType(_ address: String) -> IPAddressType {
-    let ipv4Pattern = "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$"
-    let ipv6Pattern = "^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}(\\/\\d{1,3})?$"
+    let bare = address.split(separator: "/").first.map(String.init) ?? address
 
-    let ipv4Regex = try! NSRegularExpression(pattern: ipv4Pattern, options: [])
-    let ipv6Regex = try! NSRegularExpression(pattern: ipv6Pattern, options: [])
-
-    let ipv4Matches = ipv4Regex.numberOfMatches(in: address, options: [], range: NSRange(location: 0, length: address.utf16.count))
-    let ipv6Matches = ipv6Regex.numberOfMatches(in: address, options: [], range: NSRange(location: 0, length: address.utf16.count))
-
-    if ipv4Matches > 0 {
+    var v4 = in_addr()
+    if bare.withCString({ inet_pton(AF_INET, $0, &v4) }) == 1 {
         return .ipv4
-    } else if ipv6Matches > 0 {
-        return .ipv6
-    } else {
-        return .invalid
     }
+    var v6 = in6_addr()
+    if bare.withCString({ inet_pton(AF_INET6, $0, &v6) }) == 1 {
+        return .ipv6
+    }
+    return .invalid
 }
 
 func extractIPAddressAndSubnet(from cidr: String) -> (String, String)? {

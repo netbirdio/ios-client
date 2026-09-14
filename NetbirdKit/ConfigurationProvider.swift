@@ -23,12 +23,20 @@ protocol ConfigurationProvider {
     /// Whether Rosenpass permissive mode is enabled (allows non-Rosenpass peers)
     var rosenpassPermissive: Bool { get set }
 
+    // MARK: - IPv6
+
+    /// Whether IPv6 overlay addressing is disabled
+    var disableIPv6: Bool { get set }
+
     // MARK: - Pre-Shared Key
 
-    /// The current pre-shared key (empty string if not set)
-    var preSharedKey: String { get set }
+    /// Stages a new pre-shared key; an empty string clears it. Write-only by
+    /// design: the Go layer no longer hands the key back across the bridge, so
+    /// there is no matching getter.
+    func setPreSharedKey(_ key: String)
 
-    /// Whether a pre-shared key is configured
+    /// Whether a pre-shared key is configured - staged, persisted, or enforced
+    /// by MDM policy.
     var hasPreSharedKey: Bool { get }
 
     // MARK: - Lifecycle
@@ -37,6 +45,12 @@ protocol ConfigurationProvider {
     /// Returns true on success, false on failure
     @discardableResult
     func commit() -> Bool
+
+    /// Message from the most recent failed commit, or nil after a success.
+    /// The Go layer rejects a staged value that diverges from an MDM-managed
+    /// key, and the caller needs the reason to tell that apart from an I/O
+    /// failure.
+    var lastCommitError: String? { get }
 
     /// Reloads settings from persistent storage
     func reload()
@@ -49,6 +63,7 @@ protocol ConfigurationProvider {
 final class iOSConfigurationProvider: ConfigurationProvider {
 
     private var preferences: NetBirdSDKPreferences
+    private(set) var lastCommitError: String?
 
     init() {
         self.preferences = Preferences.newPreferences()
@@ -86,19 +101,37 @@ final class iOSConfigurationProvider: ConfigurationProvider {
         }
     }
 
-    // MARK: - Pre-Shared Key
+    // MARK: - IPv6
 
-    var preSharedKey: String {
+    var disableIPv6: Bool {
         get {
-            return preferences.getPreSharedKey(nil)
+            var result = ObjCBool(false)
+            do {
+                try preferences.getDisableIPv6(&result)
+            } catch {
+                print("ConfigurationProvider: Failed to read disableIPv6 - \(error)")
+            }
+            return result.boolValue
         }
         set {
-            preferences.setPreSharedKey(newValue)
+            preferences.setDisableIPv6(newValue)
         }
     }
 
+    // MARK: - Pre-Shared Key
+
+    func setPreSharedKey(_ key: String) {
+        preferences.setPreSharedKey(key)
+    }
+
     var hasPreSharedKey: Bool {
-        return !preSharedKey.isEmpty
+        var result = ObjCBool(false)
+        do {
+            try preferences.hasPreSharedKey(&result)
+        } catch {
+            print("ConfigurationProvider: Failed to read hasPreSharedKey - \(error)")
+        }
+        return result.boolValue
     }
 
     // MARK: - Lifecycle
@@ -107,8 +140,10 @@ final class iOSConfigurationProvider: ConfigurationProvider {
     func commit() -> Bool {
         do {
             try preferences.commit()
+            lastCommitError = nil
             return true
         } catch {
+            lastCommitError = error.localizedDescription
             print("ConfigurationProvider: Failed to commit - \(error)")
             return false
         }
@@ -150,15 +185,27 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
         set { updateJSONField(field: "RosenpassPermissive", value: newValue) }
     }
 
+    // MARK: - IPv6
+
+    var disableIPv6: Bool {
+        get { extractJSONBool(field: "DisableIPv6") ?? false }
+        set { updateJSONField(field: "DisableIPv6", value: newValue) }
+    }
+
     // MARK: - Pre-Shared Key
 
-    var preSharedKey: String {
-        get { extractJSONString(field: "PreSharedKey") ?? "" }
-        set { updateJSONField(field: "PreSharedKey", value: newValue) }
+    func setPreSharedKey(_ key: String) {
+        updateJSONField(field: "PreSharedKey", value: key)
     }
 
     var hasPreSharedKey: Bool {
-        return !preSharedKey.isEmpty
+        // A policy-supplied key never reaches the local config JSON, so
+        // reading only that would report "Not configured" for a device the
+        // policy has in fact given a key.
+        if MDMRestrictions.current().mdm.preSharedKey {
+            return true
+        }
+        return !(extractJSONString(field: "PreSharedKey") ?? "").isEmpty
     }
 
     // MARK: - Lifecycle
@@ -168,6 +215,8 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
         // Settings are written directly to config JSON, no separate commit needed
         return true
     }
+
+    var lastCommitError: String? { nil }
 
     func reload() {
         // Config JSON is always read fresh from UserDefaults
@@ -203,11 +252,6 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     private func updateJSONField<T>(field: String, value: T) {
         guard var dict = parseConfigDict() else {
             AppLogger.shared.log("ConfigurationProvider: No config JSON available for updating '\(field)'")
-            return
-        }
-
-        guard dict[field] != nil else {
-            AppLogger.shared.log("ConfigurationProvider: Field '\(field)' not found in config JSON")
             return
         }
 

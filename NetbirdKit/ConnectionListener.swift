@@ -15,18 +15,51 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
 
     var adapter: NetBirdAdapter
 
+    private let pathMonitor = NWPathMonitor()
+    private let pathMonitorQueue = DispatchQueue(label: "io.netbird.connection-listener.path")
+    private let pathStatusLock = NSLock()
+    private var currentPathStatus: NWPath.Status?
+
+    /// Creates a listener that mirrors engine and physical-network state into the adapter.
     init(adapter: NetBirdAdapter, completionHandler: @escaping (Error?) -> Void) {
         self.completionHandler = completionHandler
         self.adapter = adapter
+        super.init()
+
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            self?.pathStatusLock.lock()
+            self?.currentPathStatus = path.status
+            self?.pathStatusLock.unlock()
+        }
+        pathMonitor.start(queue: pathMonitorQueue)
     }
 
+    /// Stops monitoring the physical network path.
+    deinit {
+        pathMonitor.cancel()
+    }
+
+    /// Whether the physical network is unavailable or has not produced an initial path yet.
+    private var isNetworkUnavailableOrUnknown: Bool {
+        if adapter.isNetworkUnavailable {
+            return true
+        }
+
+        pathStatusLock.lock()
+        defer { pathStatusLock.unlock() }
+        // Until the monitor publishes its first path, avoid turning a transient SDK
+        // disconnect into a terminal state. Authentication failures are handled first.
+        return currentPathStatus != .satisfied
+    }
+
+    /// Receives address changes; no additional state update is required by the iOS client.
     func onAddressChanged(_ p0: String?, p1: String?) {
         // do nothing
     }
 
+    /// Publishes a successful engine connection and completes tunnel startup.
     func onConnected() {
         let wasRestarting = adapter.isRestarting
-        adapter.isRestarting = false
         adapter.clientState = .connected
         AppLogger.shared.log("onConnected: state=connected, wasRestarting=\(wasRestarting)")
 
@@ -35,6 +68,7 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         }
     }
 
+    /// Publishes an engine connection attempt unless a controlled restart is underway.
     func onConnecting() {
         if adapter.isRestarting {
             AppLogger.shared.log("onConnecting: suppressed (isRestarting=true)")
@@ -44,49 +78,51 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         }
     }
 
-    /// Check if network is currently available using synchronous path check
-    private func isNetworkAvailable() -> Bool {
-        let monitor = NWPathMonitor()
-        let semaphore = DispatchSemaphore(value: 0)
-        var isAvailable = false
-
-        monitor.pathUpdateHandler = { path in
-            isAvailable = path.status == .satisfied
-            semaphore.signal()
-        }
-
-        let queue = DispatchQueue(label: "NetworkCheck")
-        monitor.start(queue: queue)
-
-        // Wait up to 100ms for network status
-        _ = semaphore.wait(timeout: .now() + 0.1)
-        monitor.cancel()
-
-        return isAvailable
-    }
-
+    /// Reconciles an engine disconnect with authentication, network loss, and restart state.
     func onDisconnected() {
         let wasRestarting = adapter.isRestarting
-        let isNetworkUnavailableFlag = adapter.isNetworkUnavailable
-        adapter.isRestarting = false
+        let shouldKeepTunnelAlive = isNetworkUnavailableOrUnknown
 
-        // Check both the flag AND actual network status
-        // This handles race condition where Go SDK fires onDisconnected before our handler sets the flag
-        let networkAvailable = isNetworkAvailable()
-        let shouldStayConnecting = isNetworkUnavailableFlag || !networkAvailable
+        // Session expiry takes priority over the keep-alive-on-network-loss logic below.
+        // If the last management error was an auth failure there is nothing to reconnect
+        // to, so we must NOT linger in .connecting — that keeps the now-dead tunnel
+        // interface up with the VPN's default route and black-holes ALL traffic until the
+        // user manually intervenes (independent of On-Demand). Mark disconnected and let
+        // the provider tear the tunnel down so traffic returns to the physical interface.
+        // Uses the network-free cached check — safe to call during teardown.
+        if !wasRestarting && adapter.needsLoginCached() {
+            adapter.clientState = .disconnected
+            AppLogger.shared.log("onDisconnected: login required — signalling teardown")
+            adapter.onLoginRequired?()
+            return
+        }
 
         // When network is unavailable, keep the tunnel alive by staying in "connecting" state
         // instead of "disconnected". This allows automatic reconnection when network returns.
-        if shouldStayConnecting {
+        // Prefer the provider's published flag and use this listener's long-lived cached
+        // path as a fallback. That closes the callback-ordering window without blocking
+        // an SDK callback while waiting for a newly-created monitor's first update.
+        if shouldKeepTunnelAlive {
             adapter.clientState = .connecting
-            AppLogger.shared.log("onDisconnected: network unavailable (flag=\(isNetworkUnavailableFlag), networkAvailable=\(networkAvailable)) - staying in connecting state for auto-reconnect, wasRestarting=\(wasRestarting)")
+            AppLogger.shared.log("onDisconnected: network unavailable - staying in connecting state for auto-reconnect, wasRestarting=\(wasRestarting)")
         } else {
             adapter.clientState = .disconnected
             AppLogger.shared.log("onDisconnected: state=disconnected, wasRestarting=\(wasRestarting)")
+
+            // If session expired (not a network drop), signal login required so the user
+            // gets a notification. Uses the network-free cached check: the blocking
+            // needsLogin() variant is a full Login RPC (retried with backoff for up to two
+            // minutes) on every ordinary disconnect, and it reports the same auth state the
+            // recorder already holds — the engine marks it from the management error before
+            // firing this callback.
+            if !wasRestarting && adapter.needsLoginCached() {
+                AppLogger.shared.log("onDisconnected: login required detected — signalling")
+                adapter.onLoginRequired?()
+            }
         }
-        adapter.notifyStopCompleted()
     }
 
+    /// Publishes an engine disconnect transition unless a controlled restart is underway.
     func onDisconnecting() {
         if adapter.isRestarting {
             AppLogger.shared.log("onDisconnecting: suppressed (isRestarting=true)")
@@ -96,6 +132,7 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         }
     }
     
+    /// Receives peer-count changes; peer details are loaded through the status endpoint.
     func onPeersListChanged(_ p0: Int) {
         // do nothing
     }

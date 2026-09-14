@@ -21,6 +21,12 @@ struct PeerCard: View {
                     .font(.subheadline)
                     .foregroundColor(Color("TextSecondary"))
                     .lineLimit(1)
+                if let ipv6 = peer.ipv6, !ipv6.isEmpty {
+                    Text(ipv6)
+                        .font(.subheadline)
+                        .foregroundColor(Color("TextSecondary"))
+                        .lineLimit(1)
+                }
             }
             Spacer()
             ConnectionIndicator(status: peer.connStatus)
@@ -33,8 +39,10 @@ struct ConnectionIndicator: View {
 
     var indicatorColor: Color {
         switch status {
-        case "Connected", "Connecting":
+        case "Connected":
             return .green
+        case "Connecting":
+            return .orange
         default:
             return .gray
         }

@@ -37,6 +37,11 @@ class Preferences {
         guard let preferences = NetBirdSDKNewPreferences(configPath, statePath) else {
             preconditionFailure("Failed to create NetBirdSDKPreferences")
         }
+        // Register unconditionally: with no MDM profile installed the fetcher
+        // returns "", the policy is empty and every getter behaves exactly as
+        // before. Without this the settings screens read an empty policy and
+        // silently ignore MDM, and commit() cannot reject a managed key.
+        preferences.setMDMPolicyFetcher(MDMPolicyFetcher())
         return preferences
     }
     #else
@@ -61,9 +66,15 @@ class Preferences {
         }
 
         #if DEBUG
-        // Fallback for testing when app group is not available
+        // Fallback for testing when app group is not available.
+        // On tvOS ~/Library/Application Support is read-only in the sandbox —
+        // use Caches (writable) so the Go SDK doesn't fail with EPERM.
+        #if os(tvOS)
+        let baseURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
+        #else
         let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
+        #endif
         return (baseURL ?? fileManager.temporaryDirectory).appendingPathComponent(fileName).path
         #else
         AppLogger.shared.log("ERROR: App group '\(GlobalConstants.userPreferencesSuiteName)' not available. Check entitlements.")
@@ -75,6 +86,12 @@ class Preferences {
         #if os(iOS)
         // Use profile-aware paths on iOS
         return ProfileManager.shared.activeConfigPath()
+        #elseif os(tvOS)
+        // App Group container is not writable on tvOS, so the config path handed
+        // to NetBirdSDKNewAuth must live in a writable directory — otherwise the
+        // SDK's config create/update fails with EPERM before the SSO flow starts.
+        // Persistence on tvOS goes through UserDefaults + IPC, not this file.
+        return URL(fileURLWithPath: cacheDirectory()).appendingPathComponent(GlobalConstants.configFileName).path
         #else
         return getFilePath(fileName: GlobalConstants.configFileName)
         #endif
@@ -84,9 +101,49 @@ class Preferences {
         #if os(iOS)
         // Use profile-aware paths on iOS
         return ProfileManager.shared.activeStatePath()
+        #elseif os(tvOS)
+        // App Group container is not writable from the extension on tvOS.
+        // The Go state manager writes temp files next to this path, so it must
+        // live in a writable directory or every persist fails with EPERM.
+        return URL(fileURLWithPath: cacheDirectory()).appendingPathComponent(GlobalConstants.stateFileName).path
         #else
         return getFilePath(fileName: GlobalConstants.stateFileName)
         #endif
+    }
+
+    /// Returns a writable directory for debug bundle ZIP generation.
+    /// iOS: App Group container's Caches subdir. tvOS: process-local Caches.
+    static func cacheDirectory() -> String {
+        let fileManager = FileManager.default
+        #if os(tvOS)
+        if let cacheURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            do {
+                try fileManager.createDirectory(at: cacheURL, withIntermediateDirectories: true)
+                return cacheURL.path
+            } catch {
+                return fileManager.temporaryDirectory.path
+            }
+        }
+        return fileManager.temporaryDirectory.path
+        #else
+        if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
+            let cacheURL = groupURL.appendingPathComponent("Library/Caches/netbird-debug")
+            do {
+                try fileManager.createDirectory(at: cacheURL, withIntermediateDirectories: true)
+                return cacheURL.path
+            } catch {
+                return fileManager.temporaryDirectory.path
+            }
+        }
+        return fileManager.temporaryDirectory.path
+        #endif
+    }
+
+    static func logFilePath() -> String? {
+        return FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)?
+            .appendingPathComponent("logfile.log")
+            .path
     }
 
     // MARK: - App-Local UserDefaults Storage
@@ -98,9 +155,16 @@ class Preferences {
     private static let configJSONKey = "netbird_config_json"
 
     /// Get the App Group UserDefaults.
-    /// Note: On tvOS, this is app-local only - NOT shared with extension.
+    /// Note: On tvOS, app-group suites don't work at all — cfprefsd detaches
+    /// ("Using kCFPreferencesAnyUser with a container is only allowed for System
+    /// Containers") and every read returns nil. Use process-local standard defaults
+    /// there; the app↔extension transfer happens via IPC instead.
     static func sharedUserDefaults() -> UserDefaults? {
+        #if os(tvOS)
+        return UserDefaults.standard
+        #else
         return UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        #endif
     }
 
     /// Save config JSON to UserDefaults (app-local storage).
@@ -150,6 +214,15 @@ class Preferences {
     static func loadManagementURL() -> String? {
         return sharedUserDefaults()?.string(forKey: managementURLKey)
     }
+
+    // MARK: - Login Browser Account Tracking
+    //
+    // The login browser has one cookie jar shared by every profile. login_hint tells
+    // the IdP which account a profile wants, but a hint is advisory — an IdP with a
+    // live session for another account signs in with that session instead, which is
+    // how a profile ends up holding a peer key and a token from two different
+    // accounts. Recording which profile last completed a login through that jar lets
+
 
     /// Restore config from UserDefaults to the config file path.
     /// iOS only - needed because the Go SDK reads from the file path.

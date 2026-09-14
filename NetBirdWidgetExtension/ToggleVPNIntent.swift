@@ -29,17 +29,17 @@ struct ToggleVPNIntent: AppIntent {
                 return .result()
             }
             let status = manager.connection.status
-            if status == .disconnected || status == .invalid {
-                defaults?.set(WidgetVPNStatus.connecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
-                WidgetCenter.shared.reloadAllTimelines()
-                let session = manager.connection as? NETunnelProviderSession
-                try session?.startVPNTunnel()
+            if status == .disconnected || status == .invalid,
+               let session = manager.connection as? NETunnelProviderSession {
+                try VPNIntentHelpers.startTunnel(session: session)
             }
         } else {
-            let status = manager.connection.status
-            if status == .connected || status == .connecting {
-                defaults?.set(WidgetVPNStatus.disconnecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
-                WidgetCenter.shared.reloadAllTimelines()
+            let neStatus = manager.connection.status
+            let persistedRaw = defaults?.string(forKey: WidgetConstants.keyVPNStatus) ?? "disconnected"
+            let persisted = WidgetVPNStatus(rawValue: persistedRaw) ?? .disconnected
+            let shouldDisconnect = neStatus == .connected || neStatus == .connecting
+                || persisted == .connected || persisted == .connecting
+            if shouldDisconnect {
                 manager.connection.stopVPNTunnel()
             }
         }

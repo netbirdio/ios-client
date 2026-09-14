@@ -2,189 +2,279 @@
 //  iOSConnectionView.swift
 //  NetBird
 //
-//  Connection tab: VPN button, FQDN/IP display, status indicator.
+//  Connection tab: VPN toggle, FQDN/IP display, status indicator.
 //
 
 import SwiftUI
-import Lottie
 import NetworkExtension
 
 #if os(iOS)
 
 struct iOSConnectionView: View {
     @EnvironmentObject var viewModel: ViewModel
-    @State private var animationKey: UUID = UUID()
     @State private var fqdnCopied = false
-    @State private var ipCopied = false
+    @State private var ipv4Copied = false
+    @State private var ipv6Copied = false
+    @State private var showAddressDetails = false
 
     var body: some View {
-        GeometryReader { geometry in
-            let isLandscape = geometry.size.width > geometry.size.height
-            let imageName = isLandscape ? "bg-bottom-landscape" : "bg-bottom"
+        ZStack {
+            if viewModel.statusDetailsValid {
+                Color("BgMenu")
+                    .ignoresSafeArea()
 
-            ZStack {
-                
-                if viewModel.statusDetailsValid {
-                    // Background layers
-                    VStack {
-                        Color("BgSecondary")
-                            .frame(height: UIScreen.main.bounds.height * 4/5)
-                            .ignoresSafeArea(.all)
-                        Color("BgPrimary")
-                            .frame(height: UIScreen.main.bounds.height * 1/5)
-                            .ignoresSafeArea(.all)
+                VStack(spacing: 0) {
+                    // Profile selector
+                    ProfileBadge(profileName: viewModel.activeProfileName) {
+                        viewModel.navigateToProfilesView = true
                     }
+                    .padding(.top, 8)
+                    .frame(maxWidth: .infinity, alignment: .center)
 
-                    VStack {
-                        Image(imageName)
-                            .resizable(resizingMode: .stretch)
-                            .aspectRatio(contentMode: DeviceType.isPad ? .fill : .fit)
-                            .padding(.top, Screen.height * (DeviceType.isPad ? (isLandscape ? -0.15 : 0.36) : 0.19))
-                            .padding(.leading, UIScreen.main.bounds.height * (isLandscape ? 0.04 : 0))
-                            .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
-                            .edgesIgnoringSafeArea(.bottom)
-                    }
+                    Spacer()
 
-                    // FQDN + IP + internet status
-                    VStack {
-                        ProfileBadge(profileName: viewModel.activeProfileName) {
-                            viewModel.navigateToProfilesView = true
-                        }
-                        .padding(.top, 8)
-
-                        Text(fqdnCopied ? "Copied" : viewModel.fqdn)
-                            .foregroundColor(Color("TextPrimary"))
-                            .font(.system(size: 20, weight: .regular))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                            .opacity(fqdnCopied ? 0.7 : 1.0)
-                            .animation(.easeInOut(duration: 0.2), value: fqdnCopied)
-                            .padding(.horizontal, 16)
-                            .padding(.top, Screen.height * (DeviceType.isPad ? 0.09 : 0.13))
-                            .padding(.bottom, 5)
-                            .onTapGesture {
-                                guard !viewModel.fqdn.isEmpty else { return }
-                                UIPasteboard.general.string = viewModel.fqdn
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                withAnimation(.smooth) {
-                                    fqdnCopied = true
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                    withAnimation(.smooth) {
-                                        fqdnCopied = false
-                                    }
-                                }
-                            }
-
-                        Text(ipCopied ? "Copied" : viewModel.ip)
-                            .foregroundColor(Color("TextPrimary"))
-                            .font(.system(size: 20, weight: .regular))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                            .opacity(ipCopied ? 0.7 : 1.0)
-                            .animation(.easeInOut(duration: 0.2), value: ipCopied)
-                            .onTapGesture {
-                                guard !viewModel.ip.isEmpty else { return }
-                                UIPasteboard.general.string = viewModel.ip
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                withAnimation(.smooth) {
-                                    ipCopied = true
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                    withAnimation(.smooth) {
-                                        ipCopied = false
-                                    }
-                                }
-                            }
-
-                        Spacer()
-                    }
-
-                    // VPN button + status text
-                    VStack {
-                        Spacer()
-                        Button(action: {
-                            if !viewModel.buttonLock {
-                                switch viewModel.vpnDisplayState {
-                                case .disconnected:
-                                    viewModel.connect()
-                                case .connecting, .connected:
-                                    viewModel.close()
-                                case .disconnecting:
-                                    break
-                                }
-                            }
-                        }) {
-                            CustomLottieView(vpnState: $viewModel.vpnDisplayState)
-                                .id(animationKey)
-                                .frame(width: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79), height: UIScreen.main.bounds.width * (isLandscape ? 0.40 : 0.79))
-                                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                                    self.animationKey = UUID()
-                                }
-                        }
-                        .padding(.top, -UIScreen.main.bounds.height / 27)
-                        .padding(.bottom)
-
-                        Text(viewModel.extensionStateText)
-                            .foregroundColor(Color("TextSecondary"))
-                            .font(.system(size: 24, weight: .regular))
-
-                        Spacer()
-                    }
-                    .padding()
-
-                    // Network warning banner – above tab bar
-                    if viewModel.vpnDisplayState == .connected && !viewModel.isInternetConnected {
-                        VStack {
-                            Spacer()
-                            NetworkWarningBanner()
-                                .padding(.bottom, geometry.safeAreaInsets.bottom + 80)
-                        }
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        .animation(.easeInOut(duration: 0.3), value: viewModel.isInternetConnected)
-                    }
-
-                    // Hidden NavigationLink for ProfilesView
-                    NavigationLink("", destination: ProfilesListView(), isActive: $viewModel.navigateToProfilesView)
-                        .hidden()
-
-                    // Hidden NavigationLink for ServerView
-                    NavigationLink("", destination: ServerView(), isActive: $viewModel.navigateToServerView)
-                        .hidden()
-                        .onChange(of: viewModel.navigateToServerView) { newValue in
-                            if !newValue {
-                                viewModel.startPollingDetails()
-                            }
-                        }
-
-                } else {
-                    // Loading placeholder
-                    ZStack {
-                        Color("BgPrimary")
-                            .ignoresSafeArea()
+                    // Logo + toggle + status text + device info — all in one centered block
+                    VStack(spacing: 24) {
                         Image("netbird-logo-menu")
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 200)
+                            .frame(height: 44)
+
+                        VPNToggleView(
+                            vpnState: viewModel.vpnDisplayState,
+                            isLocked: viewModel.buttonLock,
+                            onConnect: { viewModel.connect() },
+                            onDisconnect: { viewModel.close() }
+                        )
+                        .padding(.vertical, 12)
+
+                        Text(viewModel.extensionStateText)
+                            .font(.custom("InterVariable", size: 18))
+                            .fontWeight(.bold)
+                            .foregroundColor(Color("TextPrimary"))
+
+                        VStack(spacing: 15) {
+                            Text(fqdnCopied ? "Copied" : viewModel.fqdn)
+                                .font(.custom("JetBrainsMono-Regular", size: 15))
+                                .foregroundColor(Color("TextPrimary"))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                                .opacity(fqdnCopied ? 0.7 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: fqdnCopied)
+                                .padding(.horizontal, 16)
+                                .contentShape(Rectangle().inset(by: -12))
+                                .onTapGesture { copy(viewModel.fqdn, into: $fqdnCopied) }
+                            
+                            // Expandable IP details: tap to reveal IPv4 + IPv6 with copy actions.
+                            // The dropdown is an overlay (not part of the VStack flow) so it doesn't
+                            // change this block's height and shift the centered content above it.
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showAddressDetails.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text(viewModel.ip)
+                                        .font(.custom("JetBrainsMono-Regular", size: 15))
+                                        .foregroundColor(Color("TextSecondary"))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.5)
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(Color("TextSecondary"))
+                                        .rotationEffect(.degrees(showAddressDetails ? 0 : 180))
+                                }
+                                .contentShape(Rectangle().inset(by: -12))
+                            }
+                            .padding(.top, 4)
+                            .overlay(alignment: .top) {
+                                if showAddressDetails {
+                                    VStack(spacing: 0) {
+                                        addressRow(value: viewModel.ip, copied: $ipv4Copied)
+                                        Divider().background(Color("TextSecondary").opacity(0.2))
+                                        addressRow(value: viewModel.ipv6, copied: $ipv6Copied)
+                                    }
+                                    .frame(width: UIScreen.main.bounds.width - 92)
+                                    .background(Color("BgMenu"))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color("TextSecondary").opacity(0.2)))
+                                    .offset(y: 36)
+                                    .padding(.top, 10)
+                                    .transition(.opacity)
+                                }
+                            }
+                        }
                     }
+
+                    Spacer()
+
+                    // Pinned above the tab bar: the offline warning (when connected but
+                    // without internet) stacked on top of the always-present exit node
+                    // selector. Both live in the layout flow rather than an overlay so the
+                    // banner can never cover the selector.
+                    VStack(spacing: 12) {
+                        if viewModel.vpnDisplayState == .connected && !viewModel.isInternetConnected {
+                            NetworkWarningBanner()
+                                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        }
+
+                        // With client routes disabled by policy the engine
+                        // installs none, so the selector would be a control
+                        // that cannot do anything - drop it rather than show
+                        // it dead.
+                        if !viewModel.mdmRestrictions.mdm.disableClientRoutes {
+                            ExitNodeSelectorCard(routeViewModel: viewModel.routeViewModel)
+                                .padding(.horizontal, 16)
+                        }
+                    }
+                    .padding(.bottom, 16)
+                    .animation(.easeInOut(duration: 0.3), value: viewModel.isInternetConnected)
                 }
 
-                // Safari login view — shown regardless of statusDetailsValid
-                if viewModel.networkExtensionAdapter.showBrowser,
-                   let loginURLString = viewModel.networkExtensionAdapter.loginURL,
-                   let loginURL = URL(string: loginURLString)
-                {
-                    SafariView(isPresented: $viewModel.networkExtensionAdapter.showBrowser,
-                               url: loginURL,
-                               didFinish: {
-                        print("Finish login")
-                        viewModel.networkExtensionAdapter.startVPNConnection()
-                    })
+                NavigationLink("", destination: ProfilesListView(), isActive: $viewModel.navigateToProfilesView)
+                    .hidden()
+
+                NavigationLink("", destination: ServerView(), isActive: $viewModel.navigateToServerView)
+                    .hidden()
+                    .onChange(of: viewModel.navigateToServerView) { newValue in
+                        if !newValue {
+                            viewModel.startPollingDetails()
+                        }
+                    }
+
+            } else {
+                // Loading placeholder while extension state is unknown
+                ZStack {
+                    Color("BgMenu").ignoresSafeArea()
+                    Image("netbird-logo-menu")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 200)
+                }
+            }
+
+            // System auth session — started regardless of statusDetailsValid. It
+            // presents its own modal window, so this view only hosts the launcher.
+            if viewModel.networkExtensionAdapter.showBrowser,
+               let loginURLString = viewModel.networkExtensionAdapter.loginURL,
+               let loginURL = URL(string: loginURLString)
+            {
+                SafariView(
+                    isPresented: $viewModel.networkExtensionAdapter.showBrowser,
+                    url: loginURL,
+                    didFinish: loginBrowserDidFinish
+                )
+            } else if viewModel.networkExtensionAdapter.showBrowser {
+                // A login was started but its authorize URL is missing or unparsable,
+                // so no browser can be presented. Nothing would ever report an
+                // outcome, leaving the SDK flow pending until it expires — cancel it
+                // here instead.
+                Color.clear.onAppear {
+                    // The URL never goes to the log: it carries the OAuth state, the
+                    // redirect target and the login_hint — the user's email address.
+                    // Which of the two failure modes it was is the diagnostic part.
+                    let reason = viewModel.networkExtensionAdapter.loginURL == nil ? "missing" : "unparsable"
+                    AppLogger.shared.log("Login browser: \(reason) authorize URL — cancelling")
+                    viewModel.cancelPendingLogin()
                 }
             }
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarHidden(true)
+        .alert("Login failed", isPresented: Binding(
+            get: { viewModel.networkExtensionAdapter.loginErrorMessage != nil },
+            set: { if !$0 { viewModel.networkExtensionAdapter.loginErrorMessage = nil } }
+        )) {
+            Button("OK") { viewModel.networkExtensionAdapter.loginErrorMessage = nil }
+        } message: {
+            Text(viewModel.networkExtensionAdapter.loginErrorMessage ?? "")
+        }
+        .onAppear {
+            // Returning to this tab doesn't go through applyExtensionStatus, so refresh the
+            // network map here to keep the exit node selector current. Only while connected:
+            // GetRoutes answers with an empty list when there is no tunnel session and would
+            // wipe a list that is still valid.
+            if viewModel.vpnDisplayState == .connected {
+                viewModel.routeViewModel.getRoutes()
+            }
+        }
+    }
+
+    /// Resolves what the login browser's end means for the VPN.
+    private func loginBrowserDidFinish(_ outcome: LoginBrowserOutcome) {
+        let adapter = viewModel.networkExtensionAdapter
+
+        switch outcome {
+        case .failed(let error):
+            print("Login browser failed: \(error.localizedDescription)")
+            AppLogger.shared.log("Login browser failed: \(error.localizedDescription)")
+            viewModel.cancelPendingLogin()
+
+        case .redirectCaptured:
+            // The authorization code was handed to the SDK; the rest of the login
+            // runs there. The adapter starts the VPN once it reports success.
+            print("Login redirect captured - waiting for the SDK to finish")
+            adapter.resolveLoginAfterBrowserClose {
+                print("Login did not complete after redirect - resetting")
+                viewModel.cancelPendingLogin()
+            }
+
+        case .closed:
+            if adapter.loginSucceeded {
+                print("Finish login")
+                // The SDK just completed the management login, so the extension can
+                // skip its own needs-login check (one Login RPC) when it starts.
+                adapter.startVPNConnection(loginVerified: true)
+                return
+            }
+            // Ambiguous: the user may have cancelled, or closed the SDK's success
+            // page while registration was still running. Never start the VPN here —
+            // that would launch the extension, trip its needs-login path and pop a
+            // spurious "Login required" alert. Let the adapter decide, and only
+            // reset the UI if it concludes the login is not in flight.
+            print("Login browser closed without a reported success - resolving")
+            adapter.resolveLoginAfterBrowserClose {
+                print("Login cancelled or failed - resetting")
+                viewModel.cancelPendingLogin()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func addressRow(value: String, copied: Binding<Bool>) -> some View {
+        HStack {
+            Text(copied.wrappedValue ? "Copied" : (value.isEmpty ? "—" : value))
+                .font(.custom("JetBrainsMono-Regular", size: 14))
+                .foregroundColor(Color("TextPrimary"))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .opacity(copied.wrappedValue ? 0.7 : 1.0)
+                .animation(.easeInOut(duration: 0.2), value: copied.wrappedValue)
+
+            Spacer()
+
+            Button {
+                copy(value, into: copied)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color("TextSecondary"))
+                    .contentShape(Rectangle().inset(by: -10))
+            }
+            .disabled(value.isEmpty)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
+
+    private func copy(_ value: String, into flag: Binding<Bool>) {
+        guard !value.isEmpty else { return }
+        UIPasteboard.general.string = value
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(.easeInOut(duration: 0.2)) { flag.wrappedValue = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            withAnimation(.easeInOut(duration: 0.2)) { flag.wrappedValue = false }
+        }
     }
 }
 

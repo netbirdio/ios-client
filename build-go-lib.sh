@@ -13,6 +13,13 @@
 
 set -euo pipefail
 
+# The tvOS fork is not a dependency of the submodule, so its revision cannot be
+# read from go.mod the way the upstream gomobile pin is; this constant is the
+# single place it is pinned. The CI cache keys follow it through the hash of
+# this script.
+tvos_fork_module="github.com/netbirdio/gomobile-tvos-fork"
+tvos_fork_version="v0.0.0-20260129172842-a56582c0e7c9"
+
 app_path=$(pwd)
 tvos=false
 
@@ -69,6 +76,43 @@ get_version() {
   echo "$new_version"
 }
 
+# The gomobile driver shells out to gobind, and gobind is the tool that
+# actually generates the ObjC bindings and glue. Its own suggestion for a
+# missing gobind is `gomobile init`, which installs it from @latest — that
+# would let the generator float even though the driver is pinned, changing the
+# generated API without a commit here. So both tools are held to the wanted
+# revision: the module version embedded in each binary (go version -m) is
+# compared to the pin, and a missing or diverging tool is reinstalled at the
+# pin.
+#
+# GOBIN is prepended to PATH so the binary this function verified or installed
+# is the one the bind driver (and its PATH lookup of the generator) actually
+# runs, even when another copy sits earlier on the caller's PATH.
+ensure_gomobile_tools() {
+  local module="$1" want="$2"
+  shift 2
+
+  local gobin
+  gobin=$(go env GOBIN)
+  [ -n "$gobin" ] || gobin="$(go env GOPATH)/bin"
+  export PATH="$gobin:$PATH"
+
+  local tool path have
+  for tool in "$@"; do
+    have=""
+    if path=$(command -v "$tool"); then
+      # `|| true`: go version fails on binaries without build info, and set -e
+      # would abort instead of letting the reinstall below repair the tool.
+      have=$(go version -m "$path" 2>/dev/null \
+        | awk -v mod="$module" '$1 == "mod" && $2 == mod {print $3}') || true
+    fi
+    if [ "$have" != "$want" ]; then
+      echo "Installing $tool at the pin $want (found: ${have:-none})"
+      go install "$module/cmd/$tool@$want"
+    fi
+  done
+}
+
 cd netbird-core
 
 version=$(get_version "${1:-}")
@@ -76,8 +120,9 @@ echo "Using version: $version"
 
 if [ "$tvos" = true ]; then
   echo "Building for tvOS (using gomobile-netbird fork)"
-  gomobile-netbird init
-  go get github.com/netbirdio/gomobile-tvos-fork@latest
+  GOPROXY=direct ensure_gomobile_tools "$tvos_fork_module" "$tvos_fork_version" \
+    gomobile-netbird gobind-netbird
+  go get "$tvos_fork_module@$tvos_fork_version"
 
   gomobile-netbird bind \
     -target=ios,iossimulator,tvos,tvossimulator \
@@ -87,7 +132,9 @@ if [ "$tvos" = true ]; then
     "$(pwd)/client/ios/NetBirdSDK"
 else
   echo "Building for iOS"
-  gomobile init
+  ensure_gomobile_tools golang.org/x/mobile \
+    "$(go list -m -f '{{.Version}}' golang.org/x/mobile)" \
+    gomobile gobind
 
   gomobile bind \
     -target=ios,iossimulator \

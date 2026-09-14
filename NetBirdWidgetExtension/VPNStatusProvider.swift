@@ -20,12 +20,18 @@ struct VPNStatusProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<VPNStatusEntry>) -> Void) {
         loadEntry { entry in
-            let nextUpdate = Calendar.current.date(
-                byAdding: .minute,
-                value: WidgetConstants.timelineRefreshMinutes,
-                to: entry.date
-            ) ?? entry.date.addingTimeInterval(300)
-
+            let nextUpdate: Date
+            if entry.neWasTransitioning {
+                // NE was mid-transition; poll frequently so the widget recovers
+                // to the correct stable state as soon as NE settles.
+                nextUpdate = entry.date.addingTimeInterval(WidgetConstants.transitionPollInterval)
+            } else {
+                nextUpdate = Calendar.current.date(
+                    byAdding: .minute,
+                    value: WidgetConstants.timelineRefreshMinutes,
+                    to: entry.date
+                ) ?? entry.date.addingTimeInterval(300)
+            }
             completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
         }
     }
@@ -35,36 +41,47 @@ struct VPNStatusProvider: TimelineProvider {
         let ip = defaults?.string(forKey: WidgetConstants.keyIP) ?? ""
         let fqdn = defaults?.string(forKey: WidgetConstants.keyFQDN) ?? ""
         let loginRequired = defaults?.bool(forKey: WidgetConstants.keyLoginRequired) ?? false
+        let configPathStored = defaults?.string(forKey: WidgetConstants.keyActiveConfigPath) != nil
 
         NETunnelProviderManager.loadAllFromPreferences { managers, error in
             let manager = (error == nil) ? managers?.first : nil
             let status: WidgetVPNStatus
+            var effectiveLoginRequired = loginRequired
+            var neWasTransitioning = false
 
-            let persistedRaw = defaults?.string(forKey: WidgetConstants.keyVPNStatus) ?? "disconnected"
-            let persisted = WidgetVPNStatus(rawValue: persistedRaw) ?? .disconnected
-
-            if let manager {
+            if let manager = manager {
                 let neStatus = WidgetVPNStatus(neStatus: manager.connection.status)
-                // Prefer a persisted transition state (.connecting/.disconnecting) when NE
-                // still reports the old stable state — this avoids the brief snap-back
-                // right after a widget-triggered toggle rewrites keyVPNStatus.
-                let usePersistedTransition = persisted.isTransitioning && neStatus.isStable &&
-                    !(persisted == .connecting && neStatus == .connected) &&
-                    !(persisted == .disconnecting && neStatus == .disconnected)
-                status = usePersistedTransition ? persisted : neStatus
+                if neStatus.isStable {
+                    status = neStatus
+                    defaults?.set(neStatus.rawValue, forKey: WidgetConstants.keyVPNStatus)
+                } else {
+                    // NE is mid-transition; show the last known stable state so the
+                    // widget never displays a permanent spinner.
+                    let persistedRaw = defaults?.string(forKey: WidgetConstants.keyVPNStatus) ?? "disconnected"
+                    let persisted = WidgetVPNStatus(rawValue: persistedRaw) ?? .disconnected
+                    status = persisted.isStable ? persisted : .disconnected
+                    neWasTransitioning = true
+                }
+                if neStatus == .connected && loginRequired {
+                    defaults?.set(false, forKey: WidgetConstants.keyLoginRequired)
+                    effectiveLoginRequired = false
+                }
             } else {
-                status = persisted
+                // No NE manager — fall back to last persisted stable state.
+                let persistedRaw = defaults?.string(forKey: WidgetConstants.keyVPNStatus) ?? "disconnected"
+                let persisted = WidgetVPNStatus(rawValue: persistedRaw) ?? .disconnected
+                status = persisted.isStable ? persisted : .disconnected
             }
 
-            let entry = VPNStatusEntry(
+            completion(VPNStatusEntry(
                 date: Date(),
                 status: status,
                 ip: ip,
                 fqdn: fqdn,
-                needsAppSetup: manager == nil || loginRequired,
-                loginRequired: loginRequired
-            )
-            completion(entry)
+                needsAppSetup: manager == nil || !configPathStored || effectiveLoginRequired,
+                loginRequired: effectiveLoginRequired,
+                neWasTransitioning: neWasTransitioning
+            ))
         }
     }
 }

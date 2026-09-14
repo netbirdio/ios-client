@@ -22,17 +22,38 @@ struct HostDNSConfig: Codable {
 }
 
 class DNSManager: NSObject, NetBirdSDKDnsManagerProtocol {
-    
-    private var tunnelManager: PacketTunnelProviderSettingsManager
-    
+
+    // See NetworkChangeListener for the full rationale: the Go engine retains this
+    // manager for the SDK client's lifetime and can fire applyDns late, after the
+    // adapter has been swapped/torn down. Guard against dereferencing a freed
+    // tunnelManager (EXC_BAD_ACCESS / 0x28) and serialize with invalidate().
+    private let callbackQueue = DispatchQueue(label: "io.netbird.DNSManager")
+    private var isValid = true
+
+    private var tunnelManager: PacketTunnelProviderSettingsManager?
+
     init(with tunnelManager: PacketTunnelProviderSettingsManager) {
         self.tunnelManager = tunnelManager
     }
-    
+
+    /// Detach from the tunnel manager. After this call every Go callback is dropped.
+    /// Must be called before the owning adapter/provider is torn down.
+    func invalidate() {
+        callbackQueue.sync {
+            self.isValid = false
+            self.tunnelManager = nil
+        }
+    }
+
     func applyDns(_ p0: String?) {
-        if let p0 = p0, !p0.isEmpty {
-            if let config = parseDNSSettingsString(inputString: p0) {
-                self.tunnelManager.setDNS(config: config)
+        callbackQueue.sync {
+            guard self.isValid, let tunnelManager = self.tunnelManager else {
+                return
+            }
+            if let p0 = p0, !p0.isEmpty {
+                if let config = parseDNSSettingsString(inputString: p0) {
+                    tunnelManager.setDNS(config: config)
+                }
             }
         }
     }

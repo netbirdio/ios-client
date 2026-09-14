@@ -121,7 +121,7 @@ class ServerViewModel : ObservableObject {
         let configPath = self.configurationFilePath
         let detachedTask = Task.detached(priority: .background) { () -> (NetBirdSDKAuth?, String?) in
             var error: NSError?
-            let authenticator = NetBirdSDKNewAuth(configPath, managementServerUrl, &error)
+            let authenticator = NetBirdSDKNewAuth(configPath, managementServerUrl, MDMPolicyFetcher(), &error)
 
             if let error = error {
                 print(error.domain, error.code, error.description)
@@ -168,6 +168,14 @@ class ServerViewModel : ObservableObject {
                         if ssoSupported {
                             #if os(tvOS)
                             self?.saveConfigToUserDefaults(authenticator: authenticator)
+                            Preferences.saveManagementURL(managementServerUrl)
+                            #else
+                            // The Go SDK already wrote the management URL into the active
+                            // profile's netbird.cfg. Also record it in the connection cache
+                            // and shared UserDefaults so the chosen server is available
+                            // before the config can be read back.
+                            let profileID = ProfileManager.shared.getActiveProfileID()
+                            ProfileManager.shared.saveServerURL(managementServerUrl, forID: profileID)
                             Preferences.saveManagementURL(managementServerUrl)
                             #endif
                             self?.isOperationSuccessful = true
