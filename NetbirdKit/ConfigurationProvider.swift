@@ -198,10 +198,17 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     }
 
     // MARK: - Rosenpass
+    //
+    // Every setter first drops a write that would change nothing. Such a write
+    // cannot conflict with a policy, and it must not record a refusal: a caller
+    // rolling back after a refused commit writes the stored value straight back
+    // - the refused write never touched the JSON - and a refusal recorded there
+    // has no commit left to consume it, so it would fail the next allowed write.
 
     var rosenpassEnabled: Bool {
         get { extractJSONBool(field: "RosenpassEnabled") ?? false }
         set {
+            guard newValue != rosenpassEnabled else { return }
             guard !policyRefuses("rosenpassEnabled", managedBy: { $0.rosenpassEnabled }) else { return }
             updateJSONField(field: "RosenpassEnabled", value: newValue)
         }
@@ -210,6 +217,7 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     var rosenpassPermissive: Bool {
         get { extractJSONBool(field: "RosenpassPermissive") ?? false }
         set {
+            guard newValue != rosenpassPermissive else { return }
             guard !policyRefuses("rosenpassPermissive", managedBy: { $0.rosenpassPermissive }) else { return }
             updateJSONField(field: "RosenpassPermissive", value: newValue)
         }
@@ -220,6 +228,7 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     var disableIPv6: Bool {
         get { extractJSONBool(field: "DisableIPv6") ?? false }
         set {
+            guard newValue != disableIPv6 else { return }
             // No MDM key of its own; only the blanket settings gate applies.
             guard !policyRefuses("disableIPv6", managedBy: { _ in false }) else { return }
             updateJSONField(field: "DisableIPv6", value: newValue)
@@ -229,6 +238,7 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
     // MARK: - Pre-Shared Key
 
     func setPreSharedKey(_ key: String) {
+        guard key != (extractJSONString(field: "PreSharedKey") ?? "") else { return }
         guard !policyRefuses("preSharedKey", managedBy: { $0.preSharedKey }) else { return }
         updateJSONField(field: "PreSharedKey", value: key)
     }
