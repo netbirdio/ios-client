@@ -2,20 +2,31 @@
 //  MDMPolicyFetcher.swift
 //  NetbirdKit
 //
-//  Reads the current iOS managed-configuration snapshot
-//  (UserDefaults key "com.apple.configuration.managed", pushed by MDM
-//  controllers via an Apple Configuration Profile of type
-//  com.apple.app.configuration.managed) and exposes it to the Go layer
-//  as a JSON-encoded string.
+//  Hands the Go layer the current MDM managed configuration as a JSON
+//  string. The Go side calls fetchJSON() on every policy load, so the
+//  answer is always read fresh - there is no Swift-side cache.
 //
-//  Registered exactly once per process via
-//  NetBirdSDKSetMobilePolicyFetcher; the Go side invokes fetchJSON()
-//  on every LoadPolicy call so the response is always fresh — no
-//  Swift-side caching.
+//  Where the configuration comes from depends on the process:
 //
-//  Return-value contract (matches the Go-side jsonFetcherAdapter):
-//    - "" (empty)   : no MDM source present / no managed keys
-//    - "{}"         : managed config explicitly empty
+//    - The app. iOS delivers managed app configuration (the
+//      "com.apple.configuration.managed" dictionary) to the managed app's
+//      own preferences domain, so the app reads UserDefaults.standard and
+//      nothing else.
+//
+//    - The network extension. It is a separate bundle with a separate
+//      preferences domain, and the OS never delivers the dictionary there:
+//      UserDefaults.standard in the extension is empty. The app therefore
+//      mirrors the dictionary into the shared App Group, and the extension
+//      reads that copy. Its own domain is still consulted first, so if iOS
+//      ever does deliver there, the fresher value wins.
+//
+//  The mirror is only as current as the app's last run: a policy that
+//  lands while the tunnel is brought up by On Demand or the widget,
+//  without the app opening, is read as the previous copy until the app
+//  next activates.
+//
+//  Return-value contract (matches the Go-side JSON loader):
+//    - "" (empty)   : no managed configuration
 //    - "{...}"      : JSON object with key/value pairs
 //    - malformed    : logged, treated as empty
 //
@@ -24,23 +35,98 @@ import Foundation
 import NetBirdSDK
 
 @objc public final class MDMPolicyFetcher: NSObject, NetBirdSDKPolicyFetcherProtocol {
-    /// The well-known iOS UserDefaults key under which an MDM-pushed
-    /// Configuration Profile lands the managed-config dictionary.
+    /// The well-known key under which iOS stores the managed-config
+    /// dictionary in the managed app's preferences.
     public static let managedConfigKey = "com.apple.configuration.managed"
 
     public func fetchJSON() -> String {
-        guard let dict = UserDefaults.standard.dictionary(forKey: Self.managedConfigKey),
+        Self.fetchJSON(inExtension: Self.isRunningInExtension)
+    }
+
+    /// Source selection, split out so both paths are testable from the app
+    /// process that hosts the tests.
+    static func fetchJSON(inExtension: Bool) -> String {
+        let own = encodedManagedConfiguration(in: .standard)
+        #if os(iOS)
+        // The app is authoritative and never reads the mirror: after a policy
+        // is removed its own domain is empty, and falling back to the copy
+        // would resurrect the policy it just lost.
+        guard inExtension, own.isEmpty else { return own }
+        return Preferences.sharedUserDefaults()?
+            .string(forKey: GlobalConstants.keyMDMManagedConfigMirror) ?? ""
+        #else
+        // tvOS: App Group suites do not work between the app and the extension
+        // there (see Preferences.sharedUserDefaults), so there is no mirror to
+        // read. Configuration reaches the tvOS extension over IPC instead.
+        return own
+        #endif
+    }
+
+    /// True inside an app extension bundle, where the managed configuration
+    /// is not delivered.
+    static var isRunningInExtension: Bool {
+        Bundle.main.bundleURL.pathExtension == "appex"
+    }
+
+    /// Copies the app's managed configuration into the App Group for the
+    /// network extension, and tells a running extension when it changed.
+    ///
+    /// Call it whenever the app may have received a new policy - on
+    /// activation, when the restrictions snapshot is refreshed, and right
+    /// before starting the tunnel. It is a no-op outside the app process:
+    /// every other process sees an empty domain and would wipe the copy.
+    ///
+    /// - Returns: whether the mirror changed. An unchanged policy is not
+    ///   rewritten and does not wake the extension.
+    @discardableResult
+    static func mirrorToAppGroup() -> Bool {
+        #if os(iOS)
+        guard !isRunningInExtension,
+              let shared = Preferences.sharedUserDefaults() else {
+            return false
+        }
+        let current = encodedManagedConfiguration(in: .standard)
+        let previous = shared.string(forKey: GlobalConstants.keyMDMManagedConfigMirror) ?? ""
+        guard current != previous else { return false }
+
+        if current.isEmpty {
+            shared.removeObject(forKey: GlobalConstants.keyMDMManagedConfigMirror)
+        } else {
+            shared.set(current, forKey: GlobalConstants.keyMDMManagedConfigMirror)
+        }
+        shared.synchronize()
+        AppLogger.shared.log("MDMPolicyFetcher: App Group mirror \(current.isEmpty ? "cleared" : "updated (\(current.count) bytes)")")
+
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(GlobalConstants.darwinNotificationMDMPolicyChanged as CFString),
+            nil,
+            nil,
+            true
+        )
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    /// Encodes the managed-config dictionary in `defaults` as JSON, or ""
+    /// when there is none.
+    ///
+    /// Keys are sorted so the same policy always encodes to the same string;
+    /// otherwise the mirror would compare unequal on dictionary ordering alone
+    /// and wake the extension for nothing.
+    private static func encodedManagedConfiguration(in defaults: UserDefaults) -> String {
+        guard let dict = defaults.dictionary(forKey: managedConfigKey),
               !dict.isEmpty else {
             return ""
         }
-        // JSONSerialization rejects non-JSON values (e.g. Date, URL,
-        // custom NSObject); MDM payloads on iOS may contain Data or
-        // Date that Apple Configurator inserts on signed profiles. The
-        // sanitizer below coerces those into JSON-friendly shapes so
-        // a single bad value cannot break the whole snapshot.
-        let sanitized = Self.sanitizeForJSON(dict)
+        // JSONSerialization rejects non-JSON values such as Date, URL or
+        // Data, which MDM payloads can carry. The sanitizer coerces those so a
+        // single odd value cannot break the whole snapshot.
+        let sanitized = sanitizeForJSON(dict)
         guard JSONSerialization.isValidJSONObject(sanitized),
-              let data = try? JSONSerialization.data(withJSONObject: sanitized, options: []),
+              let data = try? JSONSerialization.data(withJSONObject: sanitized, options: [.sortedKeys]),
               let json = String(data: data, encoding: .utf8) else {
             AppLogger.shared.log("MDMPolicyFetcher: failed to JSON-encode managed configuration; returning empty")
             return ""

@@ -82,6 +82,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Config.apply → applyMDMPolicy on the next Run.
     private var mdmConfigObserver: NSObjectProtocol?
 
+    /// Whether the Darwin observer for the app's mirror is registered.
+    private var isObservingMDMMirror = false
+
     /// Set when a policy change arrived while a restart was already in
     /// flight. Go's detector records the newer policy the moment it is
     /// observed, so it will not report the change again - if this restart
@@ -1143,7 +1146,49 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// — the entire UserDefaults change channel is shared, so this
     /// fires on every unrelated preference write too. Deciding whether
     /// the policy actually changed is Go's job; see the handler.
+    /// Listens for the app telling us the App Group mirror of the managed
+    /// configuration changed.
+    ///
+    /// This is the path a real MDM push actually takes to the extension: iOS
+    /// writes the policy into the app's preferences domain, the app mirrors it
+    /// into the App Group and posts this Darwin notification. The
+    /// UserDefaults.didChangeNotification observer below is process-local and
+    /// never fires for any of that.
+    private func startObservingMDMMirror() {
+        guard !isObservingMDMMirror else { return }
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            { _, observer, _, _, _ in
+                guard let observer = observer else { return }
+                let provider = Unmanaged<PacketTunnelProvider>
+                    .fromOpaque(observer)
+                    .takeUnretainedValue()
+                AppLogger.shared.log("MDM: App Group mirror changed; checking the policy")
+                provider.handleManagedConfigDidChangeIfRelevant()
+            },
+            GlobalConstants.darwinNotificationMDMPolicyChanged as CFString,
+            nil,
+            .deliverImmediately
+        )
+        isObservingMDMMirror = true
+    }
+
+    /// Unregisters before the provider can go away: the observer holds an
+    /// unretained pointer to it.
+    private func stopObservingMDMMirror() {
+        guard isObservingMDMMirror else { return }
+        CFNotificationCenterRemoveObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            CFNotificationName(GlobalConstants.darwinNotificationMDMPolicyChanged as CFString),
+            nil
+        )
+        isObservingMDMMirror = false
+    }
+
     private func startObservingMDMConfigChanges() {
+        startObservingMDMMirror()
         if mdmConfigObserver != nil {
             return
         }
@@ -1158,6 +1203,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     private func stopObservingMDMConfigChanges() {
+        stopObservingMDMMirror()
         if let token = mdmConfigObserver {
             NotificationCenter.default.removeObserver(token)
             mdmConfigObserver = nil
