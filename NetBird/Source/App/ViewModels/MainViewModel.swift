@@ -935,6 +935,13 @@ class ViewModel: ObservableObject {
     /// consults only the policy loader and never touches the config file.
     /// Call it from onAppear of any screen that hides or locks controls.
     func refreshMDMRestrictions() {
+        #if os(iOS)
+        if MDMPolicyMirror.synchronize() {
+            Task {
+                await MDMZeroTouchEnrollment.shared.enrollIfNeeded()
+            }
+        }
+        #endif
         lastMDMPolicyCheck = Date()
         let snapshot = MDMRestrictions.current()
         // Equatable guards against republishing an identical snapshot and

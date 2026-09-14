@@ -69,6 +69,59 @@ final class MDMBridgeIntegrationTests: XCTestCase {
         XCTAssertEqual(MDMRestrictions.current(), .empty)
     }
 
+    func testMirrorMakesPolicyAvailableWithoutSharingSetupKey() throws {
+        let sourceSuite = "io.netbird.tests.mdm.source.\(UUID().uuidString)"
+        let destinationSuite = "io.netbird.tests.mdm.destination.\(UUID().uuidString)"
+        let source = try XCTUnwrap(UserDefaults(suiteName: sourceSuite))
+        let destination = try XCTUnwrap(UserDefaults(suiteName: destinationSuite))
+        defer {
+            source.removePersistentDomain(forName: sourceSuite)
+            destination.removePersistentDomain(forName: destinationSuite)
+        }
+
+        source.set([
+            "managementUrl": "https://mgmt.example:443",
+            "adminUrl": "https://admin.example:443",
+            "disableProfiles": true,
+            "setupKey": "secret-setup-key",
+        ], forKey: key)
+
+        XCTAssertTrue(MDMPolicyMirror.synchronize(source: source, destination: destination))
+        let mirrored = try XCTUnwrap(destination.dictionary(forKey: MDMPolicyMirror.policyKey))
+        XCTAssertNil(mirrored[MDMPolicyMirror.setupKey])
+        XCTAssertNil(mirrored["adminUrl"])
+        XCTAssertNil(mirrored["managementUrl"])
+        XCTAssertEqual(mirrored["managementURL"] as? String, "https://mgmt.example:443")
+        XCTAssertEqual(mirrored["disableProfiles"] as? Bool, true)
+
+        let json = MDMPolicyFetcher(
+            userDefaults: destination,
+            key: MDMPolicyMirror.policyKey
+        ).fetchJSON()
+        XCTAssertTrue(json.contains("mgmt.example"), "fetcher returned: \(json)")
+        XCTAssertFalse(json.contains("secret-setup-key"), "fetcher should not return the setup key")
+    }
+
+    func testEnrollmentConfigurationAcceptsLegacyKeys() throws {
+        let suiteName = "io.netbird.tests.mdm.enrollment.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set([
+            "managementUrl": " https://mgmt.example:443 ",
+            "adminUrl": "https://admin.example:443",
+            "setupKey": " setup-key ",
+        ], forKey: key)
+
+        XCTAssertEqual(
+            MDMEnrollmentConfiguration.current(userDefaults: defaults),
+            MDMEnrollmentConfiguration(
+                managementURL: "https://mgmt.example:443",
+                adminURL: "https://admin.example:443",
+                setupKey: "setup-key"
+            )
+        )
+    }
+
     /// The whole round trip: a pushed policy must come back as rendered
     /// enforcement state.
     func testPushedPolicyReachesRestrictions() {

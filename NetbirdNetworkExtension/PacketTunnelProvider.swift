@@ -75,12 +75,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private let startCompletionLock = NSLock()
     private var startCompletionHandler: ((Error?) -> Void)?
 
-    /// Observer token for UserDefaults.didChangeNotification — used to
-    /// catch MDM managed-configuration pushes
-    /// (UserDefaults["com.apple.configuration.managed"]) and trigger an
-    /// engine restart so the new policy values flow through
-    /// Config.apply → applyMDMPolicy on the next Run.
-    private var mdmConfigObserver: NSObjectProtocol?
+    /// Cross-process observer for committed policy snapshots mirrored by the app.
+    private var mdmConfigObserver: MDMPolicyChangeObserver?
 
     /// Set when a policy change arrived while a restart was already in
     /// flight. Go's detector records the newer policy the moment it is
@@ -1143,30 +1139,24 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     // MARK: - MDM managed-configuration observer
 
-    /// Subscribes to UserDefaults.didChangeNotification so changes to
-    /// the OS-pushed MDM managed-config dictionary
-    /// (UserDefaults["com.apple.configuration.managed"]) trigger an
-    /// engine restart. iOS does NOT fire a dedicated MDM notification
-    /// — the entire UserDefaults change channel is shared, so this
-    /// fires on every unrelated preference write too. Deciding whether
-    /// the policy actually changed is Go's job; see the handler.
+    /// Subscribes to policy snapshots committed by the main app.
     private func startObservingMDMConfigChanges() {
         if mdmConfigObserver != nil {
             return
         }
-        mdmConfigObserver = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification,
-            object: nil,
-            queue: nil
-        ) { [weak self] _ in
-            self?.handleManagedConfigDidChangeIfRelevant()
+        let observer = MDMPolicyChangeObserver { [weak self] in
+            self?.monitorQueue.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.handleManagedConfigDidChangeIfRelevant()
+            }
         }
+        observer.start()
+        mdmConfigObserver = observer
         AppLogger.shared.log("MDM: subscribed to managed-configuration changes")
     }
 
     private func stopObservingMDMConfigChanges() {
-        if let token = mdmConfigObserver {
-            NotificationCenter.default.removeObserver(token)
+        if let observer = mdmConfigObserver {
+            observer.stop()
             mdmConfigObserver = nil
             AppLogger.shared.log("MDM: unsubscribed from managed-configuration changes")
         }

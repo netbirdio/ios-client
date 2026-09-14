@@ -21,6 +21,7 @@
 //
 
 import Foundation
+import CryptoKit
 import NetBirdSDK
 
 @objc public final class MDMPolicyFetcher: NSObject, NetBirdSDKPolicyFetcherProtocol {
@@ -28,8 +29,26 @@ import NetBirdSDK
     /// Configuration Profile lands the managed-config dictionary.
     public static let managedConfigKey = "com.apple.configuration.managed"
 
+    private let userDefaults: UserDefaults
+    private let key: String
+
+    public override convenience init() {
+        self.init(userDefaults: .standard, key: Self.managedConfigKey)
+    }
+
+    init(userDefaults: UserDefaults, key: String) {
+        self.userDefaults = userDefaults
+        self.key = key
+        super.init()
+    }
+
+    static func mirrored() -> MDMPolicyFetcher {
+        let defaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName) ?? .standard
+        return MDMPolicyFetcher(userDefaults: defaults, key: MDMPolicyMirror.policyKey)
+    }
+
     public func fetchJSON() -> String {
-        guard let dict = UserDefaults.standard.dictionary(forKey: Self.managedConfigKey),
+        guard let dict = userDefaults.dictionary(forKey: key),
               !dict.isEmpty else {
             return ""
         }
@@ -38,7 +57,7 @@ import NetBirdSDK
         // Date that Apple Configurator inserts on signed profiles. The
         // sanitizer below coerces those into JSON-friendly shapes so
         // a single bad value cannot break the whole snapshot.
-        let sanitized = Self.sanitizeForJSON(dict)
+        let sanitized = Self.sanitizeForJSON(Self.policyDictionary(from: dict))
         guard JSONSerialization.isValidJSONObject(sanitized),
               let data = try? JSONSerialization.data(withJSONObject: sanitized, options: []),
               let json = String(data: data, encoding: .utf8) else {
@@ -46,6 +65,17 @@ import NetBirdSDK
             return ""
         }
         return json
+    }
+
+    private static func policyDictionary(from managedConfiguration: [String: Any]) -> [String: Any] {
+        var policy = managedConfiguration
+        if policy["managementURL"] == nil, let legacyURL = policy.removeValue(forKey: "managementUrl") {
+            policy["managementURL"] = legacyURL
+        }
+        policy.removeValue(forKey: MDMPolicyMirror.setupKey)
+        policy.removeValue(forKey: "adminURL")
+        policy.removeValue(forKey: "adminUrl")
+        return policy
     }
 
     /// Recursively coerces a Foundation-typed managed-config value into
@@ -77,5 +107,266 @@ import NetBirdSDK
             // key as managed (not silently swallowed).
             return "\(value)"
         }
+    }
+}
+
+enum MDMPolicyMirror {
+    static let policyKey = "netbird.mdm.policy"
+    static let changeNotification = "io.netbird.mdm.policyChanged" as CFString
+    static let setupKey = "setupKey"
+
+    @discardableResult
+    static func synchronize(
+        source: UserDefaults = .standard,
+        destination: UserDefaults? = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+    ) -> Bool {
+        guard let destination else {
+            AppLogger.shared.log("MDMPolicyMirror: App Group defaults are unavailable")
+            return false
+        }
+
+        let fetcher = MDMPolicyFetcher(
+            userDefaults: source,
+            key: MDMPolicyFetcher.managedConfigKey
+        )
+        let json = fetcher.fetchJSON()
+        let data = json.data(using: .utf8)
+        let policy = data.flatMap {
+            try? JSONSerialization.jsonObject(with: $0) as? [String: Any]
+        } ?? [:]
+
+        let previous = destination.dictionary(forKey: policyKey) ?? [:]
+        guard !NSDictionary(dictionary: previous).isEqual(to: policy) else {
+            return false
+        }
+
+        if policy.isEmpty {
+            destination.removeObject(forKey: policyKey)
+        } else {
+            destination.set(policy, forKey: policyKey)
+        }
+        destination.synchronize()
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(changeNotification),
+            nil,
+            nil,
+            true
+        )
+        return true
+    }
+}
+
+final class MDMPolicyChangeObserver {
+    private let handler: () -> Void
+    private let lock = NSLock()
+    private var isObserving = false
+
+    init(handler: @escaping () -> Void) {
+        self.handler = handler
+    }
+
+    func start() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isObserving else { return }
+        isObserving = true
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            { _, observer, _, _, _ in
+                guard let observer else { return }
+                Unmanaged<MDMPolicyChangeObserver>
+                    .fromOpaque(observer)
+                    .takeUnretainedValue()
+                    .handler()
+            },
+            MDMPolicyMirror.changeNotification,
+            nil,
+            .deliverImmediately
+        )
+    }
+
+    func stop() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard isObserving else { return }
+        CFNotificationCenterRemoveObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            CFNotificationName(MDMPolicyMirror.changeNotification),
+            nil
+        )
+        isObserving = false
+    }
+
+    deinit {
+        stop()
+    }
+}
+
+struct MDMEnrollmentConfiguration: Equatable {
+    let managementURL: String
+    let adminURL: String?
+    let setupKey: String
+
+    static func current(userDefaults: UserDefaults = .standard) -> MDMEnrollmentConfiguration? {
+        guard let managed = userDefaults.dictionary(forKey: MDMPolicyFetcher.managedConfigKey),
+              let managementURL = string(in: managed, keys: ["managementURL", "managementUrl"]),
+              let setupKey = string(in: managed, keys: [MDMPolicyMirror.setupKey]) else {
+            return nil
+        }
+        return MDMEnrollmentConfiguration(
+            managementURL: managementURL,
+            adminURL: string(in: managed, keys: ["adminURL", "adminUrl"]),
+            setupKey: setupKey
+        )
+    }
+
+    private static func string(in values: [String: Any], keys: [String]) -> String? {
+        for key in keys {
+            if let value = values[key] as? String {
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    return trimmed
+                }
+            }
+        }
+        return nil
+    }
+}
+
+private final class MDMEnrollmentListener: NSObject, NetBirdSDKErrListenerProtocol {
+    private let completion: (Error?) -> Void
+
+    init(completion: @escaping (Error?) -> Void) {
+        self.completion = completion
+    }
+
+    func onSuccess() {
+        completion(nil)
+    }
+
+    func onError(_ error: Error?) {
+        completion(error)
+    }
+}
+
+actor MDMZeroTouchEnrollment {
+    static let shared = MDMZeroTouchEnrollment()
+
+    private static let completedEnrollmentsKey = "netbird.mdm.completedEnrollments"
+
+    private init() {}
+
+    static func enrollIfNeeded(userDefaults: UserDefaults = .standard) async {
+        guard let configuration = MDMEnrollmentConfiguration.current(userDefaults: userDefaults),
+              let configPath = Preferences.configFile(),
+              let statePath = Preferences.stateFile() else {
+            return
+        }
+
+        let profileID = digest(configPath)
+        let fingerprint = digest(
+            [configuration.managementURL, configuration.adminURL ?? "", configuration.setupKey]
+                .joined(separator: "\u{0}")
+        )
+        var completed = userDefaults.dictionary(forKey: completedEnrollmentsKey) as? [String: String] ?? [:]
+        let configExists = FileManager.default.fileExists(atPath: configPath)
+        if configExists, completed[profileID] == fingerprint {
+            return
+        }
+
+        if configExists, !await loginIsRequired(configPath: configPath, statePath: statePath) {
+            guard persistAdminURL(configuration.adminURL, configPath: configPath, statePath: statePath) else {
+                return
+            }
+            completed[profileID] = fingerprint
+            userDefaults.set(completed, forKey: completedEnrollmentsKey)
+            return
+        }
+
+        var authError: NSError?
+        guard let auth = NetBirdSDKNewAuth(
+            configPath,
+            configuration.managementURL,
+            MDMPolicyFetcher(),
+            &authError
+        ) else {
+            AppLogger.shared.log(
+                "MDM enrollment: could not initialize authentication - "
+                + (authError?.localizedDescription ?? "unknown error")
+            )
+            return
+        }
+
+        let loginError = await withCheckedContinuation { continuation in
+            let listener = MDMEnrollmentListener { error in
+                continuation.resume(returning: error)
+            }
+            auth.login(
+                withSetupKeyAndSaveConfig: listener,
+                setupKey: configuration.setupKey,
+                deviceName: Device.getName()
+            )
+        }
+        if let loginError {
+            AppLogger.shared.log("MDM enrollment: setup-key login failed - \(loginError.localizedDescription)")
+            return
+        }
+
+        guard persistAdminURL(configuration.adminURL, configPath: configPath, statePath: statePath) else {
+            return
+        }
+
+        ProfileManager.shared.saveServerURL(configuration.managementURL, forID: ProfileManager.shared.getActiveProfileID())
+        Preferences.saveManagementURL(configuration.managementURL)
+        completed[profileID] = fingerprint
+        userDefaults.set(completed, forKey: completedEnrollmentsKey)
+        AppLogger.shared.log("MDM enrollment: setup-key login completed")
+    }
+
+    private func persistAdminURL(_ adminURL: String?, configPath: String, statePath: String) -> Bool {
+        guard let adminURL else { return true }
+        guard let preferences = NetBirdSDKNewPreferences(configPath, statePath) else {
+            AppLogger.shared.log("MDM enrollment: could not initialize preferences for the admin URL")
+            return false
+        }
+        preferences.setAdminURL(adminURL)
+        do {
+            try preferences.commit()
+            return true
+        } catch {
+            AppLogger.shared.log("MDM enrollment: could not persist the admin URL - \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private static func loginIsRequired(configPath: String, statePath: String) async -> Bool {
+        let cachePath = Preferences.cacheDirectory()
+        let deviceName = Device.getName()
+        let osVersion = Device.getOsVersion()
+        let osName = Device.getOsName()
+        return await Task.detached(priority: .utility) {
+            guard let client = NetBirdSDKNewClient(
+                configPath,
+                statePath,
+                cachePath,
+                "",
+                deviceName,
+                osVersion,
+                osName,
+                nil,
+                nil
+            ) else {
+                return true
+            }
+            client.setMDMPolicyFetcher(MDMPolicyFetcher())
+            return client.isLoginRequired()
+        }.value
+    }
+
+    private static func digest(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 }
