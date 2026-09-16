@@ -790,25 +790,33 @@ class ViewModel: ObservableObject {
     /// reconnects while the user is logged out, deliberately leaving the stored preference
     /// on so it can be restored — this is what restores it.
     ///
-    /// A refusal is not swallowed. `connectOnDemand` drives the Settings toggle and, on
-    /// tvOS, the disconnect confirmation prompt, so leaving it `true` over rules the manager
-    /// refused to arm would have the UI claim protection that is not in force. `.deferred`
-    /// (nothing to arm yet) leaves the preference standing; only an outright rejection
-    /// writes it down to match reality.
+    /// A refusal is logged and nothing more. Unlike `setConnectOnDemand`, this path makes no
+    /// optimistic write of its own, so there is no `previous` value to roll back to — the
+    /// preference already said `true` before the request. Writing it down to `false` instead
+    /// would be wrong twice over. It would be racy: the completion only lands after
+    /// `recoverFromFailedOnDemandWrite` has run a full `loadFromPreferences` round-trip, by
+    /// which time a newer re-arm — or the user's own Settings toggle — may have armed the
+    /// rules for real, and `true` is exactly the value such a winner leaves behind, so no
+    /// check of `connectOnDemand` can tell the two apart. And it would be permanent: `false`
+    /// closes the guard below, so a transient `NEVPNError.configurationStale` (the documented
+    /// result when another process wrote the configuration, which is what a live extension
+    /// does) would cost the user the setting for good.
+    ///
+    /// Leaving the intent standing keeps the retry alive instead: the next `.connected`
+    /// transition, and every foreground activation onto a live tunnel, runs this again — and
+    /// that reload is precisely what clears `configurationStale`. "Preference on, rules not
+    /// armed yet" is a state this app already creates on purpose; see `checkLoginRequiredFlag()`.
+    /// The cost is that tvOS may show its disconnect confirmation for rules that are not in
+    /// force until the next attempt lands, which is a far cheaper wrong than a silently
+    /// discarded setting.
     private func rearmOnDemandIfNeeded() {
         // `connectOnDemand` is the user's saved preference, which the policy
         // deliberately leaves intact so it can be restored later - so it is
         // not on its own permission to arm the rules.
         guard connectOnDemand, !autoConnectForbiddenByPolicy else { return }
-        networkExtensionAdapter.setOnDemandEnabled(true) { [weak self] update in
+        networkExtensionAdapter.setOnDemandEnabled(true) { update in
             guard case .failed(let error) = update else { return }
-            DispatchQueue.main.async {
-                guard let self, self.connectOnDemand else { return }
-                AppLogger.shared.log("On Demand re-arm rejected by the tunnel manager (\(error?.localizedDescription ?? "no details")) - clearing the saved preference to match what is in force")
-                self.connectOnDemand = false
-                UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)?
-                    .set(false, forKey: GlobalConstants.keyConnectOnDemand)
-            }
+            AppLogger.shared.log("On Demand re-arm rejected by the tunnel manager (\(error?.localizedDescription ?? "no details")) - keeping the saved preference, the next connect retries")
         }
     }
     
