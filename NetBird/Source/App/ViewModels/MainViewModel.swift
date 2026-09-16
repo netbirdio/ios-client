@@ -757,31 +757,66 @@ class ViewModel: ObservableObject {
         // important when a short On Demand cycle skipped .disconnected between polls.
         guard statusChanged else { return }
 
-        applyRouteSideEffects(for: status)
-
-        // `connectOnDemand` is the user's saved preference, which the policy
-        // deliberately leaves intact so it can be restored later - so it is
-        // not on its own permission to arm the rules.
-        if status == .connected, connectOnDemand, !autoConnectForbiddenByPolicy {
-            networkExtensionAdapter.setOnDemandEnabled(true)
-        }
+        applyStatusSideEffects(for: status)
     }
 
-    /// Brings the cached route list in line with `status`.
+    /// Everything that has to happen when the extension reaches `status`, beyond publishing
+    /// the state itself: the cached route list, and re-arming On Demand.
     ///
     /// Separate from `applyExtensionStatus` so that callers which assign `extensionState`
     /// themselves — and therefore trip its `extensionState != status` guard — can still
-    /// apply this part. Idempotent: re-running it for an unchanged status costs one
-    /// GetRoutes round-trip while connected, and nothing at all while disconnected.
-    func applyRouteSideEffects(for status: NEVPNStatus) {
+    /// apply all of it. Every such caller must go through this one function: when the On
+    /// Demand re-arm lived in `applyExtensionStatus` alone, an activation that restored
+    /// `.connected` by direct assignment silently skipped it. Idempotent: re-running it for
+    /// an unchanged status costs one GetRoutes round-trip and at most one no-op On Demand
+    /// write while connected, and nothing at all while disconnected.
+    func applyStatusSideEffects(for status: NEVPNStatus) {
         if status == .connected {
             routeViewModel.getRoutes()
+            rearmOnDemandIfNeeded()
         } else if status == .disconnected {
             // Routes only exist while the extension is up. Drop them so the exit node
             // selector on the connection screen falls back to its disabled state instead
             // of listing nodes that can no longer be applied. The core keeps the actual
             // selection, so it comes back with the next getRoutes on reconnect.
             routeViewModel.clearRoutes()
+        }
+    }
+
+    /// Puts the On Demand rules back after a successful connection when the saved
+    /// preference asks for them.
+    ///
+    /// `checkLoginRequiredFlag()` disarms the rules at the manager to stop iOS looping
+    /// reconnects while the user is logged out, deliberately leaving the stored preference
+    /// on so it can be restored — this is what restores it.
+    ///
+    /// A refusal is logged and nothing more. Unlike `setConnectOnDemand`, this path makes no
+    /// optimistic write of its own, so there is no `previous` value to roll back to — the
+    /// preference already said `true` before the request. Writing it down to `false` instead
+    /// would be wrong twice over. It would be racy: the completion only lands after
+    /// `recoverFromFailedOnDemandWrite` has run a full `loadFromPreferences` round-trip, by
+    /// which time a newer re-arm — or the user's own Settings toggle — may have armed the
+    /// rules for real, and `true` is exactly the value such a winner leaves behind, so no
+    /// check of `connectOnDemand` can tell the two apart. And it would be permanent: `false`
+    /// closes the guard below, so a transient `NEVPNError.configurationStale` (the documented
+    /// result when another process wrote the configuration, which is what a live extension
+    /// does) would cost the user the setting for good.
+    ///
+    /// Leaving the intent standing keeps the retry alive instead: the next `.connected`
+    /// transition, and every foreground activation onto a live tunnel, runs this again — and
+    /// that reload is precisely what clears `configurationStale`. "Preference on, rules not
+    /// armed yet" is a state this app already creates on purpose; see `checkLoginRequiredFlag()`.
+    /// The cost is that tvOS may show its disconnect confirmation for rules that are not in
+    /// force until the next attempt lands, which is a far cheaper wrong than a silently
+    /// discarded setting.
+    private func rearmOnDemandIfNeeded() {
+        // `connectOnDemand` is the user's saved preference, which the policy
+        // deliberately leaves intact so it can be restored later - so it is
+        // not on its own permission to arm the rules.
+        guard connectOnDemand, !autoConnectForbiddenByPolicy else { return }
+        networkExtensionAdapter.setOnDemandEnabled(true) { update in
+            guard case .failed(let error) = update else { return }
+            AppLogger.shared.log("On Demand re-arm rejected by the tunnel manager (\(error?.localizedDescription ?? "no details")) - keeping the saved preference, the next connect retries")
         }
     }
     
@@ -844,6 +879,12 @@ class ViewModel: ObservableObject {
                     AppLogger.shared.log("resetForServerChange: On Demand disarm failed, resetting anyway")
                 }
                 self.performClose()
+                // Don't wait for the disconnect to come back through polling (up to one
+                // 3 s tick away, and only while polling is running at all) — the routes
+                // belong to the server being left, so drop them now. This mirrors what
+                // handleServerChanged does on iOS, so both platforms clear on the server
+                // change itself rather than on two different mechanisms.
+                self.applyStatusSideEffects(for: .disconnected)
                 self.clearDetails()
                 completion()
             }
@@ -1138,7 +1179,7 @@ class ViewModel: ObservableObject {
     ///
     /// The preference is written up front because it is the user's *intent*: when there is
     /// nothing to arm yet (no manager, or no login), the choice has to survive so
-    /// `applyExtensionStatus` can arm it after the next successful connection. Only a manager
+    /// `applyStatusSideEffects` can arm it after the next successful connection. Only a manager
     /// that actively rejects the change rolls the stored value back, so UI, storage and the
     /// tunnel manager never disagree about what is in force.
     ///
@@ -1281,6 +1322,14 @@ class ViewModel: ObservableObject {
         managementStatus = .disconnected
         updateVPNDisplayState()
 
+        // Assigning extensionState directly means no later .disconnected update can carry
+        // the state's side effects: applyExtensionStatus returns early on an unchanged
+        // status, and stopPollingDetails() above has stopped the timer that would deliver
+        // one anyway. Apply them here, or the exit node selector stays enabled over the
+        // previous account's nodes — which the core, now pointed at another server, would
+        // never accept.
+        applyStatusSideEffects(for: .disconnected)
+
         // Clear peer info
         peerViewModel.peerInfo = []
 
@@ -1407,7 +1456,7 @@ class ViewModel: ObservableObject {
         updateVPNDisplayState()
         // Temporarily disable On Demand to stop iOS from looping reconnect attempts
         // while the user is not authenticated. It will be re-enabled automatically
-        // after a successful connection (see applyExtensionStatus).
+        // after a successful connection (see applyStatusSideEffects).
         networkExtensionAdapter.setOnDemandEnabled(false)
         #endif
     }
