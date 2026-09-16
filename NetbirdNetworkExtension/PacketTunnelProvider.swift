@@ -108,7 +108,25 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// pipeline that never clears its guard cannot leave a timer rescheduling
     /// itself for the life of the tunnel.
     private var mdmRetryAttempts = 0
-    private static let maxMDMRetryAttempts = 15
+    private static let mdmRetryInterval: TimeInterval = 2.0
+
+    /// How long the restart pipeline waits before releasing its own guard.
+    private static let restartWatchdogTimeout: TimeInterval = 30.0
+
+    /// Derived from the watchdogs rather than fixed, so the budget cannot drift
+    /// apart from them again.
+    ///
+    /// The guards are released by watchdogs of their own, timed from when they
+    /// armed - which can be later than the first deferral, since a restart may
+    /// begin while we are already waiting. A budget merely equal to a watchdog
+    /// therefore expires while the guard is still legitimately held, and the
+    /// policy is dropped: hasMDMPolicyChanged() has already recorded it as
+    /// handled, so nothing asks again until the next change or tunnel start.
+    /// One full watchdog of headroom guarantees at least one attempt after the
+    /// guard can have released.
+    private static let maxMDMRetryAttempts = Int(
+        (max(initialStartGuardTimeout, restartWatchdogTimeout) * 2) / mdmRetryInterval
+    )
 
     /// The deferred retry that waits out an in-flight restart. Tracked so
     /// teardown can cancel it: otherwise it fires afterwards, passes a guard
@@ -683,7 +701,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 userInfo: [NSLocalizedDescriptionKey: "VPN restart timed out."]
             ))
         }
-        monitorQueue.asyncAfter(deadline: .now() + 30, execute: timeoutWorkItem)
+        monitorQueue.asyncAfter(deadline: .now() + Self.restartWatchdogTimeout, execute: timeoutWorkItem)
 
         adapter.stop { [weak self] in
             self?.monitorQueue.async { [weak self] in
@@ -1252,9 +1270,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // nothing left to retry it.
             guard !self.isRestartInProgress, !self.isInitialStartInFlight else {
                 guard self.mdmRetryAttempts < Self.maxMDMRetryAttempts else {
-                    // The pipeline should clear its guard within its own
-                    // 30-second timeout; past that something is wedged, and a
-                    // timer rescheduling itself forever would only hide it.
+                    // Past a full watchdog of headroom the pipeline is wedged,
+                    // not busy, and a timer rescheduling itself forever would
+                    // only hide that.
                     AppLogger.shared.log("MDM: giving up after \(self.mdmRetryAttempts) retries — a start or restart never finished; the policy will apply on the next change or tunnel start")
                     self.mdmRetryWorkItem = nil
                     self.mdmRetryAttempts = 0
@@ -1270,7 +1288,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     self.requestMDMRestart()
                 }
                 self.mdmRetryWorkItem = retry
-                self.monitorQueue.asyncAfter(deadline: .now() + 2, execute: retry)
+                self.monitorQueue.asyncAfter(deadline: .now() + Self.mdmRetryInterval, execute: retry)
                 return
             }
             self.mdmRetryWorkItem = nil
