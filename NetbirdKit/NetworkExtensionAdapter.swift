@@ -956,6 +956,12 @@ public class NetworkExtensionAdapter: ObservableObject {
         sharedDefaults?.set(statePath,  forKey: GlobalConstants.keyWidgetActiveStatePath)
         #endif
 
+        // The extension reads the App Group copy of the managed configuration,
+        // not this app's own. Refresh it immediately before the tunnel starts,
+        // so a policy that arrived since the last activation is the one the
+        // engine applies. No-op outside the app process and on tvOS.
+        MDMPolicyFetcher.mirrorToAppGroup()
+
         guard let session = self.session else {
             logger.error("startVPNConnection: ERROR - session is nil!")
             return

@@ -46,6 +46,19 @@ struct GlobalConstants {
     /// was updated by their IT policy.
     static let keyMDMPolicyApplied = "netbird.mdm.policyApplied"
 
+    /// App Group copy of the managed configuration, written by the app.
+    ///
+    /// iOS delivers `com.apple.configuration.managed` to the managed app's own
+    /// preferences domain only. The network extension runs as a separate bundle
+    /// with a separate domain and never receives it, so the app mirrors the
+    /// dictionary here and the extension reads it back.
+    static let keyMDMManagedConfigMirror = "netbird.mdm.managedConfigMirror"
+
+    /// Darwin notification posted by the app whenever that mirror changes.
+    /// UserDefaults.didChangeNotification is process-local and cannot tell a
+    /// running extension anything; this crosses the process boundary.
+    static let darwinNotificationMDMPolicyChanged = "io.netbird.mdm.policyChanged"
+
     // Local notification identifiers
     static let notificationLoginRequired = "netbird.login.required"
     static let notificationMDMPolicyApplied = "netbird.mdm.policyApplied"
