@@ -53,7 +53,8 @@ struct RoutesDisabledByPolicyView: View {
                 .foregroundColor(Color("TextPrimary"))
                 .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, Screen.width * 0.1)
+        .padding(.horizontal, Layout.contentPadding)
+        .readableWidth()
     }
 }
 
