@@ -19,6 +19,14 @@ struct VPNOnDemandView: View {
     private let wifiOptions = WiFiOnDemandPolicy.allCases
     private let cellularOptions = CellularOnDemandPolicy.allCases
 
+    /// `disableAutoConnect` forbids the daemon from connecting on its own, so
+    /// the whole On Demand screen becomes read-only; `disableUpdateSettings`
+    /// has the same effect for a different reason.
+    private var onDemandLocked: Bool {
+        viewModel.mdmRestrictions.mdm.disableAutoConnect
+            || viewModel.mdmRestrictions.features.disableUpdateSettings
+    }
+
     var body: some View {
         Form {
             Section {
@@ -31,6 +39,12 @@ struct VPNOnDemandView: View {
                     .onChange(of: viewModel.connectOnDemand) { value in
                         viewModel.setConnectOnDemand(isEnabled: value)
                     }
+                    .mdmLocked(onDemandLocked)
+
+                if onDemandLocked {
+                    MDMManagedFooter()
+                        .font(.footnote)
+                }
             }
 
             if viewModel.connectOnDemand {
@@ -65,6 +79,7 @@ struct VPNOnDemandView: View {
                 } footer: {
                     Text(connectionDescription)
                 }
+                .mdmLocked(onDemandLocked)
                 .onChange(of: viewModel.onDemandWiFiPolicy) { _ in
                     viewModel.saveOnDemandSettings()
                 }
@@ -76,18 +91,21 @@ struct VPNOnDemandView: View {
                     networkListSection(
                         header: "Connect Only On These Wi-Fi Networks"
                     )
+                    .mdmLocked(onDemandLocked)
                 }
 
                 if viewModel.onDemandWiFiPolicy == .exceptOn {
                     networkListSection(
                         header: "Except On These Wi-Fi Networks"
                     )
+                    .mdmLocked(onDemandLocked)
                 }
             }
         }
         .navigationTitle("VPN On Demand")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            viewModel.refreshMDMRestrictions()
             fetchCurrentSSID()
         }
     }

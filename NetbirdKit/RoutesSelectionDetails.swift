@@ -14,6 +14,25 @@ struct LoginDiagnostics: Codable {
     var stateExists: Bool
     var lastResult: String
     var lastError: String
+    /// Post-login config returned by the extension after device authentication.
+    /// The main app and extension have separate UserDefaults containers on tvOS,
+    /// so the app must persist this copy for subsequent login preflight checks.
+    var configJSON: String? = nil
+}
+
+extension LoginDiagnostics {
+    /// User-facing error message, or nil if login hasn't failed
+    var friendlyError: String? {
+        guard lastResult == "error", !lastError.isEmpty else { return nil }
+        if lastError.contains("no peer auth method provided") {
+            return "This server doesn't support device code authentication. Please use a setup key instead."
+        } else if lastError.contains("expired") || lastError.contains("token") {
+            return "The device code has expired. Please try again."
+        } else if lastError.contains("denied") || lastError.contains("rejected") {
+            return "Authentication was denied. Please try again."
+        }
+        return lastError
+    }
 }
 
 struct DeviceAuthResponse: Codable {
@@ -33,10 +52,8 @@ class RoutesSelectionInfo: ObservableObject, Codable, Identifiable {
     var network: String?
     var domains: [DomainDetails]?
     var selected: Bool
-    // Connection status computed by the core ("Connected"/"Idle"). UI consumers read
-    // it directly (e.g. RouteCard.statusIndicatorColor uses route.status); there is no
-    // network-string fallback. A nil/empty value from an older core is treated as
-    // not-connected, so a selected route shows the yellow ("unknown") indicator.
+    // Connection status computed by the core ("Connected"/"Idle"). A nil/empty value
+    // from an older core is treated as not-connected.
     var status: String?
 
     init(id: UUID = UUID(), name: String, network: String?, domains: [DomainDetails]?, selected: Bool, status: String? = nil) {

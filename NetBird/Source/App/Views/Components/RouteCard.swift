@@ -19,10 +19,6 @@ struct RouteCard: View {
     var body: some View {
         HStack {
             HStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(statusIndicatorColor)
-                    .frame(width: 8, height: 40)
-
                 VStack(alignment: .leading) {
                     Text(route.name)
                         .foregroundColor(Color("TextPeerCard"))
@@ -94,14 +90,6 @@ struct RouteCard: View {
             },
             alignment: .center
         )
-    }
-
-    private var statusIndicatorColor: Color {
-        guard route.selected else { return Color.gray.opacity(0.5) }
-
-        // Status is computed by the core, which correctly handles merged exit nodes
-        // (v4/v6 pair) and dynamic routes; the UI just reflects it.
-        return route.status == "Connected" ? Color.green : Color.yellow
     }
 
     private var routeDisplayText: String {

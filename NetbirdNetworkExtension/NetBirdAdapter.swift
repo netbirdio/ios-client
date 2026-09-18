@@ -118,7 +118,7 @@ public class NetBirdAdapter {
     /// trigger flag + notification from the extension.
     var onLoginRequired: (() -> Void)?
 
-    private let stopLock = NSLock()
+    private let stopQueue = DispatchQueue(label: "io.netbird.adapter.stop")
 
     /// Tunnel device file descriptor.
     /// On iOS: searches for the utun control socket file descriptor by iterating through
@@ -250,8 +250,6 @@ public class NetBirdAdapter {
     }
     #endif
     
-    private var stopCompletionHandler: (() -> Void)?
-    
     // MARK: - Initialization
 
     /// Designated initializer.
@@ -273,12 +271,20 @@ public class NetBirdAdapter {
 
         #if os(tvOS)
         // On tvOS, the filesystem is blocked for the App Group container.
-        // Create the client with empty paths and load config from local storage instead.
-        guard let client = NetBirdSDKNewClient("", "", Preferences.cacheDirectory(), "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
+        // Create the client with an empty config path and load config from local storage instead.
+        // State path must be writable: the Go state manager persists next to it and fails
+        // with EPERM if it is empty or read-only. Log path stays empty here; engine logging
+        // is wired in a follow-up PR.
+        guard let statePath = Preferences.stateFile(), !statePath.isEmpty else {
+            adapterLogger.error("init: tvOS - writable state path is unavailable")
+            return nil
+        }
+        guard let client = NetBirdSDKNewClient("", statePath, Preferences.cacheDirectory(), "", deviceName, osVersion, osName, self.networkChangeListener, self.dnsManager) else {
             adapterLogger.error("init: tvOS - Failed to create NetBird SDK client")
             return nil
         }
         self.client = client
+        registerMDMPolicyFetcher()
 
         // Load config from extension-local storage (set via IPC from main app)
         // Note: Shared App Group UserDefaults does NOT work on tvOS between app and extension
@@ -309,6 +315,7 @@ public class NetBirdAdapter {
             return nil
         }
         self.client = client
+        registerMDMPolicyFetcher()
         self.initializedConfigPath = resolvedConfigPath
         #endif
     }
@@ -362,8 +369,14 @@ public class NetBirdAdapter {
 
                 try self.client.run(fd, interfaceName: ifName, envList: envList)
             } catch {
-                completionHandler(NSError(domain: "io.netbird.NetbirdNetworkExtension", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Netbird client startup failed."]))
-                self.stop()
+                completionHandler(NSError(
+                    domain: "io.netbird.NetbirdNetworkExtension",
+                    code: 1001,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "Netbird client startup failed: \(error.localizedDescription)",
+                        NSUnderlyingErrorKey: error
+                    ]
+                ))
             }
         }
     }
@@ -424,6 +437,21 @@ public class NetBirdAdapter {
                     #if os(tvOS)
                     let correctDeviceName = Device.getName()
                     configJSON = Self.updateDeviceNameInConfig(configJSON, newName: correctDeviceName)
+
+                    // Persist where adapter.init reads it: extension-local
+                    // standard UserDefaults (App Group storage is not shared
+                    // between app and extension on tvOS).
+                    UserDefaults.standard.set(configJSON, forKey: "netbird_config_json_local")
+                    UserDefaults.standard.synchronize()
+
+                    // Load the fresh config into the already-running client so a
+                    // parked startTunnel can proceed with adapter.start().
+                    do {
+                        try self?.client.setConfigFromJSON(configJSON)
+                        adapterLogger.info("loginAsync: tvOS - loaded post-login config into client")
+                    } catch {
+                        adapterLogger.error("loginAsync: tvOS - failed to load post-login config: \(error.localizedDescription)")
+                    }
                     #endif
 
                     _ = Preferences.saveConfigToUserDefaults(configJSON)
@@ -525,7 +553,7 @@ public class NetBirdAdapter {
             return
         }
         #endif
-        if let auth = NetBirdSDKNewAuth(configPath, managementURL, nil) {
+        if let auth = NetBirdSDKNewAuth(configPath, managementURL, MDMPolicyFetcher(), nil) {
             authRef = auth
 
             // Always pass the device name so the peer registers under the user's
@@ -549,43 +577,26 @@ public class NetBirdAdapter {
         self.dnsManager.invalidate()
     }
 
-    public func stop(completionHandler: (() -> Void)? = nil) {
-        stopLock.lock()
-
-        // Call any pending handler before setting a new one
-        if let existingHandler = self.stopCompletionHandler {
-            self.stopCompletionHandler = nil
-            stopLock.unlock()
-            existingHandler()
-        } else {
-            stopLock.unlock()
-        }
-
-        stopLock.lock()
-        self.stopCompletionHandler = completionHandler
-        stopLock.unlock()
-
-        self.client.stop()
-
-        // Fallback timeout (15 seconds) in case onDisconnected doesn't fire
-        if completionHandler != nil {
-            DispatchQueue.global().asyncAfter(deadline: .now() + 15) { [weak self] in
-                self?.notifyStopCompleted()
-            }
-        }
-    }
-
-    func notifyStopCompleted() {
-        stopLock.lock()
-
-        guard let handler = self.stopCompletionHandler else {
-            stopLock.unlock()
+    /// Stops the Go client. With `waitForExit` the Go side blocks until its run loop has
+    /// exited, so a start issued afterwards cannot overlap the outgoing run. A completion
+    /// handler moves that wait onto the adapter's stop queue and runs once the wait is
+    /// over. Pass `waitForExit: false` where the caller is on a deadline, such as stopTunnel.
+    public func stop(waitForExit: Bool = true, completionHandler: (() -> Void)? = nil) {
+        guard waitForExit else {
+            client.stopWithoutWait()
+            completionHandler?()
             return
         }
 
-        self.stopCompletionHandler = nil
-        stopLock.unlock()
-        handler()
+        guard let completionHandler = completionHandler else {
+            stopQueue.sync { self.client.stop() }
+            return
+        }
+
+        stopQueue.async { [client] in
+            client.stop()
+            completionHandler()
+        }
     }
 
     // MARK: - Config Helpers
@@ -605,6 +616,18 @@ public class NetBirdAdapter {
     }
 
     /// Update the device name in a config JSON string
+    /// Registers the policy fetcher on the Client at creation - the only
+    /// object whose Run() enforces the policy.
+    ///
+    /// Doing it here rather than in a caller covers every process and every
+    /// recreation: a profile switch builds a fresh Client, and the tvOS
+    /// extension had no registration site at all, so its engine ran
+    /// unmanaged. It also creates the change detector hasMDMPolicyChanged()
+    /// relies on.
+    private func registerMDMPolicyFetcher() {
+        client.setMDMPolicyFetcher(MDMPolicyFetcher())
+    }
+
     static func updateDeviceNameInConfig(_ configJSON: String, newName: String) -> String {
         // Escape special characters for JSON string
         let escapedName = newName
