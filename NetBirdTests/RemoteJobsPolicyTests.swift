@@ -108,6 +108,10 @@ final class RemoteJobsPolicyTests: XCTestCase {
             "the environment reports a policy for an unmanaged device"
         )
 
+        viewModel.loadRemoteJobsSettings()
+        let original = viewModel.remoteJobsAllowed
+        defer { viewModel.setRemoteJobsAllowed(allowed: original) }
+
         viewModel.setRemoteJobsAllowed(allowed: true)
 
         XCTAssertFalse(viewModel.showSettingsRejectedAlert)
