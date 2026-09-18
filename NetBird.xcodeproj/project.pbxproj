@@ -155,6 +155,7 @@
 		71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */; };
 		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
 		AA0011012F22001100000001 /* MDMBridgeIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */; };
+		AA0012012F22001200000001 /* RemoteJobsPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0012002F22001200000001 /* RemoteJobsPolicyTests.swift */; };
 		AA0010012F22001000000001 /* MDMRestrictionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0010002F22001000000001 /* MDMRestrictionsTests.swift */; };
 		962925F1DAA24D40B98D395B /* iOSPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42873052F9544A89B1408339 /* iOSPeersView.swift */; };
 		978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
@@ -305,6 +306,7 @@
 		2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSSettingsView.swift; sourceTree = "<group>"; };
 		3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlobalConstantsTests.swift; sourceTree = "<group>"; };
 		AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMBridgeIntegrationTests.swift; sourceTree = "<group>"; };
+		AA0012002F22001200000001 /* RemoteJobsPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteJobsPolicyTests.swift; sourceTree = "<group>"; };
 		AA0010002F22001000000001 /* MDMRestrictionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMRestrictionsTests.swift; sourceTree = "<group>"; };
 		42873052F9544A89B1408339 /* iOSPeersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSPeersView.swift; sourceTree = "<group>"; };
 		441C5AEE2EDF0DAE0055EEFC /* NetBird TV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "NetBird TV.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -750,6 +752,7 @@
 			children = (
 				3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */,
 				AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */,
+				AA0012002F22001200000001 /* RemoteJobsPolicyTests.swift */,
 				AA0010002F22001000000001 /* MDMRestrictionsTests.swift */,
 				8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */,
 				53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */,
@@ -1288,6 +1291,7 @@
 			files = (
 				94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */,
 				AA0011012F22001100000001 /* MDMBridgeIntegrationTests.swift in Sources */,
+				AA0012012F22001200000001 /* RemoteJobsPolicyTests.swift in Sources */,
 				AA0010012F22001000000001 /* MDMRestrictionsTests.swift in Sources */,
 				9CC0E000AE3F165CA72FD465 /* AppLoggerTests.swift in Sources */,
 				1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */,
