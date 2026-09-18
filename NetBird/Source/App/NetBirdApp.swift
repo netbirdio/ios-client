@@ -149,8 +149,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 struct NetBirdApp: App {
     @StateObject private var viewModelLoader = ViewModelLoader()
     #if os(iOS)
-    @StateObject private var sshSessionStore = SSHSessionStore()
-    @StateObject private var sshActiveSessionStore = SSHActiveSessionStore()
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     #endif
     @Environment(\.scenePhase) var scenePhase
@@ -172,10 +170,6 @@ struct NetBirdApp: App {
             if let viewModel = viewModelLoader.viewModel {
                 MainView()
                     .environmentObject(viewModel)
-                    #if os(iOS)
-                    .environmentObject(sshSessionStore)
-                    .environmentObject(sshActiveSessionStore)
-                    #endif
                     #if os(iOS)
                     .onOpenURL { url in
                         handleWidgetURL(url, viewModel: viewModel)

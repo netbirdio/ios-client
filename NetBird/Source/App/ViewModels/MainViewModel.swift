@@ -217,6 +217,11 @@ class ViewModel: ObservableObject {
         self.ip   = cached?.ip   ?? ""
         self.fqdn = cached?.fqdn ?? ""
         self.ipv6 = cached?.ipv6 ?? ""
+
+        // The SSH list is per profile and reaches the extension through this
+        // adapter, so both are handed over before any view can ask for them.
+        SSHSessionRegistry.shared.configure(adapter: networkExtensionAdapter)
+        SSHSessionRegistry.shared.setProfile(activeProfileID)
         #endif
 
         // Don't load rosenpass settings during init - they trigger expensive SDK initialization.
@@ -1082,6 +1087,12 @@ class ViewModel: ObservableObject {
     func switchConnectionInfo(toID id: String) {
         // Load cached data for the target profile so the UI shows it right away.
         loadConnectionInfoForProfile(forID: id)
+        #if os(iOS)
+        // Point the SSH list at the new profile: the tunnel goes down with the
+        // old one, and an overlay IP means a different host under the new one,
+        // so whatever was live is closed and that profile's own list loaded.
+        SSHSessionRegistry.shared.setProfile(id)
+        #endif
         peerViewModel.peerInfo = []
         managementStatus = .disconnected
         updateVPNDisplayState()

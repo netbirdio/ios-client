@@ -85,12 +85,12 @@ struct PeerDetailSheet: View {
         .onAppear { updateRelativeDate() }
         #if os(iOS)
         .sheet(isPresented: $showSSHConnect) {
-            SSHConnectSheet(
-                networkExtensionAdapter: networkExtensionAdapter,
-                isPeerContext: true,
-                peerName: peer.fqdn,
-                host: peer.ip
-            )
+            // The session lands in the SSH tab like any other; opening the
+            // terminal from here would bury it under this sheet.
+            SSHConnectSheet(request: .peer(name: peer.fqdn, ip: peer.ip)) { host, port, user in
+                SSHSessionRegistry.shared.create(host: host, port: port, user: user)
+                presentationMode.wrappedValue.dismiss()
+            }
         }
         #endif
     }

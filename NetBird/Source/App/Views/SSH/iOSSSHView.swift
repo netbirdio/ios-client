@@ -2,6 +2,11 @@
 //  iOSSSHView.swift
 //  NetBird
 //
+//  SSH tab: the list of this profile's SSH sessions, matching the Android
+//  client's sessions screen — one row per session with a state bar, a hang-up
+//  and a delete button, a context menu for edit and duplicate, and a floating
+//  button for a new connection.
+//
 
 import SwiftUI
 
@@ -9,49 +14,50 @@ import SwiftUI
 
 struct iOSSSHView: View {
     @EnvironmentObject private var viewModel: ViewModel
-    @EnvironmentObject private var activeStore: SSHActiveSessionStore
-    @EnvironmentObject private var sessionStore: SSHSessionStore
+    @ObservedObject private var registry = SSHSessionRegistry.shared
 
-    @State private var selectedActive: SSHSessionViewModel?
-    @State private var connectTarget: SavedSSHSession?
-    @State private var sshPeer: PeerInfo?
-
-    private var connectedPeers: [PeerInfo] {
-        viewModel.peerViewModel.peerInfo.filter { $0.connStatus == "Connected" && !$0.ip.isEmpty }
-    }
-
-    private var hasContent: Bool {
-        !activeStore.sessions.isEmpty || !sessionStore.sessions.isEmpty || !connectedPeers.isEmpty
-    }
+    @State private var connectSheet: SSHConnectRequest?
+    @State private var openSessionID: String?
+    @State private var pendingDelete: SSHSessionInfo?
+    @State private var toast: String?
 
     var body: some View {
-        Group {
-            if hasContent {
-                sessionList
+        ZStack {
+            Color("BgMenu").ignoresSafeArea()
+
+            if registry.sessions.isEmpty {
+                EmptyTabPlaceholder(
+                    message: "No SSH sessions yet.\nTap + to start one.",
+                    learnMoreURL: nil
+                )
             } else {
-                emptyState
+                sessionList
+            }
+
+            newSessionButton
+            toastOverlay
+        }
+        .navigationTitle("SSH Sessions")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $connectSheet) { request in
+            SSHConnectSheet(request: request) { host, port, user in
+                apply(request: request, host: host, port: port, user: user)
             }
         }
-        .navigationTitle("SSH")
-        .navigationBarTitleDisplayMode(.inline)
-        .fullScreenCover(item: $selectedActive) { session in
-            SSHTerminalView(viewModel: session)
+        .fullScreenCover(item: Binding(
+            get: { openSessionID.map(SSHTerminalRoute.init(sessionID:)) },
+            set: { openSessionID = $0?.sessionID }
+        )) { route in
+            SSHTerminalView(sessionID: route.sessionID)
         }
-        .sheet(item: $connectTarget) { session in
-            SSHConnectSheet(
-                networkExtensionAdapter: viewModel.networkExtensionAdapter,
-                host: session.host,
-                port: session.port,
-                user: session.user,
-                password: SSHKeychainStore.load(for: session.id) ?? ""
-            )
-        }
-        .sheet(item: $sshPeer) { peer in
-            SSHConnectSheet(
-                networkExtensionAdapter: viewModel.networkExtensionAdapter,
-                isPeerContext: true,
-                peerName: peer.fqdn,
-                host: peer.ip
+        .alert(item: $pendingDelete) { info in
+            Alert(
+                title: Text("Delete session"),
+                message: Text("Delete \(info.label) and discard its output?"),
+                primaryButton: .destructive(Text("Delete")) {
+                    registry.close(id: info.id)
+                },
+                secondaryButton: .cancel(Text("Cancel"))
             )
         }
     }
@@ -59,188 +65,207 @@ struct iOSSSHView: View {
     // MARK: - List
 
     private var sessionList: some View {
-        List {
-            if !activeStore.sessions.isEmpty {
-                activeSection
-            }
-
-            if !connectedPeers.isEmpty {
-                peersSection
-            }
-
-            if !sessionStore.sessions.isEmpty {
-                savedSection
-            }
-        }
-        .listStyle(.insetGrouped)
-    }
-
-    // MARK: - Active Sessions
-
-    private var activeSection: some View {
-        Section {
-            ForEach(activeStore.sessions) { session in
-                Button {
-                    selectedActive = session
-                } label: {
-                    HStack(spacing: 12) {
-                        Circle()
-                            .fill(sessionStatusColor(session.state))
-                            .frame(width: 10, height: 10)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("\(session.user)@\(session.host)")
-                                .foregroundColor(Color("TextPrimary"))
-                                .font(.body)
-                            Text(sessionStatusLabel(session.state))
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 2)
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(registry.sessions) { info in
+                    SSHSessionRow(
+                        info: info,
+                        onOpen: { open(info) },
+                        onDisconnect: { registry.disconnect(id: info.id) },
+                        onDelete: { pendingDelete = info },
+                        onEdit: { connectSheet = .edit(info) },
+                        onDuplicate: { duplicate(info) }
+                    )
                 }
             }
-            .onDelete { offsets in
-                offsets.map { activeStore.sessions[$0].sessionID }
-                    .forEach { activeStore.remove(id: $0) }
-            }
-        } header: {
-            sectionHeader("Active", systemImage: "terminal.fill", color: .accentColor)
+            .padding(.horizontal)
+            .padding(.top, 12)
+            // Clears the floating button, which would otherwise cover the last
+            // row's buttons.
+            .padding(.bottom, 96)
         }
     }
 
-    // MARK: - Peers Quick Connect
-
-    private var peersSection: some View {
-        Section {
-            ForEach(connectedPeers) { peer in
+    private var newSessionButton: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
                 Button {
-                    sshPeer = peer
+                    connectSheet = .new
                 } label: {
-                    HStack(spacing: 12) {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 10, height: 10)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(peer.fqdn.isEmpty ? peer.ip : peer.fqdn)
-                                .foregroundColor(Color("TextPrimary"))
-                                .font(.body)
-                                .lineLimit(1)
-                            Text(peer.ip)
-                                .foregroundColor(.secondary)
-                                .font(.system(.caption, design: .monospaced))
-                        }
-                        Spacer()
-                        Label("SSH", systemImage: "terminal")
-                            .font(.caption.weight(.medium))
-                            .foregroundColor(.accentColor)
-                    }
-                    .padding(.vertical, 2)
+                    Image(systemName: "plus")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 56, height: 56)
+                        .background(Circle().fill(Color.orange))
+                        .shadow(radius: 4, y: 2)
                 }
-            }
-        } header: {
-            sectionHeader("Peers", systemImage: "person.3.fill", color: .orange)
-        }
-    }
-
-    // MARK: - Saved Sessions
-
-    private var savedSection: some View {
-        Section {
-            ForEach(sessionStore.sessions) { session in
-                Button {
-                    connectTarget = session
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "bookmark.fill")
-                            .foregroundColor(.accentColor)
-                            .frame(width: 16)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(session.name)
-                                .foregroundColor(Color("TextPrimary"))
-                                .font(.body)
-                            Text("\(session.user)@\(session.host):\(session.port)")
-                                .foregroundColor(.secondary)
-                                .font(.system(.caption, design: .monospaced))
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 2)
-                }
-            }
-            .onDelete { offsets in
-                let ids = offsets.map { sessionStore.sessions[$0].id }
-                ids.forEach { sessionStore.delete(id: $0) }
-            }
-        } header: {
-            sectionHeader("Saved", systemImage: "bookmark.fill", color: .orange)
-        }
-    }
-
-    // MARK: - Empty State
-
-    private var emptyState: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "terminal")
-                .font(.system(size: 56))
-                .foregroundColor(.secondary)
-
-            VStack(spacing: 8) {
-                Text("No SSH sessions")
-                    .font(.title3.weight(.semibold))
-                    .foregroundColor(Color("TextPrimary"))
-                Text("Connect to NetBird to see your peers,\nor open a peer's details to start an SSH session.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                .accessibilityLabel("New SSH connection")
+                .padding(.trailing, 16)
+                .padding(.bottom, 24)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-
-    // MARK: - Helpers
 
     @ViewBuilder
-    private func sectionHeader(_ title: String, systemImage: String, color: Color) -> some View {
-        HStack(spacing: 8) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(color)
-                    .frame(width: 24, height: 24)
-                Image(systemName: systemImage)
-                    .font(.system(size: 12, weight: .semibold))
+    private var toastOverlay: some View {
+        if let toast {
+            VStack {
+                Spacer()
+                Text(toast)
+                    .font(.footnote)
                     .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.black.opacity(0.8)))
+                    .padding(.bottom, 100)
             }
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(Color("TextPrimary"))
-        }
-        .textCase(nil)
-        .padding(.bottom, 2)
-    }
-
-    private func sessionStatusColor(_ state: SSHConnectionState) -> Color {
-        switch state {
-        case .connected:        return .green
-        case .connecting:       return .orange
-        case .closed, .failed:  return .red
+            .transition(.opacity)
         }
     }
 
-    private func sessionStatusLabel(_ state: SSHConnectionState) -> String {
-        switch state {
-        case .connected:             return "Connected"
-        case .connecting:            return "Connecting…"
-        case .closed(let reason):    return "Closed: \(reason)"
-        case .failed(let message):   return "Failed: \(message)"
+    // MARK: - Actions
+
+    /// Reconnect on the spot only when the session left nothing behind. With
+    /// output to read, just open it and let the terminal's own bar offer the
+    /// redial, so the scrollback is not replaced before it has been seen.
+    private func open(_ info: SSHSessionInfo) {
+        if info.state.isReconnectable && !info.hasScrollback {
+            guard registry.reconnect(id: info.id) else {
+                show(toast: "NetBird is not running")
+                return
+            }
         }
+        openSessionID = info.id
+    }
+
+    private func duplicate(_ info: SSHSessionInfo) {
+        guard let copy = registry.duplicate(id: info.id) else {
+            show(toast: "NetBird is not running")
+            return
+        }
+        openSessionID = copy.id
+    }
+
+    private func apply(request: SSHConnectRequest, host: String, port: Int, user: String) {
+        switch request.mode {
+        case .edit(let id):
+            if !registry.edit(id: id, host: host, port: port, user: user) {
+                show(toast: "That session is no longer open")
+            }
+        case .connect:
+            guard registry.canConnect else {
+                show(toast: "NetBird is not running")
+                return
+            }
+            let handle = registry.create(host: host, port: port, user: user)
+            openSessionID = handle.id
+        }
+    }
+
+    private func show(toast message: String) {
+        withAnimation { toast = message }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation { if toast == message { toast = nil } }
+        }
+    }
+}
+
+/// Wraps a session id so `fullScreenCover(item:)` can drive the terminal.
+private struct SSHTerminalRoute: Identifiable {
+    let sessionID: String
+    var id: String { sessionID }
+}
+
+/// One session row: a coloured state bar, the target, the state line, and the
+/// two buttons the Android row carries. Reconnecting is what tapping a finished
+/// row already does, so only hanging up needs a button of its own.
+private struct SSHSessionRow: View {
+    let info: SSHSessionInfo
+    let onOpen: () -> Void
+    let onDisconnect: () -> Void
+    let onDelete: () -> Void
+    let onEdit: () -> Void
+    let onDuplicate: () -> Void
+
+    private var isDown: Bool { info.state.isReconnectable }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 2.5)
+                .fill(stateColor)
+                .frame(width: 5)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(info.label)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(Color("TextPrimary"))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(stateLine)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color("TextSecondary"))
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !isDown {
+                Button(action: onDisconnect) {
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 18))
+                        .foregroundColor(Color("TextPrimary"))
+                        .frame(width: 40, height: 40)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Disconnect")
+            }
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .font(.system(size: 17))
+                    .foregroundColor(Color("TextPrimary"))
+                    .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete session")
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color("BgPeerCard")))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onOpen)
+        .contextMenu {
+            Button("Edit session", action: onEdit)
+            Button("Duplicate session", action: onDuplicate)
+        }
+    }
+
+    private var stateColor: Color {
+        switch info.state {
+        case .connected: return Color(red: 0.30, green: 0.69, blue: 0.31)   // #4caf50
+        case .connecting: return Color(red: 1.0, green: 0.70, blue: 0.0)    // #ffb300
+        case .error: return Color(red: 0.90, green: 0.22, blue: 0.21)       // #e53935
+        case .needsPassword, .needsHostKeyConfirm: return Color(red: 1.0, green: 0.70, blue: 0.0)
+        case .closed: return Color(red: 0.62, green: 0.62, blue: 0.62)      // #9e9e9e
+        }
+    }
+
+    private var stateLine: String {
+        let name: String
+        switch info.state {
+        case .connecting: name = "connecting"
+        case .connected: name = "connected"
+        case .needsPassword: name = "password required"
+        case .needsHostKeyConfirm: name = "host key confirmation required"
+        case .closed: name = "closed"
+        case .error: name = "error"
+        }
+        // A prompt carries an internal marker rather than a message meant for
+        // reading, and the label already says what is needed.
+        if info.state == .needsPassword || info.state == .needsHostKeyConfirm {
+            return name
+        }
+        return info.stateMessage.isEmpty ? name : "\(name) — \(info.stateMessage)"
     }
 }
 

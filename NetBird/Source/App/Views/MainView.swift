@@ -41,7 +41,7 @@ enum MainAlertType: String, Identifiable {
 
 struct iOSMainView: View {
     @EnvironmentObject var viewModel: ViewModel
-    @EnvironmentObject var activeSessionStore: SSHActiveSessionStore
+    @ObservedObject private var sshRegistry = SSHSessionRegistry.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var selectedTab = 0
     @State private var activeAlert: MainAlertType?
@@ -204,7 +204,9 @@ struct iOSMainView: View {
                     Label("SSH", systemImage: "terminal")
                 }
                 .tag(3)
-                .badge(activeSessionStore.sessions.isEmpty ? 0 : activeSessionStore.sessions.count)
+                // Counts only what is dialled or dialling: a stored entry
+                // waiting to be redialled is not something to chase.
+                .badge(sshRegistry.liveSessionCount)
 
                 NavigationView {
                     iOSSettingsView()

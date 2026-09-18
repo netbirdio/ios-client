@@ -2,78 +2,83 @@
 //  SSHKeyboardAccessoryView.swift
 //  NetBird
 //
+//  The key bar under the terminal: the keys a phone keyboard has no room for.
+//  Same set and same order as the Android client's, so a screenshot of one
+//  reads as the other.
+//
 
 import SwiftUI
 
 #if os(iOS)
 
 struct SSHKeyboardAccessoryView: View {
-    let onInput: (Data) -> Void
+    let ctrlArmed: Bool
+    let altArmed: Bool
+    let onKey: (Data) -> Void
+    let onCursor: (Character) -> Void
+    let onToggleCtrl: () -> Void
+    let onToggleAlt: () -> Void
     let onCopy: () -> Void
+    let onPaste: () -> Void
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                accessoryKey("ESC")  { send("\u{1b}") }
-                accessoryKey("TAB")  { send("\t") }
-                accessoryKey("^C")   { send("\u{03}") }
-                accessoryKey("^D")   { send("\u{04}") }
-                accessoryKey("^Z")   { send("\u{1a}") }
+            HStack(spacing: 4) {
+                key("Esc") { onKey(Data([0x1b])) }
+                key("Tab") { onKey(Data([0x09])) }
 
-                Divider().frame(height: 22).padding(.horizontal, 2)
+                // An armed modifier is dimmed like a held-down key; released
+                // matches the full brightness of every other key.
+                key("Ctrl", armed: ctrlArmed, action: onToggleCtrl)
+                key("Alt", armed: altArmed, action: onToggleAlt)
 
-                accessoryKey("↑") { send("\u{1b}[A") }
-                accessoryKey("↓") { send("\u{1b}[B") }
-                accessoryKey("←") { send("\u{1b}[D") }
-                accessoryKey("→") { send("\u{1b}[C") }
+                // The three most common control codes get their own key:
+                // arming Ctrl and then hitting a letter needs the soft keyboard
+                // to deliver that letter, which it does not always do.
+                key("^C", label: "Control C") { onKey(Data([0x03])) }
+                key("^D", label: "Control D") { onKey(Data([0x04])) }
+                key("^Z", label: "Control Z") { onKey(Data([0x1a])) }
 
-                Divider().frame(height: 22).padding(.horizontal, 2)
+                Spacer().frame(width: 8)
 
-                accessoryKey("|")  { send("|") }
-                accessoryKey("~")  { send("~") }
-                accessoryKey("/")  { send("/") }
-                accessoryKey("-")  { send("-") }
-                accessoryKey("_")  { send("_") }
+                key("↑", label: "Arrow up") { onCursor("A") }
+                key("↓", label: "Arrow down") { onCursor("B") }
+                key("←", label: "Arrow left") { onCursor("D") }
+                key("→", label: "Arrow right") { onCursor("C") }
 
-                Divider().frame(height: 22).padding(.horizontal, 2)
+                Spacer().frame(width: 8)
 
-                accessoryKey("Copy", systemImage: "doc.on.doc") { onCopy() }
-                accessoryKey("Paste", systemImage: "doc.on.clipboard") { paste() }
+                // Characters a phone keyboard buries behind a symbol page.
+                key("|", label: "Pipe") { onKey(Data([UInt8(ascii: "|")])) }
+                key("~", label: "Tilde") { onKey(Data([UInt8(ascii: "~")])) }
+                key("/", label: "Slash") { onKey(Data([UInt8(ascii: "/")])) }
+                key("-", label: "Dash") { onKey(Data([UInt8(ascii: "-")])) }
+                key("_", label: "Underscore") { onKey(Data([UInt8(ascii: "_")])) }
+
+                Spacer().frame(width: 8)
+
+                key("Copy", action: onCopy)
+                key("Paste", action: onPaste)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(4)
         }
-        .frame(height: 44)
-        .background(.regularMaterial)
-        .overlay(alignment: .top) { Divider() }
+        .background(Color(white: 0.10))
     }
 
-    @ViewBuilder
-    private func accessoryKey(_ label: String, systemImage: String? = nil, action: @escaping () -> Void) -> some View {
+    private func key(_ title: String,
+                     label: String? = nil,
+                     armed: Bool = false,
+                     action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Group {
-                if let icon = systemImage {
-                    Label(label, systemImage: icon)
-                        .labelStyle(.iconOnly)
-                } else {
-                    Text(label)
-                        .font(.system(size: 14, weight: .medium, design: .monospaced))
-                }
-            }
-            .foregroundColor(.primary)
-            .frame(minWidth: 36, minHeight: 32)
-            .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: 6))
+            Text(title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.white)
+                .frame(minWidth: 48, minHeight: 36)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color(white: 0.22)))
+                .opacity(armed ? 0.6 : 1)
         }
         .buttonStyle(.plain)
-    }
-
-    private func send(_ string: String) {
-        onInput(Data(string.utf8))
-    }
-
-    private func paste() {
-        guard let text = UIPasteboard.general.string, !text.isEmpty else { return }
-        onInput(Data(text.utf8))
+        .accessibilityLabel(label ?? title)
     }
 }
 

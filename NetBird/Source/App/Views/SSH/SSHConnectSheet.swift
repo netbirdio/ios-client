@@ -2,169 +2,203 @@
 //  SSHConnectSheet.swift
 //  NetBird
 //
+//  Prompts for SSH connection parameters, for a fresh connection or to retarget
+//  a stored session. No password is asked for here: the Go client detects the
+//  server type and picks the auth, and only a server that refuses everything
+//  else makes the terminal prompt for one.
+//
 
 import SwiftUI
 
 #if os(iOS)
 
+/// What the sheet is being opened for.
+struct SSHConnectRequest: Identifiable {
+    enum Mode {
+        case connect
+        /// Retargets the stored session with this id.
+        case edit(String)
+    }
+
+    let id = UUID()
+    let mode: Mode
+    let title: String
+    /// Non-nil for a NetBird peer, whose address is fixed; the field is then
+    /// shown read-only so the target is visible but not editable.
+    let fixedHost: String?
+    let initialHost: String
+    let initialPort: Int
+    let initialUser: String?
+
+    static var new: SSHConnectRequest {
+        SSHConnectRequest(mode: .connect,
+                          title: "New SSH connection",
+                          fixedHost: nil,
+                          initialHost: "",
+                          initialPort: SSHDefaults.port,
+                          initialUser: nil)
+    }
+
+    /// Opened from a peer: the address is the peer's overlay IP.
+    static func peer(name: String, ip: String) -> SSHConnectRequest {
+        SSHConnectRequest(mode: .connect,
+                          title: "SSH to \(name)",
+                          fixedHost: ip,
+                          initialHost: ip,
+                          initialPort: SSHDefaults.port,
+                          initialUser: nil)
+    }
+
+    /// The host is editable here even for a peer session, which is the point:
+    /// the saved entry is what is being corrected.
+    static func edit(_ info: SSHSessionInfo) -> SSHConnectRequest {
+        SSHConnectRequest(mode: .edit(info.id),
+                          title: "Edit session",
+                          fixedHost: nil,
+                          initialHost: info.host,
+                          initialPort: info.port,
+                          initialUser: info.user)
+    }
+
+    var confirmTitle: String {
+        if case .edit = mode { return "Save" }
+        return "Connect"
+    }
+}
+
+enum SSHDefaults {
+    /// Both a NetBird peer's built-in server and an ordinary one listen here.
+    static let port = 22
+    static let maxPort = 65535
+}
+
 struct SSHConnectSheet: View {
-    let networkExtensionAdapter: NetworkExtensionAdapter
-    /// true  → launched from a NetBird peer: host is fixed, NetBird auth hint shown.
-    /// false → standalone: all fields editable.
-    ///
-    /// The password field is offered either way. A peer whose NetBird SSH is
-    /// disabled is just an ordinary sshd, and hiding the field was what forced
-    /// those peers down the JWT path and into a pointless OAuth round trip.
-    let isPeerContext: Bool
-    let peerName: String?
+    let request: SSHConnectRequest
+    let onConfirm: (String, Int, String) -> Void
 
-    @State var host: String
-    @State var port: String
-    @State var user: String
-    @State var password: String
-    @State private var saveSession = false
-    @State private var sessionName = ""
-    @State private var activeViewModel: SSHSessionViewModel?
-
-    @EnvironmentObject private var sessionStore: SSHSessionStore
-    @EnvironmentObject private var activeSessionStore: SSHActiveSessionStore
     @Environment(\.presentationMode) private var presentationMode
 
-    init(networkExtensionAdapter: NetworkExtensionAdapter,
-         isPeerContext: Bool = false,
-         peerName: String? = nil,
-         host: String = "",
-         port: Int = 22,
-         user: String = "",
-         password: String = "") {
-        self.networkExtensionAdapter = networkExtensionAdapter
-        self.isPeerContext = isPeerContext
-        self.peerName = peerName
-        _host = State(initialValue: host)
-        _port = State(initialValue: String(port))
-        _user = State(initialValue: user)
-        _password = State(initialValue: password)
-        _sessionName = State(initialValue: peerName ?? host)
+    @State private var host: String
+    @State private var user: String
+    @State private var port: String
+    @State private var hostError: String?
+    @State private var userError: String?
+    @State private var portError: String?
+
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable { case host, user, port }
+
+    init(request: SSHConnectRequest, onConfirm: @escaping (String, Int, String) -> Void) {
+        self.request = request
+        self.onConfirm = onConfirm
+        _host = State(initialValue: request.initialHost)
+        // An editor starts from the session's own name; otherwise prefill with
+        // whatever was used last, so a repeat connection is one tap. Left empty
+        // on a fresh install rather than guessing a name.
+        _user = State(initialValue: request.initialUser ?? SSHSessionStore.lastUser)
+        _port = State(initialValue: String(request.initialPort))
     }
 
     var body: some View {
         NavigationView {
             Form {
-                if isPeerContext {
-                    peerContextSection
-                } else {
-                    standaloneSection
-                }
-
                 Section {
-                    Toggle("Save session", isOn: $saveSession)
-                    if saveSession {
-                        TextField("Session name", text: $sessionName)
+                    if request.fixedHost == nil {
+                        field("Host (IP or FQDN)", text: $host, error: hostError, field: .host)
+                            .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                    }
-                }
-
-                Section {
-                    Button(action: connect) {
+                            .keyboardType(.URL)
+                    } else {
                         HStack {
+                            Text("Host")
+                                .foregroundColor(Color("TextSecondary"))
                             Spacer()
-                            Text("Connect")
-                                .fontWeight(.semibold)
-                            Spacer()
+                            Text(host)
+                                .foregroundColor(Color("TextPrimary"))
                         }
                     }
-                    .disabled(connectDisabled)
+
+                    field("Username", text: $user, error: userError, field: .user)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    field("Port", text: $port, error: portError, field: .port)
+                        .keyboardType(.numberPad)
                 }
             }
-            .navigationTitle(isPeerContext ? (peerName ?? "SSH") : "New SSH Connection")
+            .navigationTitle(request.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { presentationMode.wrappedValue.dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(request.confirmTitle) { confirm() }
                 }
             }
         }
-        .fullScreenCover(item: $activeViewModel) { vm in
-            SSHTerminalView(viewModel: vm)
+        .onAppear {
+            focusedField = request.fixedHost == nil && host.isEmpty ? .host : .user
         }
     }
-
-    // MARK: - Peer context (NetBird peer)
 
     @ViewBuilder
-    private var peerContextSection: some View {
-        Section {
-            HStack {
-                Label("Host", systemImage: "network")
-                    .foregroundColor(.secondary)
-                Spacer()
-                Text(host)
-                    .foregroundColor(.secondary)
-                    .font(.system(.body, design: .monospaced))
+    private func field(_ label: String, text: Binding<String>, error: String?, field: Field) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            TextField(label, text: text)
+                .focused($focusedField, equals: field)
+                .foregroundColor(Color("TextPrimary"))
+                .submitLabel(field == .port ? .go : .next)
+                .onSubmit {
+                    switch field {
+                    case .host: focusedField = .user
+                    case .user: focusedField = .port
+                    case .port: confirm()
+                    }
+                }
+            if let error {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
             }
-            TextField("Username", text: $user)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            SecureField("Password (only needed for regular SSH)", text: $password)
-        } footer: {
-            Text("If NetBird SSH is enabled for this peer and your account has SSH access in the dashboard, it is used automatically and the password is ignored. If the peer runs a regular SSH server, the password is used.")
-                .font(.footnote)
-                .foregroundColor(.secondary)
         }
     }
 
-    // MARK: - Standalone (any host, full credentials)
+    /// Validates and hands the details back. A blank required field leaves the
+    /// sheet open rather than dismissing it and losing what was typed.
+    private func confirm() {
+        let trimmedHost = (request.fixedHost ?? host).trimmingCharacters(in: .whitespaces)
+        let trimmedUser = user.trimmingCharacters(in: .whitespaces)
 
-    @ViewBuilder
-    private var standaloneSection: some View {
-        Section(header: Text("Connection")) {
-            TextField("Host / IP", text: $host)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.URL)
-            HStack {
-                Text("Port")
-                Spacer()
-                TextField("22", text: $port)
-                    .keyboardType(.numberPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 80)
-            }
-            TextField("Username", text: $user)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            SecureField("Password (optional for NetBird peers)", text: $password)
-        }
+        hostError = trimmedHost.isEmpty ? "Enter a host" : nil
+        // No default to fall back on: the login name is the remote account, and
+        // guessing one only produces a confusing auth failure.
+        userError = trimmedUser.isEmpty ? "Enter a username" : nil
+
+        let resolvedPort = parsePort()
+        guard hostError == nil, userError == nil, let resolvedPort else { return }
+
+        SSHSessionStore.lastUser = trimmedUser
+        onConfirm(trimmedHost, resolvedPort, trimmedUser)
+        presentationMode.wrappedValue.dismiss()
     }
 
-    // MARK: - Helpers
-
-    private var connectDisabled: Bool {
-        isPeerContext ? user.isEmpty : (host.isEmpty || user.isEmpty)
-    }
-
-    private func connect() {
-        if saveSession {
-            let session = SavedSSHSession(
-                name: sessionName.isEmpty ? (peerName ?? host) : sessionName,
-                host: host,
-                port: Int(port) ?? 22,
-                user: user
-            )
-            sessionStore.add(session)
-            if !password.isEmpty {
-                SSHKeychainStore.save(password: password, for: session.id)
-            }
+    /// Reads the port field, falling back to the default when it is blank or
+    /// not a number. A number outside the valid range is a typo worth reporting
+    /// rather than replacing, since dialling it can only fail.
+    private func parsePort() -> Int? {
+        let trimmed = port.trimmingCharacters(in: .whitespaces)
+        guard let value = Int(trimmed) else {
+            portError = nil
+            return SSHDefaults.port
         }
-        let vm = SSHSessionViewModel(
-            networkExtensionAdapter: networkExtensionAdapter,
-            host: host,
-            port: Int(port) ?? 22,
-            user: user,
-            password: password
-        )
-        activeSessionStore.add(vm)
-        activeViewModel = vm
+        guard value >= 1, value <= SSHDefaults.maxPort else {
+            portError = "Enter a port between 1 and \(SSHDefaults.maxPort)"
+            return nil
+        }
+        portError = nil
+        return value
     }
 }
 

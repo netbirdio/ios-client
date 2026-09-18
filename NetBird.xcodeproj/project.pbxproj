@@ -8,12 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		0C71C019350D42AB8F110336 /* iOSSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */; };
-		19270466922C3C7A04881706 /* SSHActiveSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081F6445497E913B0B424497 /* SSHActiveSessionStore.swift */; };
 		1C4E6A81CD33FF6D2DEFF8D5 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91FA1F06D3375864C74EAB3B /* Foundation.framework */; };
 		AA000C012F22000C00000001 /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
 		1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */; };
 		30FF9C7920F6D266D287C60A /* Terminal in Resources */ = {isa = PBXBuildFile; fileRef = 2C7C32B75979A07D28C5193D /* Terminal */; };
-		34DCB32C09E2442650FE30B9 /* ActiveSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DDC3F7D440E943BD9D175B8 /* ActiveSessionsView.swift */; };
 		EDA5F98A1D504292ACBA5070 /* iOSSSHView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 609FC285281B4A8F9E30113F /* iOSSSHView.swift */; };
 		36F90EF57603411B9916FDD6 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 		3A9A981B20EF47C1907CC877 /* TVServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8BCB110545747678AA5A9C2 /* TVServerView.swift */; };
@@ -157,7 +155,6 @@
 		55D865872F70982000A2EFF8 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 55D865862F70982000A2EFF8 /* SwiftUI.framework */; };
 		55D865982F70982100A2EFF8 /* NetBirdWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		6322AE9CFD7A43C9F3845712 /* SSHSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D69AE45BF52B532AE1693335 /* SSHSessionStore.swift */; };
-		6BF1213BA9CCD8F1A5C6E341 /* SavedSessionsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3AF60858344432AF484BBB /* SavedSessionsListView.swift */; };
 		71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */; };
 		7BD722208534FA904B8438E1 /* SSHSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B530BFC3D5396F11FD397A74 /* SSHSessionManager.swift */; };
 		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
@@ -187,7 +184,6 @@
 		A1C3D5EE2F000008001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		A1C3D5EF2F000009001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		A1C3D5F02F00000A001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
-		A21792DE8DFC5558086C32D9 /* SSHKeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FED26996C84673D2930F25A1 /* SSHKeychainStore.swift */; };
 		AA0001012F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001022F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001032F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
@@ -215,13 +211,14 @@
 		AA0009032F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
 		AA0009042F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
 		AA1B2C022F4E5A0100D1E2F3 /* TVGradientBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */; };
-		AAF26A40CFEE9CA52AFD9994 /* SavedSSHSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42FAFDA10444227993BE79E6 /* SavedSSHSession.swift */; };
 		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
 		B4C6A34FE3D10212F7CF8008 /* SSHIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA6A678602D6404CEF2DE8C5 /* SSHIPC.swift */; };
+		8E9BF12FC95C72C4A10D5015 /* SSHSessionRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E077DD13F58B77BDF640E9AF /* SSHSessionRegistry.swift */; };
+		952F4791D1F3A798646075A8 /* SSHProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5960D13D8451CA20A680F6 /* SSHProtocol.swift */; };
+		43F6003224353EC6DDCC2A81 /* SSHProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5960D13D8451CA20A680F6 /* SSHProtocol.swift */; };
 		BB001A012F99000000000001 /* TroubleshootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB001A002F99000000000001 /* TroubleshootView.swift */; };
 		BB3D4E022F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */; };
 		C87263E8CAE2316576801195 /* SSHConnectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00ADEFCC1B21B0A9724EB89 /* SSHConnectSheet.swift */; };
-		CC2940DCA976B415673A3804 /* SSHSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81ABB4F0C072C848EF8F338F /* SSHSessionViewModel.swift */; };
 		CC5F6A022F4E5A0300D1E2F3 /* TVQRCodeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC5F6A012F4E5A0300D1E2F3 /* TVQRCodeSheet.swift */; };
 		D6DC1C017236D5FA4AC21EE3 /* SSHKeyboardAccessoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F48DE55DC12388C90EAB6BD /* SSHKeyboardAccessoryView.swift */; };
 		E1A0B0012F5E000100000001 /* EmptyTabPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */; };
@@ -318,7 +315,6 @@
 
 /* Begin PBXFileReference section */
 		0787606E78348571292F3BED /* SSHTerminalView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHTerminalView.swift; sourceTree = "<group>"; };
-		081F6445497E913B0B424497 /* SSHActiveSessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHActiveSessionStore.swift; sourceTree = "<group>"; };
 		1F48DE55DC12388C90EAB6BD /* SSHKeyboardAccessoryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHKeyboardAccessoryView.swift; sourceTree = "<group>"; };
 		2C7C32B75979A07D28C5193D /* Terminal */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; path = Terminal; sourceTree = "<group>"; };
 		2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSSettingsView.swift; sourceTree = "<group>"; };
@@ -326,7 +322,6 @@
 		AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMBridgeIntegrationTests.swift; sourceTree = "<group>"; };
 		AA0010002F22001000000001 /* MDMRestrictionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMRestrictionsTests.swift; sourceTree = "<group>"; };
 		42873052F9544A89B1408339 /* iOSPeersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSPeersView.swift; sourceTree = "<group>"; };
-		42FAFDA10444227993BE79E6 /* SavedSSHSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SavedSSHSession.swift; sourceTree = "<group>"; };
 		441C5AEE2EDF0DAE0055EEFC /* NetBird TV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "NetBird TV.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		441C5AFD2EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NetBirdTVNetworkExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		443782BD2EDF284A00F9FA94 /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
@@ -338,7 +333,6 @@
 		4483B26C2F19331A00BD9F66 /* TVColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVColors.swift; sourceTree = "<group>"; };
 		44DCF5B82EDF4D900026078E /* libresolv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libresolv.tbd; path = usr/lib/libresolv.tbd; sourceTree = SDKROOT; };
 		44F3E39A2EE2F9FA00C87FEC /* TVAuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVAuthView.swift; sourceTree = "<group>"; };
-		4DDC3F7D440E943BD9D175B8 /* ActiveSessionsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ActiveSessionsView.swift; sourceTree = "<group>"; };
 		609FC285281B4A8F9E30113F /* iOSSSHView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = iOSSSHView.swift; sourceTree = "<group>"; };
 		50003BC82AFD2F0C00E5EB6B /* ConnectionListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionListener.swift; sourceTree = "<group>"; };
 		50003BCB2AFD3B0C00E5EB6B /* ClientState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientState.swift; sourceTree = "<group>"; };
@@ -405,7 +399,6 @@
 		55D865842F70982000A2EFF8 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		55D865862F70982000A2EFF8 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		5BFDF94163AF4C32A44DB3CD /* FirstLaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstLaunchView.swift; sourceTree = "<group>"; };
-		81ABB4F0C072C848EF8F338F /* SSHSessionViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHSessionViewModel.swift; sourceTree = "<group>"; };
 		8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppLoggerTests.swift; sourceTree = "<group>"; };
 		8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSConnectionView.swift; sourceTree = "<group>"; };
 		91FA1F06D3375864C74EAB3B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
@@ -431,8 +424,9 @@
 		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
 		B530BFC3D5396F11FD397A74 /* SSHSessionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHSessionManager.swift; sourceTree = "<group>"; };
 		BA6A678602D6404CEF2DE8C5 /* SSHIPC.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHIPC.swift; sourceTree = "<group>"; };
+		E077DD13F58B77BDF640E9AF /* SSHSessionRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHSessionRegistry.swift; sourceTree = "<group>"; };
+		CB5960D13D8451CA20A680F6 /* SSHProtocol.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHProtocol.swift; sourceTree = "<group>"; };
 		BB001A002F99000000000001 /* TroubleshootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TroubleshootView.swift; sourceTree = "<group>"; };
-		BB3AF60858344432AF484BBB /* SavedSessionsListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SavedSessionsListView.swift; sourceTree = "<group>"; };
 		BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPreSharedKeyButton.swift; sourceTree = "<group>"; };
 		C00ADEFCC1B21B0A9724EB89 /* SSHConnectSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHConnectSheet.swift; sourceTree = "<group>"; };
 		C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSNetworksView.swift; sourceTree = "<group>"; };
@@ -445,7 +439,6 @@
 		F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvVarPackager.swift; sourceTree = "<group>"; };
 		F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalConstants.swift; sourceTree = "<group>"; };
 		F8BCB110545747678AA5A9C2 /* TVServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVServerView.swift; sourceTree = "<group>"; };
-		FED26996C84673D2930F25A1 /* SSHKeychainStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHKeychainStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -696,8 +689,8 @@
 				50003BCB2AFD3B0C00E5EB6B /* ClientState.swift */,
 				50C5D30E2BDD96CF003159BE /* RoutesSelectionDetails.swift */,
 				BA6A678602D6404CEF2DE8C5 /* SSHIPC.swift */,
-				42FAFDA10444227993BE79E6 /* SavedSSHSession.swift */,
-				FED26996C84673D2930F25A1 /* SSHKeychainStore.swift */,
+				E077DD13F58B77BDF640E9AF /* SSHSessionRegistry.swift */,
+				CB5960D13D8451CA20A680F6 /* SSHProtocol.swift */,
 				D69AE45BF52B532AE1693335 /* SSHSessionStore.swift */,
 			);
 			path = NetbirdKit;
@@ -727,8 +720,6 @@
 				50D402962BD9B89300D4AC5B /* PeerViewModel.swift */,
 				509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */,
 				AA0002042F22000200000001 /* AddProfileViewModel.swift */,
-				81ABB4F0C072C848EF8F338F /* SSHSessionViewModel.swift */,
-				081F6445497E913B0B424497 /* SSHActiveSessionStore.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -820,9 +811,7 @@
 			children = (
 				0787606E78348571292F3BED /* SSHTerminalView.swift */,
 				C00ADEFCC1B21B0A9724EB89 /* SSHConnectSheet.swift */,
-				BB3AF60858344432AF484BBB /* SavedSessionsListView.swift */,
 				1F48DE55DC12388C90EAB6BD /* SSHKeyboardAccessoryView.swift */,
-				4DDC3F7D440E943BD9D175B8 /* ActiveSessionsView.swift */,
 				609FC285281B4A8F9E30113F /* iOSSSHView.swift */,
 			);
 			path = SSH;
@@ -1236,6 +1225,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				952F4791D1F3A798646075A8 /* SSHProtocol.swift in Sources */,
 				50CD81632AD0595E00CF830B /* DNSManager.swift in Sources */,
 				50C5D3102BDD96CF003159BE /* RoutesSelectionDetails.swift in Sources */,
 				50C727ED2A824C10006E898D /* NetBirdAdapter.swift in Sources */,
@@ -1268,6 +1258,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FF1349B3FD24FBF5354397BF /* SSHSessionManager.swift in Sources */,
+				8E9BF12FC95C72C4A10D5015 /* SSHSessionRegistry.swift in Sources */,
+				43F6003224353EC6DDCC2A81 /* SSHProtocol.swift in Sources */,
 				50CD84362AD82F9400CF830B /* ServerView.swift in Sources */,
 				50C5D30F2BDD96CF003159BE /* RoutesSelectionDetails.swift in Sources */,
 				50A8911D2A792A15007C48FC /* MainView.swift in Sources */,
@@ -1331,17 +1324,10 @@
 				F2DCB2437ECA42C3AEC3C895 /* FirstLaunchView.swift in Sources */,
 				BB001A012F99000000000001 /* TroubleshootView.swift in Sources */,
 				B4C6A34FE3D10212F7CF8008 /* SSHIPC.swift in Sources */,
-				CC2940DCA976B415673A3804 /* SSHSessionViewModel.swift in Sources */,
 				F6491406222BABA2C255A582 /* SSHTerminalView.swift in Sources */,
-				FF1349B3FD24FBF5354397BF /* SSHSessionManager.swift in Sources */,
-				AAF26A40CFEE9CA52AFD9994 /* SavedSSHSession.swift in Sources */,
-				A21792DE8DFC5558086C32D9 /* SSHKeychainStore.swift in Sources */,
 				6322AE9CFD7A43C9F3845712 /* SSHSessionStore.swift in Sources */,
 				C87263E8CAE2316576801195 /* SSHConnectSheet.swift in Sources */,
-				6BF1213BA9CCD8F1A5C6E341 /* SavedSessionsListView.swift in Sources */,
 				D6DC1C017236D5FA4AC21EE3 /* SSHKeyboardAccessoryView.swift in Sources */,
-				34DCB32C09E2442650FE30B9 /* ActiveSessionsView.swift in Sources */,
-				19270466922C3C7A04881706 /* SSHActiveSessionStore.swift in Sources */,
 				EDA5F98A1D504292ACBA5070 /* iOSSSHView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
