@@ -33,6 +33,45 @@ struct SSHSessionInfo: Identifiable, Equatable {
     /// Leading ordinal, like tmux: the target is long enough to get truncated
     /// on a narrow row, which would drop the very part that disambiguates.
     var label: String { ordinal > 0 ? "#\(ordinal)  \(target)" : target }
+
+    /// One session's details before numbering.
+    struct Draft {
+        let id: String
+        let host: String
+        let port: Int
+        let user: String
+        let state: SSHSessionState
+        let stateMessage: String
+        let hasScrollback: Bool
+
+        var target: String { "\(user)@\(host):\(port)" }
+    }
+
+    /// Numbers the sessions sharing a target, so parallel ones to the same host
+    /// can be told apart. A target with only one session gets no number, since
+    /// there is nothing to distinguish it from.
+    static func numbered(_ drafts: [Draft]) -> [SSHSessionInfo] {
+        var totals: [String: Int] = [:]
+        for draft in drafts {
+            totals[draft.target, default: 0] += 1
+        }
+        var seen: [String: Int] = [:]
+        return drafts.map { draft in
+            var ordinal = 0
+            if totals[draft.target, default: 0] > 1 {
+                ordinal = seen[draft.target, default: 0] + 1
+                seen[draft.target] = ordinal
+            }
+            return SSHSessionInfo(id: draft.id,
+                                  host: draft.host,
+                                  port: draft.port,
+                                  user: draft.user,
+                                  state: draft.state,
+                                  stateMessage: draft.stateMessage,
+                                  hasScrollback: draft.hasScrollback,
+                                  ordinal: ordinal)
+        }
+    }
 }
 
 /// What a terminal view attaches to receive live output and state.
@@ -500,30 +539,16 @@ final class SSHSessionRegistry: ObservableObject {
         publish()
     }
 
-    /// Numbers the sessions sharing a target, so parallel ones to the same host
-    /// can be told apart. A target with only one session gets no number, since
-    /// there is nothing to distinguish it from.
     private func publish() {
-        var totals: [String: Int] = [:]
-        for handle in handles {
-            totals[handle.target, default: 0] += 1
-        }
-        var seen: [String: Int] = [:]
-        sessions = handles.map { handle in
-            var ordinal = 0
-            if totals[handle.target, default: 0] > 1 {
-                ordinal = seen[handle.target, default: 0] + 1
-                seen[handle.target] = ordinal
-            }
-            return SSHSessionInfo(id: handle.id,
-                                  host: handle.host,
-                                  port: handle.port,
-                                  user: handle.user,
-                                  state: handle.state,
-                                  stateMessage: handle.stateMessage,
-                                  hasScrollback: handle.hasScrollback,
-                                  ordinal: ordinal)
-        }
+        sessions = SSHSessionInfo.numbered(handles.map {
+            SSHSessionInfo.Draft(id: $0.id,
+                                 host: $0.host,
+                                 port: $0.port,
+                                 user: $0.user,
+                                 state: $0.state,
+                                 stateMessage: $0.stateMessage,
+                                 hasScrollback: $0.hasScrollback)
+        })
     }
 
     /// Called on add/remove/edit only; a state change alters nothing stored.

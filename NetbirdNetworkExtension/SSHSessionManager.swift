@@ -22,14 +22,6 @@ private let sshJWTURLDefaultsKey   = "io.netbird.ssh.jwtURL"
 private let sshJWTCodeDefaultsKey  = "io.netbird.ssh.jwtUserCode"
 private let sshAppGroupID          = "group.io.netbird.app"
 
-/// Marker the Go binding puts in the error when a password would help.
-private let sshPasswordRequiredMarker = "netbird-ssh-password-required"
-/// Marks a password prompt as following a rejection rather than a first ask.
-private let sshRejectedMarker = "rejected"
-/// Marker the Go binding puts in the error, followed by ":" and the presented
-/// SHA256 fingerprint, when a regular server's host key is not yet trusted.
-private let sshHostKeyUnknownMarker = "netbird-ssh-hostkey-unknown"
-
 /// Handles the Go URLOpener callback for NetBird SSH servers that require JWT.
 /// Writes the auth URL to the terminal stream and notifies the main app to open
 /// it, since the extension has no UI of its own.
@@ -175,32 +167,14 @@ final class SSHSession: NSObject, NetBirdSDKSSHTerminalListenerProtocol {
         }
     }
 
+    /// Turns a dial failure into a state. Two of the three outcomes are pauses
+    /// the app can answer rather than failures; the wording each turns into
+    /// belongs to the app, which has the localized strings.
     private func handleConnectFailure(_ error: Error, generation gen: UInt64, priorAttempts: Int) {
-        let message = (error as NSError).localizedDescription
-
-        if message.contains(sshPasswordRequiredMarker) {
-            // The marker on a retry means the password was wrong. A non-empty
-            // message marks the retry case; the wording it turns into belongs
-            // to the app, which has the localized strings.
-            setState(.needsPassword, priorAttempts > 0 ? sshRejectedMarker : "", generation: gen)
-            return
-        }
-        if let fingerprint = Self.hostKeyFingerprint(in: message) {
-            setState(.needsHostKeyConfirm, fingerprint, generation: gen)
-            return
-        }
-        setState(.error, message, generation: gen)
-    }
-
-    /// Pulls the SHA256 fingerprint out of the host-key marker, or returns nil
-    /// when the error is not that marker. The Go side formats it as
-    /// "netbird-ssh-hostkey-unknown:SHA256:...".
-    private static func hostKeyFingerprint(in message: String) -> String? {
-        guard let markerRange = message.range(of: sshHostKeyUnknownMarker),
-              let colon = message.range(of: ":", range: markerRange.lowerBound..<message.endIndex)
-        else { return nil }
-        let fingerprint = message[colon.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
-        return fingerprint.isEmpty ? nil : fingerprint
+        let outcome = SSHConnectFailure.classify((error as NSError).localizedDescription,
+                                                 priorAttempts: priorAttempts)
+        let resolution = outcome.resolution
+        setState(resolution.state, resolution.message, generation: gen)
     }
 
     /// Retries with a password the user supplied after the session landed in

@@ -32,6 +32,67 @@ public enum SSHSessionState: String, Codable {
     }
 }
 
+/// How a failed dial is reported back. The Go binding flattens errors to their
+/// message, so a sentinel value would not survive the gomobile boundary; these
+/// markers are the protocol instead. Two of the three outcomes are not failures
+/// at all but pauses the UI can answer.
+enum SSHConnectFailure: Equatable {
+    /// The server wants a password. `rejected` is true when one was already
+    /// tried and turned down, which is the difference between a first ask and
+    /// a retry.
+    case passwordRequired(rejected: Bool)
+    /// A regular server presented a host key that is not yet trusted, with the
+    /// SHA256 fingerprint to show for confirmation.
+    case hostKeyUnknown(fingerprint: String)
+    /// A genuine failure, carrying the message to print.
+    case failed(message: String)
+
+    /// Marker the Go binding puts in the error when a password would help.
+    static let passwordRequiredMarker = "netbird-ssh-password-required"
+    /// Marker the Go binding puts in the error, followed by ":" and the
+    /// presented SHA256 fingerprint, when a regular server's host key is not
+    /// yet trusted.
+    static let hostKeyUnknownMarker = "netbird-ssh-hostkey-unknown"
+    /// Marks a password prompt as following a rejection rather than a first ask.
+    static let rejectedMarker = "rejected"
+
+    /// Classifies a connect error. `priorAttempts` is how many passwords this
+    /// session has already offered: the same marker means "tell me one" the
+    /// first time and "that one was wrong" afterwards.
+    static func classify(_ message: String, priorAttempts: Int) -> SSHConnectFailure {
+        if message.contains(passwordRequiredMarker) {
+            return .passwordRequired(rejected: priorAttempts > 0)
+        }
+        if let fingerprint = hostKeyFingerprint(in: message) {
+            return .hostKeyUnknown(fingerprint: fingerprint)
+        }
+        return .failed(message: message)
+    }
+
+    /// Pulls the SHA256 fingerprint out of the host-key marker, or returns nil
+    /// when the error is not that marker. The Go side formats it as
+    /// "netbird-ssh-hostkey-unknown:SHA256:...".
+    static func hostKeyFingerprint(in message: String) -> String? {
+        guard let marker = message.range(of: hostKeyUnknownMarker),
+              let colon = message.range(of: ":", range: marker.upperBound..<message.endIndex)
+        else { return nil }
+        let fingerprint = message[colon.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        return fingerprint.isEmpty ? nil : fingerprint
+    }
+
+    /// The state and detail this outcome puts the session into.
+    var resolution: (state: SSHSessionState, message: String) {
+        switch self {
+        case .passwordRequired(let rejected):
+            return (.needsPassword, rejected ? Self.rejectedMarker : "")
+        case .hostKeyUnknown(let fingerprint):
+            return (.needsHostKeyConfirm, fingerprint)
+        case .failed(let message):
+            return (.error, message)
+        }
+    }
+}
+
 /// What the app asks the extension to do with a session.
 public enum SSHCommandKind: String, Codable {
     /// Create the session and start dialling. Carries the target and the
