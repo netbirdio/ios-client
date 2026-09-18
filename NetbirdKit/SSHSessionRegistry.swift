@@ -125,14 +125,26 @@ final class SSHSessionHandle {
         return listeners.values.compactMap { $0.value }
     }
 
+
+    /// Starts a new attempt: invalidates whatever is in flight and stops the
+    /// poll loop that serves it. Stopping matters as much as the bump — the
+    /// in-flight poll bails out on the generation check without clearing
+    /// `isPolling`, and a stale flag would make the next `beginPolling` a
+    /// no-op, leaving the terminal silent.
+    @discardableResult
+    private func beginAttempt() -> UInt64 {
+        isPolling = false
+        generation &+= 1
+        return generation
+    }
+
     // MARK: - Lifecycle
 
     /// Retargets a stored session in place. The details are final on a live
     /// connection, which belonged to the old target anyway, so the scrollback
     /// goes with them.
     func retarget(host: String, port: Int, user: String) {
-        generation &+= 1
-        isPolling = false
+        beginAttempt()
         self.host = host
         self.port = port
         self.user = user
@@ -145,8 +157,7 @@ final class SSHSessionHandle {
     func open(cols: Int, rows: Int) {
         lastCols = cols
         lastRows = rows
-        generation &+= 1
-        let gen = generation
+        let gen = beginAttempt()
         setState(.connecting, "")
 
         registry.adapter?.sshOpen(sessionID: id,
@@ -166,8 +177,7 @@ final class SSHSessionHandle {
     func reconnect(cols: Int, rows: Int) {
         lastCols = cols
         lastRows = rows
-        generation &+= 1
-        let gen = generation
+        let gen = beginAttempt()
         setState(.connecting, "")
 
         registry.adapter?.sshReconnect(sessionID: id,
@@ -194,14 +204,12 @@ final class SSHSessionHandle {
     /// Ends the session in the extension. The entry itself is dropped by the
     /// registry, which owns the stored list.
     func closeRemote() {
-        isPolling = false
-        generation &+= 1
+        beginAttempt()
         registry.adapter?.sshClose(sessionID: id)
     }
 
     func retryWithPassword(_ password: String) {
-        generation &+= 1
-        let gen = generation
+        let gen = beginAttempt()
         setState(.connecting, "")
         registry.adapter?.sshSendPassword(sessionID: id, password: password) { [weak self] reply in
             Task { @MainActor in self?.handleCommandReply(reply, generation: gen, startPolling: true) }
@@ -209,8 +217,7 @@ final class SSHSessionHandle {
     }
 
     func retryWithHostKeyTrust(_ fingerprint: String) {
-        generation &+= 1
-        let gen = generation
+        let gen = beginAttempt()
         setState(.connecting, "")
         registry.adapter?.sshTrustHostKey(sessionID: id, fingerprint: fingerprint) { [weak self] reply in
             Task { @MainActor in self?.handleCommandReply(reply, generation: gen, startPolling: true) }
@@ -220,8 +227,7 @@ final class SSHSessionHandle {
     /// Gives up on a session waiting for a password or a host key; otherwise it
     /// would be parked in that state with no way forward.
     func cancelPrompt() {
-        isPolling = false
-        generation &+= 1
+        beginAttempt()
         registry.adapter?.sshCancelPrompt(sessionID: id) { [weak self] reply in
             Task { @MainActor in self?.handleCommandReply(reply, generation: nil, startPolling: false) }
         }
