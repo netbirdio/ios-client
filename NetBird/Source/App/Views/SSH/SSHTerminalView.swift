@@ -56,8 +56,18 @@ struct SSHTerminalView: View {
                 }
             }
         }
-        .onAppear { terminal.bind(sessionID: sessionID, registry: registry) }
-        .onDisappear { terminal.unbind() }
+        .onAppear {
+            terminal.bind(sessionID: sessionID, registry: registry)
+            // A terminal earns landscape: it roughly doubles the column count,
+            // which is what long command lines and full-screen programs need.
+            // The session belongs to the registry, not to this view, so it
+            // survives the rotation and replays its scrollback afterwards.
+            AppOrientation.allowLandscape(true)
+        }
+        .onDisappear {
+            terminal.unbind()
+            AppOrientation.allowLandscape(false)
+        }
         .sheet(isPresented: $terminal.showsPasswordPrompt) {
             SSHPasswordPrompt(
                 target: terminal.target,

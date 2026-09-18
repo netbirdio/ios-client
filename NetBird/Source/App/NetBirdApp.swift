@@ -122,6 +122,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return true
     }
 
+    /// The Info.plist advertises landscape so the SSH terminal can use it; every
+    /// other screen stays portrait, which is what this reports.
+    func application(_ application: UIApplication,
+                     supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        AppOrientation.mask
+    }
+
     // Show notification banner even when app is in foreground
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,

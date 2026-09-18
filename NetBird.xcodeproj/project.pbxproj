@@ -213,6 +213,7 @@
 		AA1B2C022F4E5A0100D1E2F3 /* TVGradientBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */; };
 		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
 		B4C6A34FE3D10212F7CF8008 /* SSHIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA6A678602D6404CEF2DE8C5 /* SSHIPC.swift */; };
+		11B911E7407930378C729174 /* AppOrientation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC81ABCB573851012C7290F6 /* AppOrientation.swift */; };
 		8E9BF12FC95C72C4A10D5015 /* SSHSessionRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E077DD13F58B77BDF640E9AF /* SSHSessionRegistry.swift */; };
 		952F4791D1F3A798646075A8 /* SSHProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5960D13D8451CA20A680F6 /* SSHProtocol.swift */; };
 		43F6003224353EC6DDCC2A81 /* SSHProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5960D13D8451CA20A680F6 /* SSHProtocol.swift */; };
@@ -424,6 +425,7 @@
 		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
 		B530BFC3D5396F11FD397A74 /* SSHSessionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHSessionManager.swift; sourceTree = "<group>"; };
 		BA6A678602D6404CEF2DE8C5 /* SSHIPC.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHIPC.swift; sourceTree = "<group>"; };
+		BC81ABCB573851012C7290F6 /* AppOrientation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppOrientation.swift; sourceTree = "<group>"; };
 		E077DD13F58B77BDF640E9AF /* SSHSessionRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHSessionRegistry.swift; sourceTree = "<group>"; };
 		CB5960D13D8451CA20A680F6 /* SSHProtocol.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHProtocol.swift; sourceTree = "<group>"; };
 		BB001A002F99000000000001 /* TroubleshootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TroubleshootView.swift; sourceTree = "<group>"; };
@@ -689,6 +691,7 @@
 				50003BCB2AFD3B0C00E5EB6B /* ClientState.swift */,
 				50C5D30E2BDD96CF003159BE /* RoutesSelectionDetails.swift */,
 				BA6A678602D6404CEF2DE8C5 /* SSHIPC.swift */,
+				BC81ABCB573851012C7290F6 /* AppOrientation.swift */,
 				E077DD13F58B77BDF640E9AF /* SSHSessionRegistry.swift */,
 				CB5960D13D8451CA20A680F6 /* SSHProtocol.swift */,
 				D69AE45BF52B532AE1693335 /* SSHSessionStore.swift */,
@@ -1258,6 +1261,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				11B911E7407930378C729174 /* AppOrientation.swift in Sources */,
 				FF1349B3FD24FBF5354397BF /* SSHSessionManager.swift in Sources */,
 				8E9BF12FC95C72C4A10D5015 /* SSHSessionRegistry.swift in Sources */,
 				43F6003224353EC6DDCC2A81 /* SSHProtocol.swift in Sources */,
@@ -1769,7 +1773,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = "";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1816,7 +1820,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = "";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
