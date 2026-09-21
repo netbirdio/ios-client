@@ -7,9 +7,12 @@ import SwiftUI
 
 struct PeerDetailSheet: View {
     @ObservedObject var peer: PeerInfo
+    let networkExtensionAdapter: NetworkExtensionAdapter
     @Environment(\.presentationMode) var presentationMode
 
     @State private var relativeDateText: String = ""
+    @State private var showSSHConnect = false
+    @State private var showSSHUnavailable = false
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -59,6 +62,17 @@ struct PeerDetailSheet: View {
                 Section {
                     detailRow("Public key", peer.pubKey)
                 }
+
+                #if os(iOS)
+                Section {
+                    Button {
+                        showSSHConnect = true
+                    } label: {
+                        Label("SSH", systemImage: "terminal")
+                    }
+                    .disabled(peer.ip.isEmpty || peer.connStatus != "Connected")
+                }
+                #endif
             }
             .listStyle(.insetGrouped)
             .navigationTitle(peer.fqdn)
@@ -70,6 +84,32 @@ struct PeerDetailSheet: View {
             }
         }
         .onAppear { updateRelativeDate() }
+        #if os(iOS)
+        .sheet(isPresented: $showSSHConnect) {
+            // The session lands in the SSH tab like any other; opening the
+            // terminal from here would bury it under this sheet.
+            SSHConnectSheet(request: .peer(name: peer.fqdn, ip: peer.ip)) { host, port, user in
+                // The peer's status said it was reachable when this sheet
+                // opened; the tunnel can still be gone by the time the form is
+                // confirmed. Storing a session that could not be dialled would
+                // leave it stuck reporting "connecting" forever.
+                guard SSHSessionRegistry.shared.canConnect else {
+                    showSSHUnavailable = true
+                    return false
+                }
+                SSHSessionRegistry.shared.create(host: host, port: port, user: user)
+                presentationMode.wrappedValue.dismiss()
+                return true
+            }
+        }
+        .alert(isPresented: $showSSHUnavailable) {
+            Alert(
+                title: Text("NetBird is not running"),
+                message: Text("Connect to NetBird before starting an SSH session."),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        #endif
     }
 
     @ViewBuilder

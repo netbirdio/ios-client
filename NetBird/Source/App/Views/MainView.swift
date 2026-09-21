@@ -41,6 +41,7 @@ enum MainAlertType: String, Identifiable {
 
 struct iOSMainView: View {
     @EnvironmentObject var viewModel: ViewModel
+    @ObservedObject private var sshRegistry = SSHSessionRegistry.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var selectedTab = 0
     @State private var activeAlert: MainAlertType?
@@ -139,7 +140,7 @@ struct iOSMainView: View {
                         viewModel.connectWithOnDemandDisabled()
                     },
                     secondaryButton: .cancel(Text("Edit Rules")) {
-                        selectedTab = 3 // Switch to Settings tab
+                        selectedTab = 4
                     }
                 )
             case .settingsRejected:
@@ -196,13 +197,25 @@ struct iOSMainView: View {
                 }
 
                 NavigationView {
+                    iOSSSHView()
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .tabItem {
+                    Label("SSH", systemImage: "terminal")
+                }
+                .tag(3)
+                // Counts only what is dialled or dialling: a stored entry
+                // waiting to be redialled is not something to chase.
+                .badge(sshRegistry.liveSessionCount)
+
+                NavigationView {
                     iOSSettingsView()
                 }
                 .navigationViewStyle(StackNavigationViewStyle())
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
-                .tag(3)
+                .tag(4)
             }
             .onChange(of: viewModel.navigateToServerView) { newValue in
                 if newValue {

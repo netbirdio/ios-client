@@ -26,6 +26,7 @@ struct TroubleshootView: View {
 
                 bundleActionContent
             }
+
         }
         .navigationTitle("Troubleshoot")
         .navigationBarTitleDisplayMode(.inline)

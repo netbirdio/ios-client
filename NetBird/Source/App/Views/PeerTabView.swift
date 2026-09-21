@@ -125,7 +125,7 @@ struct PeerListView: View {
         }
         .listStyle(.plain)
         .sheet(item: $selectedPeer) { peer in
-            PeerDetailSheet(peer: peer)
+            PeerDetailSheet(peer: peer, networkExtensionAdapter: viewModel.networkExtensionAdapter)
         }
     }
 }

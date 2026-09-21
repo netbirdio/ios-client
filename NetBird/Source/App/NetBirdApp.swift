@@ -91,6 +91,24 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         configureFirebaseIfNeeded()
         reportPreviousGoCrashIfNeeded()
 
+        // Open the browser when the Network Extension needs JWT auth for SSH.
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            nil,
+            { _, _, _, _, _ in
+                DispatchQueue.main.async {
+                    guard
+                        let raw = UserDefaults(suiteName: "group.io.netbird.app")?.string(forKey: "io.netbird.ssh.jwtURL"),
+                        let url = URL(string: raw)
+                    else { return }
+                    UIApplication.shared.open(url)
+                }
+            },
+            "io.netbird.app.ssh.jwtRequired" as CFString,
+            nil,
+            .deliverImmediately
+        )
+
         let center = UNUserNotificationCenter.current()
         center.delegate = self
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
@@ -102,6 +120,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         }
 
         return true
+    }
+
+    /// The Info.plist advertises landscape so the SSH terminal can use it; every
+    /// other screen stays portrait, which is what this reports.
+    func application(_ application: UIApplication,
+                     supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        AppOrientation.mask
     }
 
     // Show notification banner even when app is in foreground

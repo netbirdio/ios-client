@@ -25,6 +25,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }()
 
     private var adapter: NetBirdAdapter?
+    private let sshSessionManager = SSHSessionManager()
+    private let sshQueue = DispatchQueue(label: "io.netbird.app.ssh", attributes: .concurrent)
 
     var pathMonitor: NWPathMonitor?
     let monitorQueue = DispatchQueue(label: "NetworkMonitor")
@@ -352,6 +354,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // teardown.
         isTearingDown = true
 
+        // An SSH session dials through this tunnel, so none of them can outlive
+        // it. Tearing them down here also frees their Go clients rather than
+        // leaving them parked in a process the system is about to reclaim.
+        sshSessionManager.closeAll()
+
         // A stop that lands before the engine ever reported connected would otherwise leave
         // NE waiting on the start outcome forever: the outcome is delivered from the
         // connection listener's onConnected, and stopping just makes the engine's run loop
@@ -464,6 +471,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case let s where s.hasPrefix("DebugBundle:"):
             let anonymize = s.dropFirst("DebugBundle:".count) == "true"
             debugBundle(anonymize: anonymize, completionHandler: completionHandler)
+        case let s where s.hasPrefix(sshMessagePrefix):
+            handleSSHCommand(String(s.dropFirst(sshMessagePrefix.count)), completionHandler: completionHandler)
         default:
             AppLogger.shared.log("Unknown message: \(string)")
             completionHandler(nil)
@@ -1091,6 +1100,80 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             try adapter.client.deselectRoute(id)
         } catch {
             AppLogger.shared.log("Failed to deselect route: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: SSH
+
+    /// Runs one SSH command from the app. Everything is dispatched onto the
+    /// concurrent `sshQueue`: a poll parks its thread until output arrives, so
+    /// handling it inline would stall the provider's message handler and, with
+    /// a serial queue, every other session's commands too.
+    private func handleSSHCommand(_ payload: String, completionHandler: @escaping (Data?) -> Void) {
+        guard let command = SSHMessageCoder.decodeCommand(payload) else {
+            completionHandler(SSHMessageCoder.encode(.failure("malformed SSH command")))
+            return
+        }
+
+        sshQueue.async { [weak self] in
+            guard let self else {
+                completionHandler(SSHMessageCoder.encode(.failure("extension unavailable")))
+                return
+            }
+            completionHandler(SSHMessageCoder.encode(self.runSSHCommand(command)))
+        }
+    }
+
+    private func runSSHCommand(_ command: SSHCommand) -> SSHReply {
+        switch command.kind {
+        case .open:
+            guard let nbClient = adapter?.client else {
+                return .failure("netbird client not running")
+            }
+            return sshSessionManager.open(command: command, nbClient: nbClient)
+
+        case .poll:
+            let timeout = TimeInterval(command.timeoutMs ?? 25_000) / 1000.0
+            return sshSessionManager.poll(sessionID: command.sessionID, timeout: timeout)
+
+        case .write:
+            guard let base64 = command.dataBase64, let data = Data(base64Encoded: base64) else {
+                return .failure("malformed SSH payload")
+            }
+            return sshSessionManager.write(sessionID: command.sessionID, data: data)
+
+        case .resize:
+            guard let cols = command.cols, let rows = command.rows else {
+                return .failure("missing terminal size")
+            }
+            return sshSessionManager.resize(sessionID: command.sessionID, cols: cols, rows: rows)
+
+        case .password:
+            return sshSessionManager.retryWithPassword(sessionID: command.sessionID,
+                                                       password: command.text ?? "")
+
+        case .trustHostKey:
+            guard let fingerprint = command.text, !fingerprint.isEmpty else {
+                return .failure("missing host key fingerprint")
+            }
+            return sshSessionManager.trustHostKey(sessionID: command.sessionID, fingerprint: fingerprint)
+
+        case .cancelPrompt:
+            return sshSessionManager.cancelPrompt(sessionID: command.sessionID)
+
+        case .disconnect:
+            return sshSessionManager.disconnect(sessionID: command.sessionID)
+
+        case .reconnect:
+            guard let nbClient = adapter?.client else {
+                return .failure("netbird client not running")
+            }
+            return sshSessionManager.reconnect(sessionID: command.sessionID,
+                                               command: command,
+                                               nbClient: nbClient)
+
+        case .close:
+            return sshSessionManager.close(sessionID: command.sessionID)
         }
     }
 

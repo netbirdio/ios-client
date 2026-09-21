@@ -11,6 +11,8 @@
 		1C4E6A81CD33FF6D2DEFF8D5 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91FA1F06D3375864C74EAB3B /* Foundation.framework */; };
 		AA000C012F22000C00000001 /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
 		1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */; };
+		30FF9C7920F6D266D287C60A /* Terminal in Resources */ = {isa = PBXBuildFile; fileRef = 2C7C32B75979A07D28C5193D /* Terminal */; };
+		EDA5F98A1D504292ACBA5070 /* iOSSSHView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 609FC285281B4A8F9E30113F /* iOSSSHView.swift */; };
 		36F90EF57603411B9916FDD6 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 		3A9A981B20EF47C1907CC877 /* TVServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8BCB110545747678AA5A9C2 /* TVServerView.swift */; };
 		441C5AFE2EDF0DD20055EEFC /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50245A532A80431B0034792B /* NetworkExtension.framework */; };
@@ -152,7 +154,9 @@
 		55D865852F70982000A2EFF8 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 55D865842F70982000A2EFF8 /* WidgetKit.framework */; };
 		55D865872F70982000A2EFF8 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 55D865862F70982000A2EFF8 /* SwiftUI.framework */; };
 		55D865982F70982100A2EFF8 /* NetBirdWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		6322AE9CFD7A43C9F3845712 /* SSHSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D69AE45BF52B532AE1693335 /* SSHSessionStore.swift */; };
 		71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */; };
+		7BD722208534FA904B8438E1 /* SSHSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B530BFC3D5396F11FD397A74 /* SSHSessionManager.swift */; };
 		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
 		AA0011012F22001100000001 /* MDMBridgeIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */; };
 		AA0010012F22001000000001 /* MDMRestrictionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0010002F22001000000001 /* MDMRestrictionsTests.swift */; };
@@ -198,6 +202,7 @@
 		AA000E042F22000E00000001 /* MDMRestrictions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000E002F22000E00000001 /* MDMRestrictions.swift */; };
 		AA000B012F22000B00000001 /* ProfileMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000B002F22000B00000001 /* ProfileMigrationTests.swift */; };
 		AA000B032F22000B00000003 /* ProfileConnectionCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */; };
+		9F0BA149A3C407426B9978EF /* SSHProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 804602AFAB5F4B7A13986496 /* SSHProtocolTests.swift */; };
 		AA0002052F22000200000001 /* ProfileBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002012F22000200000001 /* ProfileBadge.swift */; };
 		AA0002062F22000200000001 /* ProfilesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002022F22000200000001 /* ProfilesListView.swift */; };
 		AA0002072F22000200000001 /* AddProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002032F22000200000001 /* AddProfileSheet.swift */; };
@@ -208,9 +213,16 @@
 		AA0009042F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
 		AA1B2C022F4E5A0100D1E2F3 /* TVGradientBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */; };
 		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
+		B4C6A34FE3D10212F7CF8008 /* SSHIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA6A678602D6404CEF2DE8C5 /* SSHIPC.swift */; };
+		11B911E7407930378C729174 /* AppOrientation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC81ABCB573851012C7290F6 /* AppOrientation.swift */; };
+		8E9BF12FC95C72C4A10D5015 /* SSHSessionRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E077DD13F58B77BDF640E9AF /* SSHSessionRegistry.swift */; };
+		952F4791D1F3A798646075A8 /* SSHProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5960D13D8451CA20A680F6 /* SSHProtocol.swift */; };
+		43F6003224353EC6DDCC2A81 /* SSHProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5960D13D8451CA20A680F6 /* SSHProtocol.swift */; };
 		BB001A012F99000000000001 /* TroubleshootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB001A002F99000000000001 /* TroubleshootView.swift */; };
 		BB3D4E022F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */; };
+		C87263E8CAE2316576801195 /* SSHConnectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00ADEFCC1B21B0A9724EB89 /* SSHConnectSheet.swift */; };
 		CC5F6A022F4E5A0300D1E2F3 /* TVQRCodeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC5F6A012F4E5A0300D1E2F3 /* TVQRCodeSheet.swift */; };
+		D6DC1C017236D5FA4AC21EE3 /* SSHKeyboardAccessoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F48DE55DC12388C90EAB6BD /* SSHKeyboardAccessoryView.swift */; };
 		E1A0B0012F5E000100000001 /* EmptyTabPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */; };
 		E1B0C0012F60000100000001 /* NetworkWarningBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */; };
 		E1C0D0012F72000100000001 /* AppButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C0D0002F72000100000001 /* AppButton.swift */; };
@@ -220,6 +232,8 @@
 		F1B2920A2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */; };
 		F1B2920B2EE0BC46001D91B8 /* GlobalConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */; };
 		F2DCB2437ECA42C3AEC3C895 /* FirstLaunchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BFDF94163AF4C32A44DB3CD /* FirstLaunchView.swift */; };
+		F6491406222BABA2C255A582 /* SSHTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0787606E78348571292F3BED /* SSHTerminalView.swift */; };
+		FF1349B3FD24FBF5354397BF /* SSHSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B530BFC3D5396F11FD397A74 /* SSHSessionManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -302,6 +316,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0787606E78348571292F3BED /* SSHTerminalView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHTerminalView.swift; sourceTree = "<group>"; };
+		1F48DE55DC12388C90EAB6BD /* SSHKeyboardAccessoryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHKeyboardAccessoryView.swift; sourceTree = "<group>"; };
+		2C7C32B75979A07D28C5193D /* Terminal */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; path = Terminal; sourceTree = "<group>"; };
 		2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSSettingsView.swift; sourceTree = "<group>"; };
 		3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlobalConstantsTests.swift; sourceTree = "<group>"; };
 		AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMBridgeIntegrationTests.swift; sourceTree = "<group>"; };
@@ -318,6 +335,7 @@
 		4483B26C2F19331A00BD9F66 /* TVColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVColors.swift; sourceTree = "<group>"; };
 		44DCF5B82EDF4D900026078E /* libresolv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libresolv.tbd; path = usr/lib/libresolv.tbd; sourceTree = SDKROOT; };
 		44F3E39A2EE2F9FA00C87FEC /* TVAuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVAuthView.swift; sourceTree = "<group>"; };
+		609FC285281B4A8F9E30113F /* iOSSSHView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = iOSSSHView.swift; sourceTree = "<group>"; };
 		50003BC82AFD2F0C00E5EB6B /* ConnectionListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionListener.swift; sourceTree = "<group>"; };
 		50003BCB2AFD3B0C00E5EB6B /* ClientState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientState.swift; sourceTree = "<group>"; };
 		501B0DC52AE04DDE004BE7A7 /* button-disconnecting.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "button-disconnecting.json"; sourceTree = "<group>"; };
@@ -399,6 +417,7 @@
 		AA000E002F22000E00000001 /* MDMRestrictions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMRestrictions.swift; sourceTree = "<group>"; };
 		AA000B002F22000B00000001 /* ProfileMigrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileMigrationTests.swift; sourceTree = "<group>"; };
 		AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileConnectionCacheTests.swift; sourceTree = "<group>"; };
+		804602AFAB5F4B7A13986496 /* SSHProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHProtocolTests.swift; sourceTree = "<group>"; };
 		AA0002012F22000200000001 /* ProfileBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileBadge.swift; sourceTree = "<group>"; };
 		AA0002022F22000200000001 /* ProfilesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesListView.swift; sourceTree = "<group>"; };
 		AA0002032F22000200000001 /* AddProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProfileSheet.swift; sourceTree = "<group>"; };
@@ -406,10 +425,17 @@
 		AA0009002F22000900000001 /* ProfileConnectionCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileConnectionCache.swift; sourceTree = "<group>"; };
 		AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVGradientBackground.swift; sourceTree = "<group>"; };
 		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
+		B530BFC3D5396F11FD397A74 /* SSHSessionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHSessionManager.swift; sourceTree = "<group>"; };
+		BA6A678602D6404CEF2DE8C5 /* SSHIPC.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHIPC.swift; sourceTree = "<group>"; };
+		BC81ABCB573851012C7290F6 /* AppOrientation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppOrientation.swift; sourceTree = "<group>"; };
+		E077DD13F58B77BDF640E9AF /* SSHSessionRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHSessionRegistry.swift; sourceTree = "<group>"; };
+		CB5960D13D8451CA20A680F6 /* SSHProtocol.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHProtocol.swift; sourceTree = "<group>"; };
 		BB001A002F99000000000001 /* TroubleshootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TroubleshootView.swift; sourceTree = "<group>"; };
 		BB3D4E012F4E5A0200D1E2F3 /* TVPreSharedKeyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPreSharedKeyButton.swift; sourceTree = "<group>"; };
+		C00ADEFCC1B21B0A9724EB89 /* SSHConnectSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHConnectSheet.swift; sourceTree = "<group>"; };
 		C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSNetworksView.swift; sourceTree = "<group>"; };
 		CC5F6A012F4E5A0300D1E2F3 /* TVQRCodeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVQRCodeSheet.swift; sourceTree = "<group>"; };
+		D69AE45BF52B532AE1693335 /* SSHSessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSHSessionStore.swift; sourceTree = "<group>"; };
 		E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyTabPlaceholder.swift; sourceTree = "<group>"; };
 		E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkWarningBanner.swift; sourceTree = "<group>"; };
 		E1C0D0002F72000100000001 /* AppButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppButton.swift; sourceTree = "<group>"; };
@@ -579,6 +605,7 @@
 				50245A582A80431C0034792B /* Info.plist */,
 				50245A592A80431C0034792B /* NetbirdNetworkExtension.entitlements */,
 				50CD814E2AD0355000CF830B /* PacketTunnelProviderSettingsManager.swift */,
+				B530BFC3D5396F11FD397A74 /* SSHSessionManager.swift */,
 			);
 			path = NetbirdNetworkExtension;
 			sourceTree = "<group>";
@@ -636,6 +663,7 @@
 				50245A1B2A7BCF120034792B /* NetBird.entitlements */,
 				50E608082A79542D00BAF09B /* Source */,
 				50A8911E2A792A16007C48FC /* Assets.xcassets */,
+				C76C5B84CD61000770A3F243 /* Resources */,
 			);
 			path = NetBird;
 			sourceTree = "<group>";
@@ -664,6 +692,11 @@
 				50003BC82AFD2F0C00E5EB6B /* ConnectionListener.swift */,
 				50003BCB2AFD3B0C00E5EB6B /* ClientState.swift */,
 				50C5D30E2BDD96CF003159BE /* RoutesSelectionDetails.swift */,
+				BA6A678602D6404CEF2DE8C5 /* SSHIPC.swift */,
+				BC81ABCB573851012C7290F6 /* AppOrientation.swift */,
+				E077DD13F58B77BDF640E9AF /* SSHSessionRegistry.swift */,
+				CB5960D13D8451CA20A680F6 /* SSHProtocol.swift */,
+				D69AE45BF52B532AE1693335 /* SSHSessionStore.swift */,
 			);
 			path = NetbirdKit;
 			sourceTree = "<group>";
@@ -679,6 +712,7 @@
 				50CD84352AD82F9400CF830B /* ServerView.swift */,
 				509CCD6B2BE90D0E00B7C2D8 /* PeerTabView.swift */,
 				509CCD6D2BE90D2100B7C2D8 /* RouteTabView.swift */,
+				C62AD9493B38833DCF8DF092 /* SSH */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -755,6 +789,7 @@
 				53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */,
 				AA000B002F22000B00000001 /* ProfileMigrationTests.swift */,
 				AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */,
+				804602AFAB5F4B7A13986496 /* SSHProtocolTests.swift */,
 			);
 			path = NetBirdTests;
 			sourceTree = "<group>";
@@ -775,6 +810,25 @@
 			);
 			name = iOS;
 			path = Views/iOS;
+			sourceTree = "<group>";
+		};
+		C62AD9493B38833DCF8DF092 /* SSH */ = {
+			isa = PBXGroup;
+			children = (
+				0787606E78348571292F3BED /* SSHTerminalView.swift */,
+				C00ADEFCC1B21B0A9724EB89 /* SSHConnectSheet.swift */,
+				1F48DE55DC12388C90EAB6BD /* SSHKeyboardAccessoryView.swift */,
+				609FC285281B4A8F9E30113F /* iOSSSHView.swift */,
+			);
+			path = SSH;
+			sourceTree = "<group>";
+		};
+		C76C5B84CD61000770A3F243 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				2C7C32B75979A07D28C5193D /* Terminal */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -824,8 +878,6 @@
 				441C5AFF2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */,
 			);
 			name = NetBirdTVNetworkExtension;
-			packageProductDependencies = (
-			);
 			productName = NetBirdTVNetworkExtension;
 			productReference = 441C5AFD2EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -900,8 +952,6 @@
 				55D865882F70982000A2EFF8 /* NetBirdWidgetExtension */,
 			);
 			name = NetBirdWidgetExtensionExtension;
-			packageProductDependencies = (
-			);
 			productName = NetBirdWidgetExtensionExtension;
 			productReference = 55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -1024,6 +1074,7 @@
 				50A8911F2A792A16007C48FC /* Assets.xcassets in Resources */,
 				501B0DD32AE04DDE004BE7A7 /* loading.json in Resources */,
 				501B0DD92AE04DDE004BE7A7 /* button-full.json in Resources */,
+
 				501B0DCD2AE04DDE004BE7A7 /* button-disconnecting.json in Resources */,
 				501B0DD12AE04DDE004BE7A7 /* logo_NetBird.json in Resources */,
 				501B0DDB2AE04DDE004BE7A7 /* button-connected.json in Resources */,
@@ -1032,6 +1083,7 @@
 				5573F6F02F9F523D00E63A73 /* GoogleService-Info.plist in Resources */,
 				501B0DCF2AE04DDE004BE7A7 /* button-connecting-loop.json in Resources */,
 				501B0DD72AE04DDE004BE7A7 /* button-full2.json in Resources */,
+				30FF9C7920F6D266D287C60A /* Terminal in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1179,6 +1231,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				952F4791D1F3A798646075A8 /* SSHProtocol.swift in Sources */,
 				50CD81632AD0595E00CF830B /* DNSManager.swift in Sources */,
 				50C5D3102BDD96CF003159BE /* RoutesSelectionDetails.swift in Sources */,
 				50C727ED2A824C10006E898D /* NetBirdAdapter.swift in Sources */,
@@ -1202,6 +1255,7 @@
 				505118CF2AD96ECA003027D3 /* x25519.c in Sources */,
 				F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */,
 				978FC4712EEDF167002D0EB8 /* AppLogger.swift in Sources */,
+				7BD722208534FA904B8438E1 /* SSHSessionManager.swift in Sources */,
 				A7C0DE032F9A0001001A2B3C /* GoCrashCapture.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1210,6 +1264,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				11B911E7407930378C729174 /* AppOrientation.swift in Sources */,
+				FF1349B3FD24FBF5354397BF /* SSHSessionManager.swift in Sources */,
+				8E9BF12FC95C72C4A10D5015 /* SSHSessionRegistry.swift in Sources */,
+				43F6003224353EC6DDCC2A81 /* SSHProtocol.swift in Sources */,
 				50CD84362AD82F9400CF830B /* ServerView.swift in Sources */,
 				50C5D30F2BDD96CF003159BE /* RoutesSelectionDetails.swift in Sources */,
 				50A8911D2A792A15007C48FC /* MainView.swift in Sources */,
@@ -1272,6 +1330,12 @@
 				4849965EC2515950756C8F10 /* VPNOnDemandView.swift in Sources */,
 				F2DCB2437ECA42C3AEC3C895 /* FirstLaunchView.swift in Sources */,
 				BB001A012F99000000000001 /* TroubleshootView.swift in Sources */,
+				B4C6A34FE3D10212F7CF8008 /* SSHIPC.swift in Sources */,
+				F6491406222BABA2C255A582 /* SSHTerminalView.swift in Sources */,
+				6322AE9CFD7A43C9F3845712 /* SSHSessionStore.swift in Sources */,
+				C87263E8CAE2316576801195 /* SSHConnectSheet.swift in Sources */,
+				D6DC1C017236D5FA4AC21EE3 /* SSHKeyboardAccessoryView.swift in Sources */,
+				EDA5F98A1D504292ACBA5070 /* iOSSSHView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1286,6 +1350,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9F0BA149A3C407426B9978EF /* SSHProtocolTests.swift in Sources */,
 				94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */,
 				AA0011012F22001100000001 /* MDMBridgeIntegrationTests.swift in Sources */,
 				AA0010012F22001000000001 /* MDMRestrictionsTests.swift in Sources */,
@@ -1712,7 +1777,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = "";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1759,7 +1824,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = "";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (

@@ -307,6 +307,12 @@ class ProfileManager {
     }
 
     /// Base directory for profile storage: the App Group shared container.
+    /// Also the config dir the Go per-profile preference stores take, which is
+    /// how the SSH session list and known hosts are kept per profile.
+    static func configDir() -> String {
+        containerBasePath()
+    }
+
     private static func containerBasePath() -> String {
         let fm = FileManager.default
         if let groupURL = fm.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
