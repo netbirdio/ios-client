@@ -95,10 +95,11 @@ struct PeerDetailSheet: View {
                 // leave it stuck reporting "connecting" forever.
                 guard SSHSessionRegistry.shared.canConnect else {
                     showSSHUnavailable = true
-                    return
+                    return false
                 }
                 SSHSessionRegistry.shared.create(host: host, port: port, user: user)
                 presentationMode.wrappedValue.dismiss()
+                return true
             }
         }
         .alert(isPresented: $showSSHUnavailable) {

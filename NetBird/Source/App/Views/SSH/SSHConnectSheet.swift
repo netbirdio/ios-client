@@ -74,7 +74,10 @@ enum SSHDefaults {
 
 struct SSHConnectSheet: View {
     let request: SSHConnectRequest
-    let onConfirm: (String, Int, String) -> Void
+    /// Returns false when the caller could not act on the details — the tunnel
+    /// went down while the form was open, say. The form then stays up with
+    /// what was typed still in it, rather than dismissing over nothing.
+    let onConfirm: (String, Int, String) -> Bool
 
     @Environment(\.presentationMode) private var presentationMode
 
@@ -89,7 +92,7 @@ struct SSHConnectSheet: View {
 
     private enum Field: Hashable { case host, user, port }
 
-    init(request: SSHConnectRequest, onConfirm: @escaping (String, Int, String) -> Void) {
+    init(request: SSHConnectRequest, onConfirm: @escaping (String, Int, String) -> Bool) {
         self.request = request
         self.onConfirm = onConfirm
         _host = State(initialValue: request.initialHost)
@@ -180,7 +183,7 @@ struct SSHConnectSheet: View {
         guard hostError == nil, userError == nil, let resolvedPort else { return }
 
         SSHSessionStore.lastUser = trimmedUser
-        onConfirm(trimmedHost, resolvedPort, trimmedUser)
+        guard onConfirm(trimmedHost, resolvedPort, trimmedUser) else { return }
         presentationMode.wrappedValue.dismiss()
     }
 

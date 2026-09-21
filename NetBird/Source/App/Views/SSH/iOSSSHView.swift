@@ -148,19 +148,24 @@ struct iOSSSHView: View {
         openSessionID = copy.id
     }
 
-    private func apply(request: SSHConnectRequest, host: String, port: Int, user: String) {
+    /// - Returns: false when nothing could be done with the details, so the
+    ///   form stays open with what was typed still in it.
+    private func apply(request: SSHConnectRequest, host: String, port: Int, user: String) -> Bool {
         switch request.mode {
         case .edit(let id):
-            if !registry.edit(id: id, host: host, port: port, user: user) {
+            guard registry.edit(id: id, host: host, port: port, user: user) else {
                 show(toast: "That session is no longer open")
+                return false
             }
+            return true
         case .connect:
             guard registry.canConnect else {
                 show(toast: "NetBird is not running")
-                return
+                return false
             }
             let handle = registry.create(host: host, port: port, user: user)
             openSessionID = handle.id
+            return true
         }
     }
 
