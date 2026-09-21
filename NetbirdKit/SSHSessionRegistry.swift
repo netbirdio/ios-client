@@ -354,11 +354,16 @@ final class SSHSessionHandle {
         let changed = newState != state || message != stateMessage
         state = newState
         stateMessage = message
-        if newState == .connected { hasEverConnected = true }
         if changed {
             notifyState()
             registry.sessionDidChange()
         }
+        // Set after the listeners have run, so a terminal handling this very
+        // callback can still tell a first connect from a reconnect: the first
+        // one clears the connect chatter, a reconnect leaves the scrollback
+        // alone. Setting it before the notification made every connect look
+        // like a reconnect and the screen was never cleared.
+        if newState == .connected { hasEverConnected = true }
     }
 
     private func append(_ data: Data) {

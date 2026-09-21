@@ -136,6 +136,16 @@ final class SSHTerminalController: ObservableObject, SSHSessionListener {
     private var terminalReady = false
     private var pendingSize: (cols: Int, rows: Int)?
 
+    /// Terminal writes issued before the page finished loading. Attaching to a
+    /// session replays its scrollback immediately, and a live session keeps
+    /// sending while the web view is still loading, so those bytes arrive
+    /// before `window.writeFromHost` exists. Evaluating them then throws and
+    /// the output is gone for good, so they wait here instead.
+    private var pendingScripts: [String] = []
+    /// Caps the queue so a page that never loads cannot grow it without limit;
+    /// the oldest go first, as they would have scrolled away anyway.
+    private static let maxPendingScripts = 256
+
     func bind(sessionID: String, registry: SSHSessionRegistry) {
         self.sessionID = sessionID
         self.registry = registry
@@ -163,6 +173,7 @@ final class SSHTerminalController: ObservableObject, SSHSessionListener {
     func terminalDidBecomeReady(cols: Int, rows: Int) {
         terminalReady = true
         pendingSize = (cols, rows)
+        flushPendingScripts()
         guard let handle else {
             printStatus("Session not found (it may have been closed).")
             return
@@ -385,7 +396,23 @@ final class SSHTerminalController: ObservableObject, SSHSessionListener {
     }
 
     private func evaluate(_ script: String) {
+        guard terminalReady else {
+            if pendingScripts.count >= Self.maxPendingScripts {
+                pendingScripts.removeFirst()
+            }
+            pendingScripts.append(script)
+            return
+        }
         webView?.evaluateJavaScript(script)
+    }
+
+    /// Replays what arrived before the page was ready, in order.
+    private func flushPendingScripts() {
+        let queued = pendingScripts
+        pendingScripts.removeAll()
+        for script in queued {
+            webView?.evaluateJavaScript(script)
+        }
     }
 
     private func show(toast message: String) {

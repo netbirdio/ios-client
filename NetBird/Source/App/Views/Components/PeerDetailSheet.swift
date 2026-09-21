@@ -12,6 +12,7 @@ struct PeerDetailSheet: View {
 
     @State private var relativeDateText: String = ""
     @State private var showSSHConnect = false
+    @State private var showSSHUnavailable = false
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -88,9 +89,24 @@ struct PeerDetailSheet: View {
             // The session lands in the SSH tab like any other; opening the
             // terminal from here would bury it under this sheet.
             SSHConnectSheet(request: .peer(name: peer.fqdn, ip: peer.ip)) { host, port, user in
+                // The peer's status said it was reachable when this sheet
+                // opened; the tunnel can still be gone by the time the form is
+                // confirmed. Storing a session that could not be dialled would
+                // leave it stuck reporting "connecting" forever.
+                guard SSHSessionRegistry.shared.canConnect else {
+                    showSSHUnavailable = true
+                    return
+                }
                 SSHSessionRegistry.shared.create(host: host, port: port, user: user)
                 presentationMode.wrappedValue.dismiss()
             }
+        }
+        .alert(isPresented: $showSSHUnavailable) {
+            Alert(
+                title: Text("NetBird is not running"),
+                message: Text("Connect to NetBird before starting an SSH session."),
+                dismissButton: .default(Text("OK"))
+            )
         }
         #endif
     }
