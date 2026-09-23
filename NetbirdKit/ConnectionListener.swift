@@ -132,9 +132,29 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         }
     }
     
-    /// Receives peer-count changes; peer details are loaded through the status endpoint.
+    /// Receives peer-count changes and forwards them to the app as a "network map
+    /// changed" signal.
+    ///
+    /// The core fires this at the end of every network map update — after the route
+    /// manager has applied the routes, see Engine.updateNetworkMap — and whenever a
+    /// route gains or loses its routing peer or a peer's connection state flips. That
+    /// makes it the one callback saying the list GetRoutes answers with has moved.
+    /// `onConnected` is too early for that: it fires once management and signal are up,
+    /// before the engine is even reachable and well before the first network map.
+    /// Android's HomeFragment relies on the same event for the same reason.
+    ///
+    /// The count itself is unused; peer details come through the status endpoint. The
+    /// app cannot be called from here — it is another process — so the change is
+    /// announced through the Darwin notify center, the way the app announces MDM policy
+    /// changes to this extension. Runs on a Go-spawned thread; posting is thread-safe.
     func onPeersListChanged(_ p0: Int) {
-        // do nothing
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(GlobalConstants.darwinNotificationNetworkMapChanged as CFString),
+            nil,
+            nil,
+            true
+        )
     }
 
 }
