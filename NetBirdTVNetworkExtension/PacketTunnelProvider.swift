@@ -52,6 +52,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var pendingStartGeneration: UInt = 0
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
+        // Before anything else: open the settings manager's lifecycle. The OS dropped the
+        // previous tunnel's settings with its utun, so what the engine pushes now must not
+        // be skipped as a repeat of them, and nothing left over from the previous tunnel
+        // may act on this one. The session goes to the start-failure path below, which
+        // may run after the next tunnel has started.
+        let settingsSession = tunnelManager.reset()
+
         // CRITICAL: Log immediately to confirm startTunnel is being called
         // Use privacy: .public to avoid log redaction
         logger.info(">>> startTunnel: ENTRY - function was called <<<")
@@ -100,9 +107,24 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // all traffic (same pattern the iOS provider handles).
         configureLoginRequiredHandler(for: adapter)
 
-        adapter.start { error in
+        // The adapter's start callback fires again on every reconnect, and with an error
+        // whenever the engine's run loop exits — also for a restart within this tunnel, and
+        // for the previous tunnel's engine, which a stop does not wait for. Only the first
+        // report is the start outcome; only a failed start ends the tunnel without a
+        // stopTunnel and has to close the settings manager's lifecycle, for its own
+        // session alone.
+        let startReportLock = NSLock()
+        var startReported = false
+        adapter.start { [weak self] error in
+            startReportLock.lock()
+            let isStartOutcome = !startReported
+            startReported = true
+            startReportLock.unlock()
             if let error = error {
                 logger.error("startTunnel: adapter.start() failed: \(error.localizedDescription, privacy: .public)")
+                if isStartOutcome {
+                    self?.tunnelManager.suspend(session: settingsSession)
+                }
                 completionHandler(error)
             } else {
                 completionHandler(nil)
@@ -111,6 +133,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        // Close the settings manager's lifecycle before the OS can start the next tunnel in
+        // this process: the apply in flight is retired so its completion or timeout cannot
+        // reach that tunnel, and the outgoing engine's last pushes are not applied.
+        tunnelManager.suspend()
+
         // If the start was parked waiting for login (e.g. the user cancelled the auth
         // sheet), release it as cancelled so the system doesn't hang on teardown.
         failPendingStartIfParked(NSError(
