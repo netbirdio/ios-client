@@ -134,6 +134,7 @@ class ViewModel: ObservableObject {
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
     @Published var disableIPv6 = false
+    @Published var remoteJobsAllowed = false
     @Published var connectOnDemand = false
     @Published var showOnDemandAlert = false
     @Published var showOnDemandConflictAlert = false
@@ -1154,6 +1155,39 @@ class ViewModel: ObservableObject {
 
     func loadIPv6Settings() {
         self.disableIPv6 = configProvider.disableIPv6
+    }
+
+    /// Whether the policy owns the remote-jobs toggle, by managing it
+    /// directly or by forbidding settings edits at all. Mirrors the lock the
+    /// iOS and tvOS toggles apply, so the backstop cannot disagree with the
+    /// control the user sees.
+    private var remoteJobsForbiddenByPolicy: Bool {
+        mdmRestrictions.mdm.remoteJobsAllowed || mdmRestrictions.features.disableUpdateSettings
+    }
+
+    func setRemoteJobsAllowed(allowed: Bool) {
+        // The snapshot can be up to a poll behind a policy pushed from
+        // another process, and on tvOS commit() always reports success, so
+        // the enforced value has to be re-read before it is trusted.
+        refreshMDMRestrictions()
+        guard !remoteJobsForbiddenByPolicy else {
+            AppLogger.shared.log("MDM: refusing to change remote debug bundles while the setting is managed")
+            self.remoteJobsAllowed = configProvider.remoteJobsAllowed
+            settingsRejectedMessage = "This setting is managed by your organization and cannot be changed."
+            showSettingsRejectedAlert = true
+            return
+        }
+        let previous = self.remoteJobsAllowed
+        self.remoteJobsAllowed = allowed
+        configProvider.remoteJobsAllowed = allowed
+        if !commitSettings() {
+            self.remoteJobsAllowed = previous
+            configProvider.remoteJobsAllowed = previous
+        }
+    }
+
+    func loadRemoteJobsSettings() {
+        self.remoteJobsAllowed = configProvider.remoteJobsAllowed
     }
 
     func setForcedRelayConnection(isEnabled: Bool) {
