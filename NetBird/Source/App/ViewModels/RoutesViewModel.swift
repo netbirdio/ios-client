@@ -27,13 +27,38 @@ class RoutesViewModel: ObservableObject {
     /// Main-thread only, matching every caller.
     private var exitNodeGeneration = 0
 
-    /// Bumped by every route read and by `clearRoutes()`. A GetRoutes reply whose captured
-    /// value is no longer current is dropped, so a read still in flight when the tunnel
-    /// goes down can't repopulate the list `clearRoutes()` just emptied — which would leave
-    /// the selector enabled over dead nodes, and a tap on one stuck showing a selection the
-    /// core never applied (with no session, the select never reports back to reconcile it).
-    /// Main-thread only, matching every caller.
+    /// Bumped by every route read, by `clearRoutes()` and by every optimistic selection
+    /// write. A GetRoutes reply whose captured value is no longer current is dropped, so a
+    /// read still in flight when the tunnel goes down can't repopulate the list
+    /// `clearRoutes()` just emptied — which would leave the selector enabled over dead
+    /// nodes, and a tap on one stuck showing a selection the core never applied (with no
+    /// session, the select never reports back to reconcile it) — and a read dispatched
+    /// before a tap can't answer after it with the pre-tap selection. Main-thread only,
+    /// matching every caller.
     private var routeReadGeneration = 0
+
+    /// A network map refresh waiting to run (see `scheduleNetworkMapRefresh`). One
+    /// scheduled read absorbs every change notification that arrives before it fires; a
+    /// change landing after the fire schedules the next one. Main-thread only.
+    private var pendingNetworkMapRefresh: DispatchWorkItem?
+
+    /// Advanced by `clearRoutes()` and `beginSelectionMutation()`, captured when a change
+    /// notification arrives and re-checked once its refresh request reaches the main queue.
+    /// That hop is a window: a notification in transit while the routes were cleared or a
+    /// selection written would otherwise schedule a read after the very invalidation that
+    /// should have dropped it — and after `clearRoutes()`, with the extension still winding
+    /// down, such a read can repopulate a list nothing clears again. Lock-guarded because
+    /// the capture happens on whatever thread the Darwin notify center delivers on.
+    private var networkMapEpoch = 0
+    private let networkMapEpochLock = NSLock()
+
+    /// How long a notified change waits before it is read back. The core announces a
+    /// change per peer and per route, so a connect with dozens of peers produces dozens
+    /// of notifications within a few seconds, and each read is an IPC round-trip that
+    /// serialises the whole route list — so reads are coalesced to at most one per window.
+    /// Short enough that the exit node selector still fills in well under a second after
+    /// the first network map.
+    private static let networkMapRefreshDelay: TimeInterval = 0.3
 
 
     init(networkExtensionAdapter: NetworkExtensionAdapter) {
@@ -43,6 +68,14 @@ class RoutesViewModel: ObservableObject {
         self.routeFilter = ""
         self.tappedRoute = nil        
         self.selectedRouteId = nil
+        startObservingNetworkMapChanges()
+    }
+
+    /// Unregisters before this object can go away: the Darwin observer holds an
+    /// unretained pointer to it.
+    deinit {
+        stopObservingNetworkMapChanges()
+        pendingNetworkMapRefresh?.cancel()
     }
     
     var filteredRoutes: [RoutesSelectionInfo] {
@@ -134,6 +167,11 @@ class RoutesViewModel: ObservableObject {
         // can still be in flight with nothing cached yet, and letting the early return skip
         // the invalidation would let that reply refill the list after the tunnel is gone.
         routeReadGeneration &+= 1
+        // A refresh the extension announced while winding down has nothing left to read,
+        // whether it is already scheduled or still on its way to the main queue.
+        pendingNetworkMapRefresh?.cancel()
+        pendingNetworkMapRefresh = nil
+        advanceNetworkMapEpoch()
         guard !routeInfo.isEmpty else { return }
         routeInfo = []
     }
@@ -169,6 +207,70 @@ class RoutesViewModel: ObservableObject {
         }
     }
 
+    /// Listens for the extension announcing that the core's network map moved (see
+    /// `GlobalConstants.darwinNotificationNetworkMapChanged`). The routes only exist in
+    /// the extension process, and the read `applyStatusSideEffects` makes on `.connected`
+    /// lands before the first network map has arrived, so without this signal the list
+    /// stayed empty until some view's onAppear happened to read it again.
+    private func startObservingNetworkMapChanges() {
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            { _, observer, _, _, _ in
+                guard let observer else { return }
+                Unmanaged<RoutesViewModel>.fromOpaque(observer).takeUnretainedValue().scheduleNetworkMapRefresh()
+            },
+            GlobalConstants.darwinNotificationNetworkMapChanged as CFString,
+            nil,
+            .deliverImmediately
+        )
+    }
+
+    private func stopObservingNetworkMapChanges() {
+        CFNotificationCenterRemoveObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            CFNotificationName(GlobalConstants.darwinNotificationNetworkMapChanged as CFString),
+            nil
+        )
+    }
+
+    /// Reads the network map back after a change notification, coalescing bursts into one
+    /// read per `networkMapRefreshDelay`.
+    ///
+    /// Safe to call from any thread; the state lives on main. Nothing is lost to the
+    /// coalescing: the extension posts after the core has applied a change, and the read
+    /// happens when the work item fires, so a change announced while a refresh is pending
+    /// is covered by that refresh, and one announced after it fired — the item clears
+    /// itself before reading — schedules the next. A notification overtaken on its way to
+    /// main by `clearRoutes()` or a selection write is dropped, see `networkMapEpoch`.
+    func scheduleNetworkMapRefresh() {
+        let epoch = currentNetworkMapEpoch()
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.currentNetworkMapEpoch() == epoch, self.pendingNetworkMapRefresh == nil else { return }
+            let refresh = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.pendingNetworkMapRefresh = nil
+                self.getRoutes()
+            }
+            self.pendingNetworkMapRefresh = refresh
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.networkMapRefreshDelay, execute: refresh)
+        }
+    }
+
+    private func currentNetworkMapEpoch() -> Int {
+        networkMapEpochLock.lock()
+        defer { networkMapEpochLock.unlock() }
+        return networkMapEpoch
+    }
+
+    /// Drops every change notification still on its way to the main queue.
+    private func advanceNetworkMapEpoch() {
+        networkMapEpochLock.lock()
+        networkMapEpoch &+= 1
+        networkMapEpochLock.unlock()
+    }
+
     /// The selection state before an optimistic mutation, tagged with the mutation that
     /// took it, so a round-trip the user has already superseded reverts nothing.
     private struct SelectionRevertPoint {
@@ -185,6 +287,17 @@ class RoutesViewModel: ObservableObject {
     /// Call immediately before writing an optimistic selection.
     private func beginSelectionMutation() -> SelectionRevertPoint {
         selectionGeneration &+= 1
+        // Retire every read still in flight, and the coalesced refresh waiting to start, as
+        // well. Either could answer after this write with the selection the core held
+        // before it and overwrite the optimistic state; the reconcile read the mutation
+        // issues afterwards is the one allowed to answer, and the mutation's own effects
+        // in the core announce themselves, so a refresh follows anyway. Reads are frequent
+        // now that the extension announces every network map change, so that window is no
+        // longer negligible.
+        routeReadGeneration &+= 1
+        pendingNetworkMapRefresh?.cancel()
+        pendingNetworkMapRefresh = nil
+        advanceNetworkMapEpoch()
         return SelectionRevertPoint(
             generation: selectionGeneration,
             selection: Dictionary(routeInfo.map { ($0.id, $0.selected) }, uniquingKeysWith: { first, _ in first })

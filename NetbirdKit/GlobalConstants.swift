@@ -59,6 +59,15 @@ struct GlobalConstants {
     /// running extension anything; this crosses the process boundary.
     static let darwinNotificationMDMPolicyChanged = "io.netbird.mdm.policyChanged"
 
+    /// Darwin notification posted by the network extension whenever the core's
+    /// network map moves: a sync was applied, a route gained or lost its routing
+    /// peer, a peer's connection state flipped. The routes only exist in the
+    /// extension process, and the app's read on `.connected` lands before the
+    /// first network map has arrived, so without this the app would never learn
+    /// that there is something to re-read. Carries no payload; the app answers
+    /// it with a GetRoutes round-trip.
+    static let darwinNotificationNetworkMapChanged = "io.netbird.networkMapChanged"
+
     // Local notification identifiers
     static let notificationLoginRequired = "netbird.login.required"
     static let notificationMDMPolicyApplied = "netbird.mdm.policyApplied"

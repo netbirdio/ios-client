@@ -771,15 +771,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let data = try PropertyListEncoder().encode(routeSelectionDetails)
             completionHandler(data)
         } catch {
+            // No payload, not an empty list. The app takes any answer from the core as the
+            // truth about the network map and replaces its cached routes with it, while a
+            // missing payload is a failed read that leaves the cache alone. The usual
+            // failure here is "not connected": the app's read on `.connected` arrives
+            // before the engine is reachable, and answering it with zero routes emptied
+            // the exit node selector until some view happened to read again.
             logger.error("getSelectRoutes: Error retrieving or encoding route selection details: \(error.localizedDescription)")
-            let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
-            do {
-                let data = try PropertyListEncoder().encode(defaultStatus)
-                completionHandler(data)
-            } catch {
-                logger.error("getSelectRoutes: Failed to encode default route selection details: \(error.localizedDescription)")
-                completionHandler(nil)
-            }
+            completionHandler(nil)
         }
     }
 
