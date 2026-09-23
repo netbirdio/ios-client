@@ -809,16 +809,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func wake() {
     }
-
-    func setTunnelSettings(tunnelNetworkSettings: NEPacketTunnelNetworkSettings) {
-        setTunnelNetworkSettings(tunnelNetworkSettings) { error in
-            if let error = error {
-                logger.error("setTunnelSettings: Error assigning routes: \(error.localizedDescription, privacy: .public)")
-                return
-            }
-            logger.info("setTunnelSettings: Routes set successfully.")
-        }
-    }
 }
 
 func initializeLogging(loglevel: String) {

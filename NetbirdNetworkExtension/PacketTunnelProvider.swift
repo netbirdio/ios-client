@@ -1145,16 +1145,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
-    func setTunnelSettings(tunnelNetworkSettings: NEPacketTunnelNetworkSettings) {
-        setTunnelNetworkSettings(tunnelNetworkSettings) { error in
-            if let error = error {
-                AppLogger.shared.log("Error assigning routes: \(error.localizedDescription)")
-                return
-            }
-            AppLogger.shared.log("Routes set successfully.")
-        }
-    }
-
     // MARK: - MDM managed-configuration observer
 
     /// Subscribes to UserDefaults.didChangeNotification so changes to

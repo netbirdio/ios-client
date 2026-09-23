@@ -20,6 +20,25 @@ class PacketTunnelProviderSettingsManager {
     private var needFallbackNS: Bool = false
     private var containsDefaultRoute: Bool = false
 
+    /// Guards every stored input above and the apply state below. The inputs arrive on the
+    /// network change listener's and the DNS manager's queues, `setTunnelNetworkSettings`
+    /// completes on a queue of the OS's choosing, and nothing else orders them.
+    private let stateLock = NSLock()
+
+    /// True from handing settings to the OS until its completion runs. Only one
+    /// `setTunnelNetworkSettings` call is ever in flight.
+    private var isApplying = false
+    /// Fingerprint of the settings in flight, valid while `isApplying`.
+    private var inFlightFingerprint: String?
+    /// Fingerprint of the settings the OS last accepted; nil after a failed apply, so the
+    /// next change is applied whatever it is.
+    private var lastAppliedFingerprint: String?
+    /// The newest settings that changed while an apply was in flight, applied once it
+    /// completes. Replaced, not queued: only the latest state matters.
+    private var pendingApply: (settings: NEPacketTunnelNetworkSettings, fingerprint: String)?
+    /// Updates absorbed by the current in-flight apply, for the log line.
+    private var coalescedUpdates = 0
+
     // Link-local dummy IPv6 used to satisfy NEIPv6Settings when the
     // interface has no IPv6 address but we still need a ::/0 blackhole route
     // to prevent IPv6 leaks while the IPv4 default route is in the tunnel.
@@ -31,11 +50,13 @@ class PacketTunnelProviderSettingsManager {
     }
 
     func setRoutes(v4Routes: [NEIPv4Route], v6Routes: [NEIPv6Route], containsDefault: Bool) {
-            self.needFallbackNS = containsDefault
-            self.containsDefaultRoute = containsDefault
-            self.ipv4Routes = v4Routes
-            self.ipv6Routes = v6Routes
-            self.updateTunnel()
+        stateLock.lock()
+        needFallbackNS = containsDefault
+        containsDefaultRoute = containsDefault
+        ipv4Routes = v4Routes
+        ipv6Routes = v6Routes
+        stateLock.unlock()
+        updateTunnel()
     }
 
     func setDNS(config: HostDNSConfig) {
@@ -59,11 +80,15 @@ class PacketTunnelProviderSettingsManager {
             dnsSettings.searchDomains = searchDomains
         }
 
+        stateLock.lock()
         self.dnsSettings = dnsSettings
-        self.updateTunnel()
+        stateLock.unlock()
+        updateTunnel()
     }
     
     func setInterfaceIP(interfaceIP: String) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
         self.interfaceIP = interfaceIP
         // A new engine session always pushes setInterfaceIP first, then setInterfaceIPv6
         // only when the session actually has a v6 address. Drop any previous session's v6
@@ -76,26 +101,131 @@ class PacketTunnelProviderSettingsManager {
     }
 
     func setInterfaceIPv6(interfaceIPv6: String) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
         self.interfaceIPv6 = interfaceIPv6
     }
 
     func getInterfaceIP() -> String? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
         return self.interfaceIP
     }
     
+    /// Pushes the current inputs to the OS, coalescing and de-duplicating the calls.
+    ///
+    /// `setTunnelNetworkSettings` is the only way to change the tunnel's routes on iOS. It
+    /// takes a few hundred milliseconds, is serialised by the OS, and flaps the utun every
+    /// time. The core announces its prefix set after every single route it adds — a connect
+    /// with a dozen static routes produced a dozen back-to-back applies, one per prefix,
+    /// keeping the tunnel in reconfiguration for seconds — and it re-announces an unchanged
+    /// set at every engine restart, as the DNS manager re-announces an unchanged DNS config.
+    /// Android answers the same notification by pulling the latest state onto a serial
+    /// thread and diffing it against what the TUN was last built with; this is that
+    /// pattern: at most one apply in flight, the newest settings waiting behind it replace
+    /// any older waiting ones, and settings identical to what is — or is about to be — in
+    /// effect are dropped.
     private func updateTunnel() {
-        if let tunnelSettings = createTunnelSettings() {
-            if let tunnelProvider = self.packetTunnelProvider {
-                tunnelProvider.setTunnelSettings(tunnelNetworkSettings: tunnelSettings)
+        stateLock.lock()
+        guard let settings = createTunnelSettingsLocked() else {
+            stateLock.unlock()
+            AppLogger.shared.log("Tunnel settings: no interface address yet, nothing to apply")
+            return
+        }
+        let fingerprint = settingsFingerprintLocked()
+        // What the OS holds once the current apply, if any, has completed.
+        let effective = isApplying ? inFlightFingerprint : lastAppliedFingerprint
+        if fingerprint == effective {
+            // Covers a queued older change too: the newest desired state is the effective one.
+            pendingApply = nil
+            stateLock.unlock()
+            return
+        }
+        if isApplying {
+            pendingApply = (settings, fingerprint)
+            coalescedUpdates += 1
+            stateLock.unlock()
+            return
+        }
+        isApplying = true
+        inFlightFingerprint = fingerprint
+        stateLock.unlock()
+        applyTunnelSettings(settings, fingerprint: fingerprint)
+    }
+
+    /// Hands `settings` to the OS and, once it completes, applies whatever change queued up
+    /// behind it. Called without the lock held and only while `isApplying` is set by the
+    /// caller, so no second apply can start underneath it.
+    private func applyTunnelSettings(_ settings: NEPacketTunnelNetworkSettings, fingerprint: String) {
+        guard let provider = packetTunnelProvider else {
+            stateLock.lock()
+            isApplying = false
+            inFlightFingerprint = nil
+            pendingApply = nil
+            stateLock.unlock()
+            AppLogger.shared.log("Tunnel settings: provider is gone, dropping the update")
+            return
+        }
+
+        let v4Count = settings.ipv4Settings?.includedRoutes?.count ?? 0
+        let v6Count = settings.ipv6Settings?.includedRoutes?.count ?? 0
+        provider.setTunnelNetworkSettings(settings) { [weak self] error in
+            guard let self else { return }
+            self.stateLock.lock()
+            // A failed apply leaves the OS in an unknown state; forget what was in effect so
+            // the next change is applied rather than skipped as a repeat.
+            self.lastAppliedFingerprint = error == nil ? fingerprint : nil
+            let coalesced = self.coalescedUpdates
+            self.coalescedUpdates = 0
+            let next = self.pendingApply
+            self.pendingApply = nil
+            if let next {
+                self.inFlightFingerprint = next.fingerprint
             } else {
-                print("Failed to get tunnel provider")
+                self.isApplying = false
+                self.inFlightFingerprint = nil
             }
-        } else {
-            print("Failed to update tunnel")
+            self.stateLock.unlock()
+
+            if let error {
+                AppLogger.shared.log("Error assigning routes: \(error.localizedDescription)")
+            } else {
+                AppLogger.shared.log("Routes set successfully (v4: \(v4Count), v6: \(v6Count), coalesced: \(coalesced))")
+            }
+            if let next {
+                self.applyTunnelSettings(next.settings, fingerprint: next.fingerprint)
+            }
         }
     }
-    
-    private func createTunnelSettings() -> NEPacketTunnelNetworkSettings? {
+
+    /// Identifies the settings `createTunnelSettingsLocked` builds from the current inputs,
+    /// so two applies that would configure the tunnel identically can be told apart from a
+    /// real change. Route order is irrelevant to the OS, so the lists are sorted. A nil v4
+    /// route list is not an empty one: nil falls back to the interface route. Caller holds
+    /// `stateLock`.
+    private func settingsFingerprintLocked() -> String {
+        let v4 = ipv4Routes.map { routes in
+            routes.map { "\($0.destinationAddress)/\($0.destinationSubnetMask)" }.sorted().joined(separator: ",")
+        } ?? "nil"
+        let v6 = (ipv6Routes ?? []).map { "\($0.destinationAddress)/\($0.destinationNetworkPrefixLength)" }.sorted().joined(separator: ",")
+        var dns = ""
+        if let dnsSettings {
+            dns = dnsSettings.servers.joined(separator: ",")
+                + "|" + (dnsSettings.searchDomains ?? []).joined(separator: ",")
+                + "|" + (dnsSettings.matchDomains ?? []).joined(separator: ",")
+        }
+        return [
+            "ip4=\(interfaceIP ?? "")",
+            "ip6=\(interfaceIPv6 ?? "")",
+            "default=\(containsDefaultRoute)",
+            "v4=\(v4)",
+            "v6=\(v6)",
+            "dns=\(dns)",
+        ].joined(separator: ";")
+    }
+
+    /// Builds the settings from the current inputs. Caller holds `stateLock`.
+    private func createTunnelSettingsLocked() -> NEPacketTunnelNetworkSettings? {
         if let interfaceIP = interfaceIP {
             if let (ipAddress, subnetMask) = extractIPAddressAndSubnet(from: interfaceIP) {
                 let tunnelNetworkSettings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: ipAddress)
