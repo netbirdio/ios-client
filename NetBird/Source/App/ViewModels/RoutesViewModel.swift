@@ -42,6 +42,16 @@ class RoutesViewModel: ObservableObject {
     /// change landing after the fire schedules the next one. Main-thread only.
     private var pendingNetworkMapRefresh: DispatchWorkItem?
 
+    /// Advanced by `clearRoutes()` and `beginSelectionMutation()`, captured when a change
+    /// notification arrives and re-checked once its refresh request reaches the main queue.
+    /// That hop is a window: a notification in transit while the routes were cleared or a
+    /// selection written would otherwise schedule a read after the very invalidation that
+    /// should have dropped it — and after `clearRoutes()`, with the extension still winding
+    /// down, such a read can repopulate a list nothing clears again. Lock-guarded because
+    /// the capture happens on whatever thread the Darwin notify center delivers on.
+    private var networkMapEpoch = 0
+    private let networkMapEpochLock = NSLock()
+
     /// How long a notified change waits before it is read back. The core announces a
     /// change per peer and per route, so a connect with dozens of peers produces dozens
     /// of notifications within a few seconds, and each read is an IPC round-trip that
@@ -157,9 +167,11 @@ class RoutesViewModel: ObservableObject {
         // can still be in flight with nothing cached yet, and letting the early return skip
         // the invalidation would let that reply refill the list after the tunnel is gone.
         routeReadGeneration &+= 1
-        // A refresh the extension announced while winding down has nothing left to read.
+        // A refresh the extension announced while winding down has nothing left to read,
+        // whether it is already scheduled or still on its way to the main queue.
         pendingNetworkMapRefresh?.cancel()
         pendingNetworkMapRefresh = nil
+        advanceNetworkMapEpoch()
         guard !routeInfo.isEmpty else { return }
         routeInfo = []
     }
@@ -230,10 +242,12 @@ class RoutesViewModel: ObservableObject {
     /// coalescing: the extension posts after the core has applied a change, and the read
     /// happens when the work item fires, so a change announced while a refresh is pending
     /// is covered by that refresh, and one announced after it fired — the item clears
-    /// itself before reading — schedules the next.
+    /// itself before reading — schedules the next. A notification overtaken on its way to
+    /// main by `clearRoutes()` or a selection write is dropped, see `networkMapEpoch`.
     func scheduleNetworkMapRefresh() {
+        let epoch = currentNetworkMapEpoch()
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.pendingNetworkMapRefresh == nil else { return }
+            guard let self, self.currentNetworkMapEpoch() == epoch, self.pendingNetworkMapRefresh == nil else { return }
             let refresh = DispatchWorkItem { [weak self] in
                 guard let self else { return }
                 self.pendingNetworkMapRefresh = nil
@@ -242,6 +256,19 @@ class RoutesViewModel: ObservableObject {
             self.pendingNetworkMapRefresh = refresh
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.networkMapRefreshDelay, execute: refresh)
         }
+    }
+
+    private func currentNetworkMapEpoch() -> Int {
+        networkMapEpochLock.lock()
+        defer { networkMapEpochLock.unlock() }
+        return networkMapEpoch
+    }
+
+    /// Drops every change notification still on its way to the main queue.
+    private func advanceNetworkMapEpoch() {
+        networkMapEpochLock.lock()
+        networkMapEpoch &+= 1
+        networkMapEpochLock.unlock()
     }
 
     /// The selection state before an optimistic mutation, tagged with the mutation that
@@ -270,6 +297,7 @@ class RoutesViewModel: ObservableObject {
         routeReadGeneration &+= 1
         pendingNetworkMapRefresh?.cancel()
         pendingNetworkMapRefresh = nil
+        advanceNetworkMapEpoch()
         return SelectionRevertPoint(
             generation: selectionGeneration,
             selection: Dictionary(routeInfo.map { ($0.id, $0.selected) }, uniquingKeysWith: { first, _ in first })
