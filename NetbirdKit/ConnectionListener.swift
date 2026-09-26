@@ -6,18 +6,20 @@
 //
 
 import Foundation
-import Network
 import NetBirdSDK
 
 class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
 
     var completionHandler: (Error?) -> Void
 
+    private let onConnectionChanged: ((ClientState) -> Void)?
+
     var adapter: NetBirdAdapter
 
-    init(adapter: NetBirdAdapter, completionHandler: @escaping (Error?) -> Void) {
+    init(adapter: NetBirdAdapter, onConnectionChanged: ((ClientState) -> Void)? = nil, completionHandler: @escaping (Error?) -> Void) {
         self.completionHandler = completionHandler
         self.adapter = adapter
+        self.onConnectionChanged = onConnectionChanged
     }
 
     func onAddressChanged(_ p0: String?, p1: String?) {
@@ -25,6 +27,7 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
     }
 
     func onConnected() {
+        onConnectionChanged?(.connected)
         let wasRestarting = adapter.isRestarting
         adapter.isRestarting = false
         adapter.clientState = .connected
@@ -36,6 +39,7 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
     }
 
     func onConnecting() {
+        onConnectionChanged?(.connecting)
         if adapter.isRestarting {
             AppLogger.shared.log("onConnecting: suppressed (isRestarting=true)")
         } else {
@@ -44,76 +48,23 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         }
     }
 
-    /// Check if network is currently available using synchronous path check
-    private func isNetworkAvailable() -> Bool {
-        let monitor = NWPathMonitor()
-        let semaphore = DispatchSemaphore(value: 0)
-        var isAvailable = false
-
-        monitor.pathUpdateHandler = { path in
-            isAvailable = path.status == .satisfied
-            semaphore.signal()
-        }
-
-        let queue = DispatchQueue(label: "NetworkCheck")
-        monitor.start(queue: queue)
-
-        // Wait up to 100ms for network status
-        _ = semaphore.wait(timeout: .now() + 0.1)
-        monitor.cancel()
-
-        return isAvailable
-    }
-
     func onDisconnected() {
+        // The core uses Connecting/NoNetwork for recoverable outages. Disconnected
+        // means Run has stopped; pretending it is still retrying leaves a dead tunnel.
+        onConnectionChanged?(.disconnected)
         let wasRestarting = adapter.isRestarting
-        let isNetworkUnavailableFlag = adapter.isNetworkUnavailable
         adapter.isRestarting = false
-
-        // Session expiry takes priority over the keep-alive-on-network-loss logic below.
-        // If the last management error was an auth failure there is nothing to reconnect
-        // to, so we must NOT linger in .connecting — that keeps the now-dead tunnel
-        // interface up with the VPN's default route and black-holes ALL traffic until the
-        // user manually intervenes (independent of On-Demand). Mark disconnected and let
-        // the provider tear the tunnel down so traffic returns to the physical interface.
-        // Uses the network-free cached check — safe to call during teardown.
+        adapter.clientState = .disconnected
+        AppLogger.shared.log("onDisconnected: state=disconnected, wasRestarting=\(wasRestarting)")
         if !wasRestarting && adapter.needsLoginCached() {
-            adapter.clientState = .disconnected
             AppLogger.shared.log("onDisconnected: login required — signalling teardown")
             adapter.onLoginRequired?()
-            adapter.notifyStopCompleted()
-            return
-        }
-
-        // Check both the flag AND actual network status
-        // This handles race condition where Go SDK fires onDisconnected before our handler sets the flag
-        let networkAvailable = isNetworkAvailable()
-        let shouldStayConnecting = isNetworkUnavailableFlag || !networkAvailable
-
-        // When network is unavailable, keep the tunnel alive by staying in "connecting" state
-        // instead of "disconnected". This allows automatic reconnection when network returns.
-        if shouldStayConnecting {
-            adapter.clientState = .connecting
-            AppLogger.shared.log("onDisconnected: network unavailable (flag=\(isNetworkUnavailableFlag), networkAvailable=\(networkAvailable)) - staying in connecting state for auto-reconnect, wasRestarting=\(wasRestarting)")
-        } else {
-            adapter.clientState = .disconnected
-            AppLogger.shared.log("onDisconnected: state=disconnected, wasRestarting=\(wasRestarting)")
-
-            // If session expired (not a network drop), signal login required so the user
-            // gets a notification. Uses the network-free cached check: the blocking
-            // needsLogin() variant is a full Login RPC (retried with backoff for up to two
-            // minutes) on every ordinary disconnect, and it reports the same auth state the
-            // recorder already holds — the engine marks it from the management error before
-            // firing this callback.
-            if !wasRestarting && adapter.needsLoginCached() {
-                AppLogger.shared.log("onDisconnected: login required detected — signalling")
-                adapter.onLoginRequired?()
-            }
         }
         adapter.notifyStopCompleted()
     }
 
     func onDisconnecting() {
+        onConnectionChanged?(.disconnecting)
         if adapter.isRestarting {
             AppLogger.shared.log("onDisconnecting: suppressed (isRestarting=true)")
         } else {

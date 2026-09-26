@@ -340,9 +340,8 @@ public class NetworkExtensionAdapter: ObservableObject {
             #endif
         } else {
             logger.info("loginIfRequired: login NOT required, calling startVPNConnection()")
-            // isLoginRequired() above just answered this against the management server;
-            // tell the extension so it doesn't repeat the same Login RPC.
-            startVPNConnection(loginVerified: true)
+            // Transport failures leave authentication undecided; the engine retries.
+            startVPNConnection()
         }
 
         logger.info("loginIfRequired: done")
@@ -726,20 +725,12 @@ public class NetworkExtensionAdapter: ObservableObject {
     #endif
 
     /// Starts the tunnel.
-    /// - Parameter loginVerified: pass true only when this process has just established the
-    ///   login state — either its own isLoginRequired() check returned false, or an
-    ///   interactive login completed successfully. The extension then skips its own
-    ///   needs-login check, which is a full Login RPC against the management server.
-    ///   Defaults to false so any caller that has not verified stays on the safe path.
-    public func startVPNConnection(loginVerified: Bool = false) {
-        logger.info("startVPNConnection: called (loginVerified=\(loginVerified))")
+    public func startVPNConnection() {
+        logger.info("startVPNConnection: called")
         let logLevel = UserDefaults.standard.string(forKey: "logLevel") ?? "INFO"
         logger.info("startVPNConnection: logLevel = \(logLevel)")
         var options: [String: NSObject] = ["logLevel": logLevel as NSObject]
         #if os(iOS)
-        if loginVerified {
-            options[GlobalConstants.optionLoginVerified] = true as NSObject
-        }
         // Pass active profile paths so the extension can reinitialize the adapter
         // if the profile changed while the extension process was still alive.
         let configPath = Preferences.configFile()

@@ -11,6 +11,9 @@ import NetBirdSDK
 import os
 import UserNotifications
 import WidgetKit
+#if os(iOS)
+import CoreTelephony
+#endif
 
 /// One-time (per process) redirect of stderr (fd 2) into "netbird.err" in the app
 /// group container. The Go runtime writes panic messages and fatal-error goroutine
@@ -71,11 +74,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     let monitorQueue = DispatchQueue(label: "NetworkMonitor")
 
     /// Network state variables - accessed only on monitorQueue for thread safety
-    private var currentNetworkType: NWInterface.InterfaceType?
-    private var wasStoppedDueToNoNetwork = false
-    private var isRestartInProgress = false
-    
-    private var networkChangeWorkItem: DispatchWorkItem?
+    private var reconnection = NetworkReconnectionState()
+    #if os(iOS)
+    private var telephonyInfo: CTTelephonyNetworkInfo?
+    #endif
 
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         if let options = options, let logLevel = options["logLevel"] as? String {
@@ -102,14 +104,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         #endif
 
-        monitorQueue.async { [weak self] in
-            self?.currentNetworkType = nil
-            self?.wasStoppedDueToNoNetwork = false
-            self?.isRestartInProgress = false
-            self?.adapter?.isNetworkUnavailable = false
-            self?.startMonitoringNetworkChanges()
-        }
-
         guard let adapter = adapter else {
             let error = NSError(
                 domain: "io.netbird.NetbirdNetworkExtension",
@@ -120,37 +114,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        // Skip this check when the main app has already established the login state (its own
-        // isLoginRequired() call, or a login it just completed) and said so via the start
-        // options. needsLogin() is a full Login RPC against the management server, so the
-        // unconditional check duplicated one the other process had just made. Starts the main
-        // app did not initiate (On Demand, widget intent) carry no flag and still verify here.
-        // Either way an expired session is caught by the engine: its own login fails with
-        // PermissionDenied, which drives onLoginRequired and tears the tunnel down.
-        #if os(iOS)
-        let loginVerifiedByApp = (options?[GlobalConstants.optionLoginVerified] as? NSNumber)?.boolValue ?? false
-        #else
-        let loginVerifiedByApp = false
-        #endif
-        if loginVerifiedByApp {
-            AppLogger.shared.log("startTunnel: login already verified by the main app, skipping needsLogin check")
-        }
-        if !loginVerifiedByApp, adapter.needsLogin() {
-            signalLoginRequired()
-            // Clear any transitioning widget state so the login button appears immediately
-            // instead of waiting for the snap-back window to expire.
-            updateWidgetStatus("disconnected")
-            // Return the error immediately so iOS tears down the tunnel interface at once.
-            // A deferred completionHandler keeps the tunnel interface alive (black-hole state)
-            // and intercepts all network traffic — including ASWebAuthenticationSession requests
-            // to the OAuth server — causing "Page not found" during re-auth with On Demand enabled.
-            completionHandler(NSError(
-                domain: "io.netbird.NetbirdNetworkExtension",
-                code: 1001,
-                userInfo: [NSLocalizedDescriptionKey: "Login required."]
-            ))
-            return
-        }
+        // The engine owns authentication and retries transport failures. A preflight
+        // Login RPC would misclassify an offline On Demand/widget start as expired
+        // credentials. Actual auth denial still reaches onLoginRequired below.
 
         // Wire up the login-required callback so the connection listener can tear the
         // tunnel down if the auth session expires mid-session (token expires while the
@@ -159,49 +125,69 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // the provider and outlives the Go engine, so without an explicit teardown it
         // lingers with the default route and black-holes all traffic until the user
         // opens the app. cancelTunnelWithError restores the default route immediately.
-        adapter.onLoginRequired = { [weak self] in
-            AppLogger.shared.log("onLoginRequired: session expired mid-tunnel — tearing down")
-            self?.signalLoginRequired()
-            self?.updateWidgetStatus("disconnected")
-            self?.cancelTunnelWithError(NSError(
-                domain: "io.netbird.NetbirdNetworkExtension",
-                code: 1001,
-                userInfo: [NSLocalizedDescriptionKey: "Login required."]
-            ))
+        let sessionID = monitorQueue.sync {
+            stopMonitoringNetworkChanges()
+            reconnection = NetworkReconnectionState()
+            adapter.isNetworkUnavailable = false
+            startMonitoringNetworkChanges()
+            return reconnection.sessionID
         }
-
-        adapter.start { [weak self] error in
-            completionHandler(error)
-            if error == nil {
-                self?.updateWidgetStatus("connected")
-            } else {
-                self?.updateWidgetStatus("disconnected")
+        adapter.onLoginRequired = { [weak self] in
+            self?.monitorQueue.async {
+                guard let self, self.reconnection.isActive,
+                      self.reconnection.sessionID == sessionID else { return }
+                AppLogger.shared.log("onLoginRequired: session expired mid-tunnel — tearing down")
+                let initialCompletion = self.reconnection.completeStart()
+                self.stopMonitoringNetworkChanges()
+                self.signalLoginRequired()
+                self.updateWidgetStatus("disconnected")
+                let error = NSError(
+                    domain: "io.netbird.NetbirdNetworkExtension",
+                    code: 1001,
+                    userInfo: [NSLocalizedDescriptionKey: "Login required."]
+                )
+                if initialCompletion {
+                    completionHandler(error)
+                } else {
+                    self.cancelTunnelWithError(error)
+                }
+            }
+        }
+        adapter.start(onConnectionChanged: { [weak self] state in
+            self?.monitorQueue.async {
+                guard let self, self.reconnection.isActive,
+                      self.reconnection.sessionID == sessionID else { return }
+                self.reconnection.connectionChanged(state)
+                self.reasserting = self.reconnection.isReasserting
+            }
+        }) { [weak self] error in
+            self?.monitorQueue.async {
+                guard let self, self.reconnection.isActive,
+                      self.reconnection.sessionID == sessionID else { return }
+                let initialCompletion = self.reconnection.completeStart()
+                if initialCompletion { completionHandler(error) }
+                if let error {
+                    self.stopMonitoringNetworkChanges()
+                    self.updateWidgetStatus("disconnected")
+                    if !initialCompletion { self.cancelTunnelWithError(error) }
+                } else {
+                    self.updateWidgetStatus("connected")
+                }
             }
         }
     }
 
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        monitorQueue.async { [weak self] in
-            self?.networkChangeWorkItem?.cancel()
-            self?.networkChangeWorkItem = nil
-            self?.currentNetworkType = nil
-            self?.wasStoppedDueToNoNetwork = false
-            self?.isRestartInProgress = false
+        // Ignore queued path/SIM callbacks once the user stops the tunnel.
+        monitorQueue.sync {
+            stopMonitoringNetworkChanges()
+            adapter?.isRestarting = false
+            adapter?.isNetworkUnavailable = false
         }
-        // Reset network unavailable flag when tunnel stops
-        adapter?.isNetworkUnavailable = false
         setNetworkUnavailableFlag(false)
-        adapter?.stop()
+        // The extension has a short shutdown deadline; do not wait for Go teardown.
+        adapter?.client.stopWithoutWait()
         updateWidgetStatus("disconnected")
-        guard let pathMonitor = self.pathMonitor else {
-            AppLogger.shared.log("pathMonitor is nil; nothing to cancel.")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                completionHandler()
-            }
-            return
-        }
-        pathMonitor.cancel()
-        self.pathMonitor = nil
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             completionHandler()
         }
@@ -278,182 +264,55 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func startMonitoringNetworkChanges() {
-        let monitor = NWPathMonitor()
-        monitor.pathUpdateHandler = { [weak self] path in
-            self?.handleNetworkChange(path: path)
+        #if os(iOS)
+        let info = CTTelephonyNetworkInfo()
+        info.delegate = self
+        telephonyInfo = info
+        #endif
+        let monitor = NWPathMonitor(prohibitedInterfaceTypes: [.other, .loopback])
+        monitor.pathUpdateHandler = { [weak self, weak monitor] path in
+            guard let self, let monitor, self.pathMonitor === monitor else { return }
+            self.handleNetworkChange(path: path)
         }
-        monitor.start(queue: monitorQueue)
-    
         pathMonitor = monitor
+        monitor.start(queue: monitorQueue)
     }
 
-    func handleNetworkChange(path: Network.NWPath) {
-        AppLogger.shared.log("""
-                  Path update:
-                  - status: \(path.status)
-                  - isExpensive: \(path.isExpensive)
-                  - usesWifi: \(path.usesInterfaceType(.wifi))
-                  - usesCellular: \(path.usesInterfaceType(.cellular))
-                  - interfaces: \(path.availableInterfaces.map { $0.type })
-                  """)
-
-        if path.status != .satisfied {
-            AppLogger.shared.log("No network connection detected")
-
-            // Cancel any pending restart
-            networkChangeWorkItem?.cancel()
-            networkChangeWorkItem = nil
-
-            // Signal UI to show disconnecting animation via shared flag
-            // We don't call adapter.stop() to avoid race conditions with Go SDK callbacks
-            // The Go SDK will handle network loss internally and reconnect when available
-            if !wasStoppedDueToNoNetwork {
-                let stateDesc = adapter?.clientState.description ?? "unknown"
-                AppLogger.shared.log("Network unavailable - signaling UI for disconnecting animation, clientState=\(stateDesc)")
-                wasStoppedDueToNoNetwork = true
-                adapter?.isNetworkUnavailable = true
-                setNetworkUnavailableFlag(true)
-            }
-            return
-        }
-
-        // Network is available again
-        let shouldRestartDueToRecovery = wasStoppedDueToNoNetwork
-        if wasStoppedDueToNoNetwork {
-            AppLogger.shared.log("Network restored after unavailability - signaling UI")
-            wasStoppedDueToNoNetwork = false
-            adapter?.isNetworkUnavailable = false
-            setNetworkUnavailableFlag(false)
-        }
-
-        // Handle wifi <-> cellular transitions
-        let newNetworkType: NWInterface.InterfaceType? = {
-            if path.usesInterfaceType(.wifi) {
-                return .wifi
-            } else if path.usesInterfaceType(.cellular) {
-                return .cellular
-            } else {
-                return nil
-            }
-        }()
-
-        // Check if network type changed (only if both current and new types are known)
-        let networkTypeChanged: Bool
-        if let current = currentNetworkType, let newType = newNetworkType {
-            networkTypeChanged = current != newType
-        } else {
-            networkTypeChanged = false
-        }
-
-        if networkTypeChanged {
-            AppLogger.shared.log("Network type changed: \(String(describing: currentNetworkType)) -> \(String(describing: newNetworkType))")
-        }
-
-        // Restart if network type changed OR recovering from network unavailability
-        // (even if returning to the same interface type, the connection may be stale)
-        // This must happen regardless of network type (wifi/cellular/other)
-        if networkTypeChanged || shouldRestartDueToRecovery {
-            AppLogger.shared.log("Scheduling restart: networkTypeChanged=\(networkTypeChanged), shouldRestartDueToRecovery=\(shouldRestartDueToRecovery)")
-
-            // Cancel any pending restart from previous rapid change
-            networkChangeWorkItem?.cancel()
-            networkChangeWorkItem = nil
-
-            // Debounce: schedule restart after 1 second
-            let workItem = DispatchWorkItem { [weak self] in
-                self?.restartClient()
-            }
-
-            networkChangeWorkItem = workItem
-            monitorQueue.asyncAfter(deadline: .now() + 1.0, execute: workItem)
-        }
-
-        // Update current network type only if known
-        if let newType = newNetworkType {
-            currentNetworkType = newType
-        }
+    private func stopMonitoringNetworkChanges() {
+        reconnection.stop()
+        reasserting = false
+        pathMonitor?.cancel()
+        pathMonitor = nil
+        #if os(iOS)
+        telephonyInfo?.delegate = nil
+        telephonyInfo = nil
+        #endif
     }
 
-    func restartClient() {
-        guard let adapter = adapter else {
-            AppLogger.shared.log("restartClient: adapter is nil")
-            return
+    func handleNetworkChange(path: Network.NWPath, forceRefresh: Bool = false) {
+        guard reconnection.isActive else { return }
+        let available = NetworkReconnectionState.allowsConnectionAttempts(path.status)
+        #if os(iOS)
+        let service = telephonyInfo?.dataServiceIdentifier
+        #else
+        let service: String? = nil
+        #endif
+        let network = available ? UnderlyingNetwork(path: path, dataServiceIdentifier: service) : nil
+        guard let change = reconnection.update(network, forceRefresh: forceRefresh) else { return }
+        AppLogger.shared.log("Network path: available=\(available), interfaces=\(network?.interfaces ?? []), changed=\(change.networkChanged)")
+        adapter?.isNetworkUnavailable = !available
+        if !available {
+            // Reflect path loss immediately; the SDK also reports reconnecting.
+            reconnection.connectionChanged(.connecting)
+            reasserting = reconnection.isReasserting
         }
-
-        if isRestartInProgress {
-            AppLogger.shared.log("restartClient: skipping - restart already in progress")
-            return
-        }
-        AppLogger.shared.log("restartClient: starting restart sequence")
-        isRestartInProgress = true
-        adapter.isRestarting = true
-
-        // Timeout after 30 seconds to reset flags if restart hangs
-        let timeoutWorkItem = DispatchWorkItem { [weak self] in
-            guard let self = self, self.isRestartInProgress else { return }
-            AppLogger.shared.log("restartClient: timeout - resetting flags")
-            self.adapter?.isRestarting = false
-            self.isRestartInProgress = false
-        }
-        monitorQueue.asyncAfter(deadline: .now() + 30, execute: timeoutWorkItem)
-
-        adapter.stop { [weak self] in
-            AppLogger.shared.log("restartClient: stop completed, checking login status")
-
-            // Tokens may have expired during a network change (common with self-hosted servers
-            // that have shorter token lifetimes). Check before restarting; if login is required
-            // signal the main app so it can show the re-auth UI instead of silently failing.
-            // The cached check reads the auth state the engine already recorded, so a network
-            // change no longer costs a Login RPC. An expiry the recorder has not seen yet is
-            // still caught one step later: the restarted engine's own login fails with
-            // PermissionDenied and drives onLoginRequired from the connection listener.
-            if self?.adapter?.needsLoginCached() == true {
-                AppLogger.shared.log("restartClient: login required — signaling main app, skipping restart")
-                self?.signalLoginRequired()
-                self?.updateWidgetStatus("disconnected")
-                self?.monitorQueue.async {
-                    self?.adapter?.isRestarting = false
-                    self?.isRestartInProgress = false
-                }
-                timeoutWorkItem.cancel()
-                return
-            }
-
-            AppLogger.shared.log("restartClient: starting client")
-            self?.adapter?.start { [weak self] error in
-                // Cancel timeout whether start succeeds or not
-                timeoutWorkItem.cancel()
-
-                self?.monitorQueue.async {
-                    self?.adapter?.isRestarting = false
-                    self?.isRestartInProgress = false
-                }
-
-                if let error = error {
-                    AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
-                    // If the start failed because the session expired, the connection
-                    // listener may have suppressed its login-required signalling: it skips
-                    // both checks while isRestarting is still true, which happens when the
-                    // stop phase never fired onDisconnected (engine already dead) and the
-                    // stop completion arrived via the 15s fallback instead. Re-check the
-                    // recorder here — the engine marks it with PermissionDenied before
-                    // Run() returns — and signal + tear down so the dead tunnel doesn't
-                    // linger and black-hole traffic.
-                    if self?.adapter?.needsLoginCached() == true {
-                        AppLogger.shared.log("restartClient: start failed due to expired login — signaling and tearing down")
-                        self?.signalLoginRequired()
-                        self?.cancelTunnelWithError(NSError(
-                            domain: "io.netbird.NetbirdNetworkExtension",
-                            code: 1001,
-                            userInfo: [NSLocalizedDescriptionKey: "Login required."]
-                        ))
-                    }
-                    self?.updateWidgetStatus("disconnected")
-                } else {
-                    AppLogger.shared.log("restartClient: start completed successfully")
-                    self?.updateWidgetStatus("connected")
-                }
-            }
+        setNetworkUnavailableFlag(!available)
+        // The core parks retries while offline and wakes them with fresh backoff.
+        adapter?.client.setNetworkAvailable(available)
+        if change.networkChanged {
+            // The core coalesces changes and sweeps stale connections/dials. Keep
+            // delivering events while reconnecting so a second SIM switch is not lost.
+            adapter?.client.notifyNetworkChange()
         }
     }
 
@@ -680,6 +539,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func wake() {
+        monitorQueue.async { [weak self] in
+            guard let self, self.reconnection.isActive, let monitor = self.pathMonitor else { return }
+            // Addresses can stay unchanged while NAT mappings and sockets expire
+            // during sleep. Refresh through the same coalesced sweep as a handover.
+            self.handleNetworkChange(path: monitor.currentPath, forceRefresh: true)
+        }
     }
 
     /// Writes the resolved VPN status to shared UserDefaults and triggers a widget reload.
@@ -756,3 +621,16 @@ func initializeLogging(loglevel: String) {
        AppLogger.shared.log("Failed to initialize log: \(actualError.localizedDescription)")
    }
 }
+
+#if os(iOS)
+extension PacketTunnelProvider: CTTelephonyNetworkInfoDelegate {
+    func dataServiceIdentifierDidChange(_ identifier: String) {
+        // CoreTelephony calls on a global queue. Read the current service on our
+        // queue rather than trusting a potentially superseded callback argument.
+        monitorQueue.async { [weak self] in
+            guard let self, let monitor = self.pathMonitor else { return }
+            self.handleNetworkChange(path: monitor.currentPath)
+        }
+    }
+}
+#endif

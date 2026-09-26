@@ -498,6 +498,10 @@ class ViewModel: ObservableObject {
             connectPressed = false
             disconnectPressed = false
             newState = .connected
+        case .reasserting:
+            connectPressed = false
+            disconnectPressed = false
+            newState = .connecting
         case .connecting:
             // Do NOT clear connectPressed here — iOS can emit .disconnecting right after
             // .connecting during tunnel startup (cleanup of old instance). Keeping
@@ -538,7 +542,7 @@ class ViewModel: ObservableObject {
         case .connected:
             extensionStateText = isInternetConnected ? "Connected" : "Offline"
         case .connecting:
-            extensionStateText = "Connecting..."
+            extensionStateText = extensionState == .reasserting ? "Reconnecting..." : "Connecting..."
         case .disconnecting:
             extensionStateText = "Disconnecting..."
         case .disconnected:
@@ -654,8 +658,8 @@ class ViewModel: ObservableObject {
         }
     }
 
-    private func applyExtensionStatus(_ status: NEVPNStatus) {
-        let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .disconnecting]
+    func applyExtensionStatus(_ status: NEVPNStatus) {
+        let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .reasserting, .disconnecting]
         guard knownStatuses.contains(status), extensionState != status else { return }
 
         let priorState = extensionState

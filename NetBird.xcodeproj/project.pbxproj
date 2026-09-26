@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E2A000012F90000100000001 /* NetworkReconnectionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A000002F90000100000001 /* NetworkReconnectionState.swift */; };
+		E2A000022F90000100000001 /* NetworkReconnectionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A000002F90000100000001 /* NetworkReconnectionState.swift */; };
+		E2A000042F90000100000001 /* NetworkReconnectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A000032F90000100000001 /* NetworkReconnectionStateTests.swift */; };
+
 		0C71C019350D42AB8F110336 /* iOSSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */; };
 		1C4E6A81CD33FF6D2DEFF8D5 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91FA1F06D3375864C74EAB3B /* Foundation.framework */; };
 		AA000C012F22000C00000001 /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
@@ -286,6 +290,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E2A000032F90000100000001 /* NetworkReconnectionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkReconnectionStateTests.swift; sourceTree = "<group>"; };
+		E2A000002F90000100000001 /* NetworkReconnectionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkReconnectionState.swift; sourceTree = "<group>"; };
 		2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSSettingsView.swift; sourceTree = "<group>"; };
 		3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlobalConstantsTests.swift; sourceTree = "<group>"; };
 		42873052F9544A89B1408339 /* iOSPeersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSPeersView.swift; sourceTree = "<group>"; };
@@ -554,6 +560,7 @@
 			children = (
 				50C727EB2A824812006E898D /* NetBirdAdapter.swift */,
 				50245A562A80431C0034792B /* PacketTunnelProvider.swift */,
+				E2A000002F90000100000001 /* NetworkReconnectionState.swift */,
 				50245A582A80431C0034792B /* Info.plist */,
 				50245A592A80431C0034792B /* NetbirdNetworkExtension.entitlements */,
 				50CD814E2AD0355000CF830B /* PacketTunnelProviderSettingsManager.swift */,
@@ -723,6 +730,7 @@
 			isa = PBXGroup;
 			children = (
 				3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */,
+				E2A000032F90000100000001 /* NetworkReconnectionStateTests.swift */,
 				8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */,
 				53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */,
 				AA000B002F22000B00000001 /* ProfileMigrationTests.swift */,
@@ -1148,6 +1156,7 @@
 				50C5D3102BDD96CF003159BE /* RoutesSelectionDetails.swift in Sources */,
 				50C727ED2A824C10006E898D /* NetBirdAdapter.swift in Sources */,
 				50245A572A80431C0034792B /* PacketTunnelProvider.swift in Sources */,
+				E2A000012F90000100000001 /* NetworkReconnectionState.swift in Sources */,
 				505118D12AD96ECA003027D3 /* key.c in Sources */,
 				50213A2D2A8D0AA30031D993 /* Preferences.swift in Sources */,
 				AA0001032F22000100000001 /* ProfileManager.swift in Sources */,
@@ -1194,6 +1203,7 @@
 				50D402972BD9B89300D4AC5B /* PeerViewModel.swift in Sources */,
 				506332022AF9415500BC8F0E /* CustomTextField.swift in Sources */,
 				50003BC42AFBD7D500E5EB6B /* PacketTunnelProvider.swift in Sources */,
+				E2A000022F90000100000001 /* NetworkReconnectionState.swift in Sources */,
 				50216D8E2ACB1905009574C9 /* NetworkChangeListener.swift in Sources */,
 				50CD81A72AD5504B00CF830B /* StatusDetails.swift in Sources */,
 				505118CE2AD96ECA003027D3 /* x25519.c in Sources */,
@@ -1245,6 +1255,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */,
+				E2A000042F90000100000001 /* NetworkReconnectionStateTests.swift in Sources */,
 				9CC0E000AE3F165CA72FD465 /* AppLoggerTests.swift in Sources */,
 				1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */,
 				AA000B012F22000B00000001 /* ProfileMigrationTests.swift in Sources */,
