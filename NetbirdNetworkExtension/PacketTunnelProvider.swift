@@ -236,7 +236,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // the provider and outlives the Go engine, so without an explicit teardown it
         // lingers with the default route and black-holes all traffic until the user
         // opens the app. cancelTunnelWithError restores the default route immediately.
-        let sessionID = monitorQueue.sync {
+        let (sessionID, engineGeneration) = monitorQueue.sync {
             stopMonitoringNetworkChanges()
             reconnection = NetworkReconnectionState()
             isRestartInProgress = false
@@ -253,7 +253,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             beginInitialStart()
             adapter.isNetworkUnavailable = false
             startMonitoringNetworkChanges()
-            return reconnection.sessionID
+            return (reconnection.sessionID, restartGeneration)
         }
         adapter.onLoginRequired = { [weak self] in
             self?.monitorQueue.async {
@@ -276,7 +276,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         adapter.start(onConnectionChanged: { [weak self] state in
             self?.monitorQueue.async {
                 guard let self, self.reconnection.isActive,
-                      self.reconnection.sessionID == sessionID else { return }
+                      self.reconnection.sessionID == sessionID,
+                      self.restartGeneration == engineGeneration else { return }
                 self.reconnection.connectionChanged(state)
                 self.reasserting = self.reconnection.isReasserting
             }
@@ -645,7 +646,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             AppLogger.shared.log("restartClient: starting client")
             self.adapter?.start(onConnectionChanged: { [weak self] state in
                 self?.monitorQueue.async {
-                    guard let self, self.isCurrentGeneration(lifecycle), self.reconnection.isActive else { return }
+                    // Keep ownership after the restart transaction finishes, but
+                    // reject notifications from engines replaced by a later restart.
+                    guard let self, self.isCurrentGeneration(lifecycle), self.reconnection.isActive,
+                          self.restartGeneration == generation else { return }
                     self.reconnection.connectionChanged(state)
                     self.reasserting = self.reconnection.isReasserting
                 }
