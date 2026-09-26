@@ -52,6 +52,30 @@ final class NetworkReconnectionStateTests: XCTestCase {
         }
     }
 
+    func testEveryPhysicalNetworkPairRecoversDirectlyAndThroughOutage() throws {
+        let networks = [wifi, simA, simB,
+                        UnderlyingNetwork(interfaces: ["en1:4"], addresses: ["192.168.2.2"]),
+                        UnderlyingNetwork(interfaces: ["en0:1"], supportsIPv4: false)]
+        for source in networks {
+            for destination in networks {
+                var state = NetworkReconnectionState()
+                _ = state.update(source)
+                state.connectionChanged(.connected)
+                if source == destination {
+                    XCTAssertNil(state.update(destination))
+                } else {
+                    XCTAssertTrue(try XCTUnwrap(state.update(destination)).networkChanged)
+                }
+                _ = state.update(nil)
+                state.connectionChanged(.connecting)
+                XCTAssertTrue(state.isReasserting)
+                XCTAssertTrue(try XCTUnwrap(state.update(destination)).networkChanged)
+                state.connectionChanged(.connected)
+                XCTAssertFalse(state.isReasserting)
+            }
+        }
+    }
+
     func testTemporarilyMissingDataServiceIsDetected() throws {
         var state = NetworkReconnectionState()
         _ = state.update(simA)
@@ -60,13 +84,8 @@ final class NetworkReconnectionStateTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(state.update(simB)).networkChanged)
     }
 
-    func testRecoveryDoesNotCompleteTunnelStartAgain() {
-        var state = NetworkReconnectionState()
-        XCTAssertTrue(state.completeStart())
-        _ = state.update(simA)
-        _ = state.update(simB)
-        XCTAssertFalse(state.completeStart())
-        XCTAssertNotEqual(state.sessionID, NetworkReconnectionState().sessionID)
+    func testEachTunnelSessionHasDistinctIdentity() {
+        XCTAssertNotEqual(NetworkReconnectionState().sessionID, NetworkReconnectionState().sessionID)
     }
 
     func testStopIgnoresLateNetworkAndSIMCallbacks() {
@@ -76,7 +95,6 @@ final class NetworkReconnectionStateTests: XCTestCase {
         XCTAssertNil(state.update(simA))
         XCTAssertNil(state.update(nil))
         XCTAssertFalse(state.isActive)
-        XCTAssertFalse(state.completeStart())
     }
     func testRequiresConnectionAllowsDialingToActivatePath() {
         XCTAssertTrue(NetworkReconnectionState.allowsConnectionAttempts(.requiresConnection))

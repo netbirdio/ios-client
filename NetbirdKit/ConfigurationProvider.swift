@@ -28,12 +28,20 @@ protocol ConfigurationProvider {
     /// Whether IPv6 overlay addressing is disabled
     var disableIPv6: Bool { get set }
 
+    // MARK: - Remote Jobs
+
+    /// Whether management may run remote jobs (debug bundle requests) on this peer
+    var remoteJobsAllowed: Bool { get set }
+
     // MARK: - Pre-Shared Key
 
-    /// The current pre-shared key (empty string if not set)
-    var preSharedKey: String { get set }
+    /// Stages a new pre-shared key; an empty string clears it. Write-only by
+    /// design: the Go layer no longer hands the key back across the bridge, so
+    /// there is no matching getter.
+    func setPreSharedKey(_ key: String)
 
-    /// Whether a pre-shared key is configured
+    /// Whether a pre-shared key is configured - staged, persisted, or enforced
+    /// by MDM policy.
     var hasPreSharedKey: Bool { get }
 
     // MARK: - Lifecycle
@@ -42,6 +50,12 @@ protocol ConfigurationProvider {
     /// Returns true on success, false on failure
     @discardableResult
     func commit() -> Bool
+
+    /// Message from the most recent failed commit, or nil after a success.
+    /// The Go layer rejects a staged value that diverges from an MDM-managed
+    /// key, and the caller needs the reason to tell that apart from an I/O
+    /// failure.
+    var lastCommitError: String? { get }
 
     /// Reloads settings from persistent storage
     func reload()
@@ -54,6 +68,7 @@ protocol ConfigurationProvider {
 final class iOSConfigurationProvider: ConfigurationProvider {
 
     private var preferences: NetBirdSDKPreferences
+    private(set) var lastCommitError: String?
 
     init() {
         self.preferences = Preferences.newPreferences()
@@ -108,19 +123,37 @@ final class iOSConfigurationProvider: ConfigurationProvider {
         }
     }
 
-    // MARK: - Pre-Shared Key
+    // MARK: - Remote Jobs
 
-    var preSharedKey: String {
+    var remoteJobsAllowed: Bool {
         get {
-            return preferences.getPreSharedKey(nil)
+            var result = ObjCBool(false)
+            do {
+                try preferences.getRemoteJobsAllowed(&result)
+            } catch {
+                print("ConfigurationProvider: Failed to read remoteJobsAllowed - \(error)")
+            }
+            return result.boolValue
         }
         set {
-            preferences.setPreSharedKey(newValue)
+            preferences.setRemoteJobsAllowed(newValue)
         }
     }
 
+    // MARK: - Pre-Shared Key
+
+    func setPreSharedKey(_ key: String) {
+        preferences.setPreSharedKey(key)
+    }
+
     var hasPreSharedKey: Bool {
-        return !preSharedKey.isEmpty
+        var result = ObjCBool(false)
+        do {
+            try preferences.hasPreSharedKey(&result)
+        } catch {
+            print("ConfigurationProvider: Failed to read hasPreSharedKey - \(error)")
+        }
+        return result.boolValue
     }
 
     // MARK: - Lifecycle
@@ -129,8 +162,10 @@ final class iOSConfigurationProvider: ConfigurationProvider {
     func commit() -> Bool {
         do {
             try preferences.commit()
+            lastCommitError = nil
             return true
         } catch {
+            lastCommitError = error.localizedDescription
             print("ConfigurationProvider: Failed to commit - \(error)")
             return false
         }
@@ -160,43 +195,106 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
 
     init() {}
 
+    /// Reason the most recent write was refused, or nil.
+    private var refusal: String?
+
+    /// Refuses a write the policy owns.
+    ///
+    /// iOS reaches Go's CheckMDMConflicts through Preferences.commit(); tvOS
+    /// writes straight to the config JSON and never crosses that bridge, so
+    /// without this gate a managed field would stay writable here while iOS
+    /// rejects it. `key` names the field the way the Go error does, so the
+    /// message a user sees is the same on both platforms.
+    private func policyRefuses(_ key: String, managedBy: (MDMRestrictions.Fields) -> Bool) -> Bool {
+        // One snapshot per write. Reading the field's own flag separately from
+        // the blanket gate would let a policy landing between the two reads
+        // slip a managed write through on the stale value - and it costs a
+        // second trip across the bridge for nothing.
+        let restrictions = MDMRestrictions.current()
+        guard managedBy(restrictions.mdm) || restrictions.features.disableUpdateSettings else {
+            return false
+        }
+        refusal = "fields managed by MDM cannot be modified: [\(key)]"
+        AppLogger.shared.log("ConfigurationProvider: refused a write to \(key) — managed by MDM policy")
+        return true
+    }
+
     // MARK: - Rosenpass
+    //
+    // Every setter first drops a write that would change nothing. Such a write
+    // cannot conflict with a policy, and it must not record a refusal: a caller
+    // rolling back after a refused commit writes the stored value straight back
+    // - the refused write never touched the JSON - and a refusal recorded there
+    // has no commit left to consume it, so it would fail the next allowed write.
 
     var rosenpassEnabled: Bool {
         get { extractJSONBool(field: "RosenpassEnabled") ?? false }
-        set { updateJSONField(field: "RosenpassEnabled", value: newValue) }
+        set {
+            guard newValue != rosenpassEnabled else { return }
+            guard !policyRefuses("rosenpassEnabled", managedBy: { $0.rosenpassEnabled }) else { return }
+            updateJSONField(field: "RosenpassEnabled", value: newValue)
+        }
     }
 
     var rosenpassPermissive: Bool {
         get { extractJSONBool(field: "RosenpassPermissive") ?? false }
-        set { updateJSONField(field: "RosenpassPermissive", value: newValue) }
+        set {
+            guard newValue != rosenpassPermissive else { return }
+            guard !policyRefuses("rosenpassPermissive", managedBy: { $0.rosenpassPermissive }) else { return }
+            updateJSONField(field: "RosenpassPermissive", value: newValue)
+        }
     }
 
     // MARK: - IPv6
 
     var disableIPv6: Bool {
         get { extractJSONBool(field: "DisableIPv6") ?? false }
-        set { updateJSONField(field: "DisableIPv6", value: newValue) }
+        set {
+            guard newValue != disableIPv6 else { return }
+            // No MDM key of its own; only the blanket settings gate applies.
+            guard !policyRefuses("disableIPv6", managedBy: { _ in false }) else { return }
+            updateJSONField(field: "DisableIPv6", value: newValue)
+        }
+    }
+
+    // MARK: - Remote Jobs
+
+    var remoteJobsAllowed: Bool {
+        get { extractJSONBool(field: "RemoteJobsAllowed") ?? false }
+        set { updateJSONField(field: "RemoteJobsAllowed", value: newValue) }
     }
 
     // MARK: - Pre-Shared Key
 
-    var preSharedKey: String {
-        get { extractJSONString(field: "PreSharedKey") ?? "" }
-        set { updateJSONField(field: "PreSharedKey", value: newValue) }
+    func setPreSharedKey(_ key: String) {
+        guard key != (extractJSONString(field: "PreSharedKey") ?? "") else { return }
+        guard !policyRefuses("preSharedKey", managedBy: { $0.preSharedKey }) else { return }
+        updateJSONField(field: "PreSharedKey", value: key)
     }
 
     var hasPreSharedKey: Bool {
-        return !preSharedKey.isEmpty
+        // A policy-supplied key never reaches the local config JSON, so
+        // reading only that would report "Not configured" for a device the
+        // policy has in fact given a key.
+        if MDMRestrictions.current().mdm.preSharedKey {
+            return true
+        }
+        return !(extractJSONString(field: "PreSharedKey") ?? "").isEmpty
     }
 
     // MARK: - Lifecycle
 
     @discardableResult
     func commit() -> Bool {
-        // Settings are written directly to config JSON, no separate commit needed
-        return true
+        // Settings are written straight to the config JSON, so there is no
+        // separate commit to make — but a write the policy refused must still
+        // be reported, since callers treat commit() as the success signal.
+        lastCommitError = refusal
+        defer { refusal = nil }
+        return refusal == nil
     }
+
+    private(set) var lastCommitError: String?
 
     func reload() {
         // Config JSON is always read fresh from UserDefaults

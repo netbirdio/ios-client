@@ -63,7 +63,6 @@ struct NetworkReconnectionState {
 
     let sessionID = UUID()
     private(set) var isActive = true
-    private var startCompleted = false
     private var hasConnected = false
     private(set) var isReasserting = false
     private var hasInitialPath = false
@@ -77,14 +76,6 @@ struct NetworkReconnectionState {
         hasInitialPath = true
         network = next
         return Change(networkChanged: changed)
-    }
-
-    /// SDK onConnected can fire again after each network recovery. Apple's tunnel
-    /// start completion belongs to the initial connection only.
-    mutating func completeStart() -> Bool {
-        guard isActive, !startCompleted else { return false }
-        startCompleted = true
-        return true
     }
 
     static func allowsConnectionAttempts(_ status: Network.NWPath.Status) -> Bool {

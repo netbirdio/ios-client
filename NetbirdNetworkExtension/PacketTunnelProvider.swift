@@ -11,56 +11,13 @@ import NetBirdSDK
 import os
 import UserNotifications
 import WidgetKit
-#if os(iOS)
 import CoreTelephony
-#endif
-
-/// One-time (per process) redirect of stderr (fd 2) into "netbird.err" in the app
-/// group container. The Go runtime writes panic messages and fatal-error goroutine
-/// dumps to fd 2, which an app extension otherwise discards — after a SIGABRT crash
-/// this file is the only place the panic reason can be recovered from.
-/// The file lives next to logfile.log, so the debug bundle generator picks it up
-/// automatically as "netbird.err" (see BundleGenerator.addLogfile in netbird-core).
-private let stderrRedirectOnce: Void = {
-    let fileManager = FileManager.default
-    guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) else {
-        AppLogger.shared.log("stderr redirect: app group container unavailable")
-        return
-    }
-    let errLogURL = groupURL.appendingPathComponent("netbird.err")
-
-    if let attrs = try? fileManager.attributesOfItem(atPath: errLogURL.path),
-       let size = attrs[.size] as? UInt64, size > 0 {
-        // Surface a previous session's crash output before appending to it.
-        AppLogger.shared.log("stderr redirect: netbird.err has \(size) bytes from a previous session (possible crash dump)")
-        // Cap growth across sessions: reset once it grows beyond 5 MB.
-        if size > 5 * 1024 * 1024 {
-            AppLogger.shared.log("stderr redirect: netbird.err exceeds 5 MB cap, resetting")
-            try? fileManager.removeItem(at: errLogURL)
-        }
-    }
-
-    let fd = open(errLogURL.path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
-    guard fd >= 0 else {
-        AppLogger.shared.log("stderr redirect: failed to open \(errLogURL.path), errno=\(errno)")
-        return
-    }
-    dup2(fd, STDERR_FILENO)
-    if fd != STDERR_FILENO {
-        close(fd)
-    }
-
-    let marker = "\n=== stderr redirect active pid=\(getpid()) at \(ISO8601DateFormatter().string(from: Date())) ===\n"
-    marker.withCString { _ = write(STDERR_FILENO, $0, strlen($0)) }
-    AppLogger.shared.log("stderr redirect: fd 2 -> netbird.err in app group container")
-}()
-
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override init() {
         // Must run before any Go SDK call so a Go panic during startup is captured too.
-        _ = stderrRedirectOnce
+        GoCrashCapture.redirect()
         super.init()
     }
 
@@ -75,11 +32,163 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// Network state variables - accessed only on monitorQueue for thread safety
     private var reconnection = NetworkReconnectionState()
-    #if os(iOS)
     private var telephonyInfo: CTTelephonyNetworkInfo?
-    #endif
+    private var isRestartInProgress = false
+    /// A policy restart deferred by an outage or another stop/start transaction.
+    private var restartPending = false
+    // Retain policy acknowledgement through offline waits and start retries.
+    private var restartCompletion: (() -> Void)?
+    private var latestPathIsSatisfied = false
+    /// Identifies the only restart transaction whose asynchronous callbacks may
+    /// mutate state. Incrementing this invalidates callbacks from a timed-out or
+    /// stopped transaction so they cannot overlap a newer engine instance.
+    private var restartGeneration: UInt64 = 0
+    private var activeRestartGeneration: UInt64?
+    private var isTunnelStopping = false
+    private var restartRetryCount = 0
+    private static let restartMaxRetries = 4
+    private static let restartRetryBaseDelay: TimeInterval = 2.0
+    /// Set from the moment startTunnel arms the connection until the adapter reports its
+    /// outcome. Policy restarts are held off while it is set, so a connection that
+    /// is still being established is never torn down mid-flight.
+    private var isInitialStartInFlight = false
 
+    private var networkChangeWorkItem: DispatchWorkItem?
+    private var initialStartTimeoutWorkItem: DispatchWorkItem?
+
+    /// Upper bound on the initial-start guard. A start that never reports its outcome must not
+    /// block policy restarts for the rest of the tunnel's life.
+    private static let initialStartGuardTimeout: TimeInterval = 30.0
+
+    /// NE requires the startTunnel completion handler to be called exactly once. The Go
+    /// engine's connection listener reports every management/signal reconnect as a fresh
+    /// onConnected, so the adapter's start callback fires repeatedly over one tunnel's life;
+    /// this latch keeps the first outcome and drops the rest. Locked because the outcome can
+    /// arrive on the main queue (connection listener) or a global queue (adapter start
+    /// errors).
+    private let startCompletionLock = NSLock()
+    private var startCompletionHandler: ((Error?) -> Void)?
+
+    /// Observer token for UserDefaults.didChangeNotification — used to
+    /// catch MDM managed-configuration pushes
+    /// (UserDefaults["com.apple.configuration.managed"]) and trigger an
+    /// engine restart so the new policy values flow through
+    /// Config.apply → applyMDMPolicy on the next Run.
+    private var mdmConfigObserver: NSObjectProtocol?
+
+    /// Whether the Darwin observer for the app's mirror is registered.
+    private var isObservingMDMMirror = false
+
+    /// Set when a policy change arrived while a restart was already in
+    /// flight. Go's detector records the newer policy the moment it is
+    /// observed, so it will not report the change again - if this restart
+    /// were simply dropped, that policy would never be applied. The flag
+    /// makes the handler come back for it.
+    private var _pendingMDMRestart = false
+    private var pendingMDMRestart: Bool {
+        get {
+            tearDownLock.lock()
+            defer { tearDownLock.unlock() }
+            return _pendingMDMRestart
+        }
+        set {
+            tearDownLock.lock()
+            _pendingMDMRestart = newValue
+            tearDownLock.unlock()
+        }
+    }
+
+    /// Attempts the deferred retry has already made. Bounded so a restart
+    /// pipeline that never clears its guard cannot leave a timer rescheduling
+    /// itself for the life of the tunnel.
+    private var mdmRetryAttempts = 0
+    private static let mdmRetryInterval: TimeInterval = 2.0
+
+    /// How long the restart pipeline waits before releasing its own guard.
+    private static let restartWatchdogTimeout: TimeInterval = 30.0
+
+    /// Derived from the watchdogs rather than fixed, so the budget cannot drift
+    /// apart from them again.
+    ///
+    /// The guards are released by watchdogs of their own, timed from when they
+    /// armed - which can be later than the first deferral, since a restart may
+    /// begin while we are already waiting. A budget merely equal to a watchdog
+    /// therefore expires while the guard is still legitimately held, and the
+    /// policy is dropped: hasMDMPolicyChanged() has already recorded it as
+    /// handled, so nothing asks again until the next change or tunnel start.
+    /// One full watchdog of headroom guarantees at least one attempt after the
+    /// guard can have released.
+    private static let maxMDMRetryAttempts = Int(
+        (max(initialStartGuardTimeout, restartWatchdogTimeout) * 2) / mdmRetryInterval
+    )
+
+    /// The deferred retry that waits out an in-flight restart. Tracked so
+    /// teardown can cancel it: otherwise it fires afterwards, passes a guard
+    /// that stopTunnel has just reset, and calls adapter.start() on a tunnel
+    /// that is going away.
+    private var mdmRetryWorkItem: DispatchWorkItem?
+
+    /// Set once stopTunnel begins, so anything still in flight can tell that
+    /// starting the client is no longer wanted.
+    ///
+    /// Lock-guarded rather than confined to monitorQueue: the restart
+    /// pipeline's stop completions arrive on the adapter's stop queue and its
+    /// start completions on a global queue, so both the write and the reads
+    /// happen off monitorQueue. Queueing the write would let a reader see the
+    /// stale value and start the engine into a teardown.
+    private let tearDownLock = NSLock()
+    private var _isTearingDown = false
+    private var isTearingDown: Bool {
+        get {
+            tearDownLock.lock()
+            defer { tearDownLock.unlock() }
+            return _isTearingDown
+        }
+        set {
+            tearDownLock.lock()
+            _isTearingDown = newValue
+            tearDownLock.unlock()
+        }
+    }
+
+    /// Bumped by every startTunnel, so work begun for one tunnel lifecycle can
+    /// tell that it is finishing into another.
+    ///
+    /// The teardown latch alone is not enough: adapter.stop() cannot cancel a
+    /// stop callback that is already executing, and a following startTunnel
+    /// clears the latch — so a callback from the previous lifecycle would pass
+    /// the check and start the engine, or report a policy applied, for the new
+    /// one. The generation makes that callback identifiable as stale.
+    private var _tunnelGeneration = 0
+
+    /// Opens a new lifecycle: clears the latch and invalidates every callback
+    /// still in flight from the previous one.
+    private func beginTunnelGeneration() -> Int {
+        tearDownLock.lock()
+        defer { tearDownLock.unlock() }
+        _isTearingDown = false
+        _tunnelGeneration += 1
+        return _tunnelGeneration
+    }
+
+    private var tunnelGeneration: Int {
+        tearDownLock.lock()
+        defer { tearDownLock.unlock() }
+        return _tunnelGeneration
+    }
+
+    /// True only while `generation` is still the live lifecycle and no
+    /// teardown has begun.
+    private func isCurrentGeneration(_ generation: Int) -> Bool {
+        tearDownLock.lock()
+        defer { tearDownLock.unlock() }
+        return !_isTearingDown && _tunnelGeneration == generation
+    }
+
+    /// Starts the selected profile's NetBird engine and completes Network Extension startup.
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
+        armTunnelStartCompletion(completionHandler)
+
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
         }
@@ -104,19 +213,21 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         #endif
 
+        _ = beginTunnelGeneration()
+        startObservingMDMConfigChanges()
+
         guard let adapter = adapter else {
             let error = NSError(
                 domain: "io.netbird.NetbirdNetworkExtension",
                 code: 1003,
                 userInfo: [NSLocalizedDescriptionKey: "Failed to initialize NetBird adapter."]
             )
-            completionHandler(error)
+            completeTunnelStart(with: error)
             return
         }
 
-        // The engine owns authentication and retries transport failures. A preflight
-        // Login RPC would misclassify an offline On Demand/widget start as expired
-        // credentials. Actual auth denial still reaches onLoginRequired below.
+        // The engine retries transport failures and reports actual authentication
+        // denial. A duplicate preflight would mistake an outage for expired login.
 
         // Wire up the login-required callback so the connection listener can tear the
         // tunnel down if the auth session expires mid-session (token expires while the
@@ -128,6 +239,18 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let sessionID = monitorQueue.sync {
             stopMonitoringNetworkChanges()
             reconnection = NetworkReconnectionState()
+            isRestartInProgress = false
+            restartPending = false
+            restartCompletion = nil
+            latestPathIsSatisfied = false
+            restartGeneration &+= 1
+            activeRestartGeneration = nil
+            isTunnelStopping = false
+            restartRetryCount = 0
+            adapter.isRestarting = false
+            networkChangeWorkItem?.cancel()
+            networkChangeWorkItem = nil
+            beginInitialStart()
             adapter.isNetworkUnavailable = false
             startMonitoringNetworkChanges()
             return reconnection.sessionID
@@ -137,7 +260,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 guard let self, self.reconnection.isActive,
                       self.reconnection.sessionID == sessionID else { return }
                 AppLogger.shared.log("onLoginRequired: session expired mid-tunnel — tearing down")
-                let initialCompletion = self.reconnection.completeStart()
                 self.stopMonitoringNetworkChanges()
                 self.signalLoginRequired()
                 self.updateWidgetStatus("disconnected")
@@ -146,9 +268,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     code: 1001,
                     userInfo: [NSLocalizedDescriptionKey: "Login required."]
                 )
-                if initialCompletion {
-                    completionHandler(error)
-                } else {
+                if !self.completeTunnelStart(with: error) {
                     self.cancelTunnelWithError(error)
                 }
             }
@@ -164,8 +284,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self?.monitorQueue.async {
                 guard let self, self.reconnection.isActive,
                       self.reconnection.sessionID == sessionID else { return }
-                let initialCompletion = self.reconnection.completeStart()
-                if initialCompletion { completionHandler(error) }
+                self.endInitialStart()
+                let initialCompletion = self.completeTunnelStart(with: error)
                 if let error {
                     self.stopMonitoringNetworkChanges()
                     self.updateWidgetStatus("disconnected")
@@ -177,16 +297,79 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
-    override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        // Ignore queued path/SIM callbacks once the user stops the tunnel.
-        monitorQueue.sync {
-            stopMonitoringNetworkChanges()
-            adapter?.isRestarting = false
-            adapter?.isNetworkUnavailable = false
+    /// Records the handler NE is waiting on for this tunnel session.
+    private func armTunnelStartCompletion(_ handler: @escaping (Error?) -> Void) {
+        startCompletionLock.lock()
+        let pending = startCompletionHandler != nil
+        startCompletionHandler = handler
+        startCompletionLock.unlock()
+
+        if pending {
+            AppLogger.shared.log("armTunnelStartCompletion: replacing a start outcome that was never reported")
         }
+    }
+
+    /// Reports the tunnel's start outcome to NE, at most once per startTunnel.
+    /// Returns true when this call is the one that delivered it.
+    @discardableResult
+    private func completeTunnelStart(with error: Error?) -> Bool {
+        startCompletionLock.lock()
+        let handler = startCompletionHandler
+        startCompletionHandler = nil
+        startCompletionLock.unlock()
+
+        guard let handler = handler else { return false }
+        handler(error)
+        return true
+    }
+
+    /// Stops monitoring and the NetBird engine before completing tunnel teardown.
+    override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        // Synchronously, and before adapter.stop(): a restart whose stop
+        // completion is still in flight reads this latch off monitorQueue, and
+        // a queued write would let it see the old value and restart into the
+        // teardown.
+        isTearingDown = true
+
+        // A stop that lands before the engine ever reported connected would otherwise leave
+        // NE waiting on the start outcome forever: the outcome is delivered from the
+        // connection listener's onConnected, and stopping just makes the engine's run loop
+        // return without connecting — nothing calls it. Close it out here, bound to the end
+        // of the start attempt rather than to its success. Latched, so a start that already
+        // reported is untouched.
+        let stoppedBeforeConnect = completeTunnelStart(with: NSError(
+            domain: "io.netbird.NetbirdNetworkExtension",
+            code: 1005,
+            userInfo: [NSLocalizedDescriptionKey: "Tunnel stopped before the connection was established (reason \(reason.rawValue))."]
+        ))
+        if stoppedBeforeConnect {
+            AppLogger.shared.log("stopTunnel: stopped before the connection was established, reported the start failure to NE")
+        }
+
+        monitorQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.networkChangeWorkItem?.cancel()
+            self.networkChangeWorkItem = nil
+            self.mdmRetryWorkItem?.cancel()
+            self.mdmRetryWorkItem = nil
+            self.pendingMDMRestart = false
+            self.endInitialStart()
+            self.stopMonitoringNetworkChanges()
+            self.isRestartInProgress = false
+            self.restartPending = false
+            self.restartCompletion = nil
+            self.latestPathIsSatisfied = false
+            self.restartGeneration &+= 1
+            self.activeRestartGeneration = nil
+            self.isTunnelStopping = true
+            self.restartRetryCount = 0
+            self.adapter?.isRestarting = false
+        }
+        stopObservingMDMConfigChanges()
+        // Reset network unavailable flag when tunnel stops
+        adapter?.isNetworkUnavailable = false
         setNetworkUnavailableFlag(false)
-        // The extension has a short shutdown deadline; do not wait for Go teardown.
-        adapter?.client.stopWithoutWait()
+        adapter?.stop(waitForExit: false)
         updateWidgetStatus("disconnected")
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             completionHandler()
@@ -263,6 +446,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// Starts monitoring the physical network. Must run on `monitorQueue`.
+    ///
+    /// The provider's own tunnel interface is excluded. An unfiltered path also covers the
+    /// utun this provider creates, so every `setTunnelNetworkSettings` call — several per
+    /// connect — flapped the monitored path. `handleNetworkChange` read that as an outage
+    /// followed by a recovery and answered it with a client restart, which re-applied the
+    /// settings and flapped the path again: a loop that kept the tunnel cycling until the
+    /// timing happened to miss the detection window.
     func startMonitoringNetworkChanges() {
         #if os(iOS)
         let info = CTTelephonyNetworkInfo()
@@ -289,9 +480,34 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         #endif
     }
 
+    /// Arms the guard that keeps a policy restart from tearing down a connection that
+    /// is still coming up. Must run on `monitorQueue`.
+    private func beginInitialStart() {
+        initialStartTimeoutWorkItem?.cancel()
+        isInitialStartInFlight = true
+
+        let timeout = DispatchWorkItem { [weak self] in
+            guard let self = self, self.isInitialStartInFlight else { return }
+            AppLogger.shared.log("beginInitialStart: timeout - releasing the initial start guard")
+            self.isInitialStartInFlight = false
+            self.initialStartTimeoutWorkItem = nil
+        }
+        initialStartTimeoutWorkItem = timeout
+        monitorQueue.asyncAfter(deadline: .now() + Self.initialStartGuardTimeout, execute: timeout)
+    }
+
+    /// Releases the initial-start guard. Must run on `monitorQueue`.
+    private func endInitialStart() {
+        initialStartTimeoutWorkItem?.cancel()
+        initialStartTimeoutWorkItem = nil
+        isInitialStartInFlight = false
+    }
+
+    /// Publishes physical network changes without restarting the engine. Runs on monitorQueue.
     func handleNetworkChange(path: Network.NWPath, forceRefresh: Bool = false) {
         guard reconnection.isActive else { return }
         let available = NetworkReconnectionState.allowsConnectionAttempts(path.status)
+        latestPathIsSatisfied = available
         #if os(iOS)
         let service = telephonyInfo?.dataServiceIdentifier
         #else
@@ -309,11 +525,283 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         setNetworkUnavailableFlag(!available)
         // The core parks retries while offline and wakes them with fresh backoff.
         adapter?.client.setNetworkAvailable(available)
+        // An MDM restart may have stopped the engine before the path went away.
+        // Resume that pending policy restart; ordinary handovers never stop it.
+        if available, restartPending, !isRestartInProgress {
+            scheduleRestart(after: 0)
+        }
         if change.networkChanged {
             // The core coalesces changes and sweeps stale connections/dials. Keep
             // delivering events while reconnecting so a second SIM switch is not lost.
             adapter?.client.notifyNetworkChange()
         }
+    }
+
+    /// Runs one serialized engine stop/start transaction against the latest usable path.
+    /// - Parameter onRestarted: run only when the engine is back up. Callers
+    ///   that must not report success early — an applied MDM policy, say —
+    ///   hang their side effect here rather than on the call returning, which
+    ///   happens long before the restart finishes.
+    func restartClient(onRestarted: (() -> Void)? = nil) {
+        networkChangeWorkItem = nil
+
+        guard !isTunnelStopping else {
+            AppLogger.shared.log("restartClient: ignored while tunnel is stopping")
+            return
+        }
+
+        guard let adapter = adapter else {
+            AppLogger.shared.log("restartClient: adapter is nil")
+            return
+        }
+
+        if isInitialStartInFlight {
+            AppLogger.shared.log("restartClient: skipping - initial connection still in flight")
+            return
+        }
+
+        if let onRestarted { restartCompletion = onRestarted }
+
+        if isRestartInProgress {
+            AppLogger.shared.log("restartClient: queuing follow-up - restart already in progress")
+            restartPending = true
+            return
+        }
+        restartPending = false
+        AppLogger.shared.log("restartClient: starting restart sequence")
+        let lifecycle = tunnelGeneration
+        isRestartInProgress = true
+        adapter.isRestarting = true
+        restartGeneration &+= 1
+        let generation = restartGeneration
+        activeRestartGeneration = generation
+
+        // A hung Go stop/start must fail closed. Merely clearing the flags would
+        // allow another restart to overlap it, and its late callback could revive
+        // an engine attached to a stale network path.
+        let timeoutWorkItem = DispatchWorkItem { [weak self] in
+            guard let self = self,
+                  self.activeRestartGeneration == generation else { return }
+            AppLogger.shared.log("restartClient[\(generation)]: timeout - tearing down stale tunnel")
+            self.restartPending = false
+            self.finishRestartTransaction(generation: generation, schedulePending: false)
+            self.updateWidgetStatus("disconnected")
+            self.cancelTunnelWithError(NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1002,
+                userInfo: [NSLocalizedDescriptionKey: "VPN restart timed out."]
+            ))
+        }
+        monitorQueue.asyncAfter(deadline: .now() + Self.restartWatchdogTimeout, execute: timeoutWorkItem)
+
+        adapter.stop { [weak self] in
+            self?.monitorQueue.async { [weak self] in
+                guard let self = self else { return }
+                guard self.activeRestartGeneration == generation else {
+                    AppLogger.shared.log("restartClient[\(generation)]: ignoring stale stop completion")
+                    return
+                }
+                AppLogger.shared.log("restartClient[\(generation)]: stop completed, checking path and login status")
+
+                // Never start the engine against an unavailable path. The next
+                // satisfied NWPath update will schedule the pending reconciliation.
+                guard self.latestPathIsSatisfied else {
+                    AppLogger.shared.log("restartClient: path unavailable after stop - waiting for recovery")
+                    self.restartPending = true
+                    timeoutWorkItem.cancel()
+                    self.finishRestartTransaction(generation: generation)
+                    return
+                }
+
+            // Tokens may have expired during a network change (common with self-hosted servers
+            // that have shorter token lifetimes). Check before restarting; if login is required
+            // signal the main app so it can show the re-auth UI instead of silently failing.
+            // The cached check reads the auth state the engine already recorded, so a network
+            // change no longer costs a Login RPC. An expiry the recorder has not seen yet is
+            // still caught one step later: the restarted engine's own login fails with
+            // PermissionDenied and drives onLoginRequired from the connection listener.
+            if self.adapter?.needsLoginCached() == true {
+                AppLogger.shared.log("restartClient: login required — signaling main app, skipping restart")
+                self.signalLoginRequired()
+                self.updateWidgetStatus("disconnected")
+                timeoutWorkItem.cancel()
+                self.finishRestartTransaction(generation: generation, schedulePending: false)
+                return
+            }
+
+            // stopTunnel may have begun while this pipeline sat in its stop
+            // phase. The scheduling-time guard cannot see that, and cancelling
+            // the retry work item cannot stop work already past it — so check
+            // again here, immediately before bringing the engine back up.
+            if !self.isCurrentGeneration(lifecycle) {
+                AppLogger.shared.log("restartClient: tunnel lifecycle moved on — abandoning restart")
+                timeoutWorkItem.cancel()
+                self.finishRestartTransaction(generation: generation, schedulePending: false)
+                return
+            }
+
+            AppLogger.shared.log("restartClient: starting client")
+            self.adapter?.start(onConnectionChanged: { [weak self] state in
+                self?.monitorQueue.async {
+                    guard let self, self.isCurrentGeneration(lifecycle), self.reconnection.isActive else { return }
+                    self.reconnection.connectionChanged(state)
+                    self.reasserting = self.reconnection.isReasserting
+                }
+            }) { [weak self] error in
+                // Cancel timeout whether start succeeds or not
+                timeoutWorkItem.cancel()
+
+                self?.monitorQueue.async { [weak self] in
+                    guard let self = self else { return }
+                    guard self.activeRestartGeneration == generation else {
+                        AppLogger.shared.log("restartClient[\(generation)]: ignoring stale start completion")
+                        return
+                    }
+                    if let error = error {
+                    AppLogger.shared.log("restartClient: start failed - \(error.localizedDescription)")
+                    // If the start failed because the session expired, the connection
+                    // listener may have suppressed its login-required signalling: it skips
+                    // both checks while isRestarting is still true, which covers every
+                    // onDisconnected delivered during the stop phase. Re-check the
+                    // recorder here — the engine marks it with PermissionDenied before
+                    // Run() returns — and signal + tear down so the dead tunnel doesn't
+                    // linger and black-hole traffic.
+                    if self.adapter?.needsLoginCached() == true {
+                        AppLogger.shared.log("restartClient: start failed due to expired login — signaling and tearing down")
+                        self.signalLoginRequired()
+                        self.cancelTunnelWithError(NSError(
+                            domain: "io.netbird.NetbirdNetworkExtension",
+                            code: 1001,
+                            userInfo: [NSLocalizedDescriptionKey: "Login required."]
+                        ))
+                        self.updateWidgetStatus("disconnected")
+                        self.finishRestartTransaction(generation: generation, schedulePending: false)
+                        return
+                    }
+                    self.updateWidgetStatus("disconnected")
+                    let pathChangedAgain = self.restartPending && self.latestPathIsSatisfied
+                    self.finishRestartTransaction(generation: generation)
+                    if !pathChangedAgain {
+                        self.scheduleRestartRetry(afterFailureOf: generation)
+                    }
+                } else {
+                    AppLogger.shared.log("restartClient: start completed successfully")
+                    // A restart that finished into a teardown has not put any
+                    // policy into force, so it must not report that it did.
+                    if self.isCurrentGeneration(lifecycle) {
+                        let completion = self.restartCompletion
+                        self.restartCompletion = nil
+                        completion?()
+                    }
+                    self.restartRetryCount = 0
+                    self.updateWidgetStatus("connected")
+                    self.finishRestartTransaction(generation: generation)
+                }
+                }
+            }
+            }
+        }
+    }
+
+    /// Signals that a policy change was applied, using the same two-path
+    /// delivery as the login-required signal: a flag in the shared app-group
+    /// container that the main app picks up when it becomes active, plus a
+    /// best-effort local notification for the case where it does not.
+    private func signalMDMPolicyApplied() {
+        let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
+        userDefaults?.set(true, forKey: GlobalConstants.keyMDMPolicyApplied)
+        userDefaults?.synchronize()
+
+        let content = UNMutableNotificationContent()
+        content.title = "MDM policy applied"
+        content.body = "NetBird configuration was updated by your IT policy."
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: GlobalConstants.notificationMDMPolicyApplied,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                AppLogger.shared.log("MDM: policy-applied notification not delivered from extension: \(error)")
+            }
+        }
+    }
+
+    /// Completes one serialized stop/start transaction and, if the path changed
+    /// while it was running, schedules exactly one follow-up reconciliation.
+    /// Must be called on monitorQueue.
+    private func finishRestartTransaction(generation: UInt64, schedulePending: Bool = true) {
+        guard activeRestartGeneration == generation else { return }
+        adapter?.isRestarting = false
+        isRestartInProgress = false
+        activeRestartGeneration = nil
+
+        guard schedulePending else {
+            restartCompletion = nil
+            restartPending = false
+            return
+        }
+        guard restartPending, latestPathIsSatisfied else { return }
+        restartPending = false
+        scheduleRestart(after: 1.0)
+    }
+
+    /// Replaces any not-yet-started reconciliation with one debounce timer.
+    /// Must be called on monitorQueue.
+    private func scheduleRestart(after delay: TimeInterval) {
+        networkChangeWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.networkChangeWorkItem = nil
+            self?.restartClient()
+        }
+        networkChangeWorkItem = workItem
+        monitorQueue.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    /// Retries a failed engine start with bounded exponential backoff. A stop,
+    /// newer path change, or newer restart invalidates/cancels the queued work.
+    /// Must be called on monitorQueue.
+    private func scheduleRestartRetry(afterFailureOf generation: UInt64) {
+        guard !isTunnelStopping else { return }
+        // An outage must park recovery, not discard it after the engine stopped.
+        guard latestPathIsSatisfied else {
+            restartPending = true
+            return
+        }
+
+        guard restartRetryCount < Self.restartMaxRetries else {
+            AppLogger.shared.log("restartClient: exhausted \(Self.restartMaxRetries) retries - tearing down tunnel")
+            restartRetryCount = 0
+            restartCompletion = nil
+            cancelTunnelWithError(NSError(
+                domain: "io.netbird.NetbirdNetworkExtension",
+                code: 1005,
+                userInfo: [NSLocalizedDescriptionKey: "Could not restart NetBird after a network change."]
+            ))
+            return
+        }
+
+        restartRetryCount += 1
+        let attempt = restartRetryCount
+        let delay = Self.restartRetryBaseDelay * pow(2.0, Double(attempt - 1))
+        AppLogger.shared.log("restartClient: scheduling retry \(attempt)/\(Self.restartMaxRetries) in \(delay)s")
+
+        networkChangeWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self,
+                  !self.isTunnelStopping,
+                  self.restartGeneration == generation else { return }
+            guard self.latestPathIsSatisfied else {
+                self.restartPending = true
+                self.networkChangeWorkItem = nil
+                return
+            }
+            self.networkChangeWorkItem = nil
+            self.restartClient()
+        }
+        networkChangeWorkItem = workItem
+        monitorQueue.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     /// Signals login required by persisting a flag to the shared app-group container.
@@ -486,15 +974,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let data = try PropertyListEncoder().encode(routeSelectionDetails)
             completionHandler(data)
         } catch {
+            // No payload, not an empty list. The app takes any answer from the core as the
+            // truth about the network map and replaces its cached routes with it, while a
+            // missing payload is a failed read that leaves the cache alone. The usual
+            // failure here is "not connected": the app's read on `.connected` arrives
+            // before the engine is reachable, and answering it with zero routes emptied
+            // the exit node selector until some view happened to read again.
             AppLogger.shared.log("Error retrieving or encoding route selection details: \(error.localizedDescription)")
-            let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
-            do {
-                let data = try PropertyListEncoder().encode(defaultStatus)
-                completionHandler(data)
-            } catch {
-                AppLogger.shared.log("Failed to encode default route selection details: \(error.localizedDescription)")
-                completionHandler(nil)
-            }
+            completionHandler(nil)
         }
     }
 
@@ -551,6 +1038,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Called from start/stop completion so the widget reflects the real tunnel state
     /// without waiting for the widget's own polling cycle.
     private func updateWidgetStatus(_ status: String) {
+        // adapter.start completions land on a global queue, so one can arrive
+        // after stopTunnel has already written "disconnected". Guarding here
+        // rather than at each call site covers startTunnel and every restart
+        // path at once.
+        if status == "connected", isTearingDown {
+            AppLogger.shared.log("updateWidgetStatus: ignoring \"connected\" during teardown")
+            return
+        }
         let defaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         defaults?.set(status, forKey: GlobalConstants.keyWidgetVPNStatus)
         AppLogger.shared.log("updateWidgetStatus: \(status)")
@@ -574,12 +1069,160 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             AppLogger.shared.log("Routes set successfully.")
         }
     }
+
+    // MARK: - MDM managed-configuration observer
+
+    /// Subscribes to UserDefaults.didChangeNotification so changes to
+    /// the OS-pushed MDM managed-config dictionary
+    /// (UserDefaults["com.apple.configuration.managed"]) trigger an
+    /// engine restart. iOS does NOT fire a dedicated MDM notification
+    /// — the entire UserDefaults change channel is shared, so this
+    /// fires on every unrelated preference write too. Deciding whether
+    /// the policy actually changed is Go's job; see the handler.
+    /// Listens for the app telling us the App Group mirror of the managed
+    /// configuration changed.
+    ///
+    /// This is the path a real MDM push actually takes to the extension: iOS
+    /// writes the policy into the app's preferences domain, the app mirrors it
+    /// into the App Group and posts this Darwin notification. The
+    /// UserDefaults.didChangeNotification observer below is process-local and
+    /// never fires for any of that.
+    private func startObservingMDMMirror() {
+        guard !isObservingMDMMirror else { return }
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            { _, observer, _, _, _ in
+                guard let observer = observer else { return }
+                let provider = Unmanaged<PacketTunnelProvider>
+                    .fromOpaque(observer)
+                    .takeUnretainedValue()
+                AppLogger.shared.log("MDM: App Group mirror changed; checking the policy")
+                provider.handleManagedConfigDidChangeIfRelevant()
+            },
+            GlobalConstants.darwinNotificationMDMPolicyChanged as CFString,
+            nil,
+            .deliverImmediately
+        )
+        isObservingMDMMirror = true
+    }
+
+    /// Unregisters before the provider can go away: the observer holds an
+    /// unretained pointer to it.
+    private func stopObservingMDMMirror() {
+        guard isObservingMDMMirror else { return }
+        CFNotificationCenterRemoveObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            CFNotificationName(GlobalConstants.darwinNotificationMDMPolicyChanged as CFString),
+            nil
+        )
+        isObservingMDMMirror = false
+    }
+
+    private func startObservingMDMConfigChanges() {
+        startObservingMDMMirror()
+        if mdmConfigObserver != nil {
+            return
+        }
+        mdmConfigObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleManagedConfigDidChangeIfRelevant()
+        }
+        AppLogger.shared.log("MDM: subscribed to managed-configuration changes")
+    }
+
+    private func stopObservingMDMConfigChanges() {
+        stopObservingMDMMirror()
+        if let token = mdmConfigObserver {
+            NotificationCenter.default.removeObserver(token)
+            mdmConfigObserver = nil
+            AppLogger.shared.log("MDM: unsubscribed from managed-configuration changes")
+        }
+        pendingMDMRestart = false
+    }
+
+    /// Called from the UserDefaults notification. The dedup this shared
+    /// channel needs lives in Go: hasMDMPolicyChanged() re-reads through
+    /// the registered fetcher, diffs against its last observation, logs
+    /// the per-key delta and returns true only on a real change. The
+    /// detector is created by setMDMPolicyFetcher, so with no fetcher
+    /// registered this is always false and nothing restarts.
+    private func handleManagedConfigDidChangeIfRelevant() {
+        guard let client = adapter?.client, client.hasMDMPolicyChanged() else {
+            return
+        }
+
+        AppLogger.shared.log("MDM: managed configuration changed; restarting client")
+        monitorQueue.async { [weak self] in
+            self?.mdmRetryAttempts = 0
+        }
+        requestMDMRestart()
+    }
+
+    /// Drives the restart for a policy change, deferring around one already
+    /// in flight.
+    ///
+    /// restartClient() returns immediately and does its work asynchronously,
+    /// and it refuses to start while another restart runs. Calling it during
+    /// one would therefore be a silent no-op for a policy Go has already
+    /// marked as seen. Retry instead until the pipeline is free; its own
+    /// 30-second timeout bounds the wait.
+    private func requestMDMRestart() {
+        // monitorQueue, not the main queue: the network-change path already
+        // drives restartClient() from here, and isRestartInProgress is plain
+        // shared state. Running the two on different queues lets both pass the
+        // guard and start their own stop/start pipelines.
+        monitorQueue.async { [weak self] in
+            guard let self = self, !self.isTearingDown else { return }
+            // isInitialStartInFlight, not a latch of our own: restartClient()
+            // consults exactly this flag and returns early while it is set, so
+            // a second guard would leave a window where this request passes,
+            // clears pendingMDMRestart, and then finds the restart refused with
+            // nothing left to retry it.
+            guard !self.isRestartInProgress, !self.isInitialStartInFlight else {
+                guard self.mdmRetryAttempts < Self.maxMDMRetryAttempts else {
+                    // Past a full watchdog of headroom the pipeline is wedged,
+                    // not busy, and a timer rescheduling itself forever would
+                    // only hide that.
+                    AppLogger.shared.log("MDM: giving up after \(self.mdmRetryAttempts) retries — a start or restart never finished; the policy will apply on the next change or tunnel start")
+                    self.mdmRetryWorkItem = nil
+                    self.mdmRetryAttempts = 0
+                    self.pendingMDMRestart = false
+                    return
+                }
+                self.mdmRetryAttempts += 1
+                self.pendingMDMRestart = true
+                AppLogger.shared.log("MDM: a start or restart is in flight; retry \(self.mdmRetryAttempts)/\(Self.maxMDMRetryAttempts)")
+                self.mdmRetryWorkItem?.cancel()
+                let retry = DispatchWorkItem { [weak self] in
+                    guard let self = self, self.pendingMDMRestart, !self.isTearingDown else { return }
+                    self.requestMDMRestart()
+                }
+                self.mdmRetryWorkItem = retry
+                self.monitorQueue.asyncAfter(deadline: .now() + Self.mdmRetryInterval, execute: retry)
+                return
+            }
+            self.mdmRetryWorkItem = nil
+            self.mdmRetryAttempts = 0
+            self.pendingMDMRestart = false
+            // Only a restart that actually brought the engine back up means the
+            // policy is in force; a deferred or failed one must not tell the
+            // user otherwise.
+            self.restartClient { [weak self] in
+                self?.signalMDMPolicyApplied()
+            }
+        }
+    }
 }
 
 func initializeLogging(loglevel: String) {
     let fileManager = FileManager.default
 
-    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.io.netbird.app")
+    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)
     let logURL = groupURL?.appendingPathComponent("logfile.log")
 
     var error: NSError?

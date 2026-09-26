@@ -18,7 +18,12 @@ struct RouteTabView: View {
             Color("BgMenu")
             VStack {
                 Spacer(minLength: 0)
-                if viewModel.vpnDisplayState == .connected && viewModel.routeViewModel.routeInfo.count > 0 {
+                if viewModel.mdmRestrictions.mdm.disableClientRoutes {
+                    // The engine installs no client routes under this policy,
+                    // so selecting them would change nothing. Say so instead
+                    // of showing an empty list that looks like a failure.
+                    RoutesDisabledByPolicyView()
+                } else if viewModel.vpnDisplayState == .connected && viewModel.routeViewModel.routeInfo.count > 0 {
                     VStack {
                         RouteSelectionHeader(routeViewModel: viewModel.routeViewModel)
                         RouteListView(viewModel: viewModel, routeViewModel: viewModel.routeViewModel, peerViewModel: viewModel.peerViewModel)
@@ -31,8 +36,24 @@ struct RouteTabView: View {
             }
         }
         .onAppear {
+            self.viewModel.refreshMDMRestrictions()
             self.viewModel.routeViewModel.getRoutes()
         }
+    }
+}
+
+struct RoutesDisabledByPolicyView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "lock.fill")
+                .font(.largeTitle)
+                .foregroundColor(Color("TextSecondary"))
+            Text("Network routes are managed by your organization")
+                .font(.system(size: 18 * Layout.fontScale))
+                .foregroundColor(Color("TextPrimary"))
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, Screen.width * 0.1)
     }
 }
 

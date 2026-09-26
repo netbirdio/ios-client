@@ -7,9 +7,17 @@ import SwiftUI
 
 #if os(iOS)
 
+/// Per-profile display values shown under a profile's name. Resolved when the
+/// list is loaded rather than while a row renders — see `loadProfiles()`.
+private struct ProfileDisplayDetails {
+    let serverURL: String?
+    let account: String?
+}
+
 struct ProfilesListView: View {
     @EnvironmentObject var viewModel: ViewModel
     @State private var profiles: [Profile] = []
+    @State private var profileDetails: [String: ProfileDisplayDetails] = [:]
     @State private var showAddSheet = false
     @State private var showSwitchAlert = false
     @State private var showRemoveAlert = false
@@ -26,101 +34,30 @@ struct ProfilesListView: View {
         profiles.filter { !$0.isActive }
     }
 
+    /// The Go profile manager rejects switch/add/rename/remove under this
+    /// gate, so the UI mirrors it: the entries that would fail are removed
+    /// rather than left to error out. Logout is gated too for every profile
+    /// but the active one, and only inactive profiles carry the action here.
+    private var profilesManaged: Bool {
+        viewModel.mdmRestrictions.features.disableProfiles
+    }
+
     var body: some View {
         List {
-            if let active = activeProfile {
-                Section("Active") {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(active.name)
-                                .font(.body.bold())
-                                .foregroundColor(Color("TextPrimary"))
-                            if let url = ProfileManager.shared.managementURL(forID: active.id) {
-                                Text(url)
-                                    .font(.footnote)
-                                    .foregroundColor(Color("TextSecondary"))
-                            }
-                        }
-                        Spacer()
-                        Text("Active")
-                            .font(.caption2.bold())
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.green)
-                            .clipShape(Capsule())
-                    }
-                }
-            }
-
-            Section("All Profiles") {
-                if inactiveProfiles.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "person.2.slash")
-                            .font(.title2)
-                            .foregroundColor(Color("TextSecondary"))
-                        Text("No Additional Profiles")
-                            .font(.subheadline.bold())
-                            .foregroundColor(Color("TextPrimary"))
-                        Text("Tap + to add a new profile")
-                            .font(.footnote)
-                            .foregroundColor(Color("TextSecondary"))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                } else {
-                    ForEach(inactiveProfiles) { profile in
-                        Button {
-                            selectedProfile = profile
-                            showSwitchAlert = true
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(profile.name)
-                                    .font(.body)
-                                    .foregroundColor(Color("TextPrimary"))
-                                if let url = ProfileManager.shared.managementURL(forID: profile.id) {
-                                    Text(url)
-                                        .font(.footnote)
-                                        .foregroundColor(Color("TextSecondary"))
-                                }
-                            }
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            if !profile.isDefault {
-                                Button(role: .destructive) {
-                                    selectedProfile = profile
-                                    showRemoveAlert = true
-                                } label: {
-                                    Label("Remove", systemImage: "trash")
-                                }
-                            }
-
-                            Button {
-                                selectedProfile = profile
-                                showLogoutAlert = true
-                            } label: {
-                                Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
-                            }
-                            .tint(.gray)
-                        }
-                    }
-                }
-            }
+            activeSection
+            managedNoticeSection
+            allProfilesSection
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Profiles")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showAddSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                        .foregroundColor(.accentColor)
-                }
+                addProfileButton
             }
         }
         .onAppear {
+            viewModel.refreshMDMRestrictions()
             loadProfiles()
         }
         .sheet(isPresented: $showAddSheet) {
@@ -159,13 +96,181 @@ struct ProfilesListView: View {
         }
     }
 
+    /// Kept out of the toolbar builder: a conditional inside
+    /// ToolbarContentBuilder is markedly more expensive to type-check than
+    /// the same conditional in a plain ViewBuilder.
+    @ViewBuilder
+    private var addProfileButton: some View {
+        if !profilesManaged {
+            Button {
+                showAddSheet = true
+            } label: {
+                Image(systemName: "plus")
+                    .foregroundColor(.accentColor)
+            }
+        }
+    }
+
+    // MARK: - Sections
+    //
+    // Split out of `body` deliberately: as one expression the List exceeded
+    // what the SwiftUI type-checker will resolve in reasonable time.
+
+    @ViewBuilder
+    private var activeSection: some View {
+        if let active = activeProfile {
+            Section("Active") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(active.name)
+                            .font(.body.bold())
+                            .foregroundColor(Color("TextPrimary"))
+                        profileSubtitle(for: active)
+                    }
+                    Spacer()
+                    Text("Active")
+                        .font(.caption2.bold())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.green)
+                        .clipShape(Capsule())
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var managedNoticeSection: some View {
+        if profilesManaged {
+            Section {
+                MDMManagedFooter()
+                    .font(.footnote)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var allProfilesSection: some View {
+        Section("All Profiles") {
+            if inactiveProfiles.isEmpty {
+                emptyProfilesPlaceholder
+            } else {
+                ForEach(inactiveProfiles) { profile in
+                    inactiveProfileRow(profile)
+                }
+            }
+        }
+    }
+
+    private var emptyProfilesPlaceholder: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "person.2.slash")
+                .font(.title2)
+                .foregroundColor(Color("TextSecondary"))
+            Text("No Additional Profiles")
+                .font(.subheadline.bold())
+                .foregroundColor(Color("TextPrimary"))
+            Text(profilesManaged ? "Profile management is disabled" : "Tap + to add a new profile")
+                .font(.footnote)
+                .foregroundColor(Color("TextSecondary"))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+    }
+
+    @ViewBuilder
+    private func inactiveProfileRow(_ profile: Profile) -> some View {
+        Button {
+            guard !profilesManaged else { return }
+            selectedProfile = profile
+            showSwitchAlert = true
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(profile.name)
+                    .font(.body)
+                    .foregroundColor(Color("TextPrimary"))
+                profileSubtitle(for: profile)
+            }
+        }
+        .mdmLocked(profilesManaged)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if !profilesManaged {
+                if !profile.isDefault {
+                    Button(role: .destructive) {
+                        selectedProfile = profile
+                        showRemoveAlert = true
+                    } label: {
+                        Label("Remove", systemImage: "trash")
+                    }
+                }
+
+                Button {
+                    selectedProfile = profile
+                    showLogoutAlert = true
+                } label: {
+                    Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+                .tint(.gray)
+            }
+        }
+    }
+
+    // MARK: - Rows
+
+    /// Server and account lines under a profile's name. The account is the one the
+    /// profile last signed in with — it is also what goes out as the login_hint on
+    /// the next login, so showing it makes visible which account a re-login returns
+    /// to. A profile that never completed an SSO login, or was logged out, has none.
+    ///
+    /// Reads only what `loadProfiles()` already resolved: both lookups touch the
+    /// filesystem, and a body may be evaluated any number of times.
+    @ViewBuilder
+    private func profileSubtitle(for profile: Profile) -> some View {
+        let details = profileDetails[profile.id]
+        if let url = details?.serverURL {
+            Text(url)
+                .font(.footnote)
+                .foregroundColor(Color("TextSecondary"))
+        }
+        if let email = details?.account {
+            Text(email)
+                .font(.footnote)
+                .foregroundColor(Color("TextSecondary"))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+    }
+
     // MARK: - Actions
 
     private func loadProfiles() {
-        profiles = ProfileManager.shared.listProfiles()
+        let loaded = ProfileManager.shared.listProfiles()
+        // Resolved here, not while a row renders: managementURL(forID:) reads the
+        // profile's config and writes the resolved URL back to the connection
+        // cache, so calling it inside `body` turns every redraw into file I/O.
+        // The account comes free with the listing — the Go core returns it on the
+        // profile itself, so it costs no extra lookup.
+        profileDetails = Dictionary(uniqueKeysWithValues: loaded.map { profile in
+            (profile.id, ProfileDisplayDetails(
+                serverURL: ProfileManager.shared.managementURL(forID: profile.id),
+                account: profile.email.isEmpty ? nil : profile.email
+            ))
+        })
+        profiles = loaded
     }
 
     private func switchToProfile(_ profile: Profile) {
+        // Re-read first: a policy that arrived while the confirmation alert was
+        // open would otherwise disconnect the user here and only then have the
+        // switch rejected by the Go manager.
+        viewModel.refreshMDMRestrictions()
+        guard !profilesManaged else {
+            errorMessage = "Profile management is disabled by your organization."
+            showErrorAlert = true
+            return
+        }
+
         viewModel.performClose()
 
         do {

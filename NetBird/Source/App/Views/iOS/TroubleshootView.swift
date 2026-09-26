@@ -13,6 +13,11 @@ struct TroubleshootView: View {
     @State private var uploadKey = ""
     @State private var showCopiedAlert = false
 
+    private var remoteJobsLocked: Bool {
+        viewModel.mdmRestrictions.mdm.remoteJobsAllowed
+            || viewModel.mdmRestrictions.features.disableUpdateSettings
+    }
+
     var body: some View {
         Form {
             Section(header: Text("Logging")) {
@@ -20,15 +25,36 @@ struct TroubleshootView: View {
                     .toggleStyle(SwitchToggleStyle(tint: .accentColor))
             }
 
-            Section(header: Text("Debug Bundle"), footer: Text("Sensitive data includes IP addresses, domain names, and private keys.")) {
+            Section {
                 Toggle("Anonymize sensitive data", isOn: $viewModel.anonymizeDebugBundle)
                     .toggleStyle(SwitchToggleStyle(tint: .accentColor))
 
+                Toggle("Allow remote debug bundles", isOn: Binding(
+                    get: { viewModel.remoteJobsAllowed },
+                    set: { newValue in
+                        viewModel.setRemoteJobsAllowed(allowed: newValue)
+                    }
+                ))
+                    .toggleStyle(SwitchToggleStyle(tint: .accentColor))
+                    .mdmLocked(remoteJobsLocked)
+
                 bundleActionContent
+            } header: {
+                Text("Debug Bundle")
+            } footer: {
+                if remoteJobsLocked {
+                    MDMManagedFooter()
+                } else {
+                    Text("Sensitive data includes IP addresses, domain names, and private keys. Allowing remote debug bundles lets your administrator request one from this device through the management server; this takes effect on the next connection.")
+                }
             }
         }
         .navigationTitle("Troubleshoot")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            viewModel.refreshMDMRestrictions()
+            viewModel.loadRemoteJobsSettings()
+        }
         .alert(isPresented: $viewModel.showLogLevelChangedAlert) {
             Alert(
                 title: Text("Changing Log Level"),

@@ -118,8 +118,14 @@ struct iOSConnectionView: View {
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
 
-                        ExitNodeSelectorCard(routeViewModel: viewModel.routeViewModel)
-                            .padding(.horizontal, 16)
+                        // With client routes disabled by policy the engine
+                        // installs none, so the selector would be a control
+                        // that cannot do anything - drop it rather than show
+                        // it dead.
+                        if !viewModel.mdmRestrictions.mdm.disableClientRoutes {
+                            ExitNodeSelectorCard(routeViewModel: viewModel.routeViewModel)
+                                .padding(.horizontal, 16)
+                        }
                     }
                     .padding(.bottom, 16)
                     .animation(.easeInOut(duration: 0.3), value: viewModel.isInternetConnected)
@@ -147,7 +153,8 @@ struct iOSConnectionView: View {
                 }
             }
 
-            // Safari login view — shown regardless of statusDetailsValid
+            // System auth session — started regardless of statusDetailsValid. It
+            // presents its own modal window, so this view only hosts the launcher.
             if viewModel.networkExtensionAdapter.showBrowser,
                let loginURLString = viewModel.networkExtensionAdapter.loginURL,
                let loginURL = URL(string: loginURLString)
@@ -155,30 +162,78 @@ struct iOSConnectionView: View {
                 SafariView(
                     isPresented: $viewModel.networkExtensionAdapter.showBrowser,
                     url: loginURL,
-                    didFinish: {
-                        if viewModel.networkExtensionAdapter.loginSucceeded {
-                            print("Finish login")
-                            viewModel.networkExtensionAdapter.startVPNConnection()
-                        } else {
-                            // User closed the browser without completing login. Do NOT start
-                            // the VPN — that would launch the extension, trip its needs-login
-                            // path, and pop a spurious "Login required" alert/notification.
-                            print("Login cancelled by user")
-                            viewModel.cancelPendingLogin()
-                        }
-                    }
+                    didFinish: loginBrowserDidFinish
                 )
+            } else if viewModel.networkExtensionAdapter.showBrowser {
+                // A login was started but its authorize URL is missing or unparsable,
+                // so no browser can be presented. Nothing would ever report an
+                // outcome, leaving the SDK flow pending until it expires — cancel it
+                // here instead.
+                Color.clear.onAppear {
+                    // The URL never goes to the log: it carries the OAuth state, the
+                    // redirect target and the login_hint — the user's email address.
+                    // Which of the two failure modes it was is the diagnostic part.
+                    let reason = viewModel.networkExtensionAdapter.loginURL == nil ? "missing" : "unparsable"
+                    AppLogger.shared.log("Login browser: \(reason) authorize URL — cancelling")
+                    viewModel.cancelPendingLogin()
+                }
             }
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarHidden(true)
+        .alert("Login failed", isPresented: Binding(
+            get: { viewModel.networkExtensionAdapter.loginErrorMessage != nil },
+            set: { if !$0 { viewModel.networkExtensionAdapter.loginErrorMessage = nil } }
+        )) {
+            Button("OK") { viewModel.networkExtensionAdapter.loginErrorMessage = nil }
+        } message: {
+            Text(viewModel.networkExtensionAdapter.loginErrorMessage ?? "")
+        }
         .onAppear {
             // Returning to this tab doesn't go through applyExtensionStatus, so refresh the
-            // network map here to keep the exit node selector current. Only while connected:
-            // GetRoutes answers with an empty list when there is no tunnel session and would
-            // wipe a list that is still valid.
-            if viewModel.vpnDisplayState == .connected {
-                viewModel.routeViewModel.getRoutes()
+            // network map here to keep the exit node selector current. Unconditional: a read
+            // with no tunnel session fails instead of answering "zero routes", and a failed
+            // read leaves the cached list alone (see RoutesViewModel.getRoutes).
+            viewModel.routeViewModel.getRoutes()
+        }
+    }
+
+    /// Resolves what the login browser's end means for the VPN.
+    private func loginBrowserDidFinish(_ outcome: LoginBrowserOutcome) {
+        let adapter = viewModel.networkExtensionAdapter
+
+        switch outcome {
+        case .failed(let error):
+            print("Login browser failed: \(error.localizedDescription)")
+            AppLogger.shared.log("Login browser failed: \(error.localizedDescription)")
+            viewModel.cancelPendingLogin()
+
+        case .redirectCaptured:
+            // The authorization code was handed to the SDK; the rest of the login
+            // runs there. The adapter starts the VPN once it reports success.
+            print("Login redirect captured - waiting for the SDK to finish")
+            adapter.resolveLoginAfterBrowserClose {
+                print("Login did not complete after redirect - resetting")
+                viewModel.cancelPendingLogin()
+            }
+
+        case .closed:
+            if adapter.loginSucceeded {
+                print("Finish login")
+                // The SDK just completed the management login, so the extension can
+                // skip its own needs-login check (one Login RPC) when it starts.
+                adapter.startVPNConnection()
+                return
+            }
+            // Ambiguous: the user may have cancelled, or closed the SDK's success
+            // page while registration was still running. Never start the VPN here —
+            // that would launch the extension, trip its needs-login path and pop a
+            // spurious "Login required" alert. Let the adapter decide, and only
+            // reset the UI if it concludes the login is not in flight.
+            print("Login browser closed without a reported success - resolving")
+            adapter.resolveLoginAfterBrowserClose {
+                print("Login cancelled or failed - resetting")
+                viewModel.cancelPendingLogin()
             }
         }
     }

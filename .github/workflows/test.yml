@@ -28,8 +28,8 @@ jobs:
 
       - name: Get netbird-core commit
         id: core-sha
-        working-directory: ios-client
-        run: echo "sha=$(git rev-parse HEAD:netbird-core)" >> "$GITHUB_OUTPUT"
+        working-directory: ios-client/netbird-core
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Cache NetBirdSDK xcframework
         id: sdk-cache

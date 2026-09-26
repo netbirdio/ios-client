@@ -37,6 +37,11 @@ class Preferences {
         guard let preferences = NetBirdSDKNewPreferences(configPath, statePath) else {
             preconditionFailure("Failed to create NetBirdSDKPreferences")
         }
+        // Register unconditionally: with no MDM profile installed the fetcher
+        // returns "", the policy is empty and every getter behaves exactly as
+        // before. Without this the settings screens read an empty policy and
+        // silently ignore MDM, and commit() cannot reject a managed key.
+        preferences.setMDMPolicyFetcher(MDMPolicyFetcher())
         return preferences
     }
     #else
@@ -209,6 +214,15 @@ class Preferences {
     static func loadManagementURL() -> String? {
         return sharedUserDefaults()?.string(forKey: managementURLKey)
     }
+
+    // MARK: - Login Browser Account Tracking
+    //
+    // The login browser has one cookie jar shared by every profile. login_hint tells
+    // the IdP which account a profile wants, but a hint is advisory — an IdP with a
+    // live session for another account signs in with that session instead, which is
+    // how a profile ends up holding a peer key and a token from two different
+    // accounts. Recording which profile last completed a login through that jar lets
+
 
     /// Restore config from UserDefaults to the config file path.
     /// iOS only - needed because the Go SDK reads from the file path.

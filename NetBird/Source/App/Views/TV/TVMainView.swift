@@ -40,17 +40,26 @@ struct TVMainView: View {
                 }
                 .tag(1)
 
-            TVNetworksView()
-                .tabItem {
-                    Label("Resources", systemImage: "globe")
-                }
-                .tag(2)
+            if !viewModel.mdmRestrictions.features.disableNetworks {
+                TVNetworksView()
+                    .tabItem {
+                        Label("Resources", systemImage: "globe")
+                    }
+                    .tag(2)
+            }
 
             TVSettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
                 .tag(3)
+        }
+        .onChange(of: viewModel.mdmRestrictions.features.disableNetworks) { _, hidden in
+            // Leaving the selection on a tab that no longer exists shows a
+            // blank screen; the iOS side does the same.
+            if hidden && selectedTab == 2 {
+                selectedTab = 0
+            }
         }
         .overlay(alignment: .topLeading) {
             Image("netbird-logo-menu")
@@ -257,12 +266,10 @@ struct TVConnectionView: View {
         }
         .onAppear {
             // Coming back to this tab doesn't go through applyExtensionStatus, so refresh
-            // the network map here to keep the exit node selector current. Only while
-            // connected: GetRoutes answers with an empty list when there is no tunnel
-            // session and would wipe a list that is still valid.
-            if viewModel.vpnDisplayState == .connected {
-                viewModel.routeViewModel.getRoutes()
-            }
+            // the network map here to keep the exit node selector current. Unconditional: a
+            // read with no tunnel session fails instead of answering "zero routes", and a
+            // failed read leaves the cached list alone (see RoutesViewModel.getRoutes).
+            viewModel.routeViewModel.getRoutes()
         }
     }
 

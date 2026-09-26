@@ -9,6 +9,7 @@ import Foundation
 import NetworkExtension
 import SwiftUI
 import Combine
+import Network
 import NetBirdSDK
 import os
 
@@ -92,7 +93,7 @@ public class NetworkExtensionAdapter: ObservableObject {
     var extensionName = "NetBird"
     private let loginRetryState = LoginRetryState()
     #else
-    var extensionID = "io.netbird.app.NetbirdNetworkExtension"
+    var extensionID = "\(Bundle.main.bundleIdentifier ?? "io.netbird.app").NetbirdNetworkExtension"
     var extensionName = "NetBird Network Extension"
     #endif
 
@@ -104,13 +105,22 @@ public class NetworkExtensionAdapter: ObservableObject {
     @Published var loginURL: String?
     #if os(iOS)
     private var pendingAuth: NetBirdSDKAuth?
-    /// Set to true by the SDK's onLoginSuccess callback (which fires once the Go PKCE
-    /// localhost server receives the OAuth callback). The browser-finished handler reads
-    /// this to tell a genuine login from the user dismissing the browser: the
-    /// ASWebAuthenticationSession completion fires with a nil callbackURL even on success
-    /// (the loopback redirect is consumed by the Go HTTP server, not the auth session),
-    /// so the SafariView callback alone cannot distinguish success from cancellation.
+    /// Set to true by the SDK's onLoginSuccess callback, which fires only once the
+    /// whole flow is done: authorization code exchanged AND the peer registered with
+    /// the management server. The browser cannot report this — its completion looks
+    /// the same whether the user cancelled or closed the SDK's success page — so
+    /// every "did the login work" decision reads this flag.
     public private(set) var loginSucceeded = false
+    /// Reason the last login failed, surfaced to the user. Nil when there is nothing
+    /// to report.
+    @Published public var loginErrorMessage: String?
+    /// Incremented on every performLogin entry. Deferred work armed for one attempt
+    /// captures the value and compares before acting, so a stale timer can never
+    /// abort a newer attempt.
+    public private(set) var loginAttemptToken = 0
+    /// Authorization URL of the in-flight login, used to locate the SDK's loopback
+    /// listener when deciding whether a closed browser means "cancelled".
+    private var pendingAuthorizeURL: String?
     #endif
     @Published var userCode: String?
 
@@ -309,7 +319,7 @@ public class NetworkExtensionAdapter: ObservableObject {
             #if os(tvOS)
             // Stop the system from retry-looping the tunnel while the user works through the
             // device code flow — every unattended start would fail on "login required".
-            // applyExtensionStatus re-arms On Demand once the tunnel is up again.
+            // applyStatusSideEffects re-arms On Demand once the tunnel is up again.
             // Await the save: the login starts a tunnel of its own, and a rule that is still
             // in force would race it with an unauthenticated start.
             if isOnDemandEnabled {
@@ -548,14 +558,26 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
         let activeManagementURL = resolvedURL ?? ""
         logger.info("performLogin: using management URL '\(activeManagementURL, privacy: .public)' for profile '\(activeProfileID, privacy: .public)'")
+        // The account this login targets is decided by the Go SDK: it reads the
+        // profile's stored account and sends it as the OIDC login_hint, and the
+        // management server's login flag decides whether the IdP is asked to
+        // re-authenticate. Nothing here rewrites the authorize URL.
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
-           let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, nil) {
+           let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, MDMPolicyFetcher(), nil) {
+            // A stale flow from an abandoned attempt would keep its loopback port
+            // bound and its WaitToken goroutine alive — stop it first.
+            self.pendingAuth?.stop()
             self.pendingAuth = auth
+            self.loginAttemptToken += 1
             self.loginSucceeded = false
             let urlOpener = MainAppLoginURLOpener()
             let errListener = MainAppLoginErrListener()
+            // Set once the browser actually opened. Gates the ownership-conflict
+            // self-heal below: an error before the browser phase falls through to the
+            // IPC fallback, and retrying concurrently with it would race two flows.
+            var browserPhaseStarted = false
 
-            let receivedURL: String? = await withCheckedContinuation { continuation in
+            let receivedURL: String? = await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
                 var resumed = false
                 let resume: (String?) -> Void = { url in
                     guard !resumed else { return }
@@ -570,8 +592,12 @@ public class NetworkExtensionAdapter: ObservableObject {
                     // the extension, trips its needsLogin path, and pops the auth alert
                     // in parallel with this browser login. Ordering them guarantees the
                     // await caller sees showBrowser == true.
+                    let browserURL = url
                     DispatchQueue.main.async {
-                        self?.loginURL = url
+                        browserPhaseStarted = true
+                        self?.loginErrorMessage = nil
+                        self?.pendingAuthorizeURL = browserURL
+                        self?.loginURL = browserURL
                         self?.showBrowser = true
                         resume(url)
                     }
@@ -592,21 +618,72 @@ public class NetworkExtensionAdapter: ObservableObject {
                         ProfileManager.shared.saveServerURL(activeManagementURL, forID: activeProfileID)
                         Preferences.saveManagementURL(activeManagementURL)
                     }
+                    // The account this login ran under is recorded by the SDK itself,
+                    // keyed by the config path it was handed, so the next login for
+                    // this profile goes out with it as the login_hint.
+                    AppLogger.shared.log("performLogin: SDK login succeeded for '\(activeProfileID)'")
                     // onSuccess runs on a background goroutine. Mark success on the main
                     // queue so the browser-finished handler (also main-queue) reliably
-                    // observes it and starts the VPN instead of treating the browser
-                    // dismissal as a cancellation.
+                    // observes it.
                     DispatchQueue.main.async {
-                        self?.loginSucceeded = true
-                        self?.pendingAuth = nil
+                        guard let self else { return }
+                        // Success is delivered twice (urlOpener.onLoginSuccess and the
+                        // result listener); act on the first only.
+                        guard !self.loginSucceeded else { return }
+                        self.logger.info("performLogin: SDK login succeeded")
+                        self.loginSucceeded = true
+                        self.pendingAuth = nil
+                        self.pendingAuthorizeURL = nil
+                        // If the browser is already gone, the view's completion handler
+                        // deferred the decision to us — the login only finished now, so
+                        // start the VPN here. While it is still open, the view starts it
+                        // when the user dismisses the success page.
+                        if !self.showBrowser {
+                            self.logger.info("performLogin: login completed after browser closed - starting VPN")
+                            self.startVPNConnection()
+                        }
                     }
                 }
                 errListener.onSuccessCallback = { urlOpener.onSuccess?() }
-                errListener.onErrorCallback = { [weak self] _ in
-                    // onError runs on a background goroutine; mutate pendingAuth on the
-                    // main queue to stay consistent with onSuccess and cancelLogin().
-                    DispatchQueue.main.async { self?.pendingAuth = nil }
-                    resume(nil)
+                errListener.onErrorCallback = { [weak self] error in
+                    // Surface the reason: a login that dies after the browser phase
+                    // (failed token exchange or management registration) is otherwise
+                    // indistinguishable from "nothing happened".
+                    let message = error?.localizedDescription ?? "unknown login error"
+                    AppLogger.shared.log("performLogin: SDK login failed: \(message)")
+                    // onError runs on a background goroutine; mutate state on the main
+                    // queue to stay consistent with onSuccess and cancelLogin().
+                    DispatchQueue.main.async {
+                        // Resume on the main queue, like onOpen does. `resumed` is a plain
+                        // captured var: resuming from the callback's own goroutine thread
+                        // while onOpen's queued block is still pending races it, and two
+                        // resumes of a checked continuation trap rather than fail softly.
+                        // Deferred so every exit path below still resumes.
+                        defer { resume(nil) }
+                        guard let self else { return }
+                        self.logger.error("performLogin: SDK login failed: \(message, privacy: .public)")
+                        self.pendingAuth = nil
+                        self.pendingAuthorizeURL = nil
+                        guard browserPhaseStarted else { return }
+                        // "peer is already registered by a different User or a Setup
+                        // Key" means the account that signed in does not own this
+                        // profile's peer. Report it rather than "repairing" it: the
+                        // app cannot tell a stale local key from a login under the
+                        // wrong account, and deleting the profile's identity to fix
+                        // the latter destroys a working registration and can
+                        // re-register the peer under the wrong account. Removing an
+                        // identity stays an explicit user action — Profiles → Log out.
+                        if message.contains("registered by a different User") {
+                            self.loginErrorMessage = """
+                                This profile belongs to a different NetBird account. \
+                                Sign in with the account that owns it, or log the \
+                                profile out (Profiles → Log out) to register it again.
+                                """
+                        } else {
+                            self.loginErrorMessage = message
+                        }
+                        self.showBrowser = false
+                    }
                 }
                 // Pass the device name explicitly. The plain login() path uses an empty
                 // device name, which makes the management server register the peer under
@@ -705,9 +782,18 @@ public class NetworkExtensionAdapter: ObservableObject {
             logger.error("performLogin: no login URL received from extension, aborting")
             return
         }
-        self.loginURL = url
-        self.showBrowser = true
+        // performLogin() is a nonisolated async method, so its body runs on the
+        // cooperative pool even when start() called it from the main actor — a
+        // nonisolated function does not inherit the caller's actor. loginURL and
+        // showBrowser are @Published, and publishing off the main thread is
+        // undefined behaviour in SwiftUI. Same ordering as the main-app path above:
+        // showBrowser is committed together with the URL it belongs to.
+        await MainActor.run {
+            self.loginURL = url
+            self.showBrowser = true
+        }
     }
+
 
     #if os(iOS)
     /// Aborts an in-progress interactive login (e.g. the user dismissed the OAuth
@@ -719,8 +805,117 @@ public class NetworkExtensionAdapter: ObservableObject {
         logger.info("cancelLogin: aborting in-progress login")
         pendingAuth?.stop()
         pendingAuth = nil
+        pendingAuthorizeURL = nil
         loginSucceeded = false
         showBrowser = false
+    }
+
+    /// Decides what a dismissed login browser means and calls `abort` only when the
+    /// login is definitely not in flight.
+    ///
+    /// The system auth session reports the same "cancelled" completion whether the
+    /// user backed out of the IdP page or closed the SDK's success page after the
+    /// redirect already went through, so the dismissal alone cannot be trusted. The
+    /// SDK's loopback listener settles it: it stays bound while the flow is still
+    /// waiting for the authorization code and goes away once the code arrives. A
+    /// listener that is still up on two probes means nothing was delivered — a real
+    /// cancel. Anything else defers to the SDK, with a bounded fallback so a login
+    /// that dies silently cannot leave the UI stuck on "Connecting…".
+    public func resolveLoginAfterBrowserClose(abort: @escaping () -> Void) {
+        let token = loginAttemptToken
+        // `abort` must never fire for an attempt other than the one being resolved.
+        let abortIfStillCurrent: () -> Void = { [weak self] in
+            guard let self, self.loginAttemptToken == token,
+                  !self.loginSucceeded, !self.showBrowser else { return }
+            abort()
+        }
+
+        guard let endpoint = pendingAuthorizeURL.flatMap(Self.loopbackEndpoint(fromAuthorizeURL:)) else {
+            logger.info("resolveLoginAfterBrowserClose: no loopback endpoint known, deferring to SDK result")
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.loginResolutionTimeout, execute: abortIfStillCurrent)
+            return
+        }
+
+        Self.probeListener(host: endpoint.host, port: endpoint.port) { [weak self] listening in
+            guard let self else { return }
+            guard listening else {
+                self.logger.info("resolveLoginAfterBrowserClose: loopback listener gone — code delivered, waiting for the SDK")
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.loginResolutionTimeout, execute: abortIfStillCurrent)
+                return
+            }
+            // Still listening: either nothing was delivered, or the code arrived and
+            // the token exchange is running with the listener briefly still up.
+            // Re-probe once before treating it as a cancel so a live exchange is
+            // never killed.
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.loopbackRecheckDelay) {
+                Self.probeListener(host: endpoint.host, port: endpoint.port) { stillListening in
+                    DispatchQueue.main.async {
+                        if stillListening {
+                            self.logger.info("resolveLoginAfterBrowserClose: loopback still waiting for the code — treating as cancelled")
+                            abortIfStillCurrent()
+                        } else {
+                            self.logger.info("resolveLoginAfterBrowserClose: code delivered late, waiting for the SDK")
+                            DispatchQueue.main.asyncAfter(deadline: .now() + Self.loginResolutionTimeout, execute: abortIfStillCurrent)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// How long to wait for the SDK's verdict once the code is known to be delivered.
+    /// Covers a first-time peer registration, which can outlast the browser session.
+    private static let loginResolutionTimeout: TimeInterval = 20
+    /// Gap between loopback probes, long enough to cover a token exchange.
+    private static let loopbackRecheckDelay: TimeInterval = 3
+
+    /// Extracts the loopback host/port the SDK told the IdP to redirect to.
+    static func loopbackEndpoint(fromAuthorizeURL urlString: String) -> (host: String, port: UInt16)? {
+        guard let components = URLComponents(string: urlString),
+              let redirect = components.queryItems?.first(where: { $0.name == "redirect_uri" })?.value,
+              let redirectComponents = URLComponents(string: redirect),
+              let host = redirectComponents.host,
+              let port = redirectComponents.port,
+              let port16 = UInt16(exactly: port)
+        else { return nil }
+        return (host, port16)
+    }
+
+    /// Reports whether something accepts TCP connections at host:port.
+    private static func probeListener(host: String, port: UInt16, completion: @escaping (Bool) -> Void) {
+        guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+            completion(false)
+            return
+        }
+        let connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
+        // Both the connection's state updates and the timeout below run here. A
+        // serial queue is what makes `settled` safe: on a concurrent queue the
+        // watchdog could run alongside a state update, and the check-then-set would
+        // let both through — cancelling twice and reporting the result twice.
+        let queue = DispatchQueue(label: "io.netbird.loopback-probe")
+        var settled = false
+        let settle: (Bool) -> Void = { listening in
+            guard !settled else { return }
+            settled = true
+            connection.cancel()
+            completion(listening)
+        }
+        connection.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                settle(true)
+            case .failed, .cancelled:
+                settle(false)
+            case .waiting:
+                // Connection refused surfaces as .waiting with a retry — for loopback
+                // that means nothing is bound.
+                settle(false)
+            default:
+                break
+            }
+        }
+        connection.start(queue: queue)
+        queue.asyncAfter(deadline: .now() + 2) { settle(false) }
     }
     #endif
 
@@ -750,6 +945,12 @@ public class NetworkExtensionAdapter: ObservableObject {
         sharedDefaults?.set(statePath,  forKey: GlobalConstants.keyWidgetActiveStatePath)
         #endif
 
+        // The extension reads the App Group copy of the managed configuration,
+        // not this app's own. Refresh it immediately before the tunnel starts,
+        // so a policy that arrived since the last activation is the one the
+        // engine applies. No-op outside the app process and on tvOS.
+        MDMPolicyFetcher.mirrorToAppGroup()
+
         guard let session = self.session else {
             logger.error("startVPNConnection: ERROR - session is nil!")
             return
@@ -778,7 +979,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         /// The rules were written to the tunnel manager.
         case applied
         /// There was nothing to arm — no manager exists yet, or no configuration to connect
-        /// with. The stored preference stands and `applyExtensionStatus` arms it after the
+        /// with. The stored preference stands and `applyStatusSideEffects` arms it after the
         /// next successful connection.
         case deferred
         /// The tunnel manager rejected the change; what is in force is still the old state.
@@ -793,6 +994,16 @@ public class NetworkExtensionAdapter: ObservableObject {
     private var requestedOnDemandState: Bool? {
         get { onDemandLock.lock(); defer { onDemandLock.unlock() }; return _requestedOnDemandState }
         set { onDemandLock.lock(); defer { onDemandLock.unlock() }; _requestedOnDemandState = newValue }
+    }
+
+    /// Set when a save fails, cleared when one succeeds. A failed save leaves the requested
+    /// values on the retained manager while the system preferences still hold the old ones,
+    /// so the manager can no longer be trusted to answer "is this already in force?". While
+    /// set, the no-write path is closed and every request writes.
+    private var _onDemandWriteFailed = false
+    private var onDemandWriteFailed: Bool {
+        get { onDemandLock.lock(); defer { onDemandLock.unlock() }; return _onDemandWriteFailed }
+        set { onDemandLock.lock(); defer { onDemandLock.unlock() }; _onDemandWriteFailed = newValue }
     }
 
     /// Updates the VPN On Demand configuration on the current manager.
@@ -851,31 +1062,89 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
 
     /// Writes the On Demand state and matching rules to the given manager.
+    ///
+    /// A request that matches what the manager already holds is answered without a write:
+    /// saveToPreferences on a configured manager makes NE emit NEVPNStatusDidChange — a
+    /// transient .disconnecting among them — and rewriting the rules of a live tunnel can
+    /// have the system reassert it. applyStatusSideEffects arms On Demand on every transition
+    /// to .connected, so an unconditional write added a spurious disconnect to every connect.
+    ///
+    /// The skip trusts the manager to reflect what the system holds, which is only true while
+    /// saves keep succeeding — hence `onDemandWriteFailed`.
     private func applyOnDemandState(_ enabled: Bool, to manager: NETunnelProviderManager, completion: ((OnDemandUpdate) -> Void)? = nil) {
-        if enabled {
-            // Build rules from saved settings
-            let rules = buildOnDemandRules()
-            if rules.isEmpty {
-                // All policies are "Do Nothing" — don't interfere with connection state
-                let ignoreRule = NEOnDemandRuleIgnore()
-                ignoreRule.interfaceTypeMatch = .any
-                manager.onDemandRules = [ignoreRule]
-            } else {
-                manager.onDemandRules = rules
-            }
-        } else {
-            manager.onDemandRules = []
+        let rules = enabled ? onDemandRulesForStoredSettings() : []
+
+        if !onDemandWriteFailed,
+           manager.isOnDemandEnabled == enabled,
+           onDemandRulesMatch(manager.onDemandRules ?? [], rules) {
+            logger.info("setOnDemandEnabled: already \(enabled ? "enabled" : "disabled") with the same rules, skipping write")
+            completion?(.applied)
+            return
         }
+
+        manager.onDemandRules = rules
         manager.isOnDemandEnabled = enabled
 
         manager.saveToPreferences { error in
-            if let error = error {
-                self.logger.error("setOnDemandEnabled: Failed to save preferences: \(error.localizedDescription)")
-                completion?(.failed(error))
-            } else {
+            guard let error = error else {
+                self.onDemandWriteFailed = false
                 self.logger.info("setOnDemandEnabled: On Demand \(enabled ? "enabled" : "disabled") successfully")
                 completion?(.applied)
+                return
             }
+
+            self.logger.error("setOnDemandEnabled: Failed to save preferences: \(error.localizedDescription)")
+            self.recoverFromFailedOnDemandWrite(on: manager) {
+                completion?(.failed(error))
+            }
+        }
+    }
+
+    /// Restores the manager to what the system actually holds after a save failed, then
+    /// reports the failure. The assignments that were not persisted stay on the retained
+    /// manager otherwise, and a reload is also what clears NEVPNError.configurationStale —
+    /// the documented cause when another process wrote the configuration in between.
+    /// The write latch stays closed until a save succeeds, so the next request writes even
+    /// if this reload fails too.
+    private func recoverFromFailedOnDemandWrite(on manager: NETunnelProviderManager, completion: @escaping () -> Void) {
+        onDemandWriteFailed = true
+        manager.loadFromPreferences { loadError in
+            if let loadError = loadError {
+                self.logger.error("setOnDemandEnabled: reload after a failed save also failed: \(loadError.localizedDescription)")
+            }
+            completion()
+        }
+    }
+
+    /// Rules to arm On Demand with, built from the persisted policies. An explicit Ignore
+    /// rule stands in for "all policies are Do Nothing" so the system does not interfere
+    /// with the connection state.
+    private func onDemandRulesForStoredSettings() -> [NEOnDemandRule] {
+        let rules = buildOnDemandRules()
+        guard rules.isEmpty else { return rules }
+
+        let ignoreRule = NEOnDemandRuleIgnore()
+        ignoreRule.interfaceTypeMatch = .any
+        return [ignoreRule]
+    }
+
+    /// Compares two rule sets by their archived form. NEOnDemandRule has no value-based
+    /// isEqual, so comparing the objects would report every freshly built set as different
+    /// and defeat the skip above. An archive that cannot be produced counts as "different",
+    /// which falls back to writing — the old, always-write behaviour.
+    private func onDemandRulesMatch(_ lhs: [NEOnDemandRule], _ rhs: [NEOnDemandRule]) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        guard let lhsData = archivedOnDemandRules(lhs),
+              let rhsData = archivedOnDemandRules(rhs) else { return false }
+        return lhsData == rhsData
+    }
+
+    private func archivedOnDemandRules(_ rules: [NEOnDemandRule]) -> Data? {
+        do {
+            return try NSKeyedArchiver.archivedData(withRootObject: rules, requiringSecureCoding: true)
+        } catch {
+            logger.debug("archivedOnDemandRules: could not archive rules: \(error.localizedDescription)")
+            return nil
         }
     }
 
@@ -1122,83 +1391,144 @@ public class NetworkExtensionAdapter: ObservableObject {
         #endif
     }
 
-    func getRoutes(completion: @escaping (RoutesSelectionDetails) -> Void) {
-        guard let session = self.session else {
-            let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
-            completion(defaultStatus)
-            return
-        }
-        
-        let messageString = "GetRoutes"
-        if let messageData = messageString.data(using: .utf8) {
-            do {
-                try session.sendProviderMessage(messageData) { response in
-                    if let response = response {
-                        do {
-                            let decodedStatus = try self.decoder.decode(RoutesSelectionDetails.self, from: response)
-                            completion(decodedStatus)
-                            return
-                        } catch {
-                            print("Failed to decode route selection details.")
-                        }
-                    } else {
-                        let defaultStatus = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
-                        completion(defaultStatus)
-                        return
-                    }
-                }
-            } catch {
-                print("Failed to send Provider message")
+    /// Why a route request never reached the core, or never came back from it.
+    ///
+    /// Every one of these means "the answer is unknown", which is categorically different
+    /// from the core answering with an empty network map. Callers must not fold the two
+    /// together: an unknown answer leaves the cached routes standing, an empty answer
+    /// replaces them.
+    enum RouteRequestError: LocalizedError {
+        /// No tunnel session to talk to — the extension is not running.
+        case noSession
+        /// The message could not be encoded, so nothing was sent.
+        case encodingFailed
+        /// `sendProviderMessage` threw; the request never left the app.
+        case sendFailed(Error)
+        /// The extension answered with no payload.
+        case emptyResponse
+        /// The extension answered with something that is not a route selection.
+        case decodingFailed(Error)
+        /// The extension never answered at all, within `routeRequestTimeout`.
+        case timedOut
+
+        var errorDescription: String? {
+            switch self {
+            case .noSession: return "No tunnel session"
+            case .encodingFailed: return "Failed to encode the request"
+            case .sendFailed(let error): return "Failed to send the request: \(error.localizedDescription)"
+            case .emptyResponse: return "No response from the extension"
+            case .decodingFailed(let error): return "Failed to decode the response: \(error.localizedDescription)"
+            case .timedOut: return "The extension did not reply in time"
             }
-        } else {
-            print("Error converting message to Data")
         }
     }
 
-    func selectRoutes(id: String, completion: @escaping (RoutesSelectionDetails) -> Void) {
-        guard let session = self.session else {
-            return
-        }
+    /// How long a route round-trip waits for the extension before it counts as failed.
+    /// Matches the bound `fetchData` puts on the status round-trip.
+    private static let routeRequestTimeout: TimeInterval = 10
 
-        let messageString = "Select-\(id)"
-        if let messageData = messageString.data(using: .utf8) {
-            do {
-                try session.sendProviderMessage(messageData) { response in
-                    let routes = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
-                    completion(routes)
-                }
-            } catch {
-                print("Failed to send Provider message")
-            }
-        } else {
-            print("Error converting message to Data")
-        }
+    /// Reads the current network map from the extension.
+    ///
+    /// The completion fires on every path, success or failure — including an extension that
+    /// never replies — because callers both reconcile optimistic UI against it and balance a
+    /// `DispatchGroup` around it. A failure carries no route list on purpose — see
+    /// `RouteRequestError`.
+    func getRoutes(completion: @escaping (Result<RoutesSelectionDetails, RouteRequestError>) -> Void) {
+        sendRouteMessage("GetRoutes", decodeResponse: true, completion: completion)
     }
 
-    func deselectRoutes(id: String, completion: @escaping (RoutesSelectionDetails) -> Void) {
-        // Callers (e.g. RoutesViewModel.selectRoute) balance a DispatchGroup enter/leave
-        // around this call, so completion must fire on every exit path or the group hangs
-        // and the pending select is never sent.
-        let routes = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
+    /// Asks the core to select `id` — a route name, or "All".
+    ///
+    /// The extension answers select/deselect with a bare acknowledgement rather than a
+    /// route list, so success carries an empty `RoutesSelectionDetails` and callers
+    /// re-read the truth with `getRoutes`. What matters here is success vs. failure:
+    /// a failure is the signal to revert an optimistic selection.
+    func selectRoutes(id: String, completion: @escaping (Result<RoutesSelectionDetails, RouteRequestError>) -> Void) {
+        sendRouteMessage("Select-\(id)", decodeResponse: false, completion: completion)
+    }
+
+    /// Asks the core to deselect `id` — a route name, or "All". Same contract as
+    /// `selectRoutes`.
+    func deselectRoutes(id: String, completion: @escaping (Result<RoutesSelectionDetails, RouteRequestError>) -> Void) {
+        sendRouteMessage("Deselect-\(id)", decodeResponse: false, completion: completion)
+    }
+
+    /// Shared body of the three route IPC calls: one exit path per failure mode, and the
+    /// completion invoked on all of them.
+    ///
+    /// - Parameter decodeResponse: `true` for reads, which need the payload; `false` for
+    ///   select/deselect, whose reply is a bare acknowledgement.
+    private func sendRouteMessage(
+        _ messageString: String,
+        decodeResponse: Bool,
+        completion: @escaping (Result<RoutesSelectionDetails, RouteRequestError>) -> Void
+    ) {
+        let acknowledgement = RoutesSelectionDetails(all: false, append: false, routeSelectionInfo: [])
 
         guard let session = self.session else {
-            completion(routes)
+            // Routine, not exceptional: views refresh the network map on appear whether or
+            // not a tunnel is up, and this is the answer that keeps a stale list from being
+            // mistaken for an empty one.
+            logger.debug("\(messageString): no tunnel session")
+            completion(.failure(.noSession))
             return
         }
 
-        let messageString = "Deselect-\(id)"
-        if let messageData = messageString.data(using: .utf8) {
-            do {
-                try session.sendProviderMessage(messageData) { response in
-                    completion(routes)
-                }
-            } catch {
-                print("Failed to send Provider message")
-                completion(routes)
+        guard let messageData = messageString.data(using: .utf8) else {
+            logger.error("\(messageString): failed to encode the message")
+            completion(.failure(.encodingFailed))
+            return
+        }
+
+        // sendProviderMessage only calls its reply handler if the extension answers. One
+        // that never does — wedged in a synchronous Go call, gone, or returning out of
+        // handleAppMessage before replying — would strand this completion, and with it the
+        // DispatchGroup RoutesViewModel.selectRoute balances around the sibling deselects:
+        // the pending select would never be sent, and the optimistic selection never
+        // reverted. Bound the wait and let exactly one outcome through, the way fetchData
+        // already does for the status round-trip.
+        var hasCompleted = false
+        let completionLock = NSLock()
+        let deliverOnce: (Result<RoutesSelectionDetails, RouteRequestError>) -> Void = { result in
+            completionLock.lock()
+            guard !hasCompleted else {
+                completionLock.unlock()
+                return
             }
-        } else {
-            print("Error converting message to Data")
-            completion(routes)
+            hasCompleted = true
+            completionLock.unlock()
+            completion(result)
+        }
+
+        let timeoutWorkItem = DispatchWorkItem { [weak self] in
+            self?.logger.error("\(messageString): no reply from the extension, giving up")
+            deliverOnce(.failure(.timedOut))
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.routeRequestTimeout, execute: timeoutWorkItem)
+
+        do {
+            try session.sendProviderMessage(messageData) { response in
+                timeoutWorkItem.cancel()
+                guard decodeResponse else {
+                    deliverOnce(.success(acknowledgement))
+                    return
+                }
+                guard let response else {
+                    self.logger.error("\(messageString): no response from the extension")
+                    deliverOnce(.failure(.emptyResponse))
+                    return
+                }
+                do {
+                    deliverOnce(.success(try self.decoder.decode(RoutesSelectionDetails.self, from: response)))
+                } catch {
+                    self.logger.error("\(messageString): failed to decode the response: \(error.localizedDescription)")
+                    deliverOnce(.failure(.decodingFailed(error)))
+                }
+            }
+        } catch {
+            timeoutWorkItem.cancel()
+            logger.error("\(messageString): failed to send the provider message: \(error.localizedDescription)")
+            deliverOnce(.failure(.sendFailed(error)))
         }
     }
     
@@ -1230,6 +1560,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
 
+    /// Requests current tunnel status, completing once even when IPC times out or fails.
     func fetchData(completion: @escaping (StatusDetails) -> Void) {
         guard !isFetchingStatus else {
             return
@@ -1249,13 +1580,17 @@ public class NetworkExtensionAdapter: ObservableObject {
         // This is to make sure completion is called only once
         let safeCompletion: (StatusDetails) -> Void = { [weak self] status in
             completionLock.lock()
-            defer { completionLock.unlock() }
-            
-            guard !hasCompleted else { return }
+            guard !hasCompleted else {
+                completionLock.unlock()
+                return
+            }
             hasCompleted = true
-            
-            self?.isFetchingStatus = false
-            completion(status)
+            completionLock.unlock()
+
+            DispatchQueue.main.async {
+                self?.isFetchingStatus = false
+                completion(status)
+            }
         }
         
         // Timeout after 10 seconds to reset fetching status to false
@@ -1297,14 +1632,16 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
     }
     
+    /// Starts status polling and delivers an immediate first result.
     func startTimer(completion: @escaping (StatusDetails) -> Void) {
         self.timer.invalidate()
         self.fetchData(completion: completion)
-        self.timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true, block: { _ in
-            self.fetchData(completion: completion)
+        self.timer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true, block: { [weak self] _ in
+            self?.fetchData(completion: completion)
         })
     }
     
+    /// Stops periodic status polling.
     func stopTimer() {
         self.timer.invalidate()
     }
@@ -1380,11 +1717,15 @@ public class NetworkExtensionAdapter: ObservableObject {
     }
     #endif
 
+    /// Loads the manager matching this build flavor and returns its connection status.
     func getExtensionStatus(completion: @escaping (NEVPNStatus) -> Void) {
         Task {
             do {
                 let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-                if let manager = managers.first(where: { $0.localizedDescription == self.extensionName }) {
+                if let manager = managers.first(where: {
+                    $0.localizedDescription == self.extensionName &&
+                    ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == self.extensionID
+                }) {
                     completion(manager.connection.status)
                 } else {
                     // No VPN manager exists yet (e.g. first connect before the iOS permission

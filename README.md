@@ -144,7 +144,9 @@ failing authentication also clears it. The app displays this state as “Reconne
 and keeps the disconnect control available. Wake events refresh connections even
 when the addresses are unchanged, as recommended by [Apple’s wake documentation](https://developer.apple.com/documentation/networkextension/neprovider/wake()).
 The sweep includes direct ICE agents as well as management, signal and relay
-connections. Startup delegates authentication to the engine; an unreachable
+connections. Repeated changes share a bounded cleanup window so continuous
+flapping cannot postpone recovery indefinitely. Policy restarts interrupted by
+an outage resume when the physical network returns. Startup delegates authentication to the engine; an unreachable
 management server does not by itself mean credentials expired.
 
 “Connected” reflects management/signal connectivity, not proof that every peer
@@ -178,7 +180,7 @@ validate carrier handovers or live VPN traffic.
 
 ### Firebase Configuration (Optional)
 
-The app supports Firebase for analytics and crash reporting. To enable it, add your `GoogleService-Info.plist` file to the project root. The app will work without Firebase configuration. For a local device build without Firebase, omit this file from the targets’ Copy Bundle Resources phases. Do not bundle the CI test placeholder: tests skip Firebase initialization, but a normal app launch rejects its dummy API key and crashes.
+The app supports Firebase for analytics and crash reporting. To enable it, add your `GoogleService-Info.plist` file to the project root. The app will work without Firebase configuration. For a local device build without Firebase, omit this file from the targets’ Copy Bundle Resources phases. The CI test placeholder is not a production Firebase configuration. Startup skips missing or invalid Firebase settings; unit tests also skip Firebase initialization.
 
 ## Other project repositories
 
