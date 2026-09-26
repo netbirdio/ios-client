@@ -574,6 +574,10 @@ class ViewModel: ObservableObject {
             connectPressed = false
             disconnectPressed = false
             newState = .connected
+        case .reasserting:
+            connectPressed = false
+            disconnectPressed = false
+            newState = .connecting
         case .connecting:
             // A connecting extension after a disconnect request represents an On Demand
             // reconnect, so the stale disconnect intent must no longer override it.
@@ -621,7 +625,7 @@ class ViewModel: ObservableObject {
         case .connected:
             extensionStateText = isInternetConnected ? "Connected" : "Offline"
         case .connecting:
-            extensionStateText = "Connecting..."
+            extensionStateText = extensionState == .reasserting ? "Reconnecting..." : "Connecting..."
         case .disconnecting:
             extensionStateText = "Disconnecting..."
         case .disconnected:
@@ -743,8 +747,8 @@ class ViewModel: ObservableObject {
 
     /// Applies a newly loaded extension status and updates dependent UI state.
     /// - Parameter status: The current status reported by Network Extension.
-    private func applyExtensionStatus(_ status: NEVPNStatus) {
-        let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .disconnecting]
+    func applyExtensionStatus(_ status: NEVPNStatus) {
+        let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .reasserting, .disconnecting]
         guard knownStatuses.contains(status) else { return }
 
         let priorState = extensionState
