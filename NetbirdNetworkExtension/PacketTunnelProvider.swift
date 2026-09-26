@@ -560,6 +560,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
+        // MDM is the only completion owner: updates coalesce to the latest
+        // policy, so recovery publishes one policy-applied notification.
         if let onRestarted { restartCompletion = onRestarted }
 
         if isRestartInProgress {

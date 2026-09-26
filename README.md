@@ -134,7 +134,8 @@ git commit -m "update netbird submodule to v0.x.y"
 
 Network changes are sent to the Go SDK's network event manager, which suspends
 retries while offline and refreshes stale connections after a handover. The iOS
-extension observes physical interfaces, addresses, gateways, IP-family availability
+extension observes physical interfaces, IPv4 addresses, IPv6 network prefixes,
+gateways, IP-family availability
 and the active data SIM;
 a SIM switch can retain the same cellular interface. Paths marked
 `requiresConnection` allow dialing so the connection can activate the network.

@@ -8,6 +8,31 @@ final class NetworkReconnectionStateTests: XCTestCase {
     private let simA = UnderlyingNetwork(interfaces: ["pdp_ip0:2"], dataServiceIdentifier: "A")
     private let simB = UnderlyingNetwork(interfaces: ["pdp_ip0:2"], dataServiceIdentifier: "B")
 
+    func testIPv6PrivacyRotationDoesNotChangeNetworkIdentity() throws {
+        let mask = try XCTUnwrap(IPv6Address("ffff:ffff:ffff:ffff::"))
+        let old = try XCTUnwrap(UnderlyingNetwork.ipv6NetworkIdentity(
+            XCTUnwrap(IPv6Address("2001:db8:1:2::1234")), netmask: mask))
+        let new = try XCTUnwrap(UnderlyingNetwork.ipv6NetworkIdentity(
+            XCTUnwrap(IPv6Address("2001:db8:1:2::5678")), netmask: mask))
+        XCTAssertEqual(old, new)
+        var state = NetworkReconnectionState()
+        _ = state.update(UnderlyingNetwork(interfaces: ["en0:1"], addresses: [old, new]))
+        XCTAssertNil(state.update(UnderlyingNetwork(interfaces: ["en0:1"], addresses: [new])))
+        let changed = try XCTUnwrap(UnderlyingNetwork.ipv6NetworkIdentity(
+            XCTUnwrap(IPv6Address("2001:db8:1:3::5678")), netmask: mask))
+        XCTAssertTrue(try XCTUnwrap(state.update(UnderlyingNetwork(interfaces: ["en0:1"], addresses: [changed]))).networkChanged)
+    }
+
+    func testIPv6IdentityUsesActualPrefixLength() throws {
+        let mask = try XCTUnwrap(IPv6Address("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"))
+        let first = try XCTUnwrap(UnderlyingNetwork.ipv6NetworkIdentity(
+            XCTUnwrap(IPv6Address("2001:db8::1")), netmask: mask))
+        let second = try XCTUnwrap(UnderlyingNetwork.ipv6NetworkIdentity(
+            XCTUnwrap(IPv6Address("2001:db8::2")), netmask: mask))
+        XCTAssertNotEqual(first, second)
+        XCTAssertTrue(first.hasSuffix("/128"))
+    }
+
     func testInitialPathSetsAvailabilityWithoutRefreshingConnections() throws {
         var state = NetworkReconnectionState()
         XCTAssertFalse(try XCTUnwrap(state.update(simA)).networkChanged)

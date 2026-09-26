@@ -14,11 +14,19 @@ struct UnderlyingNetwork: Equatable {
 
     init(interfaces: [String], addresses: [String] = [], gateways: [String] = [], supportsIPv4: Bool = true, supportsIPv6: Bool = true, dataServiceIdentifier: String? = nil) {
         self.interfaces = interfaces.sorted()
-        self.addresses = addresses.sorted()
+        self.addresses = Array(Set(addresses)).sorted()
         self.gateways = gateways.sorted()
         self.supportsIPv4 = supportsIPv4
         self.supportsIPv6 = supportsIPv6
         self.dataServiceIdentifier = dataServiceIdentifier
+    }
+
+    /// Uses the interface netmask, rather than assuming every IPv6 link is /64.
+    static func ipv6NetworkIdentity(_ address: IPv6Address, netmask: IPv6Address) -> String? {
+        let bytes = zip(address.rawValue, netmask.rawValue).map { $0 & $1 }
+        guard let prefix = IPv6Address(Data(bytes)) else { return nil }
+        let prefixLength = netmask.rawValue.reduce(0) { $0 + $1.nonzeroBitCount }
+        return "\(prefix)/\(prefixLength)"
     }
 
     init(path: NWPath, dataServiceIdentifier: String?) {
@@ -42,6 +50,21 @@ struct UnderlyingNetwork: Equatable {
                 guard names.contains(String(cString: entry.pointee.ifa_name)),
                       let address = entry.pointee.ifa_addr,
                       address.pointee.sa_family == AF_INET || address.pointee.sa_family == AF_INET6 else { continue }
+                if address.pointee.sa_family == AF_INET6 {
+                    // Privacy addresses rotate on the same network. Compare the
+                    // advertised prefix instead of reconnecting for each host ID.
+                    guard let mask = entry.pointee.ifa_netmask,
+                          mask.pointee.sa_family == AF_INET6 else { continue }
+                    var ipv6 = UnsafeRawPointer(address).assumingMemoryBound(to: sockaddr_in6.self).pointee.sin6_addr
+                    var netmask = UnsafeRawPointer(mask).assumingMemoryBound(to: sockaddr_in6.self).pointee.sin6_addr
+                    let addressData = withUnsafeBytes(of: &ipv6) { Data($0) }
+                    let maskData = withUnsafeBytes(of: &netmask) { Data($0) }
+                    guard let ipv6Address = IPv6Address(addressData),
+                          let ipv6Mask = IPv6Address(maskData),
+                          let prefix = Self.ipv6NetworkIdentity(ipv6Address, netmask: ipv6Mask) else { continue }
+                    addresses.append("\(String(cString: entry.pointee.ifa_name)):\(prefix)")
+                    continue
+                }
                 var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                 if getnameinfo(address, socklen_t(address.pointee.sa_len), &host,
                                socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 {
@@ -49,7 +72,7 @@ struct UnderlyingNetwork: Equatable {
                 }
             }
         }
-        self.addresses = addresses.sorted()
+        self.addresses = Array(Set(addresses)).sorted()
     }
 }
 
