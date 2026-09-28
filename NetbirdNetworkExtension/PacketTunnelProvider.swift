@@ -504,8 +504,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         isInitialStartInFlight = false
     }
 
+    enum NetworkChangeSource: String {
+        case path, dataSIM, wake
+    }
+
     /// Publishes physical network changes without restarting the engine. Runs on monitorQueue.
-    func handleNetworkChange(path: Network.NWPath, forceRefresh: Bool = false) {
+    func handleNetworkChange(path: Network.NWPath, source: NetworkChangeSource = .path) {
         guard reconnection.isActive else { return }
         let available = NetworkReconnectionState.allowsConnectionAttempts(path.status)
         latestPathIsSatisfied = available
@@ -515,8 +519,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let service: String? = nil
         #endif
         let network = available ? UnderlyingNetwork(path: path, dataServiceIdentifier: service) : nil
-        guard let change = reconnection.update(network, forceRefresh: forceRefresh) else { return }
-        AppLogger.shared.log("Network path: available=\(available), interfaces=\(network?.interfaces ?? []), changed=\(change.networkChanged)")
+        guard let change = reconnection.update(network) else {
+            AppLogger.shared.log("Network event: source=\(source.rawValue), available=\(available), unchanged; preserving connections")
+            return
+        }
+        AppLogger.shared.log("Network event: source=\(source.rawValue), reason=\(change.reason.rawValue), available=\(available), interfaces=\(network?.interfaces ?? []), refresh=\(change.networkChanged)")
         adapter?.isNetworkUnavailable = !available
         if !available {
             // Reflect path loss immediately; the SDK also reports reconnecting.
@@ -1034,9 +1041,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     override func wake() {
         monitorQueue.async { [weak self] in
             guard let self, self.reconnection.isActive, let monitor = self.pathMonitor else { return }
-            // Addresses can stay unchanged while NAT mappings and sockets expire
-            // during sleep. Refresh through the same coalesced sweep as a handover.
-            self.handleNetworkChange(path: monitor.currentPath, forceRefresh: true)
+            // Wake alone does not prove sockets are stale. Reconcile the path,
+            // preserving healthy connections and leaving liveness to the core.
+            self.handleNetworkChange(path: monitor.currentPath, source: .wake)
         }
     }
 
@@ -1278,7 +1285,7 @@ extension PacketTunnelProvider: CTTelephonyNetworkInfoDelegate {
         // queue rather than trusting a potentially superseded callback argument.
         monitorQueue.async { [weak self] in
             guard let self, let monitor = self.pathMonitor else { return }
-            self.handleNetworkChange(path: monitor.currentPath)
+            self.handleNetworkChange(path: monitor.currentPath, source: .dataSIM)
         }
     }
 }

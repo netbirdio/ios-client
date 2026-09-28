@@ -81,7 +81,11 @@ struct UnderlyingNetwork: Equatable {
 /// belongs to the Go core's network event manager.
 struct NetworkReconnectionState {
     struct Change {
-        let networkChanged: Bool
+        enum Reason: String {
+            case initial, unavailable, recovered, changed
+        }
+        let reason: Reason
+        var networkChanged: Bool { reason == .recovered || reason == .changed }
     }
 
     let sessionID = UUID()
@@ -91,14 +95,23 @@ struct NetworkReconnectionState {
     private var hasInitialPath = false
     private var network: UnderlyingNetwork?
 
-    mutating func update(_ next: UnderlyingNetwork?, forceRefresh: Bool = false) -> Change? {
-        guard isActive, forceRefresh || !hasInitialPath || network != next else { return nil }
+    mutating func update(_ next: UnderlyingNetwork?) -> Change? {
+        guard isActive, !hasInitialPath || network != next else { return nil }
         // The first satisfied path establishes a baseline. Returning from an
         // observed outage must refresh connections even on the same interface/SIM.
-        let changed = (forceRefresh || hasInitialPath) && next != nil
+        let reason: Change.Reason
+        if !hasInitialPath {
+            reason = .initial
+        } else if next == nil {
+            reason = .unavailable
+        } else if network == nil {
+            reason = .recovered
+        } else {
+            reason = .changed
+        }
         hasInitialPath = true
         network = next
-        return Change(networkChanged: changed)
+        return Change(reason: reason)
     }
 
     static func allowsConnectionAttempts(_ status: Network.NWPath.Status) -> Bool {

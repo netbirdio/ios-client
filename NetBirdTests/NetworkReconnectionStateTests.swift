@@ -191,15 +191,47 @@ final class NetworkReconnectionStateTests: XCTestCase {
         XCTAssertEqual(first, second)
     }
 
-    func testWakeRefreshesUnchangedPathButNeverDialsOfflineOrAfterStop() throws {
+    func testRepeatedWakePreservesHealthyConnections() {
         var state = NetworkReconnectionState()
         _ = state.update(wifi)
-        XCTAssertTrue(try XCTUnwrap(state.update(wifi, forceRefresh: true)).networkChanged)
-        XCTAssertNil(state.update(wifi))
-        XCTAssertFalse(try XCTUnwrap(state.update(nil, forceRefresh: true)).networkChanged)
-        XCTAssertTrue(try XCTUnwrap(state.update(wifi)).networkChanged)
+        state.connectionChanged(.connected)
+        for _ in 0..<24 {
+            XCTAssertNil(state.update(wifi), "An unchanged wake must not sweep healthy connections")
+        }
+        XCTAssertFalse(state.isReasserting)
+    }
+
+    func testWakeReconcilesChangedPathAndOfflineRecovery() throws {
+        var state = NetworkReconnectionState()
+        _ = state.update(wifi)
+        XCTAssertEqual(try XCTUnwrap(state.update(simA)).reason, .changed)
+        XCTAssertEqual(try XCTUnwrap(state.update(nil)).reason, .unavailable)
+        XCTAssertNil(state.update(nil))
+        XCTAssertEqual(try XCTUnwrap(state.update(simA)).reason, .recovered)
+        XCTAssertNil(state.update(simA))
         state.stop()
-        XCTAssertNil(state.update(wifi, forceRefresh: true))
+        XCTAssertNil(state.update(wifi))
+    }
+
+    func testCallOnOtherSIMAndReturnRefreshOncePerTransition() throws {
+        for hasOutage in [false, true] {
+            var state = NetworkReconnectionState()
+            _ = state.update(simA)
+            state.connectionChanged(.connected)
+            for next in [simB, simA] {
+                if hasOutage {
+                    XCTAssertFalse(try XCTUnwrap(state.update(nil)).networkChanged)
+                    state.connectionChanged(.connecting)
+                    XCTAssertTrue(state.isReasserting)
+                }
+                XCTAssertTrue(try XCTUnwrap(state.update(next)).networkChanged)
+                // Path, telephony and wake callbacks can report the same handover.
+                XCTAssertNil(state.update(next))
+                XCTAssertNil(state.update(next))
+                state.connectionChanged(.connected)
+                XCTAssertFalse(state.isReasserting)
+            }
+        }
     }
 
     @MainActor

@@ -142,13 +142,15 @@ a SIM switch can retain the same cellular interface. Paths marked
 After initial connection, confirmed path loss or SDK reconnect callbacks set iOS's
 `reasserting` status; SDK connection success clears it. Stopping the tunnel or
 failing authentication also clears it. The app displays this state as “Reconnecting…”
-and keeps the disconnect control available. Wake events refresh connections even
-when the addresses are unchanged, as recommended by [Apple’s wake documentation](https://developer.apple.com/documentation/networkextension/neprovider/wake()).
-The sweep includes direct ICE agents as well as management, signal and relay
-connections. Repeated changes share a bounded cleanup window so continuous
-flapping cannot postpone recovery indefinitely. Policy restarts interrupted by
-an outage resume when the physical network returns. Startup delegates authentication to the engine; an unreachable
-management server does not by itself mean credentials expired.
+and keeps the disconnect control available. Wake reconciles the current physical
+path without forcing a refresh when it is unchanged. Healthy sockets stay open;
+the core's normal liveness checks recover connections that actually expired.
+
+The companion core changes also invalidate stale direct ICE connections, alongside
+management, signal and relay connections. They bound the cleanup window so a
+stream of real network changes cannot postpone recovery indefinitely.
+Policy restarts interrupted by an outage resume when the physical network returns.
+Extension startup delegates authentication to the engine.
 
 “Connected” reflects management/signal connectivity, not proof that every peer
 or routed resource is reachable. Verify actual traffic in the checks below.
@@ -160,18 +162,23 @@ dual-SIM iPhone:
 1. Connect the VPN and continuously access a private peer or routed resource.
 2. With Wi-Fi disabled, switch Cellular Data from SIM A to SIM B and back. Repeat
    with Allow Cellular Data Switching enabled and the app in the background.
+   Receive a regular voice call on the non-data SIM, keep traffic running, then
+   end the call and verify recovery as data returns to the original SIM. Repeat
+   with switching disabled: an outage during the call is expected, but recovery
+   after the call must not require toggling the VPN.
 3. Test Wi-Fi → cellular → Wi-Fi and airplane mode → recovery on the same SIM.
 4. Repeat with an exit node selected; verify both private and Internet traffic recover.
 5. Switch between two Wi-Fi networks, including networks with the same local
    subnet; test IPv6-only/NAT64 and dual-stack networks.
 6. Lock the phone, let it sleep, then wake on the same and on a different network.
+   Repeated wakes on an unchanged path must not cause network-change sweeps.
 7. Start from the widget/On Demand while offline, restore connectivity, and verify
    recovery without a login prompt. Separately verify that genuinely expired
    credentials still trigger login and remove the tunnel routes.
 8. Disconnect the VPN during a handover and verify it stays disconnected with
    On Demand disabled.
 
-Check the extension log for `Network path:` and the core's
+Check the extension log for `Network event:` and the core's
 `network change: connections marked stale` messages. Simulator tests cannot
 validate carrier handovers or live VPN traffic.
 
@@ -191,3 +198,7 @@ NetBird project is composed of multiple repositories:
 - Documentations: https://github.com/netbirdio/docs, contains the documentation from https://netbird.io/docs
 - Android Client: https://github.com/netbirdio/android-client
 - iOS/tvOS Client: https://github.com/netbirdio/ios-client (this repository)
+
+Network events include their source (`path`, `dataSIM`, or `wake`) and whether
+they were unchanged, initial, unavailable, recovered, or changed. AppLogger adds
+timestamps; no SIM identifiers or address values are added to these diagnostics.
