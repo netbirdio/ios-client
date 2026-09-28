@@ -275,16 +275,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         adapter.start(onConnectionChanged: { [weak self] state in
             self?.monitorQueue.async {
-                guard let self, self.reconnection.isActive,
-                      self.reconnection.sessionID == sessionID,
-                      self.restartGeneration == engineGeneration else { return }
+                guard let self, self.reconnection.acceptsCallback(
+                    sessionID: sessionID, engineGeneration: engineGeneration,
+                    currentEngineGeneration: self.restartGeneration) else { return }
                 self.reconnection.connectionChanged(state)
                 self.reasserting = self.reconnection.isReasserting
             }
         }) { [weak self] error in
             self?.monitorQueue.async {
-                guard let self, self.reconnection.isActive,
-                      self.reconnection.sessionID == sessionID else { return }
+                guard let self, self.reconnection.acceptsCallback(
+                    sessionID: sessionID, engineGeneration: engineGeneration,
+                    currentEngineGeneration: self.restartGeneration) else { return }
                 self.endInitialStart()
                 let initialCompletion = self.completeTunnelStart(with: error)
                 if let error {
@@ -702,6 +703,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     // A restart that finished into a teardown has not put any
                     // policy into force, so it must not report that it did.
                     if self.isCurrentGeneration(lifecycle) {
+                        // A policy restart may replace a still-pending initial start
+                        // after its guard expires. Only the replacement may finish it.
+                        self.endInitialStart()
+                        self.completeTunnelStart(with: nil)
                         let completion = self.restartCompletion
                         self.restartCompletion = nil
                         completion?()

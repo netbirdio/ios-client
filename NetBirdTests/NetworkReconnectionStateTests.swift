@@ -234,6 +234,18 @@ final class NetworkReconnectionStateTests: XCTestCase {
         }
     }
 
+    func testInitialEngineCallbacksLoseOwnershipAfterReplacement() {
+        var state = NetworkReconnectionState()
+        let session = state.sessionID
+        XCTAssertTrue(state.acceptsCallback(sessionID: session, engineGeneration: 1, currentEngineGeneration: 1))
+        // Delayed success and error completions use the same ownership gate.
+        XCTAssertFalse(state.acceptsCallback(sessionID: session, engineGeneration: 1, currentEngineGeneration: 2))
+        XCTAssertTrue(state.acceptsCallback(sessionID: session, engineGeneration: 2, currentEngineGeneration: 2))
+        XCTAssertFalse(state.acceptsCallback(sessionID: UUID(), engineGeneration: 2, currentEngineGeneration: 2))
+        state.stop()
+        XCTAssertFalse(state.acceptsCallback(sessionID: session, engineGeneration: 2, currentEngineGeneration: 2))
+    }
+
     @MainActor
     func testAppAcceptsReassertingAndDisplaysReconnecting() {
         let model = ViewModel()

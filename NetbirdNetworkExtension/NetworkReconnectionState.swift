@@ -127,6 +127,11 @@ struct NetworkReconnectionState {
         }
     }
 
+    /// Both connection events and start completions belong to one engine in one tunnel session.
+    func acceptsCallback(sessionID: UUID, engineGeneration: UInt64, currentEngineGeneration: UInt64) -> Bool {
+        isActive && self.sessionID == sessionID && engineGeneration == currentEngineGeneration
+    }
+
     mutating func connectionChanged(_ state: ClientState) {
         guard isActive else { return }
         if state == .connected { hasConnected = true }
