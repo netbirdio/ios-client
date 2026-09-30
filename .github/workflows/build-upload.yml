@@ -183,7 +183,6 @@ jobs:
 
           # Read netbird submodule info
           NETBIRD_COMMIT=$(cd netbird-core && git rev-parse --short HEAD)
-          NETBIRD_DESCRIBE=$(cd netbird-core && git describe --tags --match 'v[0-9]*' --exclude '*-*' 2>/dev/null || echo "none")
 
           echo "========================================="
           echo "  Project MARKETING_VERSION: $MARKETING_VERSION"
@@ -194,7 +193,6 @@ jobs:
           echo "  Final build number: ${{ steps.settings.outputs.build-number }}"
           echo "  Final version args: ${{ steps.settings.outputs.version-args }}"
           echo "  Netbird submodule commit: $NETBIRD_COMMIT"
-          echo "  Netbird submodule describe: $NETBIRD_DESCRIBE"
           echo "  Git ref: ${{ inputs.ref }}"
           echo "  Run number: ${GITHUB_RUN_NUMBER}"
           echo "========================================="
