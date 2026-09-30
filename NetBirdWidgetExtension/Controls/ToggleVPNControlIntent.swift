@@ -25,8 +25,7 @@ struct VPNControlIntent: AppIntent {
 
         switch status {
         case .disconnected, .invalid:
-            guard let session = first.connection as? NETunnelProviderSession else { break }
-            try VPNIntentHelpers.startTunnel(session: session)
+            try await VPNIntentHelpers.startTunnel(manager: first)
         case .connected, .connecting:
             first.connection.stopVPNTunnel()
         default:

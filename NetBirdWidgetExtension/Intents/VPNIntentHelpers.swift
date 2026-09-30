@@ -23,6 +23,24 @@ enum VPNIntentHelpers {
         defaults?.bool(forKey: WidgetConstants.keyLoginRequired) ?? false
     }
 
+    /// Enables the NetBird configuration if the system disabled it, which happens
+    /// whenever another VPN app was used since the last NetBird connection.
+    /// Starting a disabled configuration fails with `configurationDisabled`.
+    static func enableIfNeeded(manager: NETunnelProviderManager) async throws {
+        guard !manager.isEnabled else { return }
+        manager.isEnabled = true
+        try await manager.saveToPreferences()
+        // A saved manager must be reloaded before its tunnel can be started.
+        try await manager.loadFromPreferences()
+    }
+
+    /// Enables the configuration if needed, then starts the tunnel.
+    static func startTunnel(manager: NETunnelProviderManager) async throws {
+        try await enableIfNeeded(manager: manager)
+        guard let session = manager.connection as? NETunnelProviderSession else { return }
+        try startTunnel(session: session)
+    }
+
     /// Starts the VPN tunnel with the active profile paths so PacketTunnelProvider
     /// can locate the correct config file even when the main app is not running.
     /// Returns an error if startVPNTunnel fails (callers should handle/log it).
