@@ -37,7 +37,9 @@ enum VPNIntentHelpers {
     /// Enables the configuration if needed, then starts the tunnel.
     static func startTunnel(manager: NETunnelProviderManager) async throws {
         try await enableIfNeeded(manager: manager)
-        guard let session = manager.connection as? NETunnelProviderSession else { return }
+        guard let session = manager.connection as? NETunnelProviderSession else {
+            throw NEVPNError(.configurationInvalid)
+        }
         try startTunnel(session: session)
     }
 
