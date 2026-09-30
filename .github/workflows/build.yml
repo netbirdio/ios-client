@@ -41,10 +41,15 @@ jobs:
           # sha already captures.
           key: netbirdsdk-ios-${{ steps.core-sha.outputs.sha }}-${{ hashFiles('ios-client/build-go-lib.sh') }}-xcode-26.1.1
 
-      - name: Fetch netbird tags
+      - name: Fetch netbird history and tags
         if: steps.sdk-cache.outputs.cache-hit != 'true'
         working-directory: ios-client/netbird-core
-        run: git fetch --tags
+        run: |
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --unshallow --tags
+          else
+            git fetch --tags
+          fi
 
       - name: Setup Go
         if: steps.sdk-cache.outputs.cache-hit != 'true'
@@ -178,10 +183,15 @@ jobs:
           # already captures.
           key: netbirdsdk-tvos-${{ steps.core-sha.outputs.sha }}-${{ hashFiles('ios-client/build-go-lib.sh') }}-xcode-26.1.1
 
-      - name: Fetch netbird tags
+      - name: Fetch netbird history and tags
         if: steps.sdk-cache.outputs.cache-hit != 'true'
         working-directory: ios-client/netbird-core
-        run: git fetch --tags
+        run: |
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --unshallow --tags
+          else
+            git fetch --tags
+          fi
 
       - name: Setup Go
         if: steps.sdk-cache.outputs.cache-hit != 'true'

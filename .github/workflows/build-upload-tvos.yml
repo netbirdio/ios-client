@@ -45,9 +45,14 @@ jobs:
           path: ios-client
           submodules: recursive
 
-      - name: Fetch netbird tags
+      - name: Fetch netbird history and tags
         working-directory: ios-client/netbird-core
-        run: git fetch --tags
+        run: |
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --unshallow --tags
+          else
+            git fetch --tags
+          fi
 
       - name: Setup Go
         uses: actions/setup-go@v5
