@@ -27,9 +27,8 @@ struct ConnectVPNIntent: AppIntent {
         VPNIntentHelpers.defaults?.set(WidgetVPNStatus.connecting.rawValue, forKey: WidgetConstants.keyVPNStatus)
         WidgetCenter.shared.reloadAllTimelines()
 
-        let session = manager.connection as? NETunnelProviderSession
         do {
-            try session?.startVPNTunnel()
+            try await VPNIntentHelpers.startTunnel(manager: manager)
         } catch {
             VPNIntentHelpers.defaults?.set(WidgetVPNStatus.disconnected.rawValue, forKey: WidgetConstants.keyVPNStatus)
             WidgetCenter.shared.reloadAllTimelines()

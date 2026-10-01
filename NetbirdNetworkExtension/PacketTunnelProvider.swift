@@ -1141,6 +1141,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let delay: TimeInterval = (status == "connected") ? 1.0 : 0.0
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             WidgetCenter.shared.reloadAllTimelines()
+            // The app is often not running when another VPN takes over, so the
+            // Control Center toggle would keep showing NetBird as connected.
+            if #available(iOS 18.0, *) {
+                ControlCenter.shared.reloadControls(ofKind: "io.netbird.vpn.control")
+            }
         }
     }
 

@@ -25,11 +25,7 @@ struct SetVPNStateIntent: SetValueIntent {
         }
 
         if value {
-            guard let session = manager.connection as? NETunnelProviderSession else {
-                await reload()
-                return .result()
-            }
-            try VPNIntentHelpers.startTunnel(session: session)
+            try await VPNIntentHelpers.startTunnel(manager: manager)
         } else {
             manager.connection.stopVPNTunnel()
         }
