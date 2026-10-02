@@ -156,7 +156,7 @@ struct ExitNodeSelectorCard: View {
         // first and last rows) while also disabling scrolling. Sizing the frame itself
         // keeps short lists snug and lets longer ones scroll.
         .frame(height: dropdownHeight)
-        .frame(width: UIScreen.main.bounds.width - 32)
+        .frame(maxWidth: .infinity)
         .background(Color("BgMenu"))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color("TextSecondary").opacity(0.2)))
