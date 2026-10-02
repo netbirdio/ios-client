@@ -33,7 +33,7 @@ on:
         description: 'testflight = App Store Connect upload, artifact = development-signed IPA artifact'
 
 concurrency:
-  group: build-upload-${{ inputs.ref }}
+  group: build-upload-${{ github.workflow }}-${{ inputs.ref }}
   cancel-in-progress: true
 
 permissions:
