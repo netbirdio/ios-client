@@ -94,7 +94,12 @@ struct iOSConnectionView: View {
                                         Divider().background(Color("TextSecondary").opacity(0.2))
                                         addressRow(value: viewModel.ipv6, copied: $ipv6Copied)
                                     }
-                                    .frame(width: UIScreen.main.bounds.width - 92)
+                                    // Intrinsic, not tied to the screen or column: this is a
+                                    // popover-style overlay showing two short address values,
+                                    // so per HIG it should be "only big enough to display its
+                                    // contents" — the floor just keeps it from looking cramped
+                                    // when a value is a short placeholder like "—".
+                                    .frame(minWidth: 200)
                                     .background(Color("BgMenu"))
                                     .clipShape(RoundedRectangle(cornerRadius: 10))
                                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color("TextSecondary").opacity(0.2)))
@@ -130,6 +135,7 @@ struct iOSConnectionView: View {
                     .padding(.bottom, 16)
                     .animation(.easeInOut(duration: 0.3), value: viewModel.isInternetConnected)
                 }
+                .readableWidth()
 
                 NavigationLink("", destination: ProfilesListView(), isActive: $viewModel.navigateToProfilesView)
                     .hidden()
