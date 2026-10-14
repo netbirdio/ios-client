@@ -146,11 +146,10 @@ and keeps the disconnect control available. Wake reconciles the current physical
 path without forcing a refresh when it is unchanged. Healthy sockets stay open;
 the core's normal liveness checks recover connections that actually expired.
 
-The companion core changes also invalidate stale direct ICE connections, alongside
-management, signal and relay connections. They bound the cleanup window so a
-stream of real network changes cannot postpone recovery indefinitely.
+The existing core sweep refreshes management, signal and relay connections.
+ICE/P2P cleanup and the sweep timing are unchanged; P2P is disabled by default
+on mobile to limit battery usage.
 Policy restarts interrupted by an outage resume when the physical network returns.
-Extension startup delegates authentication to the engine.
 
 “Connected” reflects management/signal connectivity, not proof that every peer
 or routed resource is reachable. Verify actual traffic in the checks below.
@@ -172,9 +171,8 @@ dual-SIM iPhone:
    subnet; test IPv6-only/NAT64 and dual-stack networks.
 6. Lock the phone, let it sleep, then wake on the same and on a different network.
    Repeated wakes on an unchanged path must not cause network-change sweeps.
-7. Start from the widget/On Demand while offline, restore connectivity, and verify
-   recovery without a login prompt. Separately verify that genuinely expired
-   credentials still trigger login and remove the tunnel routes.
+7. Verify that genuinely expired credentials still trigger login and remove
+   the tunnel routes. Offline startup authentication is a separate change.
 8. Disconnect the VPN during a handover and verify it stays disconnected with
    On Demand disabled.
 
