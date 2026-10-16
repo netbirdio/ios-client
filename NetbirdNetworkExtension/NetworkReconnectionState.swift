@@ -136,7 +136,7 @@ struct NetworkReconnectionState {
         guard isActive else { return }
         if state == .connected { hasConnected = true }
         // Initial startup and terminal disconnection are not reassertion.
-        isReasserting = hasConnected && state == .connecting
+        isReasserting = hasConnected && (state == .connecting || state == .noNetwork)
     }
 
     mutating func stop() {

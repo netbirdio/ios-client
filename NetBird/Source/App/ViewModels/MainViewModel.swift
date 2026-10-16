@@ -625,7 +625,8 @@ class ViewModel: ObservableObject {
         case .connected:
             extensionStateText = isInternetConnected ? "Connected" : "Offline"
         case .connecting:
-            extensionStateText = extensionState == .reasserting ? "Reconnecting..." : "Connecting..."
+            extensionStateText = managementStatus == .noNetwork ? "No network" :
+                (extensionState == .reasserting ? "Reconnecting..." : "Connecting...")
         case .disconnecting:
             extensionStateText = "Disconnecting..."
         case .disconnected:

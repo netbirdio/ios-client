@@ -1,12 +1,35 @@
 import XCTest
 import Network
 import NetworkExtension
+import NetBirdSDK
 @testable import NetBird
 
 final class NetworkReconnectionStateTests: XCTestCase {
     private let wifi = UnderlyingNetwork(interfaces: ["en0:1"])
     private let simA = UnderlyingNetwork(interfaces: ["pdp_ip0:2"], dataServiceIdentifier: "A")
     private let simB = UnderlyingNetwork(interfaces: ["pdp_ip0:2"], dataServiceIdentifier: "B")
+
+    func testSDKStatesPreserveNetworkLoss() {
+        XCTAssertEqual(ClientState(sdkState: NetBirdSDKClientStateNoNetwork), .noNetwork)
+        XCTAssertEqual(ClientState(sdkState: NetBirdSDKClientStateConnecting), .connecting)
+        XCTAssertEqual(ClientState(sdkState: NetBirdSDKClientStateConnected), .connected)
+        XCTAssertEqual(ClientState(sdkState: NetBirdSDKClientStateDisconnected), .disconnected)
+        XCTAssertEqual(ClientState(sdkState: NetBirdSDKClientStateDisconnecting), .disconnecting)
+        XCTAssertNil(ClientState(sdkState: -1))
+    }
+
+    func testNetworkLossReassertsUntilConnected() {
+        var state = NetworkReconnectionState()
+        state.connectionChanged(.noNetwork)
+        XCTAssertFalse(state.isReasserting)
+        state.connectionChanged(.connected)
+        state.connectionChanged(.noNetwork)
+        XCTAssertTrue(state.isReasserting)
+        state.connectionChanged(.connecting)
+        XCTAssertTrue(state.isReasserting)
+        state.connectionChanged(.connected)
+        XCTAssertFalse(state.isReasserting)
+    }
 
     func testIPv6PrivacyRotationDoesNotChangeNetworkIdentity() throws {
         let mask = try XCTUnwrap(IPv6Address("ffff:ffff:ffff:ffff::"))
@@ -244,6 +267,18 @@ final class NetworkReconnectionStateTests: XCTestCase {
         XCTAssertFalse(state.acceptsCallback(sessionID: UUID(), engineGeneration: 2, currentEngineGeneration: 2))
         state.stop()
         XCTAssertFalse(state.acceptsCallback(sessionID: session, engineGeneration: 2, currentEngineGeneration: 2))
+    }
+
+    @MainActor
+    func testAppDistinguishesNoNetworkFromReconnecting() {
+        let model = ViewModel()
+        model.managementStatus = .noNetwork
+        model.applyExtensionStatus(.reasserting)
+        XCTAssertEqual(model.vpnDisplayState, .connecting)
+        XCTAssertEqual(model.extensionStateText, "No network")
+        model.managementStatus = .connecting
+        model.applyExtensionStatus(.reasserting)
+        XCTAssertEqual(model.extensionStateText, "Reconnecting...")
     }
 
     @MainActor

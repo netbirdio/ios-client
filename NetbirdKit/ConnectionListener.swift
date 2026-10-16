@@ -26,50 +26,35 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         // do nothing
     }
 
-    func onConnected() {
-        onConnectionChanged?(.connected)
-        let wasRestarting = adapter.isRestarting
-        adapter.clientState = .connected
-        AppLogger.shared.log("onConnected: state=connected, wasRestarting=\(wasRestarting)")
+    func onStateChanged(_ state: Int) {
+        guard let state = ClientState(sdkState: state) else { return }
+        onConnectionChanged?(state)
+        if adapter.isRestarting && (state == .connecting || state == .disconnecting) {
+            AppLogger.shared.log("onStateChanged: suppressed state=\(state) (isRestarting=true)")
+            return
+        }
+        adapter.clientState = state
+        AppLogger.shared.log("onStateChanged: state=\(state)")
+    }
 
+    func onConnected() {
         DispatchQueue.main.async {
             self.completionHandler(nil)
         }
     }
 
-    func onConnecting() {
-        onConnectionChanged?(.connecting)
-        if adapter.isRestarting {
-            AppLogger.shared.log("onConnecting: suppressed (isRestarting=true)")
-        } else {
-            adapter.clientState = .connecting
-            AppLogger.shared.log("onConnecting: state=connecting")
-        }
-    }
+    func onConnecting() {}
 
     func onDisconnected() {
-        // The core uses Connecting/NoNetwork for recoverable outages. Disconnected
-        // means Run has stopped; pretending it is still retrying leaves a dead tunnel.
-        onConnectionChanged?(.disconnected)
-        let wasRestarting = adapter.isRestarting
-        adapter.clientState = .disconnected
-        AppLogger.shared.log("onDisconnected: state=disconnected, wasRestarting=\(wasRestarting)")
-        if !wasRestarting && adapter.needsLoginCached() {
+        // Disconnected means Run has stopped; NoNetwork is recoverable.
+        if !adapter.isRestarting && adapter.needsLoginCached() {
             AppLogger.shared.log("onDisconnected: login required — signalling teardown")
             adapter.onLoginRequired?()
         }
     }
 
-    func onDisconnecting() {
-        onConnectionChanged?(.disconnecting)
-        if adapter.isRestarting {
-            AppLogger.shared.log("onDisconnecting: suppressed (isRestarting=true)")
-        } else {
-            adapter.clientState = .disconnecting
-            AppLogger.shared.log("onDisconnecting: state=disconnecting")
-        }
-    }
-    
+    func onDisconnecting() {}
+
     /// Receives peer-count changes and forwards them to the app as a "network map
     /// changed" signal.
     ///

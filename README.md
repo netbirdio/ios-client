@@ -139,11 +139,12 @@ gateways, IP-family availability
 and the active data SIM;
 a SIM switch can retain the same cellular interface. Paths marked
 `requiresConnection` allow dialing so the connection can activate the network.
-After initial connection, confirmed path loss or SDK reconnect callbacks set iOS's
+After initial connection, the SDK’s Connecting and NoNetwork states set iOS’s
 `reasserting` status; SDK connection success clears it. Stopping the tunnel or
-failing authentication also clears it. The app displays this state as “Reconnecting…”
-and keeps the disconnect control available. Wake reconciles the current physical
-path without forcing a refresh when it is unchanged. Healthy sockets stay open;
+failing authentication also clears it. The app displays “No network” for the SDK’s
+NoNetwork state and “Reconnecting…” while reconnecting, and keeps the disconnect
+control available. Wake reconciles the current physical path without forcing a
+refresh when it is unchanged. Healthy sockets stay open;
 the core's normal liveness checks recover connections that actually expired.
 
 The existing core sweep refreshes management, signal and relay connections.
