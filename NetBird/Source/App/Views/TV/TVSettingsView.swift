@@ -95,7 +95,7 @@ struct TVSettingsView: View {
                             TVSettingsToggleRow(
                                 icon: "shield.lefthalf.filled",
                                 title: "Rosenpass",
-                                subtitle: subtitle("Post-quantum secure encryption", managed: rosenpassLocked),
+                                subtitle: subtitle("Deprecated: may be removed in a future release", managed: rosenpassLocked),
                                 isOn: Binding(
                                     get: { viewModel.rosenpassEnabled },
                                     set: { newValue in
