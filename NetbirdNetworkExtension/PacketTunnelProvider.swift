@@ -253,37 +253,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        // Skip this check when the main app has already established the login state (its own
-        // isLoginRequired() call, or a login it just completed) and said so via the start
-        // options. needsLogin() is a full Login RPC against the management server, so the
-        // unconditional check duplicated one the other process had just made. Starts the main
-        // app did not initiate (On Demand, widget intent) carry no flag and still verify here.
-        // Either way an expired session is caught by the engine: its own login fails with
-        // PermissionDenied, which drives onLoginRequired and tears the tunnel down.
-        #if os(iOS)
-        let loginVerifiedByApp = (options?[GlobalConstants.optionLoginVerified] as? NSNumber)?.boolValue ?? false
-        #else
-        let loginVerifiedByApp = false
-        #endif
-        if loginVerifiedByApp {
-            AppLogger.shared.log("startTunnel: login already verified by the main app, skipping needsLogin check")
-        }
-        if !loginVerifiedByApp, adapter.needsLogin() {
-            signalLoginRequired()
-            // Clear any transitioning widget state so the login button appears immediately
-            // instead of waiting for the snap-back window to expire.
-            updateWidgetStatus("disconnected")
-            // Return the error immediately so iOS tears down the tunnel interface at once.
-            // A deferred completionHandler keeps the tunnel interface alive (black-hole state)
-            // and intercepts all network traffic — including ASWebAuthenticationSession requests
-            // to the OAuth server — causing "Page not found" during re-auth with On Demand enabled.
-            completeTunnelStart(with: NSError(
-                domain: "io.netbird.NetbirdNetworkExtension",
-                code: 1001,
-                userInfo: [NSLocalizedDescriptionKey: "Login required."]
-            ))
-            return
-        }
+        // The engine retries transport failures and reports actual authentication
+        // denial. A duplicate preflight would mistake an outage for expired login.
 
         // Wire up the login-required callback so the connection listener can tear the
         // tunnel down if the auth session expires mid-session (token expires while the

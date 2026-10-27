@@ -220,9 +220,7 @@ struct iOSConnectionView: View {
         case .closed:
             if adapter.loginSucceeded {
                 print("Finish login")
-                // The SDK just completed the management login, so the extension can
-                // skip its own needs-login check (one Login RPC) when it starts.
-                adapter.startVPNConnection(loginVerified: true)
+                adapter.startVPNConnection()
                 return
             }
             // Ambiguous: the user may have cancelled, or closed the SDK's success
