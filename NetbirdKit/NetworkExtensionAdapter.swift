@@ -578,7 +578,7 @@ public class NetworkExtensionAdapter: ObservableObject {
             // IPC fallback, and retrying concurrently with it would race two flows.
             var browserPhaseStarted = false
 
-            let receivedURL: String? = await withCheckedContinuation { continuation in
+            let receivedURL: String? = await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
                 var resumed = false
                 let resume: (String?) -> Void = { url in
                     guard !resumed else { return }
