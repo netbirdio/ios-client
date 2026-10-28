@@ -30,12 +30,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     let monitorQueue = DispatchQueue(label: "NetworkMonitor")
 
     /// Network state variables - accessed only on monitorQueue for thread safety
-    private var currentNetworkType: NWInterface.InterfaceType?
+    private var pathReconciler = NetworkPathReconciler()
     private var wasStoppedDueToNoNetwork = false
     private var isRestartInProgress = false
-    /// A path change that arrived while a stop/start transaction was in flight.
-    /// Handoffs commonly emit several path updates; dropping the later update can
-    /// leave the newly-started client bound to an intermediate path indefinitely.
+    /// A restart that is still owed: one requested while another was in flight, or one
+    /// that stopped the engine and found no usable path to start it on. The next
+    /// satisfied path update runs it, so the tunnel is never left without an engine.
     private var restartPending = false
     private var latestPathIsSatisfied = false
     /// Identifies the only restart transaction whose asynchronous callbacks may
@@ -48,8 +48,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let restartMaxRetries = 4
     private static let restartRetryBaseDelay: TimeInterval = 2.0
     /// Set from the moment startTunnel arms the connection until the adapter reports its
-    /// outcome. Network-change restarts are held off while it is set, so a connection that
-    /// is still being established is never torn down mid-flight.
+    /// outcome. Restarts are held off while it is set, so a connection that is still being
+    /// established is never torn down mid-flight.
     private var isInitialStartInFlight = false
 
     private var networkChangeWorkItem: DispatchWorkItem?
@@ -221,7 +221,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         monitorQueue.async { [weak self] in
             guard let self = self else { return }
-            self.currentNetworkType = nil
+            // A reused adapter keeps its Go client, which may still think the device is
+            // offline from the previous tunnel.
+            self.pathReconciler.reset()
+            self.adapter?.setNetworkAvailable(true)
             self.wasStoppedDueToNoNetwork = false
             self.isRestartInProgress = false
             self.restartPending = false
@@ -377,7 +380,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self.mdmRetryWorkItem = nil
             self.pendingMDMRestart = false
             self.endInitialStart()
-            self.currentNetworkType = nil
+            self.pathReconciler.reset()
             self.wasStoppedDueToNoNetwork = false
             self.isRestartInProgress = false
             self.restartPending = false
@@ -548,13 +551,18 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self.wasStoppedDueToNoNetwork = true
             self.adapter?.isNetworkUnavailable = true
             self.setNetworkUnavailableFlag(true)
+            self.deliverNetworkEvents(self.pathReconciler.confirmLoss())
         }
 
         networkLossWorkItem = workItem
         monitorQueue.asyncAfter(deadline: .now() + Self.networkLossDebounce, execute: workItem)
     }
 
-    /// Debounces and reconciles physical path loss, recovery, and interface changes.
+    /// Debounces physical path loss for the UI and reports path changes to the Go client.
+    ///
+    /// A network change does not restart the engine. The Go client redials its connections
+    /// on the new path while the engine and the tunnel stay up; a restart only made the
+    /// outage longer and, with fast Wi-Fi/cellular flips, kept the tunnel restarting.
     /// - Parameter path: The latest path published by the provider's network monitor.
     func handleNetworkChange(path: Network.NWPath) {
         guard !isTunnelStopping else { return }
@@ -565,20 +573,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                   - isExpensive: \(path.isExpensive)
                   - usesWifi: \(path.usesInterfaceType(.wifi))
                   - usesCellular: \(path.usesInterfaceType(.cellular))
-                  - interfaces: \(path.availableInterfaces.map { $0.type })
+                  - interfaces: \(path.availableInterfaces.map { "\($0.name)(\($0.type))" })
+                  - gateways: \(path.gateways)
                   """)
+
+        let events = pathReconciler.handle(NetworkPathSnapshot(path: path))
 
         if path.status != .satisfied {
             AppLogger.shared.log("Path not satisfied - confirming over \(Self.networkLossDebounce)s before treating it as an outage")
 
-            // Cancel any pending restart
-            networkChangeWorkItem?.cancel()
-            networkChangeWorkItem = nil
-
-            // If the physical path disappears during a restart, do not let the
-            // in-flight transaction be considered final. Recovery must reconcile
-            // once more against the path that eventually becomes usable.
-            if isRestartInProgress {
+            // A restart scheduled but not yet started would stop the engine on a dead
+            // path. Hold it until the path is back instead of dropping it.
+            if let scheduled = networkChangeWorkItem {
+                scheduled.cancel()
+                networkChangeWorkItem = nil
                 restartPending = true
             }
 
@@ -587,11 +595,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         // Network is available again. A loss that never lasted long enough to be confirmed is
-        // a blip: drop it so it produces neither the UI's network warning nor a restart.
+        // a blip: drop it so it produces no network warning in the UI.
         networkLossWorkItem?.cancel()
         networkLossWorkItem = nil
 
-        let shouldRestartDueToRecovery = wasStoppedDueToNoNetwork
         if wasStoppedDueToNoNetwork {
             AppLogger.shared.log("Network restored after unavailability - signaling UI")
             wasStoppedDueToNoNetwork = false
@@ -599,53 +606,26 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             setNetworkUnavailableFlag(false)
         }
 
-        // Handle wifi <-> cellular transitions
-        let newNetworkType: NWInterface.InterfaceType? = {
-            if path.usesInterfaceType(.wifi) {
-                return .wifi
-            } else if path.usesInterfaceType(.cellular) {
-                return .cellular
-            } else {
-                return nil
-            }
-        }()
+        deliverNetworkEvents(events)
 
-        // Check if network type changed (only if both current and new types are known)
-        let networkTypeChanged: Bool
-        if let current = currentNetworkType, let newType = newNetworkType {
-            networkTypeChanged = current != newType
-        } else {
-            networkTypeChanged = false
-        }
-
-        if networkTypeChanged {
-            AppLogger.shared.log("Network type changed: \(String(describing: currentNetworkType)) -> \(String(describing: newNetworkType))")
-        }
-
-        // Restart if network type changed OR recovering from network unavailability
-        // (even if returning to the same interface type, the connection may be stale)
-        // This must happen regardless of network type (wifi/cellular/other)
-        if networkTypeChanged || shouldRestartDueToRecovery {
-            AppLogger.shared.log("Scheduling restart: networkTypeChanged=\(networkTypeChanged), shouldRestartDueToRecovery=\(shouldRestartDueToRecovery)")
-
-            // A restart already in progress cannot absorb a new path. Remember it
-            // and run another reconciliation after the current transaction ends.
-            if isRestartInProgress {
-                restartPending = true
-                if let newType = newNetworkType {
-                    currentNetworkType = newType
-                }
-                return
-            }
-
-            // Cancel any pending restart from previous rapid change
-            restartRetryCount = 0
+        if restartPending, !isRestartInProgress {
+            AppLogger.shared.log("Path satisfied - running the pending restart")
+            restartPending = false
             scheduleRestart(after: 1.0)
         }
+    }
 
-        // Update current network type only if known
-        if let newType = newNetworkType {
-            currentNetworkType = newType
+    /// Hands the reconciler's events to the Go client. Must run on `monitorQueue`.
+    private func deliverNetworkEvents(_ events: [NetworkPathEvent]) {
+        for event in events {
+            switch event {
+            case .networkChanged:
+                AppLogger.shared.log("Network changed - telling the client to redial")
+                adapter?.notifyNetworkChange()
+            case .networkAvailable(let available):
+                AppLogger.shared.log("Network available=\(available) - telling the client")
+                adapter?.setNetworkAvailable(available)
+            }
         }
     }
 
