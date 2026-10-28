@@ -199,6 +199,7 @@
 		AA000E042F22000E00000001 /* MDMRestrictions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000E002F22000E00000001 /* MDMRestrictions.swift */; };
 		AA000B012F22000B00000001 /* ProfileMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000B002F22000B00000001 /* ProfileMigrationTests.swift */; };
 		AA000B032F22000B00000003 /* ProfileConnectionCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */; };
+		AA0013012F22001300000001 /* NetworkPathReconcilerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0013002F22001300000001 /* NetworkPathReconcilerTests.swift */; };
 		AA0002052F22000200000001 /* ProfileBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002012F22000200000001 /* ProfileBadge.swift */; };
 		AA0002062F22000200000001 /* ProfilesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002022F22000200000001 /* ProfilesListView.swift */; };
 		AA0002072F22000200000001 /* AddProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002032F22000200000001 /* AddProfileSheet.swift */; };
@@ -401,6 +402,7 @@
 		AA000E002F22000E00000001 /* MDMRestrictions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMRestrictions.swift; sourceTree = "<group>"; };
 		AA000B002F22000B00000001 /* ProfileMigrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileMigrationTests.swift; sourceTree = "<group>"; };
 		AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileConnectionCacheTests.swift; sourceTree = "<group>"; };
+		AA0013002F22001300000001 /* NetworkPathReconcilerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NetworkPathReconcilerTests.swift; sourceTree = "<group>"; };
 		AA0002012F22000200000001 /* ProfileBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileBadge.swift; sourceTree = "<group>"; };
 		AA0002022F22000200000001 /* ProfilesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesListView.swift; sourceTree = "<group>"; };
 		AA0002032F22000200000001 /* AddProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProfileSheet.swift; sourceTree = "<group>"; };
@@ -758,6 +760,7 @@
 				53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */,
 				AA000B002F22000B00000001 /* ProfileMigrationTests.swift */,
 				AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */,
+				AA0013002F22001300000001 /* NetworkPathReconcilerTests.swift */,
 			);
 			path = NetBirdTests;
 			sourceTree = "<group>";
@@ -1297,6 +1300,7 @@
 				1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */,
 				AA000B012F22000B00000001 /* ProfileMigrationTests.swift in Sources */,
 				AA000B032F22000B00000003 /* ProfileConnectionCacheTests.swift in Sources */,
+				AA0013012F22001300000001 /* NetworkPathReconcilerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
