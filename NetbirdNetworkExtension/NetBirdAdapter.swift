@@ -392,6 +392,18 @@ public class NetBirdAdapter {
         return self.client.isLoginRequiredCached()
     }
 
+    /// Tells the Go client whether the OS reports any usable network. While unavailable,
+    /// its reconnect loops pause instead of burning their backoff on dials that cannot work.
+    public func setNetworkAvailable(_ available: Bool) {
+        self.client.setNetworkAvailable(available)
+    }
+
+    /// Tells the Go client that the OS moved to another network, so it redials management,
+    /// signal and relay at once instead of waiting for the old sockets to time out.
+    public func notifyNetworkChange() {
+        self.client.notifyNetworkChange()
+    }
+
     /// Legacy synchronous login - returns URL string directly
     /// Used by iOS which opens Safari
     public func login() -> String {
