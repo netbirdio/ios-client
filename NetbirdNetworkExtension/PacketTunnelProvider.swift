@@ -1308,6 +1308,90 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 }
 
+/// The parts of an NWPath the reconciler looks at. A plain value because NWPath has no
+/// public initializer, so tests could not build one.
+struct NetworkPathSnapshot: Equatable {
+    struct Interface: Equatable {
+        let type: NWInterface.InterfaceType
+        let name: String
+    }
+
+    let isSatisfied: Bool
+    /// The interface the OS prefers for new connections. Our own utun shows up as `.other`
+    /// even though the monitor prohibits that type, so it is skipped.
+    let primaryInterface: Interface?
+
+    init(isSatisfied: Bool, primaryInterface: Interface?) {
+        self.isSatisfied = isSatisfied
+        self.primaryInterface = primaryInterface
+    }
+
+    init(path: Network.NWPath) {
+        isSatisfied = path.status == .satisfied
+        primaryInterface = path.availableInterfaces
+            .first { $0.type != .other && $0.type != .loopback }
+            .map { Interface(type: $0.type, name: $0.name) }
+    }
+}
+
+/// A network event for the Go client, in the order it must be delivered.
+enum NetworkPathEvent: Equatable {
+    case networkChanged
+    case networkAvailable(Bool)
+}
+
+/// Turns path updates into the network events the Go client expects, so a network switch
+/// makes it redial its connections instead of the extension restarting the engine.
+///
+/// Every return from an unsatisfied path counts as a change, even one shorter than the loss
+/// debounce: a switch between two Wi-Fi networks keeps the same interface and shows only as
+/// a blip of under a second. Interfaces other than the primary one coming and going (cellular
+/// listed while Wi-Fi is in use, our own utun) are not a change.
+struct NetworkPathReconciler {
+    private var primaryInterface: NetworkPathSnapshot.Interface?
+    private var isUnsatisfied = false
+    private var isLossConfirmed = false
+
+    /// Starts over for a new tunnel. The Go client must be told it is online at the same
+    /// time, since that is what a fresh reconciler assumes.
+    mutating func reset() {
+        self = NetworkPathReconciler()
+    }
+
+    mutating func handle(_ path: NetworkPathSnapshot) -> [NetworkPathEvent] {
+        guard path.isSatisfied else {
+            isUnsatisfied = true
+            return []
+        }
+
+        let previousInterface = primaryInterface
+        if let interface = path.primaryInterface {
+            primaryInterface = interface
+        }
+
+        if isUnsatisfied {
+            isUnsatisfied = false
+            guard isLossConfirmed else { return [.networkChanged] }
+            isLossConfirmed = false
+            // Mark the old connections stale before waking the reconnect loops, so the
+            // sweep does not also cut the first redials on the new network.
+            return [.networkChanged, .networkAvailable(true)]
+        }
+
+        guard let previous = previousInterface,
+              let current = path.primaryInterface,
+              previous != current else { return [] }
+        return [.networkChanged]
+    }
+
+    /// Called once the path has stayed unsatisfied for the provider's loss debounce.
+    mutating func confirmLoss() -> [NetworkPathEvent] {
+        guard isUnsatisfied, !isLossConfirmed else { return [] }
+        isLossConfirmed = true
+        return [.networkAvailable(false)]
+    }
+}
+
 func initializeLogging(loglevel: String) {
     let fileManager = FileManager.default
 
