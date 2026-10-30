@@ -1,0 +1,43 @@
+name: e2e-trigger
+
+# Asks the mobile-e2e repo to run the device e2e suite on this PR's commit.
+# The suite runs there, on the self-hosted Mac with the iPhone, and reports
+# back to this PR as the "ios-e2e" commit status.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+jobs:
+  dispatch:
+    name: Request iOS e2e
+    # No drafts. No PRs from other forks: they get no secrets, and their code
+    # must not run on the device unreviewed.
+    if: >-
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch to mobile-e2e
+        env:
+          GH_TOKEN: ${{ secrets.E2E_DISPATCH_TOKEN }}
+          E2E_REPO: ${{ vars.E2E_REPO || 'evgeniyChepelev/mobile-e2e' }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::E2E_DISPATCH_TOKEN is not set, e2e not requested"
+            exit 0
+          fi
+          jq -n \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg ref "$HEAD_REF" \
+            --arg sha "$HEAD_SHA" \
+            --arg pr "$PR_NUMBER" \
+            --arg title "$PR_TITLE" \
+            '{event_type: "ios-pr", client_payload: {repo: $repo, ref: $ref, sha: $sha, pr: $pr, title: $title}}' \
+          | gh api "repos/$E2E_REPO/dispatches" --input -
+          echo "Requested e2e in $E2E_REPO for $HEAD_SHA"
