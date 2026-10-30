@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		0C71C019350D42AB8F110336 /* iOSSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */; };
 		1C4E6A81CD33FF6D2DEFF8D5 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91FA1F06D3375864C74EAB3B /* Foundation.framework */; };
-		AA000C012F22000C00000001 /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
 		1C9E4E97130030CE0D6C8F59 /* SharedUserDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53CB9305A9DC6CAD1895495A /* SharedUserDefaultsTests.swift */; };
 		36F90EF57603411B9916FDD6 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 		3A9A981B20EF47C1907CC877 /* TVServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8BCB110545747678AA5A9C2 /* TVServerView.swift */; };
@@ -19,11 +18,9 @@
 		443782C52EDF288A00F9FA94 /* TVSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C32EDF288A00F9FA94 /* TVSettingsView.swift */; };
 		443782C62EDF288A00F9FA94 /* TVPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C22EDF288A00F9FA94 /* TVPeersView.swift */; };
 		443782C72EDF288A00F9FA94 /* TVNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C12EDF288A00F9FA94 /* TVNetworksView.swift */; };
-		E1E0F0012F90000100000001 /* TVExitNodeSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */; };
 		443782C82EDF288A00F9FA94 /* TVMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782C02EDF288A00F9FA94 /* TVMainView.swift */; };
 		443782C92EDF293400F9FA94 /* NetBirdApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911A2A792A15007C48FC /* NetBirdApp.swift */; };
 		443782CA2EDF296500F9FA94 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911C2A792A15007C48FC /* MainView.swift */; };
-		AA000F012F22000F00000001 /* MDMManagedNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000F002F22000F00000001 /* MDMManagedNotice.swift */; };
 		443782CC2EDF298B00F9FA94 /* PeerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D402962BD9B89300D4AC5B /* PeerViewModel.swift */; };
 		443782CD2EDF298B00F9FA94 /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E608122A7958B100BAF09B /* MainViewModel.swift */; };
 		443782CE2EDF298B00F9FA94 /* RoutesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */; };
@@ -114,10 +111,8 @@
 		509CCD6A2BE908C000B7C2D8 /* RoutesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */; };
 		509CCD6C2BE90D0E00B7C2D8 /* PeerTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD6B2BE90D0E00B7C2D8 /* PeerTabView.swift */; };
 		509CCD6E2BE90D2100B7C2D8 /* RouteTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509CCD6D2BE90D2100B7C2D8 /* RouteTabView.swift */; };
-		E1D0E0032F80000200000001 /* ExitNodeSelectorCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D0E0022F80000200000001 /* ExitNodeSelectorCard.swift */; };
 		50A8911B2A792A15007C48FC /* NetBirdApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911A2A792A15007C48FC /* NetBirdApp.swift */; };
 		50A8911D2A792A15007C48FC /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A8911C2A792A15007C48FC /* MainView.swift */; };
-		AA000F022F22000F00000001 /* MDMManagedNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000F002F22000F00000001 /* MDMManagedNotice.swift */; };
 		50A8911F2A792A16007C48FC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 50A8911E2A792A16007C48FC /* Assets.xcassets */; };
 		50BB17412C30239400518BCA /* RouteCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50BB17402C30239400518BCA /* RouteCard.swift */; };
 		50C5D30F2BDD96CF003159BE /* RoutesSelectionDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C5D30E2BDD96CF003159BE /* RoutesSelectionDetails.swift */; };
@@ -154,18 +149,11 @@
 		55D865982F70982100A2EFF8 /* NetBirdWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */; };
 		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
-		AA0011012F22001100000001 /* MDMBridgeIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */; };
-		AA0012012F22001200000001 /* RemoteJobsPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0012002F22001200000001 /* RemoteJobsPolicyTests.swift */; };
-		AA0010012F22001000000001 /* MDMRestrictionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0010002F22001000000001 /* MDMRestrictionsTests.swift */; };
 		962925F1DAA24D40B98D395B /* iOSPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42873052F9544A89B1408339 /* iOSPeersView.swift */; };
 		978FC4702EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
 		978FC4712EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
 		978FC4722EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
 		978FC4732EEDF167002D0EB8 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978FC46F2EEDF167002D0EB8 /* AppLogger.swift */; };
-		A7C0DE012F9A0001001A2B3C /* GoCrashCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C0DE002F9A0001001A2B3C /* GoCrashCapture.swift */; };
-		A7C0DE022F9A0001001A2B3C /* GoCrashCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C0DE002F9A0001001A2B3C /* GoCrashCapture.swift */; };
-		A7C0DE032F9A0001001A2B3C /* GoCrashCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C0DE002F9A0001001A2B3C /* GoCrashCapture.swift */; };
-		A7C0DE042F9A0001001A2B3C /* GoCrashCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C0DE002F9A0001001A2B3C /* GoCrashCapture.swift */; };
 		978FC4742EEDF168002D0EB8 /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443782BD2EDF284A00F9FA94 /* Platform.swift */; };
 		9B6C03E5ED4245A597C0FBE7 /* iOSConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */; };
 		9CC0E000AE3F165CA72FD465 /* AppLoggerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */; };
@@ -181,24 +169,14 @@
 		A1C3D5EE2F000008001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		A1C3D5EF2F000009001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
 		A1C3D5F02F00000A001A2B3C /* CellularOnDemandPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */; };
+		A7C0DE012F9A0001001A2B3C /* GoCrashCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C0DE002F9A0001001A2B3C /* GoCrashCapture.swift */; };
+		A7C0DE022F9A0001001A2B3C /* GoCrashCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C0DE002F9A0001001A2B3C /* GoCrashCapture.swift */; };
+		A7C0DE032F9A0001001A2B3C /* GoCrashCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C0DE002F9A0001001A2B3C /* GoCrashCapture.swift */; };
+		A7C0DE042F9A0001001A2B3C /* GoCrashCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C0DE002F9A0001001A2B3C /* GoCrashCapture.swift */; };
 		AA0001012F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001022F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001032F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
 		AA0001042F22000100000001 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002F22000100000001 /* ProfileManager.swift */; };
-		AA000A012F22000A00000001 /* ProfileLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */; };
-		AA000D012F22000D00000001 /* MDMPolicyFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000D002F22000D00000001 /* MDMPolicyFetcher.swift */; };
-		AA000E012F22000E00000001 /* MDMRestrictions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000E002F22000E00000001 /* MDMRestrictions.swift */; };
-		AA000A022F22000A00000001 /* ProfileLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */; };
-		AA000D022F22000D00000001 /* MDMPolicyFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000D002F22000D00000001 /* MDMPolicyFetcher.swift */; };
-		AA000E022F22000E00000001 /* MDMRestrictions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000E002F22000E00000001 /* MDMRestrictions.swift */; };
-		AA000A032F22000A00000001 /* ProfileLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */; };
-		AA000D032F22000D00000001 /* MDMPolicyFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000D002F22000D00000001 /* MDMPolicyFetcher.swift */; };
-		AA000E032F22000E00000001 /* MDMRestrictions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000E002F22000E00000001 /* MDMRestrictions.swift */; };
-		AA000A042F22000A00000001 /* ProfileLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */; };
-		AA000D042F22000D00000001 /* MDMPolicyFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000D002F22000D00000001 /* MDMPolicyFetcher.swift */; };
-		AA000E042F22000E00000001 /* MDMRestrictions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000E002F22000E00000001 /* MDMRestrictions.swift */; };
-		AA000B012F22000B00000001 /* ProfileMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000B002F22000B00000001 /* ProfileMigrationTests.swift */; };
-		AA000B032F22000B00000003 /* ProfileConnectionCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */; };
 		AA0002052F22000200000001 /* ProfileBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002012F22000200000001 /* ProfileBadge.swift */; };
 		AA0002062F22000200000001 /* ProfilesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002022F22000200000001 /* ProfilesListView.swift */; };
 		AA0002072F22000200000001 /* AddProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002032F22000200000001 /* AddProfileSheet.swift */; };
@@ -207,6 +185,26 @@
 		AA0009022F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
 		AA0009032F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
 		AA0009042F22000900000001 /* ProfileConnectionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0009002F22000900000001 /* ProfileConnectionCache.swift */; };
+		AA000A012F22000A00000001 /* ProfileLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */; };
+		AA000A022F22000A00000001 /* ProfileLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */; };
+		AA000A032F22000A00000001 /* ProfileLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */; };
+		AA000A042F22000A00000001 /* ProfileLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */; };
+		AA000B012F22000B00000001 /* ProfileMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000B002F22000B00000001 /* ProfileMigrationTests.swift */; };
+		AA000B032F22000B00000003 /* ProfileConnectionCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */; };
+		AA000C012F22000C00000001 /* NetBirdSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50D402932BD9143900D4AC5B /* NetBirdSDK.xcframework */; };
+		AA000D012F22000D00000001 /* MDMPolicyFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000D002F22000D00000001 /* MDMPolicyFetcher.swift */; };
+		AA000D022F22000D00000001 /* MDMPolicyFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000D002F22000D00000001 /* MDMPolicyFetcher.swift */; };
+		AA000D032F22000D00000001 /* MDMPolicyFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000D002F22000D00000001 /* MDMPolicyFetcher.swift */; };
+		AA000D042F22000D00000001 /* MDMPolicyFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000D002F22000D00000001 /* MDMPolicyFetcher.swift */; };
+		AA000E012F22000E00000001 /* MDMRestrictions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000E002F22000E00000001 /* MDMRestrictions.swift */; };
+		AA000E022F22000E00000001 /* MDMRestrictions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000E002F22000E00000001 /* MDMRestrictions.swift */; };
+		AA000E032F22000E00000001 /* MDMRestrictions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000E002F22000E00000001 /* MDMRestrictions.swift */; };
+		AA000E042F22000E00000001 /* MDMRestrictions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000E002F22000E00000001 /* MDMRestrictions.swift */; };
+		AA000F012F22000F00000001 /* MDMManagedNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000F002F22000F00000001 /* MDMManagedNotice.swift */; };
+		AA000F022F22000F00000001 /* MDMManagedNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000F002F22000F00000001 /* MDMManagedNotice.swift */; };
+		AA0010012F22001000000001 /* MDMRestrictionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0010002F22001000000001 /* MDMRestrictionsTests.swift */; };
+		AA0011012F22001100000001 /* MDMBridgeIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */; };
+		AA0012012F22001200000001 /* RemoteJobsPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0012002F22001200000001 /* RemoteJobsPolicyTests.swift */; };
 		AA1B2C022F4E5A0100D1E2F3 /* TVGradientBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */; };
 		B1A2C3D42F3A000100000001 /* PeerDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */; };
 		BB001A012F99000000000001 /* TroubleshootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB001A002F99000000000001 /* TroubleshootView.swift */; };
@@ -215,6 +213,8 @@
 		E1A0B0012F5E000100000001 /* EmptyTabPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */; };
 		E1B0C0012F60000100000001 /* NetworkWarningBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */; };
 		E1C0D0012F72000100000001 /* AppButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C0D0002F72000100000001 /* AppButton.swift */; };
+		E1D0E0032F80000200000001 /* ExitNodeSelectorCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D0E0022F80000200000001 /* ExitNodeSelectorCard.swift */; };
+		E1E0F0012F90000100000001 /* TVExitNodeSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */; };
 		F1258DE22ED4EE5000C0D205 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */; };
 		F1B292072EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */; };
 		F1B292082EE0AC2A001D91B8 /* EnvVarPackager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */; };
@@ -251,6 +251,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 55D865822F70982000A2EFF8;
 			remoteInfo = NetBirdWidgetExtensionExtension;
+		};
+		E2E000012F40000000000008 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 50A8910F2A792A15007C48FC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 50A891162A792A15007C48FC;
+			remoteInfo = NetBird;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -305,16 +312,12 @@
 /* Begin PBXFileReference section */
 		2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSSettingsView.swift; sourceTree = "<group>"; };
 		3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlobalConstantsTests.swift; sourceTree = "<group>"; };
-		AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMBridgeIntegrationTests.swift; sourceTree = "<group>"; };
-		AA0012002F22001200000001 /* RemoteJobsPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteJobsPolicyTests.swift; sourceTree = "<group>"; };
-		AA0010002F22001000000001 /* MDMRestrictionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMRestrictionsTests.swift; sourceTree = "<group>"; };
 		42873052F9544A89B1408339 /* iOSPeersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSPeersView.swift; sourceTree = "<group>"; };
 		441C5AEE2EDF0DAE0055EEFC /* NetBird TV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "NetBird TV.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		441C5AFD2EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NetBirdTVNetworkExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		443782BD2EDF284A00F9FA94 /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
 		443782C02EDF288A00F9FA94 /* TVMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVMainView.swift; sourceTree = "<group>"; };
 		443782C12EDF288A00F9FA94 /* TVNetworksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVNetworksView.swift; sourceTree = "<group>"; };
-		E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVExitNodeSelector.swift; sourceTree = "<group>"; };
 		443782C22EDF288A00F9FA94 /* TVPeersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPeersView.swift; sourceTree = "<group>"; };
 		443782C32EDF288A00F9FA94 /* TVSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVSettingsView.swift; sourceTree = "<group>"; };
 		4483B26C2F19331A00BD9F66 /* TVColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVColors.swift; sourceTree = "<group>"; };
@@ -356,11 +359,9 @@
 		509CCD692BE908C000B7C2D8 /* RoutesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutesViewModel.swift; sourceTree = "<group>"; };
 		509CCD6B2BE90D0E00B7C2D8 /* PeerTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerTabView.swift; sourceTree = "<group>"; };
 		509CCD6D2BE90D2100B7C2D8 /* RouteTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteTabView.swift; sourceTree = "<group>"; };
-		E1D0E0022F80000200000001 /* ExitNodeSelectorCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExitNodeSelectorCard.swift; sourceTree = "<group>"; };
 		50A891172A792A15007C48FC /* NetBird.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NetBird.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		50A8911A2A792A15007C48FC /* NetBirdApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetBirdApp.swift; sourceTree = "<group>"; };
 		50A8911C2A792A15007C48FC /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
-		AA000F002F22000F00000001 /* MDMManagedNotice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMManagedNotice.swift; sourceTree = "<group>"; };
 		50A8911E2A792A16007C48FC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		50BB17402C30239400518BCA /* RouteCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteCard.swift; sourceTree = "<group>"; };
 		50C5D30E2BDD96CF003159BE /* RoutesSelectionDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutesSelectionDetails.swift; sourceTree = "<group>"; };
@@ -389,23 +390,27 @@
 		8DE6A20955914E68BFADDEED /* iOSConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSConnectionView.swift; sourceTree = "<group>"; };
 		91FA1F06D3375864C74EAB3B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		978FC46F2EEDF167002D0EB8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
-		A7C0DE002F9A0001001A2B3C /* GoCrashCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoCrashCapture.swift; sourceTree = "<group>"; };
 		9CD257EF78F038560FF3112D /* VPNOnDemandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNOnDemandView.swift; sourceTree = "<group>"; };
 		A1B2C3D32F4A000100000001 /* VPNToggleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNToggleView.swift; sourceTree = "<group>"; };
 		A1B2C3D42EEDF500001A2B3C /* ConfigurationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationProvider.swift; sourceTree = "<group>"; };
 		A1C3D5E72F000001001A2B3C /* WiFiOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiOnDemandPolicy.swift; sourceTree = "<group>"; };
 		A1C3D5E82F000002001A2B3C /* CellularOnDemandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellularOnDemandPolicy.swift; sourceTree = "<group>"; };
+		A7C0DE002F9A0001001A2B3C /* GoCrashCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoCrashCapture.swift; sourceTree = "<group>"; };
 		AA0001002F22000100000001 /* ProfileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileManager.swift; sourceTree = "<group>"; };
-		AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileLayoutMigration.swift; sourceTree = "<group>"; };
-		AA000D002F22000D00000001 /* MDMPolicyFetcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMPolicyFetcher.swift; sourceTree = "<group>"; };
-		AA000E002F22000E00000001 /* MDMRestrictions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMRestrictions.swift; sourceTree = "<group>"; };
-		AA000B002F22000B00000001 /* ProfileMigrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileMigrationTests.swift; sourceTree = "<group>"; };
-		AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileConnectionCacheTests.swift; sourceTree = "<group>"; };
 		AA0002012F22000200000001 /* ProfileBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileBadge.swift; sourceTree = "<group>"; };
 		AA0002022F22000200000001 /* ProfilesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesListView.swift; sourceTree = "<group>"; };
 		AA0002032F22000200000001 /* AddProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProfileSheet.swift; sourceTree = "<group>"; };
 		AA0002042F22000200000001 /* AddProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProfileViewModel.swift; sourceTree = "<group>"; };
 		AA0009002F22000900000001 /* ProfileConnectionCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileConnectionCache.swift; sourceTree = "<group>"; };
+		AA000A002F22000A00000001 /* ProfileLayoutMigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileLayoutMigration.swift; sourceTree = "<group>"; };
+		AA000B002F22000B00000001 /* ProfileMigrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileMigrationTests.swift; sourceTree = "<group>"; };
+		AA000B022F22000B00000002 /* ProfileConnectionCacheTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileConnectionCacheTests.swift; sourceTree = "<group>"; };
+		AA000D002F22000D00000001 /* MDMPolicyFetcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMPolicyFetcher.swift; sourceTree = "<group>"; };
+		AA000E002F22000E00000001 /* MDMRestrictions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMRestrictions.swift; sourceTree = "<group>"; };
+		AA000F002F22000F00000001 /* MDMManagedNotice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMManagedNotice.swift; sourceTree = "<group>"; };
+		AA0010002F22001000000001 /* MDMRestrictionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMRestrictionsTests.swift; sourceTree = "<group>"; };
+		AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMBridgeIntegrationTests.swift; sourceTree = "<group>"; };
+		AA0012002F22001200000001 /* RemoteJobsPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteJobsPolicyTests.swift; sourceTree = "<group>"; };
 		AA1B2C012F4E5A0100D1E2F3 /* TVGradientBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVGradientBackground.swift; sourceTree = "<group>"; };
 		B1A2C3D32F3A000100000001 /* PeerDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDetailSheet.swift; sourceTree = "<group>"; };
 		BB001A002F99000000000001 /* TroubleshootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TroubleshootView.swift; sourceTree = "<group>"; };
@@ -415,6 +420,9 @@
 		E1A0B0002F5E000100000001 /* EmptyTabPlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyTabPlaceholder.swift; sourceTree = "<group>"; };
 		E1B0C0002F60000100000001 /* NetworkWarningBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkWarningBanner.swift; sourceTree = "<group>"; };
 		E1C0D0002F72000100000001 /* AppButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppButton.swift; sourceTree = "<group>"; };
+		E1D0E0022F80000200000001 /* ExitNodeSelectorCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExitNodeSelectorCard.swift; sourceTree = "<group>"; };
+		E1E0F0002F90000100000001 /* TVExitNodeSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVExitNodeSelector.swift; sourceTree = "<group>"; };
+		E2E000012F40000000000001 /* NetBirdUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NetBirdUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F1258DE12ED4EE4900C0D205 /* ServerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerViewModel.swift; sourceTree = "<group>"; };
 		F1B292062EE0AC25001D91B8 /* EnvVarPackager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvVarPackager.swift; sourceTree = "<group>"; };
 		F1B292092EE0BC40001D91B8 /* GlobalConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalConstants.swift; sourceTree = "<group>"; };
@@ -442,6 +450,7 @@
 		441C5AEF2EDF0DAE0055EEFC /* NetBird TV */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "NetBird TV"; sourceTree = "<group>"; };
 		441C5AFF2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (441C5B072EDF0DD20055EEFC /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = NetBirdTVNetworkExtension; sourceTree = "<group>"; };
 		55D865882F70982000A2EFF8 /* NetBirdWidgetExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (55D865992F70982100A2EFF8 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = NetBirdWidgetExtension; sourceTree = "<group>"; };
+		E2E000012F40000000000002 /* NetBirdUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = NetBirdUITests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -511,6 +520,13 @@
 			files = (
 				1C4E6A81CD33FF6D2DEFF8D5 /* Foundation.framework in Frameworks */,
 				AA000C012F22000C00000001 /* NetBirdSDK.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E2E000012F40000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -614,6 +630,7 @@
 				50A891182A792A15007C48FC /* Products */,
 				50245A182A7BCE830034792B /* Frameworks */,
 				651C942641826A7AA94ED369 /* NetBirdTests */,
+				E2E000012F40000000000002 /* NetBirdUITests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -625,6 +642,7 @@
 				441C5AEE2EDF0DAE0055EEFC /* NetBird TV.app */,
 				441C5AFD2EDF0DD20055EEFC /* NetBirdTVNetworkExtension.appex */,
 				50733EE9CE10FEDDA61600B8 /* NetBirdTests.xctest */,
+				E2E000012F40000000000001 /* NetBirdUITests.xctest */,
 				55D865832F70982000A2EFF8 /* NetBirdWidgetExtensionExtension.appex */,
 			);
 			name = Products;
@@ -927,6 +945,27 @@
 			productReference = 50733EE9CE10FEDDA61600B8 /* NetBirdTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		E2E000012F40000000000003 /* NetBirdUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E2E000012F40000000000009 /* Build configuration list for PBXNativeTarget "NetBirdUITests" */;
+			buildPhases = (
+				E2E000012F40000000000004 /* Sources */,
+				E2E000012F40000000000005 /* Frameworks */,
+				E2E000012F40000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E2E000012F40000000000007 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				E2E000012F40000000000002 /* NetBirdUITests */,
+			);
+			name = NetBirdUITests;
+			productName = NetBirdUITests;
+			productReference = E2E000012F40000000000001 /* NetBirdUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -954,6 +993,10 @@
 					55D865822F70982000A2EFF8 = {
 						CreatedOnToolsVersion = 26.1.1;
 					};
+					E2E000012F40000000000003 = {
+						CreatedOnToolsVersion = 26.4;
+						TestTargetID = 50A891162A792A15007C48FC;
+					};
 				};
 			};
 			buildConfigurationList = 50A891122A792A15007C48FC /* Build configuration list for PBXProject "NetBird" */;
@@ -978,6 +1021,7 @@
 				441C5AED2EDF0DAE0055EEFC /* NetBird TV */,
 				441C5AFC2EDF0DD20055EEFC /* NetBirdTVNetworkExtension */,
 				C4BEBDBD1DC2C4D7764C202C /* NetBirdTests */,
+				E2E000012F40000000000003 /* NetBirdUITests */,
 				55D865822F70982000A2EFF8 /* NetBirdWidgetExtensionExtension */,
 			);
 		};
@@ -1048,6 +1092,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		867D87D69DACEF5CF82E9A1B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E2E000012F40000000000006 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -1300,6 +1351,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E2E000012F40000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1324,6 +1382,11 @@
 			target = 55D865822F70982000A2EFF8 /* NetBirdWidgetExtensionExtension */;
 			targetProxy = 55D865962F70982100A2EFF8 /* PBXContainerItemProxy */;
 		};
+		E2E000012F40000000000007 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 50A891162A792A15007C48FC /* NetBird */;
+			targetProxy = E2E000012F40000000000008 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -1334,6 +1397,10 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = TA739QLA7A;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -1347,7 +1414,6 @@
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NetBird.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NetBird";
-				FRAMEWORK_SEARCH_PATHS = ("$(inherited)", "$(PROJECT_DIR)");
 			};
 			name = Debug;
 		};
@@ -1868,6 +1934,10 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = TA739QLA7A;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -1881,7 +1951,49 @@
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NetBird.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NetBird";
-				FRAMEWORK_SEARCH_PATHS = ("$(inherited)", "$(PROJECT_DIR)");
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		E2E000012F4000000000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = TA739QLA7A;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = NetBird;
+			};
+			name = Debug;
+		};
+		E2E000012F4000000000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = TA739QLA7A;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.netbird.app.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = NetBird;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -1948,6 +2060,15 @@
 			buildConfigurations = (
 				55D8659B2F70982100A2EFF8 /* Debug */,
 				55D8659C2F70982100A2EFF8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E2E000012F40000000000009 /* Build configuration list for PBXNativeTarget "NetBirdUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E2E000012F4000000000000A /* Debug */,
+				E2E000012F4000000000000B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
