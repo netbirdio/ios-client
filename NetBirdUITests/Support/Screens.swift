@@ -425,6 +425,16 @@ struct NewProfileSheet {
             }
             type(setupKey, into: setupKeyField, "setup key")
         }
+        // Leaving the name field can let the keyboard's autocorrect append a
+        // suggestion ("e2e-1a2b" became "e2e-1a2btu"). Check the name last,
+        // and type it again as the final step if it changed, so nothing
+        // leaves the field before Create.
+        if let name, (nameField.value as? String) != name {
+            XCTContext.runActivity(named: "The keyboard changed the name to \"\(nameField.value as? String ?? "")\", typing it again") { _ in }
+            clear(nameField)
+            nameField.typeText(name)
+            XCTAssertEqual(nameField.value as? String, name, "the profile name field does not hold the typed name")
+        }
     }
 
     func submit() {
@@ -468,6 +478,14 @@ struct NewProfileSheet {
         XCTAssertTrue(field.waitForExistence(timeout: 5), "no \(what) field")
         field.tap()
         field.typeText(text)
+    }
+
+    /// Empties a text field: a tap at its right edge puts the cursor after
+    /// the text, then the text is deleted backwards.
+    private func clear(_ field: XCUIElement) {
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
+        let current = field.value as? String ?? ""
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
     }
 
     private func textField(placeholder: String) -> XCUIElement {
