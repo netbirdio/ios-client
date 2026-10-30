@@ -22,7 +22,7 @@ jobs:
       - name: Dispatch to mobile-e2e
         env:
           GH_TOKEN: ${{ secrets.E2E_DISPATCH_TOKEN }}
-          E2E_REPO: ${{ vars.E2E_REPO || 'evgeniyChepelev/mobile-e2e' }}
+          E2E_REPO: ${{ vars.E2E_REPO || 'netbirdio/mobile-e2e' }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
