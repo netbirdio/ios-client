@@ -14,6 +14,9 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
 
     private let onConnectionChanged: ((ClientState) -> Void)?
 
+    private let startLock = NSLock()
+    private var hasStarted = false
+
     var adapter: NetBirdAdapter
 
     init(adapter: NetBirdAdapter, onConnectionChanged: ((ClientState) -> Void)? = nil, completionHandler: @escaping (Error?) -> Void) {
@@ -28,6 +31,11 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
 
     func onStateChanged(_ state: Int) {
         guard let state = ClientState(sdkState: state) else { return }
+        // ClientStart can be reported as NoNetwork when startup is offline.
+        if state == .connecting || state == .noNetwork {
+            onConnecting()
+        }
+        if state == .disconnected && !engineHasStarted { return }
         onConnectionChanged?(state)
         if adapter.isRestarting && (state == .connecting || state == .disconnecting) {
             AppLogger.shared.log("onStateChanged: suppressed state=\(state) (isRestarting=true)")
@@ -43,9 +51,22 @@ class ConnectionListener: NSObject, NetBirdSDKConnectionListenerProtocol {
         }
     }
 
-    func onConnecting() {}
+    func onConnecting() {
+        startLock.lock()
+        hasStarted = true
+        startLock.unlock()
+    }
+
+    private var engineHasStarted: Bool {
+        startLock.lock()
+        defer { startLock.unlock() }
+        return hasStarted
+    }
 
     func onDisconnected() {
+        // Registering a listener synchronously replays the reused client's previous
+        // disconnected state and auth error. Only the new run may request teardown.
+        guard engineHasStarted else { return }
         // Disconnected means Run has stopped; NoNetwork is recoverable.
         if !adapter.isRestarting && adapter.needsLoginCached() {
             AppLogger.shared.log("onDisconnected: login required — signalling teardown")
