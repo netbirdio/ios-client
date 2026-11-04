@@ -76,6 +76,13 @@ struct RouteCard: View {
                                     .onAppear {
                                         tooltipSize = tooltipGeometry.size
                                     }
+                                    .onChange(of: tooltipGeometry.size) { newSize in
+                                        // Rotation resizes the tooltip (its text wraps at a
+                                        // different width) without this view disappearing and
+                                        // reappearing, so onAppear alone would leave tooltipSize
+                                        // — and the position derived from it below — stale.
+                                        tooltipSize = newSize
+                                    }
                             })
                             .position(
                                 x: parentGeometry.size.width / 2,
@@ -119,7 +126,7 @@ struct RouteTooltipView: View {
     @ObservedObject var route: RoutesSelectionInfo
     @State var orientationTop: Bool
     @Binding var selectedRouteId: UUID?
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(route.name)
@@ -131,7 +138,11 @@ struct RouteTooltipView: View {
         .background(Color(UIColor.systemGray6))
         .cornerRadius(5)
         .shadow(radius: 5)
-        .frame(width: UIScreen.main.bounds.width * 0.8)
+        // A ceiling, not a fixed width: Apple's own popover-sizing guidance
+        // (see Layout.popoverMaxWidth) — this popover shows a variable
+        // number of label/value rows, so it should shrink to its content
+        // when short and wrap, not stretch, when long.
+        .frame(maxWidth: Layout.popoverMaxWidth)
         .overlay(
             Triangle()
                 .fill(Color(UIColor.systemGray6))
