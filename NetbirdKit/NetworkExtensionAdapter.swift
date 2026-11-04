@@ -634,14 +634,10 @@ public class NetworkExtensionAdapter: ObservableObject {
                         self.loginSucceeded = true
                         self.pendingAuth = nil
                         self.pendingAuthorizeURL = nil
-                        // If the browser is already gone, the view's completion handler
-                        // deferred the decision to us — the login only finished now, so
-                        // start the VPN here. While it is still open, the view starts it
-                        // when the user dismisses the success page.
-                        if !self.showBrowser {
-                            self.logger.info("performLogin: login completed after browser closed - starting VPN")
-                            self.startVPNConnection()
-                        }
+                        // Nothing is left to do on the SDK's success page, so close it
+                        // instead of waiting for the user to dismiss it.
+                        self.showBrowser = false
+                        self.startVPNConnection()
                     }
                 }
                 errListener.onSuccessCallback = { urlOpener.onSuccess?() }
