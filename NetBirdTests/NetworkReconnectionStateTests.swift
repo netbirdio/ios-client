@@ -296,3 +296,57 @@ final class NetworkReconnectionStateTests: XCTestCase {
     }
 
 }
+
+
+final class ConnectionListenerStartupTests: XCTestCase {
+    private final class AuthFailedAdapter: NetBirdAdapter {
+        override func needsLoginCached() -> Bool { true }
+    }
+
+    private func makeAdapter() throws -> AuthFailedAdapter {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try FileManager.default.removeItem(at: directory) }
+        return try XCTUnwrap(AuthFailedAdapter(
+            with: PacketTunnelProviderSettingsManager(with: PacketTunnelProvider()),
+            configPath: directory.appendingPathComponent("config.json").path,
+            statePath: directory.appendingPathComponent("state.json").path))
+    }
+
+    func testStaleDisconnectIsIgnoredButNewAuthenticationFailureIsDelivered() throws {
+        let adapter = try makeAdapter()
+        var loginRequired = 0
+        var states: [ClientState] = []
+        adapter.onLoginRequired = { loginRequired += 1 }
+        let listener = ConnectionListener(adapter: adapter, onConnectionChanged: { states.append($0) }) { _ in }
+
+        // The SDK replays the legacy callback before OnStateChanged.
+        listener.onDisconnected()
+        listener.onStateChanged(NetBirdSDKClientStateDisconnected)
+        XCTAssertEqual(loginRequired, 0)
+        XCTAssertTrue(states.isEmpty)
+
+        listener.onConnecting()
+        listener.onStateChanged(NetBirdSDKClientStateConnecting)
+        listener.onDisconnected()
+        listener.onStateChanged(NetBirdSDKClientStateDisconnected)
+        XCTAssertEqual(loginRequired, 1)
+        XCTAssertEqual(states, [.connecting, .disconnected])
+
+        // Each engine start gets a new listener, even when reusing the adapter.
+        let nextListener = ConnectionListener(adapter: adapter) { _ in }
+        nextListener.onDisconnected()
+        XCTAssertEqual(loginRequired, 1)
+    }
+
+    func testOfflineStartStillDeliversAuthenticationFailure() throws {
+        let adapter = try makeAdapter()
+        var loginRequired = 0
+        adapter.onLoginRequired = { loginRequired += 1 }
+        let listener = ConnectionListener(adapter: adapter) { _ in }
+        // NoNetwork has no legacy onConnecting callback.
+        listener.onStateChanged(NetBirdSDKClientStateNoNetwork)
+        listener.onDisconnected()
+        XCTAssertEqual(loginRequired, 1)
+    }
+}
