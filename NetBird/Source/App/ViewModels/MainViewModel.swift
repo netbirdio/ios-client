@@ -107,13 +107,18 @@ class ViewModel: ObservableObject {
     // Debug
     @Published var traceLogsEnabled: Bool {
         didSet {
+            let logLevel = traceLogsEnabled ? "TRACE" : "INFO"
+            UserDefaults.standard.set(logLevel, forKey: "logLevel")
+            UserDefaults.standard.synchronize()
+            // Turning trace on reaches a running tunnel at once. Anything else waits for
+            // the next connect, which is what the alert says.
+            if traceLogsEnabled && networkExtensionAdapter.enableTraceLogs() {
+                return
+            }
             self.showLogLevelChangedAlert = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 self.showLogLevelChangedAlert = false
             }
-            let logLevel = traceLogsEnabled ? "TRACE" : "INFO"
-            UserDefaults.standard.set(logLevel, forKey: "logLevel")
-            UserDefaults.standard.synchronize()
         }
     }
 

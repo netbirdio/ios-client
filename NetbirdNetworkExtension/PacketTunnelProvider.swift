@@ -55,10 +55,18 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private var networkChangeWorkItem: DispatchWorkItem?
     private var initialStartTimeoutWorkItem: DispatchWorkItem?
+    private var statusLogWorkItem: DispatchWorkItem?
+    private var settingsLogWorkItem: DispatchWorkItem?
+    /// Routes in the last `Network settings applied` line. Read and written on `monitorQueue`.
+    private var loggedRoutes: [String] = []
 
     /// Upper bound on the initial-start guard. A start that never reports its outcome must not
     /// block policy restarts for the rest of the tunnel's life.
     private static let initialStartGuardTimeout: TimeInterval = 30.0
+    /// Quiet time after the last network event before the status line is logged.
+    private static let statusLogDelay: TimeInterval = 10.0
+    /// Quiet time after the last applied settings before the settings line is logged.
+    private static let settingsLogDelay: TimeInterval = 2.0
 
     /// NE requires the startTunnel completion handler to be called exactly once. The Go
     /// engine's connection listener reports every management/signal reconnect as a fresh
@@ -279,6 +287,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             adapter.isRestarting = false
             networkChangeWorkItem?.cancel()
             networkChangeWorkItem = nil
+            statusLogWorkItem?.cancel()
+            statusLogWorkItem = nil
+            settingsLogWorkItem?.cancel()
+            settingsLogWorkItem = nil
+            loggedRoutes = []
             beginInitialStart()
             adapter.isNetworkUnavailable = false
             startMonitoringNetworkChanges()
@@ -381,6 +394,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             guard let self = self else { return }
             self.networkChangeWorkItem?.cancel()
             self.networkChangeWorkItem = nil
+            self.statusLogWorkItem?.cancel()
+            self.statusLogWorkItem = nil
+            self.settingsLogWorkItem?.cancel()
+            self.settingsLogWorkItem = nil
+            self.loggedRoutes = []
             self.mdmRetryWorkItem?.cancel()
             self.mdmRetryWorkItem = nil
             self.pendingMDMRestart = false
@@ -471,6 +489,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case let s where s.hasPrefix("DebugBundle:"):
             let anonymize = s.dropFirst("DebugBundle:".count) == "true"
             debugBundle(anonymize: anonymize, completionHandler: completionHandler)
+        case "EnableTraceLogs":
+            adapter?.client.setTraceLogLevel()
+            AppLogger.shared.log("Trace logs enabled")
+            completionHandler("true".data(using: .utf8))
         default:
             AppLogger.shared.log("Unknown message: \(string)")
             completionHandler(nil)
@@ -541,6 +563,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Publishes physical network changes without restarting the engine. Runs on monitorQueue.
     func handleNetworkChange(path: Network.NWPath, source: NetworkChangeSource = .path) {
         guard reconnection.isActive else { return }
+        // Scheduled before the unchanged check below, so a wake on the same network is covered.
+        scheduleStatusLog()
         let available = NetworkReconnectionState.allowsConnectionAttempts(path.status)
         latestPathIsSatisfied = available
         #if os(iOS)
@@ -573,6 +597,44 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // delivering events while reconnecting so a second SIM switch is not lost.
             adapter?.client.notifyNetworkChange()
         }
+    }
+
+    /// Logs one status line after the network has been quiet for `statusLogDelay`.
+    /// A newer network event replaces the pending line. Must run on `monitorQueue`.
+    private func scheduleStatusLog() {
+        statusLogWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.statusLogWorkItem = nil
+            self.logStatus()
+        }
+        statusLogWorkItem = workItem
+        monitorQueue.asyncAfter(deadline: .now() + Self.statusLogDelay, execute: workItem)
+    }
+
+    /// Handshake and traffic counters are left out: the iOS status read does not refresh them.
+    private func logStatus() {
+        guard let adapter, let status = adapter.client.getStatusDetails() else { return }
+        var connectedCount = 0
+        var relayedCount = 0
+        var exitPeers: [String] = []
+        for i in 0..<status.size() {
+            guard let peer = status.get(i) else { continue }
+            let isConnected = peer.connStatus == "Connected"
+            if isConnected {
+                connectedCount += 1
+                if peer.relayed { relayedCount += 1 }
+            }
+            let routes = peer.getRouteDetails()
+            let isExitPeer = (0..<(routes?.size() ?? 0)).contains { index in
+                guard let route = routes?.get(index)?.route else { return false }
+                return route == "0.0.0.0/0" || route == "::/0"
+            }
+            if isExitPeer {
+                exitPeers.append("\(peer.pubKey.prefix(5)) \(peer.connStatus) relayed=\(peer.relayed) since=\(peer.connStatusUpdate)")
+            }
+        }
+        AppLogger.shared.log("Status after network event: state=\(adapter.clientState), peers=\(connectedCount)/\(status.size()), relayed=\(relayedCount), exit=\(exitPeers)")
     }
 
     /// Runs one serialized engine stop/start transaction against the latest usable path.
@@ -1036,8 +1098,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         guard let adapter = adapter else { return }
         do {
             try adapter.client.selectRoute(id)
+            AppLogger.shared.log("Route selected: \(NetworkSettingsLogLine.name(id))")
         } catch {
-            AppLogger.shared.log("Failed to select route: \(error.localizedDescription)")
+            AppLogger.shared.log("Failed to select route \(NetworkSettingsLogLine.name(id)): \(error.localizedDescription)")
         }
     }
 
@@ -1045,8 +1108,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         guard let adapter = adapter else { return }
         do {
             try adapter.client.deselectRoute(id)
+            AppLogger.shared.log("Route deselected: \(NetworkSettingsLogLine.name(id))")
         } catch {
-            AppLogger.shared.log("Failed to deselect route: \(error.localizedDescription)")
+            AppLogger.shared.log("Failed to deselect route \(NetworkSettingsLogLine.name(id)): \(error.localizedDescription)")
         }
     }
 
@@ -1113,13 +1177,54 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     func setTunnelSettings(tunnelNetworkSettings: NEPacketTunnelNetworkSettings) {
-        setTunnelNetworkSettings(tunnelNetworkSettings) { error in
+        setTunnelNetworkSettings(tunnelNetworkSettings) { [weak self] error in
             if let error = error {
                 AppLogger.shared.log("Error assigning routes: \(error.localizedDescription)")
                 return
             }
             AppLogger.shared.log("Routes set successfully.")
+            self?.monitorQueue.async {
+                self?.scheduleSettingsLog(tunnelNetworkSettings)
+            }
         }
+    }
+
+    /// Go applies one route list per prefix and sends no end signal, so printing each list
+    /// would grow with the square of the route count. Logs only the last list of a burst.
+    /// Must run on `monitorQueue`.
+    private func scheduleSettingsLog(_ settings: NEPacketTunnelNetworkSettings) {
+        settingsLogWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.settingsLogWorkItem = nil
+            self.logSettings(settings)
+        }
+        settingsLogWorkItem = workItem
+        monitorQueue.asyncAfter(deadline: .now() + Self.settingsLogDelay, execute: workItem)
+    }
+
+    private func logSettings(_ settings: NEPacketTunnelNetworkSettings) {
+        let ipv4Routes: [String] = settings.ipv4Settings?.includedRoutes?.map { route in
+            let prefixLength = route.destinationSubnetMask
+                .split(separator: ".")
+                .compactMap { UInt8($0) }
+                .reduce(0) { $0 + $1.nonzeroBitCount }
+            return "\(route.destinationAddress)/\(prefixLength)"
+        } ?? []
+        let ipv6Routes: [String] = settings.ipv6Settings?.includedRoutes?.map {
+            "\($0.destinationAddress)/\($0.destinationNetworkPrefixLength)"
+        } ?? []
+        let dns = settings.dnsSettings
+        let line = NetworkSettingsLogLine.make(
+            ipv4Routes: ipv4Routes,
+            ipv6Routes: ipv6Routes,
+            previousRoutes: loggedRoutes,
+            dnsServers: dns?.servers ?? [],
+            matchDomains: dns?.matchDomains ?? [],
+            searchDomains: dns?.searchDomains ?? []
+        )
+        loggedRoutes = ipv4Routes + ipv6Routes
+        AppLogger.shared.log("Network settings applied: \(line)")
     }
 
     // MARK: - MDM managed-configuration observer
