@@ -1,0 +1,32 @@
+{
+  "configurations" : [
+    {
+      "id" : "ADA7FFED-6061-4270-B142-E30B22D45CB8",
+      "name" : "Default",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "defaultTestExecutionTimeAllowance" : 600,
+    "preferredScreenCaptureFormat" : "video",
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:NetBird.xcodeproj",
+      "identifier" : "50A891162A792A15007C48FC",
+      "name" : "NetBird"
+    },
+    "testTimeoutsEnabled" : true,
+    "uiTestingScreenshotsLifetime" : "keepAlways"
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:NetBird.xcodeproj",
+        "identifier" : "E2E000012F40000000000003",
+        "name" : "NetBirdUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

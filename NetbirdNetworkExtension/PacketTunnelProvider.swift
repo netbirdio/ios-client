@@ -1439,11 +1439,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 }
 
+/// Starts logfile.log afresh in the log folder for this extension run and
+/// points the Go client log at it.
 func initializeLogging(loglevel: String) {
     let fileManager = FileManager.default
 
-    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)
-    let logURL = groupURL?.appendingPathComponent("logfile.log")
+    let logURL = AppLogger.logDirectoryURL?.appendingPathComponent("logfile.log")
 
     var error: NSError?
     var success = false
