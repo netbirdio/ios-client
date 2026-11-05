@@ -80,6 +80,13 @@ final class NetworkSettingsLogLineTests: XCTestCase {
         XCTAssertTrue(result.contains("searchDomains=[ domain=example.org ]"))
     }
 
+    func testLongDomainListIsCappedAndCountsTheRest() {
+        let domains = (0..<30).map { "d\($0).example.com" }
+        let result = line(search: domains)
+        XCTAssertTrue(result.contains("+10 more ]"))
+        XCTAssertEqual(result.components(separatedBy: "domain=").count - 1, NetworkSettingsLogLine.maxDomains)
+    }
+
     func testRouteNameWithoutDotStaysReadable() {
         XCTAssertEqual(NetworkSettingsLogLine.name("exit-docker"), "exit-docker")
         XCTAssertEqual(NetworkSettingsLogLine.name("corp.example.com"), "domain=corp.example.com")

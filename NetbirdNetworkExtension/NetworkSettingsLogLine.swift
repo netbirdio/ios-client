@@ -7,6 +7,8 @@ import Foundation
 enum NetworkSettingsLogLine {
     /// Most prefixes printed in one line, added and removed together.
     static let maxPrefixes = 50
+    /// Most names printed per domain list. The line repeats these lists on every settings update.
+    static let maxDomains = 20
 
     static func make(
         ipv4Routes: [String],
@@ -27,8 +29,8 @@ enum NetworkSettingsLogLine {
         return "ipv4=\(ipv4Routes.count) ipv6=\(ipv6Routes.count)"
             + " default4=\(ipv4Routes.contains("0.0.0.0/0") ? "yes" : "no")"
             + " default6=\(ipv6Routes.contains("::/0") ? "yes" : "no")"
-            + " added=\(prefixList(added, shown: shownAdded))"
-            + " removed=\(prefixList(removed, shown: shownRemoved))"
+            + " added=\(cappedList(added, shown: shownAdded))"
+            + " removed=\(cappedList(removed, shown: shownRemoved))"
             + " dns=\(dnsServers)"
             + " matchDomains=\(domainList(matchDomains))"
             + " searchDomains=\(domainList(searchDomains))"
@@ -39,16 +41,16 @@ enum NetworkSettingsLogLine {
         name.contains(".") ? "domain=\(name)" : name
     }
 
-    private static func prefixList(_ prefixes: [String], shown: Int) -> String {
-        var items = Array(prefixes.prefix(shown))
-        if prefixes.count > shown {
-            items.append("+\(prefixes.count - shown) more")
+    private static func cappedList(_ all: [String], shown: Int) -> String {
+        var items = Array(all.prefix(shown))
+        if all.count > shown {
+            items.append("+\(all.count - shown) more")
         }
         return bracketed(items)
     }
 
     private static func domainList(_ domains: [String]) -> String {
-        bracketed(domains.map { $0.isEmpty ? "\"\"" : name($0) })
+        cappedList(domains.map { $0.isEmpty ? "\"\"" : name($0) }, shown: maxDomains)
     }
 
     /// Spaces around the items: the anonymizer would read a closing bracket as part of a name.
