@@ -30,6 +30,9 @@ class E2ETestCase: XCTestCase {
     /// "Login failed" that follows (LOGIN-B01).
     private var cancelledLogin = false
 
+    /// Launches the app to its main screen, resets the device-wide state and
+    /// removes profiles left by earlier runs, then remembers the active profile
+    /// so teardown can return to it.
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = AppLaunch.toMainScreen()
@@ -41,6 +44,10 @@ class E2ETestCase: XCTestCase {
         startingProfile = profiles.activeProfileName ?? startingProfile
     }
 
+    /// After a passing test, leaves the device as the test found it: closes a
+    /// late "Login failed", disconnects, switches back to the starting profile
+    /// and removes the profiles the test created. A failing test leaves its
+    /// state for troubleshooting; the next setUp clears it.
     override func tearDownWithError() throws {
         guard passed, !createdProfiles.isEmpty else { return }
         // The alert can come more than 10 s after the cancel.

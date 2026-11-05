@@ -1308,6 +1308,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 }
 
+/// Starts logfile.log afresh in the log folder for this extension run and
+/// points the Go client log at it.
 func initializeLogging(loglevel: String) {
     let fileManager = FileManager.default
 

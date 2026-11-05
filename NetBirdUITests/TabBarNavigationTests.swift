@@ -18,6 +18,7 @@ final class TabBarNavigationTests: XCTestCase {
         app = AppLaunch.toMainScreen()
     }
 
+    /// SMOKE-001 — every tab opens its screen, forwards and in reverse order.
     func testSwitchesThroughAllTabs() {
         // Resources is hidden when an MDM policy disables networks.
         let resourcesShown = tab("Resources").exists

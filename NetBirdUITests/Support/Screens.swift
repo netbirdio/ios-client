@@ -12,6 +12,8 @@ import XCTest
 /// Values the CI passes in through the test runner's environment
 /// (TEST_RUNNER_<NAME> on the xcodebuild command line).
 enum TestSecrets {
+    /// The secret passed to the test runner as `TEST_RUNNER_<name>`.
+    /// Throws, failing the test, when it is not set.
     static func value(_ name: String, file: StaticString = #filePath, line: UInt = #line) throws -> String {
         let value = ProcessInfo.processInfo.environment[name] ?? ""
         return try XCTUnwrap(value.isEmpty ? nil : value, "\(name) is not set for this run", file: file, line: line)
@@ -90,6 +92,8 @@ struct ConnectionScreen {
         XCTContext.runActivity(named: "The toggle did not react to 4 taps") { _ in }
     }
 
+    /// Waits until the toggle leaves Disconnecting, then 3 s more: the app
+    /// ignores taps on the toggle for about 3 s after a state change.
     private func waitWhileDisconnecting(timeout: TimeInterval = 15) {
         let deadline = Date().addingTimeInterval(timeout)
         while (toggle.value as? String) == "Disconnecting" && Date() < deadline {
@@ -131,6 +135,8 @@ struct ConnectionScreen {
         app.buttons[name]
     }
 
+    /// Disconnects if connected, answering the On Demand "Disable & Disconnect"
+    /// alert, and waits until the state reads Disconnected.
     func disconnect(timeout: TimeInterval = 30) {
         TabBar(app: app).open("Connection")
         guard state != "Disconnected" else { return }
@@ -263,6 +269,8 @@ struct ProfilesScreen {
         return parts.filter { !$0.isEmpty && $0 != "Active" && seen.insert($0).inserted }
     }
 
+    /// Polls `condition` every half second until it holds or `timeout` passes.
+    /// Returns whether it held.
     private func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
@@ -291,6 +299,9 @@ struct ProfilesScreen {
         XCTAssertNotNil(row(name), "\(name) is not in the profile list")
     }
 
+    /// Opens the New Profile sheet from the Profiles screen. Tries twice,
+    /// waiting out notification banners first: a banner over the navigation bar
+    /// takes the tap on the add button.
     func openNewProfileSheet() -> NewProfileSheet {
         let add = app.navigationBars["Profiles"].buttons["Add"]
         XCTAssertTrue(add.waitForExistence(timeout: 5), "no add button on the Profiles screen")
@@ -502,6 +513,7 @@ struct OnDemandScreen {
     var isOn: Bool { (toggle.value as? String) == "1" }
 
     @discardableResult
+    /// Opens Settings → VPN On Demand, unless that screen is already showing.
     func open() -> OnDemandScreen {
         if app.navigationBars["VPN On Demand"].exists {
             return self
@@ -518,6 +530,7 @@ struct OnDemandScreen {
         return self
     }
 
+    /// Switches VPN On Demand to `on` and waits up to 5 s for the switch to follow.
     func set(_ on: Bool) {
         guard isOn != on else { return }
         // A SwiftUI switch takes the tap on its knob, at the right edge.
@@ -562,6 +575,8 @@ enum Banner {
         SystemAlerts.springboard.descendants(matching: .any)["NotificationShortLookView"]
     }
 
+    /// Waits up to `timeout` for a notification banner to go away, so it does
+    /// not take a tap meant for the navigation bar under it.
     static func waitUntilGone(timeout: TimeInterval = 10) {
         guard element.exists else { return }
         XCTContext.runActivity(named: "Wait for a notification banner to go away") { _ in

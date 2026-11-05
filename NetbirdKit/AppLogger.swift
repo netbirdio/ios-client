@@ -62,6 +62,9 @@ public class AppLogger {
         }
     }
 
+    /// Opens swift-log.log for appending in the log folder, falling back to
+    /// Documents where there is no app group. Signals `setupSemaphore` when done,
+    /// whether or not the file could be opened.
     private func setupLogFile() {
         let fileManager = FileManager.default
         var containerURL: URL?
@@ -221,6 +224,7 @@ public class AppLogger {
         }
     }
 
+    /// The Swift log file, once set up and present; waits up to 2 s for setup.
     public static func getLogFileURL() -> URL? {
         // Wait for setup to complete (with timeout to avoid blocking forever)
         _ = shared.setupSemaphore.wait(timeout: .now() + 2.0)
@@ -233,6 +237,8 @@ public class AppLogger {
         return url
     }
 
+    /// The Go client log, logfile.log, in the log folder or, without an app
+    /// group, in Documents. Nil until the extension has created it.
     public static func getGoLogFileURL() -> URL? {
         let fileManager = FileManager.default
         // Try app group first

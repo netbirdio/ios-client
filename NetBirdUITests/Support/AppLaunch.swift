@@ -66,6 +66,7 @@ enum SystemAlerts {
         return true
     }
 
+    /// The first button under `snapshot` whose label accepts a prompt, searched depth-first.
     private static func findButton(in snapshot: XCUIElementSnapshot) -> XCUIElementSnapshot? {
         for child in snapshot.children {
             if child.elementType == .button && acceptLabels.contains(child.label) { return child }
@@ -99,6 +100,7 @@ enum SignInAlert {
         return !labels.isDisjoint(with: cancelLabels) && !labels.isDisjoint(with: continueLabels)
     }
 
+    /// Labels of every button under `snapshot`, at any depth.
     private static func buttonLabels(in snapshot: XCUIElementSnapshot) -> Set<String> {
         var labels = Set<String>()
         for child in snapshot.children {
@@ -110,6 +112,8 @@ enum SignInAlert {
         return labels
     }
 
+    /// Polls for the sign-in alert until it shows or `timeout` passes.
+    /// Returns whether it showed.
     static func waitForAppearance(timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
@@ -121,6 +125,8 @@ enum SignInAlert {
         return false
     }
 
+    /// Taps Cancel in the sign-in alert and waits up to 5 s for it to close.
+    /// Fails the test if no sign-in alert is up.
     static func cancel(file: StaticString = #filePath, line: UInt = #line) {
         guard let cancel = button(cancelLabels) else {
             XCTFail("no sign-in alert to cancel", file: file, line: line)

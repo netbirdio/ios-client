@@ -25,9 +25,16 @@ public enum GoCrashCapture {
     /// Crashlytics keeps at most 64 KB of logs per session; stay under it so the
     /// panic header at the top of the dump is never the part that gets dropped.
     private static let maxReportSize = 48 * 1024
-    // v2: netbird.err moved to Library/Logs, so the offset into the old file
-    // must not carry over to the new one.
-    private static let reportedOffsetKey = "io.netbird.goCrashCapture.reportedOffset.v2"
+    /// Where the reported part of netbird.err ends, one key per location: the
+    /// file lives in Library/Logs, or at the container root when that folder
+    /// cannot be created (see AppLogger.logDirectoryURL). A shared offset
+    /// would let one file's progress skip a panic in the other. The root keeps
+    /// the key it had before the move, since it is the same file.
+    private static var reportedOffsetKey: String {
+        fileURL?.deletingLastPathComponent().lastPathComponent == "Logs"
+            ? "io.netbird.goCrashCapture.reportedOffset.logs"
+            : "io.netbird.goCrashCapture.reportedOffset"
+    }
     private static let crashMarkers = ["panic:", "fatal error:"]
 
     private static var fileURL: URL? {
