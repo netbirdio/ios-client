@@ -1069,10 +1069,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func sleep(completionHandler: @escaping () -> Void) {
+        AppLogger.shared.log("Device sleep: tunnel entering sleep")
         completionHandler()
     }
 
     override func wake() {
+        AppLogger.shared.log("Device wake: tunnel resumed")
         monitorQueue.async { [weak self] in
             guard let self, self.reconnection.isActive, let monitor = self.pathMonitor else { return }
             // Wake alone does not prove sockets are stale. Reconcile the path,
