@@ -1444,6 +1444,30 @@ public class NetworkExtensionAdapter: ObservableObject {
         sendRouteMessage("GetRoutes", decodeResponse: true, completion: completion)
     }
 
+    /// Turns on trace logs in a running tunnel, so no reconnect is needed. A reconnect would
+    /// wipe the Go log that may hold the problem being debugged.
+    ///
+    /// - Returns: `false` when no running tunnel took the message; the level then applies on
+    ///   the next connect.
+    func enableTraceLogs() -> Bool {
+        #if os(iOS)
+        guard let session,
+              session.status == .connected || session.status == .reasserting,
+              let messageData = "EnableTraceLogs".data(using: .utf8) else {
+            return false
+        }
+        do {
+            try session.sendProviderMessage(messageData) { _ in }
+            return true
+        } catch {
+            logger.error("enableTraceLogs: \(error.localizedDescription)")
+            return false
+        }
+        #else
+        return false
+        #endif
+    }
+
     /// Asks the core to select `id` — a route name, or "All".
     ///
     /// The extension answers select/deselect with a bare acknowledgement rather than a
