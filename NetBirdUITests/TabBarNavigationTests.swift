@@ -27,7 +27,7 @@ final class TabBarNavigationTests: XCTestCase {
             open("Resources", showing: app.staticTexts["Resources connected"])
         }
         open("Settings", showing: app.navigationBars["Settings"])
-        open("Connection", showing: nil)
+        open("Connection", showing: connectToggle)
 
         // And once more in reverse, so every tab is also left from another one.
         open("Settings", showing: app.navigationBars["Settings"])
@@ -35,10 +35,15 @@ final class TabBarNavigationTests: XCTestCase {
             open("Resources", showing: app.staticTexts["Resources connected"])
         }
         open("Peers", showing: app.staticTexts["Peers connected"])
-        open("Connection", showing: nil)
+        open("Connection", showing: connectToggle)
     }
 
     // MARK: - Helpers
+
+    /// The connect/disconnect toggle, the Connection screen's own control.
+    private var connectToggle: XCUIElement {
+        app.descendants(matching: .any)["VPN Connection"]
+    }
 
     private func tab(_ name: String) -> XCUIElement {
         app.tabBars.firstMatch.buttons[name]

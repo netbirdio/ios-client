@@ -169,6 +169,8 @@ final class ConnectionTests: E2ETestCase {
         }
 
         step("For 30 s: at most one login prompt, and no connection") {
+            // The state is read from the toggle, which is only on this tab.
+            TabBar(app: app).open("Connection")
             var prompts = 0
             let deadline = Date().addingTimeInterval(30)
             while Date() < deadline {

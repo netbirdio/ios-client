@@ -90,8 +90,24 @@ enum SignInAlert {
         alert.buttons.allElementsBoundByIndex.first { labels.contains($0.label) }
     }
 
+    /// Read from one snapshot: the alert can close between listing its
+    /// buttons and reading their labels, and a vanished live element fails the
+    /// test, while a snapshot only throws. Polled in tight loops, so it matters.
     static var isShowing: Bool {
-        alert.exists && button(cancelLabels) != nil && button(continueLabels) != nil
+        guard alert.exists, let snapshot = try? alert.snapshot() else { return false }
+        let labels = buttonLabels(in: snapshot)
+        return !labels.isDisjoint(with: cancelLabels) && !labels.isDisjoint(with: continueLabels)
+    }
+
+    private static func buttonLabels(in snapshot: XCUIElementSnapshot) -> Set<String> {
+        var labels = Set<String>()
+        for child in snapshot.children {
+            if child.elementType == .button {
+                labels.insert(child.label)
+            }
+            labels.formUnion(buttonLabels(in: child))
+        }
+        return labels
     }
 
     static func waitForAppearance(timeout: TimeInterval) -> Bool {

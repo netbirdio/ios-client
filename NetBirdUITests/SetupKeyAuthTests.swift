@@ -14,6 +14,7 @@ import XCTest
 final class SetupKeyAuthTests: E2ETestCase {
 
     func testLoginWithSetupKeyViaUi() throws {
+        try requireDevice()
         let setupKey = try TestSecrets.value("NB_SETUP_KEY")
         let profile = newProfileName()
 

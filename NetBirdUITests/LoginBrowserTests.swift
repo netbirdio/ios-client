@@ -19,12 +19,6 @@ final class LoginBrowserTests: E2ETestCase {
     /// launch the extension, hit its needs-login path and pop a spurious
     /// "Authentication required" alert.
     func testB01_cancellingTheLoginAbortsCleanly() throws {
-        // Disabled until the app stops reporting a cancelled login as failed:
-        // cancelLogin() stops the SDK's token wait, the SDK reports that as a
-        // login error, and the adapter's error handler shows it as "Login
-        // failed" without checking that the user cancelled. Remove this line
-        // once that is fixed.
-        throw XCTSkip("disabled: the app shows \"Login failed\" after a cancelled login")
         try requireDevice()
         let profile = signedOutProfileAsked()
 
@@ -34,8 +28,22 @@ final class LoginBrowserTests: E2ETestCase {
 
         step("The VPN stays off and nothing else pops up") {
             expectStaysDisconnected(for: 10)
+            // Known issue: cancelLogin() stops the SDK's token wait, the SDK
+            // reports that as a login error, and the adapter shows it as
+            // "Login failed" without checking that the user cancelled. Only
+            // this check is expected to fail; the rest of the case still runs.
+            // Not strict, so the run stays green once the app is fixed, and
+            // this block can then go.
+            let options = XCTExpectedFailure.Options()
+            options.isStrict = false
+            XCTExpectFailure("LOGIN-B01: \"Login failed\" after a cancelled login", options: options) {
+                XCTAssertEqual(app.alerts.count, 0,
+                               "an alert followed the cancelled login: \(app.alerts.firstMatch.label)")
+            }
+            // It can also come a little later than the check above.
+            closeLoginFailed(waiting: 5)
             XCTAssertEqual(app.alerts.count, 0,
-                           "an alert followed the cancelled login: \(app.alerts.firstMatch.label)")
+                           "an alert other than \"Login failed\" followed the cancelled login: \(app.alerts.firstMatch.label)")
             XCTAssertFalse(SignInAlert.isShowing, "the sign-in alert came back by itself")
         }
 
