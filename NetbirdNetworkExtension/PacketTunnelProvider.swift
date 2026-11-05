@@ -1311,8 +1311,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 func initializeLogging(loglevel: String) {
     let fileManager = FileManager.default
 
-    let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)
-    let logURL = groupURL?.appendingPathComponent("logfile.log")
+    let logURL = AppLogger.logDirectoryURL?.appendingPathComponent("logfile.log")
 
     var error: NSError?
     var success = false
