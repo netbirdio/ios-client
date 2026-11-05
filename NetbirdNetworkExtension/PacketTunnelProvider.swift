@@ -59,6 +59,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var settingsLogWorkItem: DispatchWorkItem?
     /// Routes in the last `Network settings applied` line. Read and written on `monitorQueue`.
     private var loggedRoutes: [String] = []
+    private var exitPeerStatsWorkItem: DispatchWorkItem?
+    private var exitPeerStatsSamplesLeft = 0
+    /// Whether this engine runs at trace level. Read and written on `monitorQueue`.
+    private var traceLogsActive = false
 
     /// Upper bound on the initial-start guard. A start that never reports its outcome must not
     /// block policy restarts for the rest of the tunnel's life.
@@ -67,6 +71,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let statusLogDelay: TimeInterval = 10.0
     /// Quiet time after the last applied settings before the settings line is logged.
     private static let settingsLogDelay: TimeInterval = 2.0
+    /// Exit peer stats run for two minutes after the last network event, trace logs only.
+    private static let exitPeerStatsInterval: TimeInterval = 10.0
+    private static let exitPeerStatsSamples = 12
 
     /// NE requires the startTunnel completion handler to be called exactly once. The Go
     /// engine's connection listener reports every management/signal reconnect as a fresh
@@ -199,6 +206,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
+            monitorQueue.async { [weak self] in
+                self?.traceLogsActive = logLevel == "TRACE"
+            }
         }
 
         // Extract profile paths passed from the main app via startVPNTunnel(options:).
@@ -292,6 +302,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             settingsLogWorkItem?.cancel()
             settingsLogWorkItem = nil
             loggedRoutes = []
+            exitPeerStatsWorkItem?.cancel()
+            exitPeerStatsWorkItem = nil
             beginInitialStart()
             adapter.isNetworkUnavailable = false
             startMonitoringNetworkChanges()
@@ -399,6 +411,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self.settingsLogWorkItem?.cancel()
             self.settingsLogWorkItem = nil
             self.loggedRoutes = []
+            self.exitPeerStatsWorkItem?.cancel()
+            self.exitPeerStatsWorkItem = nil
             self.mdmRetryWorkItem?.cancel()
             self.mdmRetryWorkItem = nil
             self.pendingMDMRestart = false
@@ -491,6 +505,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             debugBundle(anonymize: anonymize, completionHandler: completionHandler)
         case "EnableTraceLogs":
             adapter?.client.setTraceLogLevel()
+            monitorQueue.async { [weak self] in
+                self?.traceLogsActive = true
+            }
             AppLogger.shared.log("Trace logs enabled")
             completionHandler("true".data(using: .utf8))
         default:
@@ -565,6 +582,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         guard reconnection.isActive else { return }
         // Scheduled before the unchanged check below, so a wake on the same network is covered.
         scheduleStatusLog()
+        if traceLogsActive {
+            startExitPeerStats()
+        }
         let available = NetworkReconnectionState.allowsConnectionAttempts(path.status)
         latestPathIsSatisfied = available
         #if os(iOS)
@@ -612,7 +632,55 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         monitorQueue.asyncAfter(deadline: .now() + Self.statusLogDelay, execute: workItem)
     }
 
-    /// Handshake and traffic counters are left out: the iOS status read does not refresh them.
+    /// Samples exit peer stats after a network event. A dead WireGuard session under a live
+    /// relay shows as tx growing while rx and the handshake stand still. A new event restarts
+    /// the count and keeps the running timer, so repeated events cannot starve the samples.
+    /// Must run on `monitorQueue`.
+    private func startExitPeerStats() {
+        exitPeerStatsSamplesLeft = Self.exitPeerStatsSamples
+        if exitPeerStatsWorkItem == nil {
+            scheduleNextExitPeerStats()
+        }
+    }
+
+    private func scheduleNextExitPeerStats() {
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.exitPeerStatsWorkItem = nil
+            self.logExitPeerStats()
+            self.exitPeerStatsSamplesLeft -= 1
+            if self.exitPeerStatsSamplesLeft > 0 {
+                self.scheduleNextExitPeerStats()
+            }
+        }
+        exitPeerStatsWorkItem = workItem
+        monitorQueue.asyncAfter(deadline: .now() + Self.exitPeerStatsInterval, execute: workItem)
+    }
+
+    private func logExitPeerStats() {
+        guard let adapter else { return }
+        do {
+            try adapter.client.refreshWireGuardStats()
+        } catch {
+            AppLogger.shared.log("Exit peer stats failed: \(error.localizedDescription)")
+            return
+        }
+        guard let status = adapter.client.getStatusDetails() else { return }
+        for i in 0..<status.size() {
+            guard let peer = status.get(i), Self.isExitPeer(peer) else { continue }
+            AppLogger.shared.log("Exit peer stats: \(peer.pubKey.prefix(5)) \(peer.connStatus) handshake=\(peer.lastWireguardHandshake) rx=\(peer.bytesRx) tx=\(peer.bytesTx)")
+        }
+    }
+
+    private static func isExitPeer(_ peer: NetBirdSDKPeerInfo) -> Bool {
+        let routes = peer.getRouteDetails()
+        return (0..<(routes?.size() ?? 0)).contains { index in
+            guard let route = routes?.get(index)?.route else { return false }
+            return route == "0.0.0.0/0" || route == "::/0"
+        }
+    }
+
+    /// Handshake and traffic counters are left out: this read does not refresh them.
     private func logStatus() {
         guard let adapter, let status = adapter.client.getStatusDetails() else { return }
         var connectedCount = 0
@@ -625,12 +693,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 connectedCount += 1
                 if peer.relayed { relayedCount += 1 }
             }
-            let routes = peer.getRouteDetails()
-            let isExitPeer = (0..<(routes?.size() ?? 0)).contains { index in
-                guard let route = routes?.get(index)?.route else { return false }
-                return route == "0.0.0.0/0" || route == "::/0"
-            }
-            if isExitPeer {
+            if Self.isExitPeer(peer) {
                 exitPeers.append("\(peer.pubKey.prefix(5)) \(peer.connStatus) relayed=\(peer.relayed) since=\(peer.connStatusUpdate)")
             }
         }
