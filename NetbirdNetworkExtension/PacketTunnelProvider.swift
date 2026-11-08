@@ -593,6 +593,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // a blip: drop it so it produces neither the UI's network warning nor a restart.
         networkLossWorkItem?.cancel()
         networkLossWorkItem = nil
+        NetBirdSDKCheckHeartbeatsNow()
 
         let shouldRestartDueToRecovery = wasStoppedDueToNoNetwork
         if wasStoppedDueToNoNetwork {
