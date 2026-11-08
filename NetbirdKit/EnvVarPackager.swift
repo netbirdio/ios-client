@@ -47,7 +47,7 @@ class EnvVarPackager {
         // (PHASES default off,on; idle = engine stopped by the extension, tunnel up).
         // The extension restarts the engine at each slot boundary.
         let file = testQuietFile()
-        var quiet = ["NB_TEST_TCP_KEEPALIVE_SEC": "", "NB_TEST_GRPC_KEEPALIVE_SEC": "", "NB_TEST_SIGNAL_WATCHDOG_SEC": "", "NB_TEST_ABLATE": ""]
+        var quiet = ["NB_TEST_TCP_KEEPALIVE_SEC": "", "NB_TEST_GRPC_KEEPALIVE_SEC": "", "NB_TEST_SIGNAL_WATCHDOG_SEC": "", "NB_TEST_ABLATE": "", "NB_TEST_HB_DYNAMIC": "", "NB_TEST_HB_STALE": "", "NB_TEST_HB_PERIOD_SEC": "", "NB_TEST_HB_CLIENT_PHASE_MS": ""]
         var phase = ""
         if let schedule = testQuietSchedule(file), testQuietPhase(file) != "on" {
             phase = " schedule=\(Int(schedule)) phase=\(testQuietPhase(file))"
