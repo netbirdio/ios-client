@@ -1232,6 +1232,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func wake() {
         AppLogger.shared.log("LOCAL TEST: wake")
+        NetBirdSDKCheckHeartbeatsNow()
     }
 
     /// Writes the resolved VPN status to shared UserDefaults and triggers a widget reload.
