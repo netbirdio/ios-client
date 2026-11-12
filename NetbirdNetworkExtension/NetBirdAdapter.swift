@@ -368,7 +368,7 @@ public class NetBirdAdapter {
                 self.client.setConnectionListener(connectionListener)
 
                 let envList = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName).flatMap {
-                    EnvVarPackager.getEnvironmentVariables(defaults: $0)
+                    EnvVarPackager.getEnvironmentVariables(defaults: $0, configPath: self.initializedConfigPath)
                 }
 
                 try self.client.run(fd, interfaceName: ifName, envList: envList)

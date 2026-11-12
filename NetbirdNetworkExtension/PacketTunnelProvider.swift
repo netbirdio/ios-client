@@ -233,6 +233,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         _ = beginTunnelGeneration()
         startObservingMDMConfigChanges()
+        monitorQueue.async { [weak self] in self?.startQuietScheduleTimer() } // LOCAL TEST
 
         guard let adapter = adapter else {
             let error = NSError(
@@ -427,6 +428,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self.isTunnelStopping = true
             self.restartRetryCount = 0
             self.adapter?.isRestarting = false
+            self.stopQuietScheduleTimer() // LOCAL TEST
+            self.quietIdle = false // LOCAL TEST
         }
         stopObservingMDMConfigChanges()
         // Reset network unavailable flag when tunnel stops
@@ -607,6 +610,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         setNetworkUnavailableFlag(!available)
         // The core parks retries while offline and wakes them with fresh backoff.
         adapter?.client.setNetworkAvailable(available)
+        if available {
+            NetBirdSDKCheckHeartbeatsNow() // LOCAL TEST
+        }
         // An MDM restart may have stopped the engine before the path went away.
         // Resume that pending policy restart; ordinary handovers never stop it.
         if available, restartPending, !isRestartInProgress {
@@ -715,6 +721,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         guard let adapter = adapter else {
             AppLogger.shared.log("restartClient: adapter is nil")
+            return
+        }
+
+        // LOCAL TEST (battery): the idle phase keeps the engine stopped until the next boundary.
+        if quietIdle {
+            AppLogger.shared.log("restartClient: ignored in quiet idle phase")
             return
         }
 
@@ -1195,11 +1207,119 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    // LOCAL TEST (battery): quiet A/B schedule. With SCHEDULE=N in test-quiet, restart the
+    // engine at every N-second wall-clock boundary so EnvVarPackager picks the new phase.
+    // In an idle slot the engine is stopped and the tunnel stays up (drift control).
+    private var quietScheduleTimer: DispatchSourceTimer?
+    private var quietIdle = false
+
+    private func startQuietScheduleTimer() {
+        quietScheduleTimer?.cancel()
+        quietScheduleTimer = nil
+        let file = EnvVarPackager.testQuietFile()
+        guard let schedule = EnvVarPackager.testQuietSchedule(file) else { return }
+        let offset = EnvVarPackager.testQuietOffset(file)
+        let now = Date().timeIntervalSince1970
+        let boundary = (floor((now - offset) / schedule) + 1) * schedule + offset
+        let timer = DispatchSource.makeTimerSource(queue: monitorQueue)
+        timer.schedule(wallDeadline: .now() + (boundary - now) + 1, leeway: .seconds(1))
+        timer.setEventHandler { [weak self] in
+            guard let self = self else { return }
+            let late = Date().timeIntervalSince1970 - boundary
+            let phase = EnvVarPackager.testQuietPhase(EnvVarPackager.testQuietFile())
+            if EnvVarPackager.testQuietFile()["FOOTPRINT"] == "1" {
+                self.quietFootprintBurst(remaining: 30)
+            } else {
+                self.logQuietFootprint()
+            }
+            if phase == "idle" {
+                AppLogger.shared.log("LOCAL TEST: quiet schedule boundary \(Date(timeIntervalSince1970: boundary)) phase=idle late=\(String(format: "%.1f", late))s - stopping engine")
+                self.enterQuietIdle()
+            } else {
+                AppLogger.shared.log("LOCAL TEST: quiet schedule boundary \(Date(timeIntervalSince1970: boundary)) phase=\(phase) late=\(String(format: "%.1f", late))s - restarting engine")
+                self.quietIdle = false
+                self.restartClient()
+            }
+            self.startQuietScheduleTimer()
+        }
+        quietScheduleTimer = timer
+        timer.resume()
+        startQuietFootprintTimer()
+        let current = EnvVarPackager.testQuietPhase(file)
+        AppLogger.shared.log("LOCAL TEST: quiet schedule \(Int(schedule))s offset \(Int(offset))s phases \(EnvVarPackager.testQuietPhases(file).joined(separator: ",")) armed, current phase \(current)\(current == "idle" && !quietIdle ? " (engine stays up until the next boundary)" : ""), next boundary \(Date(timeIntervalSince1970: boundary))")
+    }
+
+    // LOCAL TEST (battery): stop the engine and keep the tunnel. isRestarting stays true so the
+    // connection listener treats the disconnect as a controlled one. Waits for a restart in flight.
+    private func enterQuietIdle() {
+        guard !isTunnelStopping, let adapter = adapter else { return }
+        if isRestartInProgress || isInitialStartInFlight {
+            AppLogger.shared.log("LOCAL TEST: quiet idle waits for a restart in flight")
+            monitorQueue.asyncAfter(deadline: .now() + 5) { [weak self] in self?.enterQuietIdle() }
+            return
+        }
+        networkChangeWorkItem?.cancel()
+        networkChangeWorkItem = nil
+        quietIdle = true
+        adapter.isRestarting = true
+        adapter.stop {
+            AppLogger.shared.log("LOCAL TEST: quiet idle - engine stopped, tunnel up")
+        }
+    }
+
+    private func stopQuietScheduleTimer() {
+        quietScheduleTimer?.cancel()
+        quietScheduleTimer = nil
+        quietFootprintTimer?.cancel()
+        quietFootprintTimer = nil
+    }
+
+    // LOCAL TEST (battery): phys_footprint is the number iOS jetsam compares with the
+    // extension limit (50 MB, seen on the XR). One sample per boundary. With FOOTPRINT=1 in
+    // test-quiet also every 15 s and every second for 30 s after each boundary (not for power runs).
+    private var quietFootprintTimer: DispatchSourceTimer?
+
+    private func startQuietFootprintTimer() {
+        guard quietFootprintTimer == nil, EnvVarPackager.testQuietFile()["FOOTPRINT"] == "1" else { return }
+        let timer = DispatchSource.makeTimerSource(queue: monitorQueue)
+        timer.schedule(deadline: .now(), repeating: .seconds(15), leeway: .seconds(1))
+        timer.setEventHandler { [weak self] in self?.logQuietFootprint() }
+        quietFootprintTimer = timer
+        timer.resume()
+    }
+
+    private func quietFootprintBurst(remaining: Int) {
+        guard remaining > 0, !isTunnelStopping else { return }
+        logQuietFootprint()
+        monitorQueue.asyncAfter(deadline: .now() + 1) { [weak self] in
+            self?.quietFootprintBurst(remaining: remaining - 1)
+        }
+    }
+
+    private func logQuietFootprint() {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.stride / MemoryLayout<natural_t>.stride)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else {
+            AppLogger.shared.log("LOCAL TEST: footprint task_info failed \(result)")
+            return
+        }
+        let mb = { (bytes: UInt64) in String(format: "%.1f", Double(bytes) / 1_048_576) }
+        AppLogger.shared.log("LOCAL TEST: footprint \(mb(info.phys_footprint)) MB peak \(mb(UInt64(info.ledger_phys_footprint_peak))) MB idle=\(quietIdle)")
+    }
+
     override func sleep(completionHandler: @escaping () -> Void) {
+        AppLogger.shared.log("LOCAL TEST: sleep")
         completionHandler()
     }
 
     override func wake() {
+        AppLogger.shared.log("LOCAL TEST: wake")
+        NetBirdSDKCheckHeartbeatsNow()
         monitorQueue.async { [weak self] in
             guard let self, self.reconnection.isActive, let monitor = self.pathMonitor else { return }
             // Wake alone does not prove sockets are stale. Reconcile the path,
@@ -1443,7 +1563,7 @@ func initializeLogging(loglevel: String) {
     let fileManager = FileManager.default
 
     let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)
-    let logURL = groupURL?.appendingPathComponent("logfile.log")
+    let logURL = groupURL?.appendingPathComponent("Library/Caches/logfile.log") // LOCAL TEST
 
     var error: NSError?
     var success = false

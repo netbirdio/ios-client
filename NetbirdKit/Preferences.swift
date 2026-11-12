@@ -142,7 +142,7 @@ class Preferences {
     static func logFilePath() -> String? {
         return FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)?
-            .appendingPathComponent("logfile.log")
+            .appendingPathComponent("Library/Caches/logfile.log") // LOCAL TEST
             .path
     }
 

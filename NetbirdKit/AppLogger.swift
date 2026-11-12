@@ -11,7 +11,7 @@ public class AppLogger {
     public static let shared = AppLogger()
 
     private let logFileName = "swift-log.log"
-    private let maxLogSize: UInt64 = 100 * 1024  // 100 KB
+    private let maxLogSize: UInt64 = 20 * 1024 * 1024  // LOCAL TEST: 20 MB (upstream 100 KB)
     private let queue = DispatchQueue(label: "io.netbird.logger", qos: .utility)
     private var fileHandle: FileHandle?
     private var logFileURL: URL?
@@ -41,7 +41,7 @@ public class AppLogger {
 
         // Try app group container first
         if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
-            containerURL = groupURL
+            containerURL = groupURL.appendingPathComponent("Library/Caches") // LOCAL TEST: devicectl can read Library/ only
         } else if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
             // Fallback to documents directory (works on Mac Catalyst)
             containerURL = documentsURL
@@ -210,7 +210,7 @@ public class AppLogger {
         let fileManager = FileManager.default
         // Try app group first
         if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
-            let url = groupURL.appendingPathComponent("logfile.log")
+            let url = groupURL.appendingPathComponent("Library/Caches/logfile.log") // LOCAL TEST
             if fileManager.fileExists(atPath: url.path) {
                 return url
             }
