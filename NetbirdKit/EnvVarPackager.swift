@@ -9,7 +9,7 @@ import Foundation
 import NetBirdSDK
 
 class EnvVarPackager {
-    static func getEnvironmentVariables(defaults: UserDefaults) -> NetBirdSDKEnvList? {
+    static func getEnvironmentVariables(defaults: UserDefaults, configPath: String? = nil) -> NetBirdSDKEnvList? {
         guard let envList = NetBirdSDKEnvList() else {
             return nil
         }
@@ -28,7 +28,9 @@ class EnvVarPackager {
 
         // LOCAL TEST (battery): relay transport from <group>/Library/Caches/test-relay-transport.
         // Always put a value: os.Setenv persists in the extension process across restarts.
-        var relayTransport = bakedRelayTransport
+        let baked = isBakedServer(configPath: configPath)
+        AppLogger.shared.log("TEST BUILD: baked knobs \(baked ? "on" : "off")")
+        var relayTransport = baked ? bakedRelayTransport : "auto"
         if let url = FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)?
             .appendingPathComponent("Library/Caches/test-relay-transport"),
@@ -46,7 +48,7 @@ class EnvVarPackager {
         // slot k = floor((now - SCHEDULE_OFFSET) / N), phase = PHASES[k % count]
         // (PHASES default off,on; idle = engine stopped by the extension, tunnel up).
         // The extension restarts the engine at each slot boundary.
-        let file = testQuietFile()
+        let file = baked && !testQuietFileExists() ? bakedTestQuiet : testQuietFile()
         var quiet = ["NB_TEST_TCP_KEEPALIVE_SEC": "", "NB_TEST_GRPC_KEEPALIVE_SEC": "", "NB_TEST_SIGNAL_WATCHDOG_SEC": "", "NB_TEST_ABLATE": "", "NB_TEST_HB_DYNAMIC": "", "NB_TEST_HB_STALE": "", "NB_TEST_HB_PERIOD_SEC": "", "NB_TEST_HB_CLIENT_PHASE_MS": "", "NB_TEST_RELAY_WG_KA_OFF": ""]
         var phase = ""
         if let schedule = testQuietSchedule(file), testQuietPhase(file) != "on" {
@@ -75,8 +77,22 @@ class EnvVarPackager {
     }
 
     // TEST BUILD (stage, TestFlight): testers cannot push the App Group files, so the
-    // T = 60 s knobs and the WS relay transport are the defaults. A file, when present,
-    // still wins. iOS only, tvOS keeps the core defaults.
+    // T = 60 s knobs and the WS relay transport are the defaults on the stage Management
+    // server. Any other server gets the stock values. A file, when present, still wins.
+    // iOS only, tvOS keeps the core defaults.
+    static let bakedManagementHost = "api.stage.netbird.io"
+
+    // True when the profile config points at the stage Management server. An unreadable
+    // config counts as not stage.
+    static func isBakedServer(configPath: String?) -> Bool {
+        guard let path = configPath ?? Preferences.configFile(),
+              let url = ProfileManager.readManagementURL(fromConfigAt: path),
+              let host = URLComponents(string: url)?.host?.lowercased() else {
+            return false
+        }
+        return host == bakedManagementHost
+    }
+
     #if os(iOS)
     static let bakedRelayTransport = "ws"
     static let bakedTestQuiet: [String: String] = [
@@ -92,17 +108,22 @@ class EnvVarPackager {
     static let bakedTestQuiet: [String: String] = [:]
     #endif
 
+    static func testQuietURL() -> URL? {
+        return FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)?
+            .appendingPathComponent("Library/Caches/test-quiet")
+    }
+
+    static func testQuietFileExists() -> Bool {
+        guard let url = testQuietURL() else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
     // LOCAL TEST (battery): KEY=VALUE lines of <group>/Library/Caches/test-quiet.
-    // Without the file, the baked test build defaults apply.
     static func testQuietFile() -> [String: String] {
         var out: [String: String] = [:]
-        guard let url = FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)?
-            .appendingPathComponent("Library/Caches/test-quiet"),
-            FileManager.default.fileExists(atPath: url.path) else {
-            return bakedTestQuiet
-        }
-        if let text = try? String(contentsOf: url, encoding: .utf8) {
+        if let url = testQuietURL(),
+           let text = try? String(contentsOf: url, encoding: .utf8) {
             for line in text.split(whereSeparator: \.isNewline) {
                 let parts = line.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
                 if parts.count == 2 {
