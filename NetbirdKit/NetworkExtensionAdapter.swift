@@ -578,7 +578,7 @@ public class NetworkExtensionAdapter: ObservableObject {
             // IPC fallback, and retrying concurrently with it would race two flows.
             var browserPhaseStarted = false
 
-            let receivedURL: String? = await withCheckedContinuation { continuation in
+            let receivedURL: String? = await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
                 var resumed = false
                 let resume: (String?) -> Void = { url in
                     guard !resumed else { return }
@@ -635,16 +635,12 @@ public class NetworkExtensionAdapter: ObservableObject {
                         self.loginSucceeded = true
                         self.pendingAuth = nil
                         self.pendingAuthorizeURL = nil
-                        // If the browser is already gone, the view's completion handler
-                        // deferred the decision to us — the login only finished now, so
-                        // start the VPN here. While it is still open, the view starts it
-                        // when the user dismisses the success page.
-                        if !self.showBrowser {
-                            self.logger.info("performLogin: login completed after browser closed - starting VPN")
-                            // The management login just completed here, so the extension
-                            // can skip its own needs-login check (one Login RPC).
-                            self.startVPNConnection(loginVerified: true)
-                        }
+                        // Nothing is left to do on the SDK's success page, so close it
+                        // instead of waiting for the user to dismiss it.
+                        self.showBrowser = false
+                        // The management login just completed here, so the extension
+                        // can skip its own needs-login check (one Login RPC).
+                        self.startVPNConnection(loginVerified: true)
                     }
                 }
                 errListener.onSuccessCallback = { urlOpener.onSuccess?() }
@@ -1446,6 +1442,30 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// `RouteRequestError`.
     func getRoutes(completion: @escaping (Result<RoutesSelectionDetails, RouteRequestError>) -> Void) {
         sendRouteMessage("GetRoutes", decodeResponse: true, completion: completion)
+    }
+
+    /// Turns on trace logs in a running tunnel, so no reconnect is needed. A reconnect would
+    /// wipe the Go log that may hold the problem being debugged.
+    ///
+    /// - Returns: `false` when no running tunnel took the message; the level then applies on
+    ///   the next connect.
+    func enableTraceLogs() -> Bool {
+        #if os(iOS)
+        guard let session,
+              session.status == .connected || session.status == .reasserting,
+              let messageData = "EnableTraceLogs".data(using: .utf8) else {
+            return false
+        }
+        do {
+            try session.sendProviderMessage(messageData) { _ in }
+            return true
+        } catch {
+            logger.error("enableTraceLogs: \(error.localizedDescription)")
+            return false
+        }
+        #else
+        return false
+        #endif
     }
 
     /// Asks the core to select `id` — a route name, or "All".

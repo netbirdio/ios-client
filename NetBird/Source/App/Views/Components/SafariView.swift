@@ -110,8 +110,9 @@ struct SafariView: UIViewControllerRepresentable {
             // The SDK's PKCE flow uses a loopback redirect (RFC 8252 §7.3): the
             // authorization code arrives at an HTTP server the SDK runs on
             // 127.0.0.1. That server is the primary path and needs no interception —
-            // the browser simply follows the redirect to it, and this session then
-            // ends via .closed when the user dismisses the SDK's success page.
+            // the browser simply follows the redirect to it. The adapter then closes
+            // this session when the SDK reports success, unless the user dismissed
+            // the SDK's success page first, which ends it via .closed.
             //
             // A session must still declare a callback, and "http" is the closest
             // match for that redirect. Should the session capture the navigation
