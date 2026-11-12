@@ -28,7 +28,7 @@ class EnvVarPackager {
 
         // LOCAL TEST (battery): relay transport from <group>/Library/Caches/test-relay-transport.
         // Always put a value: os.Setenv persists in the extension process across restarts.
-        var relayTransport = "auto"
+        var relayTransport = bakedRelayTransport
         if let url = FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)?
             .appendingPathComponent("Library/Caches/test-relay-transport"),
@@ -74,13 +74,35 @@ class EnvVarPackager {
         return envList
     }
 
+    // TEST BUILD (stage, TestFlight): testers cannot push the App Group files, so the
+    // T = 60 s knobs and the WS relay transport are the defaults. A file, when present,
+    // still wins. iOS only, tvOS keeps the core defaults.
+    #if os(iOS)
+    static let bakedRelayTransport = "ws"
+    static let bakedTestQuiet: [String: String] = [
+        "NB_TEST_GRPC_KEEPALIVE_SEC": "70",
+        "NB_TEST_HB_DYNAMIC": "1",
+        "NB_TEST_HB_STALE": "1",
+        "NB_TEST_HB_PERIOD_SEC": "60",
+        "NB_TEST_RELAY_WG_KA_OFF": "1",
+        "NB_TEST_SIGNAL_WATCHDOG_SEC": "75",
+    ]
+    #else
+    static let bakedRelayTransport = "auto"
+    static let bakedTestQuiet: [String: String] = [:]
+    #endif
+
     // LOCAL TEST (battery): KEY=VALUE lines of <group>/Library/Caches/test-quiet.
+    // Without the file, the baked test build defaults apply.
     static func testQuietFile() -> [String: String] {
         var out: [String: String] = [:]
-        if let url = FileManager.default
+        guard let url = FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)?
             .appendingPathComponent("Library/Caches/test-quiet"),
-           let text = try? String(contentsOf: url, encoding: .utf8) {
+            FileManager.default.fileExists(atPath: url.path) else {
+            return bakedTestQuiet
+        }
+        if let text = try? String(contentsOf: url, encoding: .utf8) {
             for line in text.split(whereSeparator: \.isNewline) {
                 let parts = line.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
                 if parts.count == 2 {
