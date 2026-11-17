@@ -592,7 +592,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         #endif
         let pathAllows = NetworkReconnectionState.allowsConnectionAttempts(path.status)
         let network = reconnection.resolveNetwork(
-            pathAllowsConnection: pathAllows,
+            status: path.status,
             fromPath: { UnderlyingNetwork(path: path, dataServiceIdentifier: service) },
             fromInterfaces: { UnderlyingNetwork.fromInterfaceAddresses(dataServiceIdentifier: service) })
         let available = network != nil
