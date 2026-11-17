@@ -140,7 +140,6 @@ struct NetworkReconnectionState {
     let sessionID = UUID()
     private(set) var isActive = true
     private var hasConnected = false
-    private var isEngineStopped = false
     private var hasInitialPath = false
     private var network: UnderlyingNetwork?
     /// Set once the path monitor reports a usable path in this session.
@@ -164,7 +163,7 @@ struct NetworkReconnectionState {
     /// Reasserting makes iOS hold new flows through the tunnel, so it is raised only while
     /// the device has no network. Management, Signal or peer state never raises it.
     var isReasserting: Bool {
-        isActive && hasConnected && !isEngineStopped && hasInitialPath && network == nil
+        isActive && hasConnected && hasInitialPath && network == nil
     }
 
     mutating func update(_ next: UnderlyingNetwork?) -> Change? {
@@ -204,10 +203,12 @@ struct NetworkReconnectionState {
         isActive && self.sessionID == sessionID && engineGeneration == currentEngineGeneration
     }
 
+    /// Disconnecting and Disconnected do not clear reasserting. The core sends Disconnecting
+    /// from ClientTeardown inside its retry loop, and Disconnected while Management and Signal
+    /// are both down. A real shutdown always goes through stop().
     mutating func connectionChanged(_ state: ClientState) {
         guard isActive else { return }
         if state == .connected { hasConnected = true }
-        isEngineStopped = state == .disconnecting || state == .disconnected
     }
 
     mutating func stop() {

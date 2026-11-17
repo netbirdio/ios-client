@@ -541,7 +541,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private func stopMonitoringNetworkChanges() {
         reconnection.stop()
-        reasserting = false
+        applyReasserting()
         pathMonitor?.cancel()
         pathMonitor = nil
         #if os(iOS)

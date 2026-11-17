@@ -257,16 +257,26 @@ final class NetworkReconnectionStateTests: XCTestCase {
         XCTAssertFalse(state.isReasserting)
     }
 
-    func testTerminalDisconnectionClearsReasserting() {
-        for terminalState: ClientState in [.disconnecting, .disconnected] {
+    func testCoreDisconnectStatesKeepReasserting() {
+        // The core sends these inside its retry loop, so they must not clear reasserting.
+        for coreState: ClientState in [.disconnecting, .disconnected] {
             var state = NetworkReconnectionState()
             _ = state.update(wifi)
             state.connectionChanged(.connected)
+            state.connectionChanged(coreState)
             _ = state.update(nil)
             XCTAssertTrue(state.isReasserting)
-            state.connectionChanged(terminalState)
-            XCTAssertFalse(state.isReasserting)
         }
+    }
+
+    func testStopClearsReasserting() {
+        var state = NetworkReconnectionState()
+        _ = state.update(wifi)
+        state.connectionChanged(.connected)
+        _ = state.update(nil)
+        XCTAssertTrue(state.isReasserting)
+        state.stop()
+        XCTAssertFalse(state.isReasserting)
     }
 
     func testGatewayAndIPFamilyChangesRefreshSameInterface() throws {
