@@ -172,8 +172,8 @@ struct NetworkReconnectionState {
 
     /// The interfaces are only read when a network event arrives. A tunnel that starts or
     /// wakes before any interface has an address would stay paused on a device whose
-    /// monitor never reports a usable path, so the interfaces are read again on a timer
-    /// until a network is found or the monitor reports a usable path.
+    /// monitor never reports a satisfied path, so the interfaces are read again on a timer
+    /// until the path or the interfaces give a network, or the monitor becomes trusted.
     var needsInterfaceRecheck: Bool {
         isActive && hasInitialPath && !isPathMonitorTrusted && network == nil
     }

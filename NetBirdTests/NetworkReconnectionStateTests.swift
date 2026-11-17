@@ -298,6 +298,17 @@ final class NetworkReconnectionStateTests: XCTestCase {
         XCTAssertFalse(state.needsInterfaceRecheck)
     }
 
+    func testInterfaceRecheckFollowsSatisfiedOnlyTrust() {
+        var state = NetworkReconnectionState()
+        // requiresConnection is not paused, so nothing to re-check, but it does not trust the monitor.
+        _ = state.update(state.resolveNetwork(status: .requiresConnection, fromPath: { wifi }, fromInterfaces: { nil }))
+        XCTAssertFalse(state.needsInterfaceRecheck)
+        reportUnsatisfied(&state, interfaces: nil)
+        XCTAssertTrue(state.needsInterfaceRecheck, "requiresConnection then unsatisfied still re-checks")
+        _ = state.update(state.resolveNetwork(status: .requiresConnection, fromPath: { wifi }, fromInterfaces: { nil }))
+        XCTAssertFalse(state.needsInterfaceRecheck, "a path that allows attempts gives a network")
+    }
+
     private final class FakeSchedule {
         var ticks: [(delay: TimeInterval, work: DispatchWorkItem)] = []
         lazy var timer = InterfaceRecheckTimer { [unowned self] delay, work in self.ticks.append((delay, work)) }
