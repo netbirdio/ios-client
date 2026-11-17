@@ -333,7 +333,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     sessionID: sessionID, engineGeneration: engineGeneration,
                     currentEngineGeneration: self.restartGeneration) else { return }
                 self.reconnection.connectionChanged(state)
-                self.reasserting = self.reconnection.isReasserting
+                self.applyReasserting()
             }
         }) { [weak self] error in
             self?.monitorQueue.async {
@@ -599,11 +599,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         AppLogger.shared.log("Network event: source=\(source.rawValue), reason=\(change.reason.rawValue), available=\(available), interfaces=\(network?.interfaces ?? []), refresh=\(change.networkChanged)")
         adapter?.isNetworkUnavailable = !available
-        if !available {
-            // Reflect path loss immediately; the SDK also reports reconnecting.
-            reconnection.connectionChanged(.connecting)
-            reasserting = reconnection.isReasserting
-        }
+        applyReasserting()
         setNetworkUnavailableFlag(!available)
         // The core parks retries while offline and wakes them with fresh backoff.
         adapter?.client.setNetworkAvailable(available)
@@ -617,6 +613,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // delivering events while reconnecting so a second SIM switch is not lost.
             adapter?.client.notifyNetworkChange()
         }
+    }
+
+    /// Publishes the reasserting flag only when it changes. Must run on `monitorQueue`.
+    private func applyReasserting() {
+        let value = reconnection.isReasserting
+        guard reasserting != value else { return }
+        AppLogger.shared.log("Reasserting: \(value)")
+        reasserting = value
     }
 
     /// Logs one status line after the network has been quiet for `statusLogDelay`.
@@ -813,7 +817,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     guard let self, self.isCurrentGeneration(lifecycle), self.reconnection.isActive,
                           self.restartGeneration == generation else { return }
                     self.reconnection.connectionChanged(state)
-                    self.reasserting = self.reconnection.isReasserting
+                    self.applyReasserting()
                 }
             }) { [weak self] error in
                 // Cancel timeout whether start succeeds or not
