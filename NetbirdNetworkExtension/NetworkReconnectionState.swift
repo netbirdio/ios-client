@@ -140,7 +140,7 @@ struct NetworkReconnectionState {
     let sessionID = UUID()
     private(set) var isActive = true
     private var hasConnected = false
-    private(set) var isReasserting = false
+    private var isEngineStopped = false
     private var hasInitialPath = false
     private var network: UnderlyingNetwork?
     /// Set once the path monitor reports a usable path in this session.
@@ -159,6 +159,12 @@ struct NetworkReconnectionState {
             return fromPath()
         }
         return isPathMonitorTrusted ? nil : fromInterfaces()
+    }
+
+    /// Reasserting makes iOS hold new flows through the tunnel, so it is raised only while
+    /// the device has no network. Management, Signal or peer state never raises it.
+    var isReasserting: Bool {
+        isActive && hasConnected && !isEngineStopped && hasInitialPath && network == nil
     }
 
     mutating func update(_ next: UnderlyingNetwork?) -> Change? {
@@ -201,12 +207,10 @@ struct NetworkReconnectionState {
     mutating func connectionChanged(_ state: ClientState) {
         guard isActive else { return }
         if state == .connected { hasConnected = true }
-        // Initial startup and terminal disconnection are not reassertion.
-        isReasserting = hasConnected && (state == .connecting || state == .noNetwork)
+        isEngineStopped = state == .disconnecting || state == .disconnected
     }
 
     mutating func stop() {
         isActive = false
-        isReasserting = false
     }
 }

@@ -18,15 +18,35 @@ final class NetworkReconnectionStateTests: XCTestCase {
         XCTAssertNil(ClientState(sdkState: -1))
     }
 
-    func testNetworkLossReassertsUntilConnected() {
+    func testNetworkLossReassertsUntilNetworkReturns() {
         var state = NetworkReconnectionState()
+        // Offline start: the tunnel was never up, so there is nothing to reassert.
+        _ = state.update(nil)
         state.connectionChanged(.noNetwork)
         XCTAssertFalse(state.isReasserting)
+        _ = state.update(wifi)
         state.connectionChanged(.connected)
+        _ = state.update(nil)
         state.connectionChanged(.noNetwork)
         XCTAssertTrue(state.isReasserting)
         state.connectionChanged(.connecting)
         XCTAssertTrue(state.isReasserting)
+        // The network is back: new flows must pass even before the core reconnects.
+        _ = state.update(simA)
+        XCTAssertFalse(state.isReasserting)
+        state.connectionChanged(.connected)
+        XCTAssertFalse(state.isReasserting)
+    }
+
+    func testServerLossWithNetworkDoesNotReassert() {
+        // Management or Signal down while peers and routes keep working.
+        var state = NetworkReconnectionState()
+        _ = state.update(wifi)
+        state.connectionChanged(.connected)
+        state.connectionChanged(.connecting)
+        XCTAssertFalse(state.isReasserting)
+        _ = state.update(simA)
+        XCTAssertFalse(state.isReasserting)
         state.connectionChanged(.connected)
         XCTAssertFalse(state.isReasserting)
     }
@@ -210,24 +230,25 @@ final class NetworkReconnectionStateTests: XCTestCase {
         XCTAssertFalse(state.isReasserting)
     }
 
-    func testReassertingFollowsConnectionRecoveryNotPathNotifications() {
+    func testHandoverWithoutOutageDoesNotReassert() {
         var state = NetworkReconnectionState()
         _ = state.update(simA)
         state.connectionChanged(.connected)
         _ = state.update(simB)
         XCTAssertFalse(state.isReasserting)
         state.connectionChanged(.connecting)
-        XCTAssertTrue(state.isReasserting)
+        XCTAssertFalse(state.isReasserting)
         _ = state.update(simA)
-        XCTAssertTrue(state.isReasserting)
+        XCTAssertFalse(state.isReasserting)
         state.connectionChanged(.connected)
         XCTAssertFalse(state.isReasserting)
     }
 
     func testStoppingClearsReassertingAndIgnoresLateConnectionEvents() {
         var state = NetworkReconnectionState()
+        _ = state.update(wifi)
         state.connectionChanged(.connected)
-        state.connectionChanged(.connecting)
+        _ = state.update(nil)
         XCTAssertTrue(state.isReasserting)
         state.stop()
         XCTAssertFalse(state.isReasserting)
@@ -239,8 +260,9 @@ final class NetworkReconnectionStateTests: XCTestCase {
     func testTerminalDisconnectionClearsReasserting() {
         for terminalState: ClientState in [.disconnecting, .disconnected] {
             var state = NetworkReconnectionState()
+            _ = state.update(wifi)
             state.connectionChanged(.connected)
-            state.connectionChanged(.connecting)
+            _ = state.update(nil)
             XCTAssertTrue(state.isReasserting)
             state.connectionChanged(terminalState)
             XCTAssertFalse(state.isReasserting)
