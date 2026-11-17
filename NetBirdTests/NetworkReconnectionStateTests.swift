@@ -173,7 +173,7 @@ final class NetworkReconnectionStateTests: XCTestCase {
     func testUnsatisfiedPathBeforeAnyUsablePathFallsBackToInterfaces() throws {
         var state = NetworkReconnectionState()
         let live = UnderlyingNetwork(interfaces: ["en0", "pdp_ip0"], addresses: ["en0:192.168.6.207"])
-        let network = state.resolveNetwork(pathAllowsConnection: false,
+        let network = state.resolveNetwork(status: .unsatisfied,
                                            fromPath: { XCTFail("unsatisfied path must not be read"); return wifi },
                                            fromInterfaces: { live })
         XCTAssertEqual(network, live)
@@ -183,27 +183,39 @@ final class NetworkReconnectionStateTests: XCTestCase {
 
     func testUnsatisfiedPathWithoutInterfacesKeepsOfflineStart() {
         var state = NetworkReconnectionState()
-        XCTAssertNil(state.resolveNetwork(pathAllowsConnection: false,
+        XCTAssertNil(state.resolveNetwork(status: .unsatisfied,
                                           fromPath: { wifi },
                                           fromInterfaces: { nil }))
     }
 
     func testPathMonitorIsTrustedAfterFirstUsablePath() {
         var state = NetworkReconnectionState()
-        XCTAssertEqual(state.resolveNetwork(pathAllowsConnection: true,
+        XCTAssertEqual(state.resolveNetwork(status: .satisfied,
                                             fromPath: { wifi },
                                             fromInterfaces: { XCTFail("usable path needs no check"); return nil }), wifi)
         XCTAssertTrue(state.isPathMonitorTrusted)
-        XCTAssertNil(state.resolveNetwork(pathAllowsConnection: false,
+        XCTAssertNil(state.resolveNetwork(status: .unsatisfied,
                                           fromPath: { wifi },
                                           fromInterfaces: { XCTFail("trusted monitor needs no check"); return wifi }))
+    }
+
+    func testRequiresConnectionDoesNotTrustPathMonitor() {
+        var state = NetworkReconnectionState()
+        let live = UnderlyingNetwork(interfaces: ["en0"], addresses: ["en0:192.168.6.207"])
+        XCTAssertEqual(state.resolveNetwork(status: .requiresConnection,
+                                            fromPath: { wifi },
+                                            fromInterfaces: { XCTFail("path allows connection attempts"); return nil }), wifi)
+        XCTAssertFalse(state.isPathMonitorTrusted)
+        XCTAssertEqual(state.resolveNetwork(status: .unsatisfied,
+                                            fromPath: { XCTFail("unsatisfied path must not be read"); return wifi },
+                                            fromInterfaces: { live }), live)
     }
 
     func testInterfaceFallbackSwitchingToPathRefreshesConnections() throws {
         var state = NetworkReconnectionState()
         let live = UnderlyingNetwork(interfaces: ["en0"], addresses: ["en0:192.168.6.207"])
-        _ = state.update(state.resolveNetwork(pathAllowsConnection: false, fromPath: { wifi }, fromInterfaces: { live }))
-        let next = state.resolveNetwork(pathAllowsConnection: true, fromPath: { wifi }, fromInterfaces: { live })
+        _ = state.update(state.resolveNetwork(status: .unsatisfied, fromPath: { wifi }, fromInterfaces: { live }))
+        let next = state.resolveNetwork(status: .satisfied, fromPath: { wifi }, fromInterfaces: { live })
         XCTAssertTrue(try XCTUnwrap(state.update(next)).networkChanged)
     }
 
@@ -259,7 +271,7 @@ final class NetworkReconnectionStateTests: XCTestCase {
 
     /// One unsatisfied path report on a monitor that is not trusted yet.
     private func reportUnsatisfied(_ state: inout NetworkReconnectionState, interfaces: UnderlyingNetwork?) {
-        _ = state.update(state.resolveNetwork(pathAllowsConnection: false, fromPath: { wifi }, fromInterfaces: { interfaces }))
+        _ = state.update(state.resolveNetwork(status: .unsatisfied, fromPath: { wifi }, fromInterfaces: { interfaces }))
     }
 
     func testInterfaceRecheckNeededOnlyForNoNetworkOnUntrustedMonitor() {
@@ -279,7 +291,7 @@ final class NetworkReconnectionStateTests: XCTestCase {
         var state = NetworkReconnectionState()
         reportUnsatisfied(&state, interfaces: nil)
         XCTAssertTrue(state.needsInterfaceRecheck)
-        _ = state.update(state.resolveNetwork(pathAllowsConnection: true, fromPath: { wifi }, fromInterfaces: { nil }))
+        _ = state.update(state.resolveNetwork(status: .satisfied, fromPath: { wifi }, fromInterfaces: { nil }))
         XCTAssertFalse(state.needsInterfaceRecheck)
         // A trusted monitor's outage is real: the core waits for the next path event.
         reportUnsatisfied(&state, interfaces: nil)
@@ -364,7 +376,7 @@ final class NetworkReconnectionStateTests: XCTestCase {
         var interfaces: UnderlyingNetwork?
         var changes: [NetworkReconnectionState.Change.Reason] = []
         func handle() {
-            if let change = state.update(state.resolveNetwork(pathAllowsConnection: false,
+            if let change = state.update(state.resolveNetwork(status: .unsatisfied,
                                                               fromPath: { wifi }, fromInterfaces: { interfaces })) {
                 changes.append(change.reason)
             }

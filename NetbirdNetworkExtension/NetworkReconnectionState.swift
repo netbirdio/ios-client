@@ -148,19 +148,23 @@ struct NetworkReconnectionState {
     private var hasConnected = false
     private var hasInitialPath = false
     private var network: UnderlyingNetwork?
-    /// Set once the path monitor reports a usable path in this session.
+    /// Set once the path monitor reports a satisfied path in this session.
     private(set) var isPathMonitorTrusted = false
 
     /// Returns the network to act on, or nil when the device has no network.
     /// An unsatisfied path parks the core, so the report must be right. On some devices
     /// (seen on iOS 15) the extension's monitor reports unsatisfied with no interfaces
     /// for the whole session while Wi-Fi and cellular work. Until the monitor reports a
-    /// usable path once, an unsatisfied report is checked against the interfaces.
-    mutating func resolveNetwork(pathAllowsConnection: Bool,
+    /// satisfied path once, an unsatisfied report is checked against the interfaces.
+    /// requiresConnection still allows connection attempts, but it does not show that
+    /// the monitor sees the network, so it does not make the monitor trusted.
+    mutating func resolveNetwork(status: Network.NWPath.Status,
                                  fromPath: () -> UnderlyingNetwork,
                                  fromInterfaces: () -> UnderlyingNetwork?) -> UnderlyingNetwork? {
-        if pathAllowsConnection {
+        if status == .satisfied {
             isPathMonitorTrusted = true
+        }
+        if Self.allowsConnectionAttempts(status) {
             return fromPath()
         }
         return isPathMonitorTrusted ? nil : fromInterfaces()
