@@ -40,39 +40,8 @@ struct UnderlyingNetwork: Equatable {
         self.dataServiceIdentifier = path.usesInterfaceType(.cellular) ? dataServiceIdentifier : nil
 
         let names = Set(interfaces.map(\.name))
-        var addresses: [String] = []
-        var head: UnsafeMutablePointer<ifaddrs>?
-        if getifaddrs(&head) == 0 {
-            defer { freeifaddrs(head) }
-            var cursor = head
-            while let entry = cursor {
-                defer { cursor = entry.pointee.ifa_next }
-                guard names.contains(String(cString: entry.pointee.ifa_name)),
-                      let address = entry.pointee.ifa_addr,
-                      address.pointee.sa_family == AF_INET || address.pointee.sa_family == AF_INET6 else { continue }
-                if address.pointee.sa_family == AF_INET6 {
-                    // Privacy addresses rotate on the same network. Compare the
-                    // advertised prefix instead of reconnecting for each host ID.
-                    guard let mask = entry.pointee.ifa_netmask,
-                          mask.pointee.sa_family == AF_INET6 else { continue }
-                    var ipv6 = UnsafeRawPointer(address).assumingMemoryBound(to: sockaddr_in6.self).pointee.sin6_addr
-                    var netmask = UnsafeRawPointer(mask).assumingMemoryBound(to: sockaddr_in6.self).pointee.sin6_addr
-                    let addressData = withUnsafeBytes(of: &ipv6) { Data($0) }
-                    let maskData = withUnsafeBytes(of: &netmask) { Data($0) }
-                    guard let ipv6Address = IPv6Address(addressData),
-                          let ipv6Mask = IPv6Address(maskData),
-                          let prefix = Self.ipv6NetworkIdentity(ipv6Address, netmask: ipv6Mask) else { continue }
-                    addresses.append("\(String(cString: entry.pointee.ifa_name)):\(prefix)")
-                    continue
-                }
-                var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                if getnameinfo(address, socklen_t(address.pointee.sa_len), &host,
-                               socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 {
-                    addresses.append("\(String(cString: entry.pointee.ifa_name)):\(String(cString: host))")
-                }
-            }
-        }
-        self.addresses = Array(Set(addresses)).sorted()
+        let entries = Self.readInterfaceAddresses() ?? []
+        self.addresses = Array(Set(entries.filter { names.contains($0.interface) }.compactMap(\.identity))).sorted()
     }
 
     /// Wi-Fi, wired (en*) and cellular (pdp_ip*) interfaces. The VPN's own utun,
@@ -95,33 +64,70 @@ struct UnderlyingNetwork: Equatable {
 
     /// Reads the physical interfaces that are up, running and hold a usable address
     /// straight from the kernel, bypassing the path monitor. Returns nil when there is none.
-    /// Only IPv4 addresses enter the identity: IPv6 privacy addresses rotate on the same network.
-    static func fromInterfaceAddresses() -> UnderlyingNetwork? {
-        var names = Set<String>()
-        var addresses: [String] = []
+    static func fromInterfaceAddresses(dataServiceIdentifier: String?) -> UnderlyingNetwork? {
+        guard let entries = readInterfaceAddresses() else { return nil }
+        return fromInterfaceAddresses(entries, dataServiceIdentifier: dataServiceIdentifier)
+    }
+
+    /// getifaddrs has no gateways, so they stay out of this identity.
+    /// The data service identifier only counts while a cellular (pdp_ip*) interface is up.
+    static func fromInterfaceAddresses(_ entries: [InterfaceAddress], dataServiceIdentifier: String?) -> UnderlyingNetwork? {
+        let required = UInt32(IFF_UP | IFF_RUNNING)
+        let usable = entries.filter {
+            isPhysicalInterface($0.interface) && $0.flags & required == required && isUsableAddress($0.host)
+        }
+        guard !usable.isEmpty else { return nil }
+        let names = Set(usable.map(\.interface))
+        return UnderlyingNetwork(interfaces: Array(names),
+                                 addresses: usable.compactMap(\.identity),
+                                 supportsIPv4: usable.contains { !$0.isIPv6 },
+                                 supportsIPv6: usable.contains { $0.isIPv6 },
+                                 dataServiceIdentifier: names.contains { $0.hasPrefix("pdp_ip") } ? dataServiceIdentifier : nil)
+    }
+
+    struct InterfaceAddress {
+        let interface: String
+        let flags: UInt32
+        /// Numeric address, used to tell usable addresses from link-local and loopback.
+        let host: String
+        let isIPv6: Bool
+        /// "interface:address" for IPv4, "interface:prefix" for IPv6, nil when IPv6 has no netmask.
+        let identity: String?
+    }
+
+    /// Reads every IPv4 and IPv6 address from getifaddrs. Returns nil when the call fails.
+    /// IPv6 privacy addresses rotate on the same network, so IPv6 enters the identity
+    /// as the advertised prefix instead of the host address.
+    static func readInterfaceAddresses() -> [InterfaceAddress]? {
         var head: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&head) == 0 else { return nil }
         defer { freeifaddrs(head) }
-        let required = UInt32(IFF_UP | IFF_RUNNING)
+        var entries: [InterfaceAddress] = []
         var cursor = head
         while let entry = cursor {
             defer { cursor = entry.pointee.ifa_next }
-            let name = String(cString: entry.pointee.ifa_name)
-            guard isPhysicalInterface(name),
-                  entry.pointee.ifa_flags & required == required,
-                  let address = entry.pointee.ifa_addr,
+            guard let address = entry.pointee.ifa_addr,
                   address.pointee.sa_family == AF_INET || address.pointee.sa_family == AF_INET6 else { continue }
             var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
             guard getnameinfo(address, socklen_t(address.pointee.sa_len), &host,
                               socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 else { continue }
+            let name = String(cString: entry.pointee.ifa_name)
             let text = String(cString: host)
-            guard isUsableAddress(text) else { continue }
-            names.insert(name)
-            if address.pointee.sa_family == AF_INET {
-                addresses.append("\(name):\(text)")
-            }
+            let isIPv6 = address.pointee.sa_family == AF_INET6
+            entries.append(InterfaceAddress(interface: name, flags: entry.pointee.ifa_flags, host: text, isIPv6: isIPv6,
+                                            identity: isIPv6 ? ipv6Identity(entry.pointee).map { "\(name):\($0)" } : "\(name):\(text)"))
         }
-        return names.isEmpty ? nil : UnderlyingNetwork(interfaces: Array(names), addresses: addresses)
+        return entries
+    }
+
+    private static func ipv6Identity(_ entry: ifaddrs) -> String? {
+        guard let address = entry.ifa_addr, let mask = entry.ifa_netmask,
+              mask.pointee.sa_family == AF_INET6 else { return nil }
+        var ipv6 = UnsafeRawPointer(address).assumingMemoryBound(to: sockaddr_in6.self).pointee.sin6_addr
+        var netmask = UnsafeRawPointer(mask).assumingMemoryBound(to: sockaddr_in6.self).pointee.sin6_addr
+        guard let ipv6Address = IPv6Address(withUnsafeBytes(of: &ipv6) { Data($0) }),
+              let ipv6Mask = IPv6Address(withUnsafeBytes(of: &netmask) { Data($0) }) else { return nil }
+        return ipv6NetworkIdentity(ipv6Address, netmask: ipv6Mask)
     }
 }
 

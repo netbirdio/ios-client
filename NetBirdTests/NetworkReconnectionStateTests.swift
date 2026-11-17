@@ -222,6 +222,41 @@ final class NetworkReconnectionStateTests: XCTestCase {
         }
     }
 
+    private func ipv6Entry(_ interface: String, _ host: String) throws -> UnderlyingNetwork.InterfaceAddress {
+        let mask = try XCTUnwrap(IPv6Address("ffff:ffff:ffff:ffff::"))
+        let prefix = try XCTUnwrap(UnderlyingNetwork.ipv6NetworkIdentity(XCTUnwrap(IPv6Address(host)), netmask: mask))
+        return UnderlyingNetwork.InterfaceAddress(interface: interface, flags: UInt32(IFF_UP | IFF_RUNNING),
+                                                  host: host, isIPv6: true, identity: "\(interface):\(prefix)")
+    }
+
+    func testInterfaceFallbackIPv6OnlyPrefixChangeRefreshesConnections() throws {
+        let first = try XCTUnwrap(UnderlyingNetwork.fromInterfaceAddresses(
+            [ipv6Entry("en0", "2001:db8:1:2::1234")], dataServiceIdentifier: nil))
+        XCTAssertFalse(first.supportsIPv4)
+        XCTAssertTrue(first.supportsIPv6)
+        let rotated = try XCTUnwrap(UnderlyingNetwork.fromInterfaceAddresses(
+            [ipv6Entry("en0", "2001:db8:1:2::5678")], dataServiceIdentifier: nil))
+        let moved = try XCTUnwrap(UnderlyingNetwork.fromInterfaceAddresses(
+            [ipv6Entry("en0", "2001:db8:1:3::1234")], dataServiceIdentifier: nil))
+        var state = NetworkReconnectionState()
+        _ = state.update(first)
+        XCTAssertNil(state.update(rotated))
+        XCTAssertEqual(try XCTUnwrap(state.update(moved)).reason, .changed)
+    }
+
+    func testInterfaceFallbackDataServiceChangeRefreshesConnections() throws {
+        let entries = [try ipv6Entry("pdp_ip0", "2001:db8:1:2::1234")]
+        let simA = try XCTUnwrap(UnderlyingNetwork.fromInterfaceAddresses(entries, dataServiceIdentifier: "A"))
+        let simB = try XCTUnwrap(UnderlyingNetwork.fromInterfaceAddresses(entries, dataServiceIdentifier: "B"))
+        XCTAssertEqual(simA.dataServiceIdentifier, "A")
+        var state = NetworkReconnectionState()
+        _ = state.update(simA)
+        XCTAssertEqual(try XCTUnwrap(state.update(simB)).reason, .changed)
+        let wifiOnly = try XCTUnwrap(UnderlyingNetwork.fromInterfaceAddresses(
+            [ipv6Entry("en0", "2001:db8:1:2::1234")], dataServiceIdentifier: "A"))
+        XCTAssertNil(wifiOnly.dataServiceIdentifier)
+    }
+
     func testInitialConnectionDoesNotReassert() {
         var state = NetworkReconnectionState()
         state.connectionChanged(.connecting)
