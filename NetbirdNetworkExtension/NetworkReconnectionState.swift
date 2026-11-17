@@ -74,6 +74,55 @@ struct UnderlyingNetwork: Equatable {
         }
         self.addresses = Array(Set(addresses)).sorted()
     }
+
+    /// Wi-Fi, wired (en*) and cellular (pdp_ip*) interfaces. The VPN's own utun,
+    /// AWDL, hotspot bridges and loopback do not give the device a network.
+    static func isPhysicalInterface(_ name: String) -> Bool {
+        name.hasPrefix("en") || name.hasPrefix("pdp_ip")
+    }
+
+    /// A link-local or loopback address does not reach any server.
+    static func isUsableAddress(_ host: String) -> Bool {
+        let host = host.split(separator: "%", maxSplits: 1).first.map(String.init) ?? host
+        if let ipv4 = IPv4Address(host) {
+            return !ipv4.isLinkLocal && !ipv4.isLoopback && ipv4 != .any
+        }
+        if let ipv6 = IPv6Address(host) {
+            return !ipv6.isLinkLocal && !ipv6.isLoopback && ipv6 != .any
+        }
+        return false
+    }
+
+    /// Reads the physical interfaces that are up, running and hold a usable address
+    /// straight from the kernel, bypassing the path monitor. Returns nil when there is none.
+    /// Only IPv4 addresses enter the identity: IPv6 privacy addresses rotate on the same network.
+    static func fromInterfaceAddresses() -> UnderlyingNetwork? {
+        var names = Set<String>()
+        var addresses: [String] = []
+        var head: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&head) == 0 else { return nil }
+        defer { freeifaddrs(head) }
+        let required = UInt32(IFF_UP | IFF_RUNNING)
+        var cursor = head
+        while let entry = cursor {
+            defer { cursor = entry.pointee.ifa_next }
+            let name = String(cString: entry.pointee.ifa_name)
+            guard isPhysicalInterface(name),
+                  entry.pointee.ifa_flags & required == required,
+                  let address = entry.pointee.ifa_addr,
+                  address.pointee.sa_family == AF_INET || address.pointee.sa_family == AF_INET6 else { continue }
+            var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            guard getnameinfo(address, socklen_t(address.pointee.sa_len), &host,
+                              socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 else { continue }
+            let text = String(cString: host)
+            guard isUsableAddress(text) else { continue }
+            names.insert(name)
+            if address.pointee.sa_family == AF_INET {
+                addresses.append("\(name):\(text)")
+            }
+        }
+        return names.isEmpty ? nil : UnderlyingNetwork(interfaces: Array(names), addresses: addresses)
+    }
 }
 
 /// Deduplicates OS notifications without suppressing changes during reconnection.
@@ -94,6 +143,23 @@ struct NetworkReconnectionState {
     private(set) var isReasserting = false
     private var hasInitialPath = false
     private var network: UnderlyingNetwork?
+    /// Set once the path monitor reports a usable path in this session.
+    private(set) var isPathMonitorTrusted = false
+
+    /// Returns the network to act on, or nil when the device has no network.
+    /// An unsatisfied path parks the core, so the report must be right. On some devices
+    /// (seen on iOS 15) the extension's monitor reports unsatisfied with no interfaces
+    /// for the whole session while Wi-Fi and cellular work. Until the monitor reports a
+    /// usable path once, an unsatisfied report is checked against the interfaces.
+    mutating func resolveNetwork(pathAllowsConnection: Bool,
+                                 fromPath: () -> UnderlyingNetwork,
+                                 fromInterfaces: () -> UnderlyingNetwork?) -> UnderlyingNetwork? {
+        if pathAllowsConnection {
+            isPathMonitorTrusted = true
+            return fromPath()
+        }
+        return isPathMonitorTrusted ? nil : fromInterfaces()
+    }
 
     mutating func update(_ next: UnderlyingNetwork?) -> Change? {
         guard isActive, !hasInitialPath || network != next else { return nil }

@@ -585,19 +585,23 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         if traceLogsActive {
             startExitPeerStats()
         }
-        let available = NetworkReconnectionState.allowsConnectionAttempts(path.status)
-        latestPathIsSatisfied = available
         #if os(iOS)
         let service = telephonyInfo?.dataServiceIdentifier
         #else
         let service: String? = nil
         #endif
-        let network = available ? UnderlyingNetwork(path: path, dataServiceIdentifier: service) : nil
+        let pathAllows = NetworkReconnectionState.allowsConnectionAttempts(path.status)
+        let network = reconnection.resolveNetwork(
+            pathAllowsConnection: pathAllows,
+            fromPath: { UnderlyingNetwork(path: path, dataServiceIdentifier: service) },
+            fromInterfaces: { UnderlyingNetwork.fromInterfaceAddresses() })
+        let available = network != nil
+        latestPathIsSatisfied = available
         guard let change = reconnection.update(network) else {
-            AppLogger.shared.log("Network event: source=\(source.rawValue), available=\(available), unchanged; preserving connections")
+            AppLogger.shared.log("Network event: source=\(source.rawValue), available=\(available), pathAvailable=\(pathAllows), unchanged; preserving connections")
             return
         }
-        AppLogger.shared.log("Network event: source=\(source.rawValue), reason=\(change.reason.rawValue), available=\(available), interfaces=\(network?.interfaces ?? []), refresh=\(change.networkChanged)")
+        AppLogger.shared.log("Network event: source=\(source.rawValue), reason=\(change.reason.rawValue), available=\(available), pathAvailable=\(pathAllows), interfaces=\(network?.interfaces ?? []), refresh=\(change.networkChanged)")
         adapter?.isNetworkUnavailable = !available
         if !available {
             // Reflect path loss immediately; the SDK also reports reconnecting.

@@ -150,6 +150,58 @@ final class NetworkReconnectionStateTests: XCTestCase {
         XCTAssertFalse(NetworkReconnectionState.allowsConnectionAttempts(.unsatisfied))
     }
 
+    func testUnsatisfiedPathBeforeAnyUsablePathFallsBackToInterfaces() throws {
+        var state = NetworkReconnectionState()
+        let live = UnderlyingNetwork(interfaces: ["en0", "pdp_ip0"], addresses: ["en0:192.168.6.207"])
+        let network = state.resolveNetwork(pathAllowsConnection: false,
+                                           fromPath: { XCTFail("unsatisfied path must not be read"); return wifi },
+                                           fromInterfaces: { live })
+        XCTAssertEqual(network, live)
+        XCTAssertFalse(state.isPathMonitorTrusted)
+        XCTAssertEqual(try XCTUnwrap(state.update(network)).reason, .initial)
+    }
+
+    func testUnsatisfiedPathWithoutInterfacesKeepsOfflineStart() {
+        var state = NetworkReconnectionState()
+        XCTAssertNil(state.resolveNetwork(pathAllowsConnection: false,
+                                          fromPath: { wifi },
+                                          fromInterfaces: { nil }))
+    }
+
+    func testPathMonitorIsTrustedAfterFirstUsablePath() {
+        var state = NetworkReconnectionState()
+        XCTAssertEqual(state.resolveNetwork(pathAllowsConnection: true,
+                                            fromPath: { wifi },
+                                            fromInterfaces: { XCTFail("usable path needs no check"); return nil }), wifi)
+        XCTAssertTrue(state.isPathMonitorTrusted)
+        XCTAssertNil(state.resolveNetwork(pathAllowsConnection: false,
+                                          fromPath: { wifi },
+                                          fromInterfaces: { XCTFail("trusted monitor needs no check"); return wifi }))
+    }
+
+    func testInterfaceFallbackSwitchingToPathRefreshesConnections() throws {
+        var state = NetworkReconnectionState()
+        let live = UnderlyingNetwork(interfaces: ["en0"], addresses: ["en0:192.168.6.207"])
+        _ = state.update(state.resolveNetwork(pathAllowsConnection: false, fromPath: { wifi }, fromInterfaces: { live }))
+        let next = state.resolveNetwork(pathAllowsConnection: true, fromPath: { wifi }, fromInterfaces: { live })
+        XCTAssertTrue(try XCTUnwrap(state.update(next)).networkChanged)
+    }
+
+    func testOnlyPhysicalInterfacesWithUsableAddressesCount() {
+        for name in ["en0", "en2", "pdp_ip0", "pdp_ip1"] {
+            XCTAssertTrue(UnderlyingNetwork.isPhysicalInterface(name), name)
+        }
+        for name in ["utun3", "lo0", "awdl0", "llw0", "anpi0", "ap1", "bridge100"] {
+            XCTAssertFalse(UnderlyingNetwork.isPhysicalInterface(name), name)
+        }
+        for host in ["192.168.6.207", "10.183.44.121", "2a00:1450:4001:80b::200e"] {
+            XCTAssertTrue(UnderlyingNetwork.isUsableAddress(host), host)
+        }
+        for host in ["169.254.10.1", "127.0.0.1", "0.0.0.0", "fe80::498:1a54:b8c4:9f3f%en0", "::1", "::", "garbage"] {
+            XCTAssertFalse(UnderlyingNetwork.isUsableAddress(host), host)
+        }
+    }
+
     func testInitialConnectionDoesNotReassert() {
         var state = NetworkReconnectionState()
         state.connectionChanged(.connecting)
