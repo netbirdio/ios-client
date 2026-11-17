@@ -54,6 +54,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var isInitialStartInFlight = false
 
     private var networkChangeWorkItem: DispatchWorkItem?
+    /// Re-reads the interfaces while the core is paused on a path monitor not yet trusted.
+    private lazy var interfaceRecheck = InterfaceRecheckTimer { [monitorQueue] delay, work in
+        monitorQueue.asyncAfter(deadline: .now() + delay, execute: work)
+    }
     private var initialStartTimeoutWorkItem: DispatchWorkItem?
     private var statusLogWorkItem: DispatchWorkItem?
     private var settingsLogWorkItem: DispatchWorkItem?
@@ -542,6 +546,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private func stopMonitoringNetworkChanges() {
         reconnection.stop()
         applyReasserting()
+        updateInterfaceRecheck()
         pathMonitor?.cancel()
         pathMonitor = nil
         #if os(iOS)
@@ -574,16 +579,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     enum NetworkChangeSource: String {
-        case path, dataSIM, wake
+        case path, dataSIM, wake, recheck
     }
 
     /// Publishes physical network changes without restarting the engine. Runs on monitorQueue.
     func handleNetworkChange(path: Network.NWPath, source: NetworkChangeSource = .path) {
         guard reconnection.isActive else { return }
-        // Scheduled before the unchanged check below, so a wake on the same network is covered.
-        scheduleStatusLog()
-        if traceLogsActive {
-            startExitPeerStats()
+        // A re-check that finds nothing new is not a network event.
+        let isRecheck = source == .recheck
+        // A wake or path event can come just before Wi-Fi gets its address, so a real
+        // event starts the re-check over at its short delay.
+        defer { updateInterfaceRecheck(restartBackoff: !isRecheck) }
+        if !isRecheck {
+            // Scheduled before the unchanged check below, so a wake on the same network is covered.
+            noteNetworkEvent()
         }
         #if os(iOS)
         let service = telephonyInfo?.dataServiceIdentifier
@@ -598,8 +607,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let available = network != nil
         latestPathIsSatisfied = available
         guard let change = reconnection.update(network) else {
-            AppLogger.shared.log("Network event: source=\(source.rawValue), available=\(available), pathAvailable=\(pathAllows), unchanged; preserving connections")
+            if !isRecheck {
+                AppLogger.shared.log("Network event: source=\(source.rawValue), available=\(available), pathAvailable=\(pathAllows), unchanged; preserving connections")
+            }
             return
+        }
+        if isRecheck {
+            noteNetworkEvent()
         }
         AppLogger.shared.log("Network event: source=\(source.rawValue), reason=\(change.reason.rawValue), available=\(available), pathAvailable=\(pathAllows), interfaces=\(network?.interfaces ?? []), refresh=\(change.networkChanged)")
         adapter?.isNetworkUnavailable = !available
@@ -616,6 +630,32 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // The core coalesces changes and sweeps stale connections/dials. Keep
             // delivering events while reconnecting so a second SIM switch is not lost.
             adapter?.client.notifyNetworkChange()
+        }
+    }
+
+    /// Starts the status line and, with trace logs, the exit peer stats. Must run on `monitorQueue`.
+    private func noteNetworkEvent() {
+        scheduleStatusLog()
+        if traceLogsActive {
+            startExitPeerStats()
+        }
+    }
+
+    /// Keeps the interface re-check running only while NetworkReconnectionState needs it.
+    /// Each tick goes through handleNetworkChange, which calls this again. Must run on `monitorQueue`.
+    private func updateInterfaceRecheck(restartBackoff: Bool = false) {
+        let wasRunning = interfaceRecheck.isRunning
+        if restartBackoff {
+            interfaceRecheck.cancel()
+        }
+        interfaceRecheck.update(needed: reconnection.needsInterfaceRecheck) { [weak self] in
+            guard let self, let monitor = self.pathMonitor else { return }
+            self.handleNetworkChange(path: monitor.currentPath, source: .recheck)
+        }
+        if !wasRunning, interfaceRecheck.isRunning {
+            AppLogger.shared.log("Interface recheck: started, no network on an untrusted path monitor")
+        } else if wasRunning, !interfaceRecheck.isRunning {
+            AppLogger.shared.log("Interface recheck: stopped, available=\(latestPathIsSatisfied), trusted=\(reconnection.isPathMonitorTrusted), active=\(reconnection.isActive)")
         }
     }
 

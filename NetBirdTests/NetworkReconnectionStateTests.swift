@@ -257,6 +257,130 @@ final class NetworkReconnectionStateTests: XCTestCase {
         XCTAssertNil(wifiOnly.dataServiceIdentifier)
     }
 
+    /// One unsatisfied path report on a monitor that is not trusted yet.
+    private func reportUnsatisfied(_ state: inout NetworkReconnectionState, interfaces: UnderlyingNetwork?) {
+        _ = state.update(state.resolveNetwork(pathAllowsConnection: false, fromPath: { wifi }, fromInterfaces: { interfaces }))
+    }
+
+    func testInterfaceRecheckNeededOnlyForNoNetworkOnUntrustedMonitor() {
+        var state = NetworkReconnectionState()
+        XCTAssertFalse(state.needsInterfaceRecheck, "no result yet")
+        reportUnsatisfied(&state, interfaces: nil)
+        XCTAssertTrue(state.needsInterfaceRecheck)
+        reportUnsatisfied(&state, interfaces: UnderlyingNetwork(interfaces: ["en0"], addresses: ["en0:192.168.6.207"]))
+        XCTAssertFalse(state.needsInterfaceRecheck, "network found")
+        reportUnsatisfied(&state, interfaces: nil)
+        XCTAssertTrue(state.needsInterfaceRecheck, "network lost again")
+        state.stop()
+        XCTAssertFalse(state.needsInterfaceRecheck, "stopped")
+    }
+
+    func testInterfaceRecheckNotNeededOnceMonitorIsTrusted() {
+        var state = NetworkReconnectionState()
+        reportUnsatisfied(&state, interfaces: nil)
+        XCTAssertTrue(state.needsInterfaceRecheck)
+        _ = state.update(state.resolveNetwork(pathAllowsConnection: true, fromPath: { wifi }, fromInterfaces: { nil }))
+        XCTAssertFalse(state.needsInterfaceRecheck)
+        // A trusted monitor's outage is real: the core waits for the next path event.
+        reportUnsatisfied(&state, interfaces: nil)
+        XCTAssertFalse(state.needsInterfaceRecheck)
+    }
+
+    private final class FakeSchedule {
+        var ticks: [(delay: TimeInterval, work: DispatchWorkItem)] = []
+        lazy var timer = InterfaceRecheckTimer { [unowned self] delay, work in self.ticks.append((delay, work)) }
+    }
+
+    func testInterfaceRecheckTimerStartsOnceAndBacksOffToCap() throws {
+        let fake = FakeSchedule()
+        var fired = 0
+        func update() { fake.timer.update(needed: true) { fired += 1 } }
+        update()
+        update()
+        XCTAssertTrue(fake.timer.isRunning)
+        XCTAssertEqual(fake.ticks.count, 1, "a pending tick is not armed twice")
+        var delays: [TimeInterval] = []
+        for _ in 0..<9 {
+            let tick = try XCTUnwrap(fake.ticks.last)
+            delays.append(tick.delay)
+            tick.work.perform()
+            XCTAssertTrue(fake.timer.isRunning, "running while the tick is handled")
+            update()
+        }
+        XCTAssertEqual(fired, 9)
+        XCTAssertEqual(delays, [1, 2, 4, 8, 16, 32, 60, 60, 60])
+        XCTAssertEqual(InterfaceRecheckTimer.initialDelay, delays.first)
+        XCTAssertEqual(InterfaceRecheckTimer.maxDelay, delays.last)
+    }
+
+    func testInterfaceRecheckTimerStopsWhenNoLongerNeeded() throws {
+        let fake = FakeSchedule()
+        var fired = 0
+        fake.timer.update(needed: true) { fired += 1 }
+        try XCTUnwrap(fake.ticks.last).work.perform()
+        fake.timer.update(needed: true) { fired += 1 }
+        fake.timer.update(needed: false) { fired += 1 }
+        XCTAssertFalse(fake.timer.isRunning)
+        let pending = try XCTUnwrap(fake.ticks.last)
+        XCTAssertTrue(pending.work.isCancelled)
+        // A tick already handed to the queue must not fire after the stop.
+        pending.work.perform()
+        XCTAssertEqual(fired, 1)
+        // A later outage starts over at the short delay.
+        fake.timer.update(needed: true) { fired += 1 }
+        XCTAssertEqual(fake.ticks.last?.delay, InterfaceRecheckTimer.initialDelay)
+    }
+
+    func testInterfaceRecheckTimerCancelDropsQueuedTick() throws {
+        let fake = FakeSchedule()
+        var fired = 0
+        fake.timer.update(needed: true) { fired += 1 }
+        fake.timer.cancel()
+        XCTAssertFalse(fake.timer.isRunning)
+        try XCTUnwrap(fake.ticks.last).work.perform()
+        XCTAssertEqual(fired, 0)
+        fake.timer.update(needed: false) { fired += 1 }
+        XCTAssertEqual(fake.ticks.count, 1, "not needed arms nothing")
+    }
+
+    func testInterfaceRecheckTimerReleasesTickAndOwner() {
+        weak var weakTimer: InterfaceRecheckTimer?
+        var work: DispatchWorkItem?
+        var fired = 0
+        do {
+            let timer = InterfaceRecheckTimer { _, item in work = item }
+            weakTimer = timer
+            timer.update(needed: true) { fired += 1 }
+        }
+        XCTAssertNil(weakTimer, "a queued tick must not keep the timer alive")
+        work?.perform()
+        XCTAssertEqual(fired, 0)
+    }
+
+    /// Offline start, Wi-Fi joins later: the re-check, not a path event, finds it.
+    func testInterfaceRecheckFindsLateWiFiAndStops() throws {
+        let fake = FakeSchedule()
+        var state = NetworkReconnectionState()
+        var interfaces: UnderlyingNetwork?
+        var changes: [NetworkReconnectionState.Change.Reason] = []
+        func handle() {
+            if let change = state.update(state.resolveNetwork(pathAllowsConnection: false,
+                                                              fromPath: { wifi }, fromInterfaces: { interfaces })) {
+                changes.append(change.reason)
+            }
+            fake.timer.update(needed: state.needsInterfaceRecheck, fire: handle)
+        }
+        handle()
+        try XCTUnwrap(fake.ticks.last).work.perform()
+        try XCTUnwrap(fake.ticks.last).work.perform()
+        XCTAssertEqual(fake.ticks.count, 3)
+        interfaces = UnderlyingNetwork(interfaces: ["en0"], addresses: ["en0:192.168.6.207"])
+        try XCTUnwrap(fake.ticks.last).work.perform()
+        XCTAssertEqual(changes, [.initial, .recovered])
+        XCTAssertFalse(fake.timer.isRunning)
+        XCTAssertEqual(fake.ticks.count, 3, "nothing armed after the network is found")
+    }
+
     func testInitialConnectionDoesNotReassert() {
         var state = NetworkReconnectionState()
         state.connectionChanged(.connecting)
