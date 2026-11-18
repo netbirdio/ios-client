@@ -383,6 +383,8 @@ final class NetworkReconnectionStateTests: XCTestCase {
     /// Offline start, Wi-Fi joins later: the re-check, not a path event, finds it.
     func testInterfaceRecheckFindsLateWiFiAndStops() throws {
         let fake = FakeSchedule()
+        // Each tick holds handle, which holds fake: drop the ticks to break the cycle.
+        defer { fake.ticks.removeAll() }
         var state = NetworkReconnectionState()
         var interfaces: UnderlyingNetwork?
         var changes: [NetworkReconnectionState.Change.Reason] = []
