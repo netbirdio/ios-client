@@ -170,6 +170,14 @@ struct NetworkReconnectionState {
         return isPathMonitorTrusted ? nil : fromInterfaces()
     }
 
+    /// The interfaces are only read when a network event arrives. A tunnel that starts or
+    /// wakes before any interface has an address would stay paused on a device whose
+    /// monitor never reports a satisfied path, so the interfaces are read again on a timer
+    /// until the path or the interfaces give a network, or the monitor becomes trusted.
+    var needsInterfaceRecheck: Bool {
+        isActive && hasInitialPath && !isPathMonitorTrusted && network == nil
+    }
+
     /// Reasserting makes iOS hold new flows through the tunnel, so it is raised only while
     /// the device has no network. Management, Signal or peer state never raises it.
     var isReasserting: Bool {
@@ -223,5 +231,56 @@ struct NetworkReconnectionState {
 
     mutating func stop() {
         isActive = false
+    }
+}
+
+/// Runs the interface re-check while NetworkReconnectionState.needsInterfaceRecheck holds.
+/// The delay starts short, so a Wi-Fi join is picked up within seconds, and doubles up to
+/// maxDelay. Confined to the provider's monitorQueue.
+final class InterfaceRecheckTimer {
+    typealias Schedule = (_ delay: TimeInterval, _ work: DispatchWorkItem) -> Void
+
+    static let initialDelay: TimeInterval = 1
+    static let maxDelay: TimeInterval = 60
+
+    private let schedule: Schedule
+    private var workItem: DispatchWorkItem?
+    /// Bumped by cancel, so a tick that was already queued cannot fire after it.
+    private var generation: UInt64 = 0
+    private var nextDelay = InterfaceRecheckTimer.initialDelay
+    /// From the first tick until cancel, including while a tick is firing.
+    private(set) var isRunning = false
+
+    init(schedule: @escaping Schedule) {
+        self.schedule = schedule
+    }
+
+    /// Arms one tick when needed and none is pending. Cancels and resets the backoff
+    /// otherwise. The tick does not rearm itself: fire must call update again.
+    func update(needed: Bool, fire: @escaping () -> Void) {
+        guard needed else {
+            cancel()
+            return
+        }
+        guard workItem == nil else { return }
+        let delay = nextDelay
+        nextDelay = min(nextDelay * 2, Self.maxDelay)
+        isRunning = true
+        let token = generation
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, self.generation == token else { return }
+            self.workItem = nil
+            fire()
+        }
+        workItem = item
+        schedule(delay, item)
+    }
+
+    func cancel() {
+        generation &+= 1
+        workItem?.cancel()
+        workItem = nil
+        nextDelay = Self.initialDelay
+        isRunning = false
     }
 }
