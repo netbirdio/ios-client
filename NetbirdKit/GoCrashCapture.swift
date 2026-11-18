@@ -12,8 +12,8 @@ import Foundation
 /// extension keeps stderr anywhere, and the resulting SIGABRT crash report stops
 /// at the Go stack switch (`runtime.asmcgocall`) without the panicking Go frames —
 /// so after a crash this file is the only place the panic reason can be recovered
-/// from. `redirect()` points fd 2 at "netbird.err" in the app group container,
-/// next to logfile.log, where the debug bundle generator already picks it up
+/// from. `redirect()` points fd 2 at "netbird.err" in the log folder
+/// (AppLogger.logDirectoryURL), next to logfile.log, where the debug bundle generator already picks it up
 /// (see BundleGenerator.addLogfile in netbird-core).
 ///
 /// Both processes append to the same file. `takeUnreportedCrashOutput()` lets the
@@ -25,13 +25,20 @@ public enum GoCrashCapture {
     /// Crashlytics keeps at most 64 KB of logs per session; stay under it so the
     /// panic header at the top of the dump is never the part that gets dropped.
     private static let maxReportSize = 48 * 1024
-    private static let reportedOffsetKey = "io.netbird.goCrashCapture.reportedOffset"
+    /// Where the reported part of netbird.err ends, one key per location: the
+    /// file lives in Library/Logs, or at the container root when that folder
+    /// cannot be created (see AppLogger.logDirectoryURL). A shared offset
+    /// would let one file's progress skip a panic in the other. The root keeps
+    /// the key it had before the move, since it is the same file.
+    private static var reportedOffsetKey: String {
+        fileURL?.deletingLastPathComponent().lastPathComponent == "Logs"
+            ? "io.netbird.goCrashCapture.reportedOffset.logs"
+            : "io.netbird.goCrashCapture.reportedOffset"
+    }
     private static let crashMarkers = ["panic:", "fatal error:"]
 
     private static var fileURL: URL? {
-        FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName)?
-            .appendingPathComponent(fileName)
+        AppLogger.logDirectoryURL?.appendingPathComponent(fileName)
     }
 
     private static let redirectOnce: Void = {
@@ -69,7 +76,7 @@ public enum GoCrashCapture {
 
         let marker = "\n=== stderr redirect active pid=\(getpid()) at \(ISO8601DateFormatter().string(from: Date())) ===\n"
         marker.withCString { _ = write(STDERR_FILENO, $0, strlen($0)) }
-        AppLogger.shared.log("stderr redirect: fd 2 -> netbird.err in app group container")
+        AppLogger.shared.log("stderr redirect: fd 2 -> netbird.err in the log folder")
     }()
 
     /// Redirects this process's stderr into netbird.err. Safe to call repeatedly;

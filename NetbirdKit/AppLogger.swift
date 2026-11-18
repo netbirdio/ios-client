@@ -28,6 +28,33 @@ public class AppLogger {
         return formatter
     }()
 
+    /// Folder for the three log files: logfile.log (Go), swift-log.log (this
+    /// logger) and netbird.err (Go stderr, see GoCrashCapture). They stay side
+    /// by side because the debug bundle looks for the other two next to
+    /// logfile.log. The folder is Library/Logs in the app group container, the
+    /// only part of it `devicectl device copy from` can read, so the logs can be
+    /// pulled off a device. Falls back to the container root, where the logs
+    /// used to live, if the folder cannot be created; nil without an app group.
+    public static let logDirectoryURL: URL? = {
+        let fileManager = FileManager.default
+        guard let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) else {
+            return nil
+        }
+        let logsURL = groupURL.appendingPathComponent("Library/Logs", isDirectory: true)
+        do {
+            try fileManager.createDirectory(at: logsURL, withIntermediateDirectories: true)
+        } catch {
+            print("AppLogger: Failed to create \(logsURL.path), logging to the container root: \(error)")
+            return groupURL
+        }
+        // Logs written by earlier versions at the container root are no longer
+        // read by anything; remove them so they do not linger.
+        for name in ["logfile.log", "swift-log.log", "netbird.err"] {
+            try? fileManager.removeItem(at: groupURL.appendingPathComponent(name))
+        }
+        return logsURL
+    }()
+
     private init() {
         // Setup file logging asynchronously to avoid blocking main thread
         queue.async { [weak self] in
@@ -35,13 +62,16 @@ public class AppLogger {
         }
     }
 
+    /// Opens swift-log.log for appending in the log folder, falling back to
+    /// Documents where there is no app group. Signals `setupSemaphore` when done,
+    /// whether or not the file could be opened.
     private func setupLogFile() {
         let fileManager = FileManager.default
         var containerURL: URL?
 
         // Try app group container first
-        if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
-            containerURL = groupURL
+        if let logsURL = AppLogger.logDirectoryURL {
+            containerURL = logsURL
         } else if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
             // Fallback to documents directory (works on Mac Catalyst)
             containerURL = documentsURL
@@ -194,6 +224,7 @@ public class AppLogger {
         }
     }
 
+    /// The Swift log file, once set up and present; waits up to 2 s for setup.
     public static func getLogFileURL() -> URL? {
         // Wait for setup to complete (with timeout to avoid blocking forever)
         _ = shared.setupSemaphore.wait(timeout: .now() + 2.0)
@@ -206,11 +237,13 @@ public class AppLogger {
         return url
     }
 
+    /// The Go client log, logfile.log, in the log folder or, without an app
+    /// group, in Documents. Nil until the extension has created it.
     public static func getGoLogFileURL() -> URL? {
         let fileManager = FileManager.default
         // Try app group first
-        if let groupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: GlobalConstants.userPreferencesSuiteName) {
-            let url = groupURL.appendingPathComponent("logfile.log")
+        if let logsURL = AppLogger.logDirectoryURL {
+            let url = logsURL.appendingPathComponent("logfile.log")
             if fileManager.fileExists(atPath: url.path) {
                 return url
             }
