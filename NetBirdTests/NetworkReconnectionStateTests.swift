@@ -170,6 +170,105 @@ final class NetworkReconnectionStateTests: XCTestCase {
         XCTAssertFalse(NetworkReconnectionState.allowsConnectionAttempts(.unsatisfied))
     }
 
+    func testUnsatisfiedPathBeforeAnyUsablePathFallsBackToInterfaces() throws {
+        var state = NetworkReconnectionState()
+        let live = UnderlyingNetwork(interfaces: ["en0", "pdp_ip0"], addresses: ["en0:192.168.6.207"])
+        let network = state.resolveNetwork(status: .unsatisfied,
+                                           fromPath: { XCTFail("unsatisfied path must not be read"); return wifi },
+                                           fromInterfaces: { live })
+        XCTAssertEqual(network, live)
+        XCTAssertFalse(state.isPathMonitorTrusted)
+        XCTAssertEqual(try XCTUnwrap(state.update(network)).reason, .initial)
+    }
+
+    func testUnsatisfiedPathWithoutInterfacesKeepsOfflineStart() {
+        var state = NetworkReconnectionState()
+        XCTAssertNil(state.resolveNetwork(status: .unsatisfied,
+                                          fromPath: { wifi },
+                                          fromInterfaces: { nil }))
+    }
+
+    func testPathMonitorIsTrustedAfterFirstUsablePath() {
+        var state = NetworkReconnectionState()
+        XCTAssertEqual(state.resolveNetwork(status: .satisfied,
+                                            fromPath: { wifi },
+                                            fromInterfaces: { XCTFail("usable path needs no check"); return nil }), wifi)
+        XCTAssertTrue(state.isPathMonitorTrusted)
+        XCTAssertNil(state.resolveNetwork(status: .unsatisfied,
+                                          fromPath: { wifi },
+                                          fromInterfaces: { XCTFail("trusted monitor needs no check"); return wifi }))
+    }
+
+    func testRequiresConnectionDoesNotTrustPathMonitor() {
+        var state = NetworkReconnectionState()
+        let live = UnderlyingNetwork(interfaces: ["en0"], addresses: ["en0:192.168.6.207"])
+        XCTAssertEqual(state.resolveNetwork(status: .requiresConnection,
+                                            fromPath: { wifi },
+                                            fromInterfaces: { XCTFail("path allows connection attempts"); return nil }), wifi)
+        XCTAssertFalse(state.isPathMonitorTrusted)
+        XCTAssertEqual(state.resolveNetwork(status: .unsatisfied,
+                                            fromPath: { XCTFail("unsatisfied path must not be read"); return wifi },
+                                            fromInterfaces: { live }), live)
+    }
+
+    func testInterfaceFallbackSwitchingToPathRefreshesConnections() throws {
+        var state = NetworkReconnectionState()
+        let live = UnderlyingNetwork(interfaces: ["en0"], addresses: ["en0:192.168.6.207"])
+        _ = state.update(state.resolveNetwork(status: .unsatisfied, fromPath: { wifi }, fromInterfaces: { live }))
+        let next = state.resolveNetwork(status: .satisfied, fromPath: { wifi }, fromInterfaces: { live })
+        XCTAssertTrue(try XCTUnwrap(state.update(next)).networkChanged)
+    }
+
+    func testOnlyPhysicalInterfacesWithUsableAddressesCount() {
+        for name in ["en0", "en2", "pdp_ip0", "pdp_ip1"] {
+            XCTAssertTrue(UnderlyingNetwork.isPhysicalInterface(name), name)
+        }
+        for name in ["utun3", "lo0", "awdl0", "llw0", "anpi0", "ap1", "bridge100"] {
+            XCTAssertFalse(UnderlyingNetwork.isPhysicalInterface(name), name)
+        }
+        for host in ["192.168.6.207", "10.183.44.121", "2a00:1450:4001:80b::200e"] {
+            XCTAssertTrue(UnderlyingNetwork.isUsableAddress(host), host)
+        }
+        for host in ["169.254.10.1", "127.0.0.1", "0.0.0.0", "fe80::498:1a54:b8c4:9f3f%en0", "::1", "::", "garbage"] {
+            XCTAssertFalse(UnderlyingNetwork.isUsableAddress(host), host)
+        }
+    }
+
+    private func ipv6Entry(_ interface: String, _ host: String) throws -> UnderlyingNetwork.InterfaceAddress {
+        let mask = try XCTUnwrap(IPv6Address("ffff:ffff:ffff:ffff::"))
+        let prefix = try XCTUnwrap(UnderlyingNetwork.ipv6NetworkIdentity(XCTUnwrap(IPv6Address(host)), netmask: mask))
+        return UnderlyingNetwork.InterfaceAddress(interface: interface, flags: UInt32(IFF_UP | IFF_RUNNING),
+                                                  host: host, isIPv6: true, identity: "\(interface):\(prefix)")
+    }
+
+    func testInterfaceFallbackIPv6OnlyPrefixChangeRefreshesConnections() throws {
+        let first = try XCTUnwrap(UnderlyingNetwork.fromInterfaceAddresses(
+            [ipv6Entry("en0", "2001:db8:1:2::1234")], dataServiceIdentifier: nil))
+        XCTAssertFalse(first.supportsIPv4)
+        XCTAssertTrue(first.supportsIPv6)
+        let rotated = try XCTUnwrap(UnderlyingNetwork.fromInterfaceAddresses(
+            [ipv6Entry("en0", "2001:db8:1:2::5678")], dataServiceIdentifier: nil))
+        let moved = try XCTUnwrap(UnderlyingNetwork.fromInterfaceAddresses(
+            [ipv6Entry("en0", "2001:db8:1:3::1234")], dataServiceIdentifier: nil))
+        var state = NetworkReconnectionState()
+        _ = state.update(first)
+        XCTAssertNil(state.update(rotated))
+        XCTAssertEqual(try XCTUnwrap(state.update(moved)).reason, .changed)
+    }
+
+    func testInterfaceFallbackDataServiceChangeRefreshesConnections() throws {
+        let entries = [try ipv6Entry("pdp_ip0", "2001:db8:1:2::1234")]
+        let simA = try XCTUnwrap(UnderlyingNetwork.fromInterfaceAddresses(entries, dataServiceIdentifier: "A"))
+        let simB = try XCTUnwrap(UnderlyingNetwork.fromInterfaceAddresses(entries, dataServiceIdentifier: "B"))
+        XCTAssertEqual(simA.dataServiceIdentifier, "A")
+        var state = NetworkReconnectionState()
+        _ = state.update(simA)
+        XCTAssertEqual(try XCTUnwrap(state.update(simB)).reason, .changed)
+        let wifiOnly = try XCTUnwrap(UnderlyingNetwork.fromInterfaceAddresses(
+            [ipv6Entry("en0", "2001:db8:1:2::1234")], dataServiceIdentifier: "A"))
+        XCTAssertNil(wifiOnly.dataServiceIdentifier)
+    }
+
     func testInitialConnectionDoesNotReassert() {
         var state = NetworkReconnectionState()
         state.connectionChanged(.connecting)
@@ -205,16 +304,26 @@ final class NetworkReconnectionStateTests: XCTestCase {
         XCTAssertFalse(state.isReasserting)
     }
 
-    func testTerminalDisconnectionClearsReasserting() {
-        for terminalState: ClientState in [.disconnecting, .disconnected] {
+    func testCoreDisconnectStatesKeepReasserting() {
+        // The core sends these inside its retry loop, so they must not clear reasserting.
+        for coreState: ClientState in [.disconnecting, .disconnected] {
             var state = NetworkReconnectionState()
             _ = state.update(wifi)
             state.connectionChanged(.connected)
+            state.connectionChanged(coreState)
             _ = state.update(nil)
             XCTAssertTrue(state.isReasserting)
-            state.connectionChanged(terminalState)
-            XCTAssertFalse(state.isReasserting)
         }
+    }
+
+    func testStopClearsReasserting() {
+        var state = NetworkReconnectionState()
+        _ = state.update(wifi)
+        state.connectionChanged(.connected)
+        _ = state.update(nil)
+        XCTAssertTrue(state.isReasserting)
+        state.stop()
+        XCTAssertFalse(state.isReasserting)
     }
 
     func testGatewayAndIPFamilyChangesRefreshSameInterface() throws {
