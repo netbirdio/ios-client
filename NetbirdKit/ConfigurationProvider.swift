@@ -251,8 +251,7 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
         get { extractJSONBool(field: "DisableIPv6") ?? false }
         set {
             guard newValue != disableIPv6 else { return }
-            // No MDM key of its own; only the blanket settings gate applies.
-            guard !policyRefuses("disableIPv6", managedBy: { _ in false }) else { return }
+            guard !policyRefuses("disableIPv6", managedBy: { $0.disableIPv6 }) else { return }
             updateJSONField(field: "DisableIPv6", value: newValue)
         }
     }
