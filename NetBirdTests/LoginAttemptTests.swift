@@ -199,6 +199,49 @@ final class LoginAttemptTests: XCTestCase {
         XCTAssertFalse(adapter.showBrowser)
     }
 
+    func testFallbackIPCSentOnceForCurrentAttempt() {
+        let adapter = NetworkExtensionAdapter()
+        var sends = 0
+        adapter.fallbackLoginIPCOverride = { completion in
+            sends += 1
+            completion(self.authorizeURL)
+        }
+        let attempt = adapter.beginLoginAttempt(with: nil)
+        var received: String?
+
+        let sent = adapter.sendFallbackLogin(attempt: attempt) { received = $0 }
+
+        XCTAssertTrue(sent)
+        XCTAssertEqual(sends, 1)
+        XCTAssertEqual(received, authorizeURL)
+    }
+
+    func testFallbackIPCNotSentForReplacedAttempt() {
+        let adapter = NetworkExtensionAdapter()
+        var sends = 0
+        adapter.fallbackLoginIPCOverride = { _ in sends += 1 }
+        let old = adapter.beginLoginAttempt(with: nil)
+        _ = adapter.beginLoginAttempt(with: nil)
+        var completed = false
+
+        let sent = adapter.sendFallbackLogin(attempt: old) { _ in completed = true }
+
+        XCTAssertFalse(sent)
+        XCTAssertEqual(sends, 0)
+        XCTAssertFalse(completed)
+    }
+
+    func testFallbackIPCNotSentAfterCancel() {
+        let adapter = NetworkExtensionAdapter()
+        var sends = 0
+        adapter.fallbackLoginIPCOverride = { _ in sends += 1 }
+        let attempt = adapter.beginLoginAttempt(with: nil)
+        adapter.cancelLogin()
+
+        XCTAssertFalse(adapter.sendFallbackLogin(attempt: attempt) { _ in })
+        XCTAssertEqual(sends, 0)
+    }
+
     func testVPNStartAfterLoginOnlyForCurrentAttemptWithoutBrowser() {
         // IPC failed for the current attempt: start the VPN to launch the extension.
         XCTAssertTrue(NetworkExtensionAdapter.shouldStartVPNAfterLogin(outcome: .current, browserShown: false))

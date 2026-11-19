@@ -761,12 +761,24 @@ public class NetworkExtensionAdapter: ObservableObject {
             attempt()
         }
         #else
-        // Fallback: IPC to the NE extension (if main-app auth setup failed)
-        let loginURLString: String? = await withCheckedContinuation { continuation in
-            self.login { urlString in
-                continuation.resume(returning: urlString)
+        // Fallback: IPC to the NE extension (if main-app auth setup failed). The attempt
+        // check and the send run in one main-queue step, so a replaced or cancelled
+        // attempt sends no competing Login.
+        let fallback: (sent: Bool, url: String?) = await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                let sent = self.sendFallbackLogin(attempt: attempt) { urlString in
+                    continuation.resume(returning: (true, urlString))
+                }
+                if !sent {
+                    continuation.resume(returning: (false, nil))
+                }
             }
         }
+        guard fallback.sent else {
+            logger.info("performLogin: attempt \(attempt) was superseded, not sending the IPC login")
+            return .superseded
+        }
+        let loginURLString = fallback.url
         #endif
         #if os(tvOS)
         guard retryState.isActive(retryGeneration) else {
@@ -803,6 +815,24 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// do it: the login that replaced it is still running.
     static func shouldStartVPNAfterLogin(outcome: LoginAttemptOutcome, browserShown: Bool) -> Bool {
         outcome == .current && !browserShown
+    }
+
+    /// Replaces the fallback Login IPC in tests. Nil sends the real `login(completion:)`.
+    var fallbackLoginIPCOverride: ((@escaping (String?) -> Void) -> Void)?
+
+    /// Sends the fallback Login IPC for `attempt`. Main queue only. Returns false, and
+    /// sends nothing, when the attempt is no longer current; `completion` then never runs.
+    func sendFallbackLogin(attempt: Int, completion: @escaping (String?) -> Void) -> Bool {
+        guard loginAttemptToken == attempt else {
+            logger.info("performLogin: not sending IPC login for stale attempt \(attempt)")
+            return false
+        }
+        if let override = fallbackLoginIPCOverride {
+            override(completion)
+        } else {
+            login(completion: completion)
+        }
+        return true
     }
 
     /// Shows the login URL the extension returned for `attempt`. Main queue only.
