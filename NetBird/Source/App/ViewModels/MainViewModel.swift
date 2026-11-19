@@ -287,6 +287,13 @@ class ViewModel: ObservableObject {
                 !self.isValidSetupKey(setupKey)
             }
             .assign(to: &$showInvalidSetupKeyHint)
+
+        // Views read the adapter's login state through this model, and @Published on a
+        // class reference fires only when the reference changes. Without this, the login
+        // page waits for an unrelated change here, often the 10 s status poll.
+        networkExtensionAdapter.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
     }
 
     /// Stops long-lived monitors and removes the VPN status observer.

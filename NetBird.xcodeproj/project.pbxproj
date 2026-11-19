@@ -162,6 +162,7 @@
 		71DD928A21BE4943BB0FEC1D /* iOSNetworksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A1CFF65CC44187912007EC /* iOSNetworksView.swift */; };
 		94F739DA3E076313908BA6DF /* GlobalConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */; };
 		AA0011012F22001100000001 /* MDMBridgeIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */; };
+		AA0014012F22001400000001 /* LoginBrowserObservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0014002F22001400000001 /* LoginBrowserObservationTests.swift */; };
 		AA0012012F22001200000001 /* RemoteJobsPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0012002F22001200000001 /* RemoteJobsPolicyTests.swift */; };
 		AA0010012F22001000000001 /* MDMRestrictionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0010002F22001000000001 /* MDMRestrictionsTests.swift */; };
 		962925F1DAA24D40B98D395B /* iOSPeersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42873052F9544A89B1408339 /* iOSPeersView.swift */; };
@@ -317,6 +318,7 @@
 		2F8A4B98A775451786C5DDF8 /* iOSSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSSettingsView.swift; sourceTree = "<group>"; };
 		3E054D83063E440DAD0C52FA /* GlobalConstantsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlobalConstantsTests.swift; sourceTree = "<group>"; };
 		AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMBridgeIntegrationTests.swift; sourceTree = "<group>"; };
+		AA0014002F22001400000001 /* LoginBrowserObservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginBrowserObservationTests.swift; sourceTree = "<group>"; };
 		AA0012002F22001200000001 /* RemoteJobsPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteJobsPolicyTests.swift; sourceTree = "<group>"; };
 		AA0010002F22001000000001 /* MDMRestrictionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMRestrictionsTests.swift; sourceTree = "<group>"; };
 		42873052F9544A89B1408339 /* iOSPeersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSPeersView.swift; sourceTree = "<group>"; };
@@ -767,6 +769,7 @@
 				E2A000032F90000100000001 /* NetworkReconnectionStateTests.swift */,
 				E2A000082F90000100000001 /* NetworkSettingsLogLineTests.swift */,
 				AA0011002F22001100000001 /* MDMBridgeIntegrationTests.swift */,
+				AA0014002F22001400000001 /* LoginBrowserObservationTests.swift */,
 				AA0012002F22001200000001 /* RemoteJobsPolicyTests.swift */,
 				AA0010002F22001000000001 /* MDMRestrictionsTests.swift */,
 				8AA7193B3AE82DF185EDEB1B /* AppLoggerTests.swift */,
@@ -1312,6 +1315,7 @@
 				E2A000042F90000100000001 /* NetworkReconnectionStateTests.swift in Sources */,
 				E2A000092F90000100000001 /* NetworkSettingsLogLineTests.swift in Sources */,
 				AA0011012F22001100000001 /* MDMBridgeIntegrationTests.swift in Sources */,
+				AA0014012F22001400000001 /* LoginBrowserObservationTests.swift in Sources */,
 				AA0012012F22001200000001 /* RemoteJobsPolicyTests.swift in Sources */,
 				AA0010012F22001000000001 /* MDMRestrictionsTests.swift in Sources */,
 				9CC0E000AE3F165CA72FD465 /* AppLoggerTests.swift in Sources */,
