@@ -30,6 +30,10 @@ struct AdvancedView: View {
         viewModel.mdmRestrictions.mdm.rosenpassPermissive || editingDisabled
     }
 
+    private var forceRelayLocked: Bool {
+        viewModel.mdmRestrictions.mdm.forceRelay || editingDisabled
+    }
+
     private var disableIPv6Locked: Bool {
         viewModel.mdmRestrictions.mdm.disableIPv6 || editingDisabled
     }
@@ -126,7 +130,7 @@ struct AdvancedView: View {
                     .onChange(of: viewModel.forceRelayConnection) { value in
                         viewModel.setForcedRelayConnection(isEnabled: value)
                     }
-                    .mdmLocked(editingDisabled)
+                    .mdmLocked(forceRelayLocked)
 
                 Toggle("Disable IPv6", isOn: $viewModel.disableIPv6)
                     .toggleStyle(SwitchToggleStyle(tint: .accentColor))
@@ -137,7 +141,7 @@ struct AdvancedView: View {
             } header: {
                 Text("Network & Security")
             } footer: {
-                if editingDisabled || disableIPv6Locked {
+                if editingDisabled || disableIPv6Locked || forceRelayLocked {
                     MDMManagedFooter()
                 }
             }

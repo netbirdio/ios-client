@@ -159,4 +159,10 @@ final class MDMRestrictionsTests: XCTestCase {
         XCTAssertFalse(MDMRestrictions.decode(#"{"mdm":{}}"#).mdm.disableIPv6)
         XCTAssertFalse(MDMRestrictions.empty.mdm.disableIPv6)
     }
+
+    func testForceRelayIsManagedOnlyWhenPresent() {
+        XCTAssertTrue(MDMRestrictions.decode(#"{"mdm":{"forceRelay":true}}"#).mdm.forceRelay)
+        XCTAssertFalse(MDMRestrictions.decode(#"{"mdm":{}}"#).mdm.forceRelay)
+        XCTAssertFalse(MDMRestrictions.empty.mdm.forceRelay)
+    }
 }

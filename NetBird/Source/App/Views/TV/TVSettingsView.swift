@@ -33,6 +33,9 @@ struct TVSettingsView: View {
     private var rosenpassPermissiveLocked: Bool {
         viewModel.mdmRestrictions.mdm.rosenpassPermissive || editingDisabled
     }
+    private var forceRelayLocked: Bool {
+        viewModel.mdmRestrictions.mdm.forceRelay || editingDisabled
+    }
     private var disableIPv6Locked: Bool {
         viewModel.mdmRestrictions.mdm.disableIPv6 || editingDisabled
     }
@@ -145,14 +148,14 @@ struct TVSettingsView: View {
                             TVSettingsToggleRow(
                                 icon: "arrow.triangle.branch",
                                 title: "Force Relay",
-                                subtitle: subtitle("Force all connections through relay servers", managed: editingDisabled),
+                                subtitle: subtitle("Force all connections through relay servers", managed: forceRelayLocked),
                                 isOn: Binding(
                                     get: { viewModel.forceRelayConnection },
                                     set: { newValue in
                                         viewModel.setForcedRelayConnection(isEnabled: newValue)
                                     }
                                 ),
-                                isDisabled: editingDisabled
+                                isDisabled: forceRelayLocked
                             )
                         }
 

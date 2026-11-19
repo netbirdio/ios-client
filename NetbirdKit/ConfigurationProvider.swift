@@ -28,6 +28,12 @@ protocol ConfigurationProvider {
     /// Whether IPv6 overlay addressing is disabled
     var disableIPv6: Bool { get set }
 
+    // MARK: - Force Relay
+
+    /// The force relay value a policy enforces. The user's own choice lives in
+    /// UserDefaults and reaches the daemon as NB_FORCE_RELAY.
+    var enforcedForceRelay: Bool { get }
+
     // MARK: - Remote Jobs
 
     /// Whether management may run remote jobs (debug bundle requests) on this peer
@@ -121,6 +127,18 @@ final class iOSConfigurationProvider: ConfigurationProvider {
         set {
             preferences.setDisableIPv6(newValue)
         }
+    }
+
+    // MARK: - Force Relay
+
+    var enforcedForceRelay: Bool {
+        var result = ObjCBool(false)
+        do {
+            try preferences.getForceRelay(&result)
+        } catch {
+            print("ConfigurationProvider: Failed to read forceRelay - \(error)")
+        }
+        return result.boolValue
     }
 
     // MARK: - Remote Jobs
@@ -255,6 +273,12 @@ final class tvOSConfigurationProvider: ConfigurationProvider {
             updateJSONField(field: "DisableIPv6", value: newValue)
         }
     }
+
+    // MARK: - Force Relay
+
+    // The tvOS provider reads the profile file, which never holds a policy
+    // value, so a locked switch shows the profile setting here.
+    var enforcedForceRelay: Bool { extractJSONBool(field: "ForceRelay") ?? false }
 
     // MARK: - Remote Jobs
 

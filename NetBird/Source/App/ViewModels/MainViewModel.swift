@@ -1017,6 +1017,7 @@ class ViewModel: ObservableObject {
         // getters return the enforced value once a key is managed, so re-read
         // them here rather than waiting for the next onAppear.
         loadRosenpassSettings()
+        forceRelayConnection = getForcedRelayConnectionEnabled()
         presharedKeySecure = configProvider.hasPreSharedKey
     }
 
@@ -1208,13 +1209,27 @@ class ViewModel: ObservableObject {
     }
 
     func setForcedRelayConnection(isEnabled: Bool) {
+        // A policy-held value is shown, not chosen: refreshing the locked
+        // switch would otherwise store it as the user's own choice.
+        guard !forceRelayManaged else { return }
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         userDefaults?.set(isEnabled, forKey: GlobalConstants.keyForceRelayConnection)
         self.forceRelayConnection = isEnabled
         self.showForceRelayAlert = true
     }
     
+    private var forceRelayManaged: Bool {
+        mdmRestrictions.mdm.forceRelay || mdmRestrictions.features.disableUpdateSettings
+    }
+
     func getForcedRelayConnectionEnabled() -> Bool {
+        #if os(iOS)
+        if mdmRestrictions.mdm.forceRelay {
+            return configProvider.enforcedForceRelay
+        }
+        #endif
+        // The tvOS tunnel never receives the policy, so the device's own
+        // setting is the one in effect there.
         let userDefaults = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName)
         #if os(iOS)
         userDefaults?.register(defaults: [GlobalConstants.keyForceRelayConnection: true])
