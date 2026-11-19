@@ -335,15 +335,18 @@ public class NetworkExtensionAdapter: ObservableObject {
 
             // Note: For tvOS, config initialization happens in the extension's startTunnel
             // before the needsLogin check. The extension has permission to write to App Group.
+            #if os(tvOS)
             await performLogin()
+            #else
+            let outcome = await performLogin()
 
-            #if os(iOS)
             // If performLogin() didn't open the browser, the IPC failed because the extension
             // is not running. Start the VPN connection anyway so the extension process starts,
             // detects login required, signals the main app via UserDefaults, and stays alive
             // long enough for the user to press Connect from the auth alert (which will retry
             // IPC to a still-alive extension and succeed).
-            if !self.showBrowser {
+            let browserShown = await MainActor.run { self.showBrowser }
+            if Self.shouldStartVPNAfterLogin(outcome: outcome, browserShown: browserShown) {
                 logger.info("loginIfRequired: IPC failed (extension not running), starting VPN to launch extension")
                 startVPNConnection()
             }
@@ -526,7 +529,17 @@ public class NetworkExtensionAdapter: ObservableObject {
         var observer: NSObjectProtocol?
     }
 
-    private func performLogin() async {
+    /// Whether a login attempt still owned the login when performLogin() returned.
+    enum LoginAttemptOutcome {
+        case current
+        /// A newer attempt or a cancel took over.
+        case superseded
+    }
+
+    /// Returns `.superseded` when a newer attempt or a cancel took over; the caller must
+    /// then leave the connection alone.
+    @discardableResult
+    private func performLogin() async -> LoginAttemptOutcome {
         #if os(iOS)
         // Run the OAuth flow in the main-app process using NetBirdSDKAuth.
         // The NE extension's client context is cancelled when adapter.stop() is called
@@ -563,9 +576,14 @@ public class NetworkExtensionAdapter: ObservableObject {
         // profile's stored account and sends it as the OIDC login_hint, and the
         // management server's login flag decides whether the IdP is asked to
         // re-authenticate. Nothing here rewrites the authorize URL.
-        if let configPath = Preferences.configFile(), !configPath.isEmpty,
-           let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, MDMPolicyFetcher(), nil) {
-            let attempt = beginLoginAttempt(with: auth)
+        var sdkAuth: NetBirdSDKAuth?
+        if let configPath = Preferences.configFile(), !configPath.isEmpty {
+            sdkAuth = NetBirdSDKNewAuth(configPath, activeManagementURL, MDMPolicyFetcher(), nil)
+        }
+        // Every attempt owns a token, an IPC-only one too. Taken on the main queue,
+        // where the SDK callbacks and cancelLogin() check it.
+        let attempt = await MainActor.run { [sdkAuth] in self.beginLoginAttempt(with: sdkAuth) }
+        if let auth = sdkAuth {
             let urlOpener = MainAppLoginURLOpener()
             let errListener = MainAppLoginErrListener()
             // Set once the browser actually opened. Gates the ownership-conflict
@@ -605,30 +623,33 @@ public class NetworkExtensionAdapter: ObservableObject {
                     }
                 }
                 urlOpener.onSuccess = { [weak self] in
-                    var err: NSError?
-                    let json = auth.getConfigJSON(&err)
-                    if err == nil, !json.isEmpty {
-                        _ = Preferences.saveConfigToUserDefaults(json)
-                        if let path = Preferences.configFile() {
-                            try? json.write(toFile: path, atomically: true, encoding: .utf8)
-                        }
-                    }
-                    // Record the management URL in the connection cache and the shared
-                    // UserDefaults so the user's own server is available to the next login
-                    // even before the config file can be read back.
-                    if !activeManagementURL.isEmpty {
-                        ProfileManager.shared.saveServerURL(activeManagementURL, forID: activeProfileID)
-                        Preferences.saveManagementURL(activeManagementURL)
-                    }
-                    // The account this login ran under is recorded by the SDK itself,
-                    // keyed by the config path it was handed, so the next login for
-                    // this profile goes out with it as the login_hint.
-                    AppLogger.shared.log("performLogin: SDK login succeeded for '\(activeProfileID)'")
                     // onSuccess runs on a background goroutine. Mark success on the main
                     // queue so the browser-finished handler (also main-queue) reliably
-                    // observes it.
+                    // observes it. Saving runs there too, after the attempt check, so a
+                    // replaced attempt cannot overwrite what the current one saved.
+                    var err: NSError?
+                    let configJSON = auth.getConfigJSON(&err)
+                    let json = err == nil ? configJSON : ""
                     DispatchQueue.main.async {
-                        self?.applyLoginSuccess(attempt: attempt)
+                        self?.applyLoginSuccess(attempt: attempt) {
+                            if !json.isEmpty {
+                                _ = Preferences.saveConfigToUserDefaults(json)
+                                if let path = Preferences.configFile() {
+                                    try? json.write(toFile: path, atomically: true, encoding: .utf8)
+                                }
+                            }
+                            // Record the management URL in the connection cache and the shared
+                            // UserDefaults so the user's own server is available to the next login
+                            // even before the config file can be read back.
+                            if !activeManagementURL.isEmpty {
+                                ProfileManager.shared.saveServerURL(activeManagementURL, forID: activeProfileID)
+                                Preferences.saveManagementURL(activeManagementURL)
+                            }
+                            // The account this login ran under is recorded by the SDK itself,
+                            // keyed by the config path it was handed, so the next login for
+                            // this profile goes out with it as the login_hint.
+                            AppLogger.shared.log("performLogin: SDK login succeeded for '\(activeProfileID)'")
+                        }
                     }
                 }
                 errListener.onSuccessCallback = { urlOpener.onSuccess?() }
@@ -664,16 +685,20 @@ public class NetworkExtensionAdapter: ObservableObject {
 
             if let url = receivedURL, !url.isEmpty {
                 logger.info("performLogin: auth started in main-app process")
-                return
+                return .current
             }
             // A newer attempt or a cancel took over while this one was starting. The
             // IPC fallback would start a second login next to it.
-            guard self.loginAttemptToken == attempt else {
+            let stillCurrent = await MainActor.run { () -> Bool in
+                guard self.loginAttemptToken == attempt else { return false }
+                self.pendingAuth = nil
+                return true
+            }
+            guard stillCurrent else {
                 logger.info("performLogin: attempt \(attempt) was superseded, not falling back to IPC")
-                return
+                return .superseded
             }
             logger.error("performLogin: main-app auth failed to get URL, falling back to IPC")
-            self.pendingAuth = nil
         }
         #endif
 
@@ -746,12 +771,12 @@ public class NetworkExtensionAdapter: ObservableObject {
         #if os(tvOS)
         guard retryState.isActive(retryGeneration) else {
             logger.info("performLogin: tvOS login IPC retry loop cancelled")
-            return
+            return .superseded
         }
         #endif
         guard let url = loginURLString, !url.isEmpty else {
             logger.error("performLogin: no login URL received from extension, aborting")
-            return
+            return .current
         }
         // performLogin() is a nonisolated async method, so its body runs on the
         // cooperative pool even when start() called it from the main actor — a
@@ -759,15 +784,40 @@ public class NetworkExtensionAdapter: ObservableObject {
         // showBrowser are @Published, and publishing off the main thread is
         // undefined behaviour in SwiftUI. Same ordering as the main-app path above:
         // showBrowser is committed together with the URL it belongs to.
+        #if os(iOS)
+        let applied = await MainActor.run { self.applyFallbackLoginURL(url, attempt: attempt) }
+        return applied ? .current : .superseded
+        #else
         await MainActor.run {
             self.loginURL = url
             self.showBrowser = true
         }
+        return .current
+        #endif
     }
 
 
     #if os(iOS)
-    /// Starts a new login attempt with `auth` and returns its token.
+    /// Whether loginIfRequired() should start the VPN after performLogin() returned.
+    /// The start launches the extension when IPC failed. A superseded attempt must not
+    /// do it: the login that replaced it is still running.
+    static func shouldStartVPNAfterLogin(outcome: LoginAttemptOutcome, browserShown: Bool) -> Bool {
+        outcome == .current && !browserShown
+    }
+
+    /// Shows the login URL the extension returned for `attempt`. Main queue only.
+    /// Returns false, and changes nothing, when the attempt is no longer current.
+    func applyFallbackLoginURL(_ url: String, attempt: Int) -> Bool {
+        guard loginAttemptToken == attempt else {
+            logger.info("performLogin: ignoring IPC login URL of stale attempt \(attempt)")
+            return false
+        }
+        loginURL = url
+        showBrowser = true
+        return true
+    }
+
+    /// Starts a new login attempt with `auth` and returns its token. Main queue only.
     func beginLoginAttempt(with auth: NetBirdSDKAuth?) -> Int {
         // A stale flow from an abandoned attempt would keep its loopback port
         // bound and its WaitToken goroutine alive — stop it first. Its error
@@ -779,8 +829,9 @@ public class NetworkExtensionAdapter: ObservableObject {
         return loginAttemptToken
     }
 
-    /// Applies the SDK's success for `attempt`. Main queue only.
-    func applyLoginSuccess(attempt: Int) {
+    /// Applies the SDK's success for `attempt`. Main queue only. `persist` saves the
+    /// login result and runs only for the current attempt, once, before the VPN starts.
+    func applyLoginSuccess(attempt: Int, persist: () -> Void = {}) {
         guard loginAttemptToken == attempt else {
             logger.info("performLogin: ignoring success of stale attempt \(attempt)")
             return
@@ -788,6 +839,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         // Success is delivered twice (urlOpener.onLoginSuccess and the
         // result listener); act on the first only.
         guard !loginSucceeded else { return }
+        persist()
         logger.info("performLogin: SDK login succeeded")
         loginSucceeded = true
         pendingAuth = nil

@@ -130,6 +130,85 @@ final class LoginAttemptTests: XCTestCase {
         XCTAssertEqual(adapter.loginErrorMessage, "token exchange failed")
     }
 
+    func testSuccessOfReplacedAttemptDoesNotPersist() {
+        let adapter = NetworkExtensionAdapter()
+        let old = adapter.beginLoginAttempt(with: nil)
+        _ = adapter.beginLoginAttempt(with: nil)
+        var persisted = 0
+
+        adapter.applyLoginSuccess(attempt: old) { persisted += 1 }
+
+        XCTAssertEqual(persisted, 0)
+    }
+
+    func testSuccessAfterCancelDoesNotPersist() {
+        let adapter = NetworkExtensionAdapter()
+        let attempt = adapter.beginLoginAttempt(with: nil)
+        adapter.cancelLogin()
+        var persisted = 0
+
+        adapter.applyLoginSuccess(attempt: attempt) { persisted += 1 }
+
+        XCTAssertEqual(persisted, 0)
+        XCTAssertFalse(adapter.loginSucceeded)
+    }
+
+    /// The SDK reports success twice; the result is saved once.
+    func testSuccessOfCurrentAttemptPersistsOnce() {
+        let adapter = NetworkExtensionAdapter()
+        let attempt = adapter.beginLoginAttempt(with: nil)
+        openBrowser(adapter)
+        var persisted = 0
+
+        adapter.applyLoginSuccess(attempt: attempt) { persisted += 1 }
+        adapter.applyLoginSuccess(attempt: attempt) { persisted += 1 }
+
+        XCTAssertEqual(persisted, 1)
+        XCTAssertTrue(adapter.loginSucceeded)
+        XCTAssertFalse(adapter.showBrowser)
+    }
+
+    func testFallbackURLOfCurrentAttemptOpensBrowser() {
+        let adapter = NetworkExtensionAdapter()
+        let attempt = adapter.beginLoginAttempt(with: nil)
+
+        XCTAssertTrue(adapter.applyFallbackLoginURL(authorizeURL, attempt: attempt))
+
+        XCTAssertTrue(adapter.showBrowser)
+        XCTAssertEqual(adapter.loginURL, authorizeURL)
+    }
+
+    func testFallbackURLOfReplacedAttemptIsDropped() {
+        let adapter = NetworkExtensionAdapter()
+        let old = adapter.beginLoginAttempt(with: nil)
+        _ = adapter.beginLoginAttempt(with: nil)
+
+        XCTAssertFalse(adapter.applyFallbackLoginURL(authorizeURL, attempt: old))
+
+        XCTAssertFalse(adapter.showBrowser)
+        XCTAssertNil(adapter.loginURL)
+    }
+
+    func testFallbackURLAfterCancelIsDropped() {
+        let adapter = NetworkExtensionAdapter()
+        let attempt = adapter.beginLoginAttempt(with: nil)
+        adapter.cancelLogin()
+
+        XCTAssertFalse(adapter.applyFallbackLoginURL(authorizeURL, attempt: attempt))
+
+        XCTAssertFalse(adapter.showBrowser)
+    }
+
+    func testVPNStartAfterLoginOnlyForCurrentAttemptWithoutBrowser() {
+        // IPC failed for the current attempt: start the VPN to launch the extension.
+        XCTAssertTrue(NetworkExtensionAdapter.shouldStartVPNAfterLogin(outcome: .current, browserShown: false))
+        // Browser is up: the login is in progress.
+        XCTAssertFalse(NetworkExtensionAdapter.shouldStartVPNAfterLogin(outcome: .current, browserShown: true))
+        // A newer attempt took over: leave the connection to it.
+        XCTAssertFalse(NetworkExtensionAdapter.shouldStartVPNAfterLogin(outcome: .superseded, browserShown: false))
+        XCTAssertFalse(NetworkExtensionAdapter.shouldStartVPNAfterLogin(outcome: .superseded, browserShown: true))
+    }
+
     func testRepeatedAttemptsOnlyLatestIsCurrent() {
         let adapter = NetworkExtensionAdapter()
         let attempts = (0..<5).map { _ in adapter.beginLoginAttempt(with: nil) }
