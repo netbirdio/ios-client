@@ -114,9 +114,9 @@ public class NetworkExtensionAdapter: ObservableObject {
     /// Reason the last login failed, surfaced to the user. Nil when there is nothing
     /// to report.
     @Published public var loginErrorMessage: String?
-    /// Incremented on every performLogin entry. Deferred work armed for one attempt
-    /// captures the value and compares before acting, so a stale timer can never
-    /// abort a newer attempt.
+    /// Incremented on every performLogin entry and on cancelLogin. Deferred work and SDK
+    /// callbacks armed for one attempt capture the value and compare before acting, so a
+    /// stale timer or a stopped flow can never touch a newer attempt.
     public private(set) var loginAttemptToken = 0
     /// Authorization URL of the in-flight login, used to locate the SDK's loopback
     /// listener when deciding whether a closed browser means "cancelled".
@@ -565,12 +565,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         // re-authenticate. Nothing here rewrites the authorize URL.
         if let configPath = Preferences.configFile(), !configPath.isEmpty,
            let auth = NetBirdSDKNewAuth(configPath, activeManagementURL, MDMPolicyFetcher(), nil) {
-            // A stale flow from an abandoned attempt would keep its loopback port
-            // bound and its WaitToken goroutine alive — stop it first.
-            self.pendingAuth?.stop()
-            self.pendingAuth = auth
-            self.loginAttemptToken += 1
-            self.loginSucceeded = false
+            let attempt = beginLoginAttempt(with: auth)
             let urlOpener = MainAppLoginURLOpener()
             let errListener = MainAppLoginErrListener()
             // Set once the browser actually opened. Gates the ownership-conflict
@@ -595,11 +590,17 @@ public class NetworkExtensionAdapter: ObservableObject {
                     // await caller sees showBrowser == true.
                     let browserURL = url
                     DispatchQueue.main.async {
+                        // A stopped flow can still report its URL. Opening it would show
+                        // a login nothing waits for, so end this attempt instead.
+                        guard let self, self.loginAttemptToken == attempt else {
+                            resume(nil)
+                            return
+                        }
                         browserPhaseStarted = true
-                        self?.loginErrorMessage = nil
-                        self?.pendingAuthorizeURL = browserURL
-                        self?.loginURL = browserURL
-                        self?.showBrowser = true
+                        self.loginErrorMessage = nil
+                        self.pendingAuthorizeURL = browserURL
+                        self.loginURL = browserURL
+                        self.showBrowser = true
                         resume(url)
                     }
                 }
@@ -627,20 +628,7 @@ public class NetworkExtensionAdapter: ObservableObject {
                     // queue so the browser-finished handler (also main-queue) reliably
                     // observes it.
                     DispatchQueue.main.async {
-                        guard let self else { return }
-                        // Success is delivered twice (urlOpener.onLoginSuccess and the
-                        // result listener); act on the first only.
-                        guard !self.loginSucceeded else { return }
-                        self.logger.info("performLogin: SDK login succeeded")
-                        self.loginSucceeded = true
-                        self.pendingAuth = nil
-                        self.pendingAuthorizeURL = nil
-                        // Nothing is left to do on the SDK's success page, so close it
-                        // instead of waiting for the user to dismiss it.
-                        self.showBrowser = false
-                        // The management login just completed here, so the extension
-                        // can skip its own needs-login check (one Login RPC).
-                        self.startVPNConnection(loginVerified: true)
+                        self?.applyLoginSuccess(attempt: attempt)
                     }
                 }
                 errListener.onSuccessCallback = { urlOpener.onSuccess?() }
@@ -659,29 +647,7 @@ public class NetworkExtensionAdapter: ObservableObject {
                         // resumes of a checked continuation trap rather than fail softly.
                         // Deferred so every exit path below still resumes.
                         defer { resume(nil) }
-                        guard let self else { return }
-                        self.logger.error("performLogin: SDK login failed: \(message, privacy: .public)")
-                        self.pendingAuth = nil
-                        self.pendingAuthorizeURL = nil
-                        guard browserPhaseStarted else { return }
-                        // "peer is already registered by a different User or a Setup
-                        // Key" means the account that signed in does not own this
-                        // profile's peer. Report it rather than "repairing" it: the
-                        // app cannot tell a stale local key from a login under the
-                        // wrong account, and deleting the profile's identity to fix
-                        // the latter destroys a working registration and can
-                        // re-register the peer under the wrong account. Removing an
-                        // identity stays an explicit user action — Profiles → Log out.
-                        if message.contains("registered by a different User") {
-                            self.loginErrorMessage = """
-                                This profile belongs to a different NetBird account. \
-                                Sign in with the account that owns it, or log the \
-                                profile out (Profiles → Log out) to register it again.
-                                """
-                        } else {
-                            self.loginErrorMessage = message
-                        }
-                        self.showBrowser = false
+                        self?.applyLoginFailure(message, attempt: attempt, browserPhaseStarted: browserPhaseStarted)
                     }
                 }
                 // Pass the device name explicitly. The plain login() path uses an empty
@@ -698,6 +664,12 @@ public class NetworkExtensionAdapter: ObservableObject {
 
             if let url = receivedURL, !url.isEmpty {
                 logger.info("performLogin: auth started in main-app process")
+                return
+            }
+            // A newer attempt or a cancel took over while this one was starting. The
+            // IPC fallback would start a second login next to it.
+            guard self.loginAttemptToken == attempt else {
+                logger.info("performLogin: attempt \(attempt) was superseded, not falling back to IPC")
                 return
             }
             logger.error("performLogin: main-app auth failed to get URL, falling back to IPC")
@@ -795,6 +767,72 @@ public class NetworkExtensionAdapter: ObservableObject {
 
 
     #if os(iOS)
+    /// Starts a new login attempt with `auth` and returns its token.
+    func beginLoginAttempt(with auth: NetBirdSDKAuth?) -> Int {
+        // A stale flow from an abandoned attempt would keep its loopback port
+        // bound and its WaitToken goroutine alive — stop it first. Its error
+        // arrives later and is dropped by the token check.
+        pendingAuth?.stop()
+        pendingAuth = auth
+        loginAttemptToken += 1
+        loginSucceeded = false
+        return loginAttemptToken
+    }
+
+    /// Applies the SDK's success for `attempt`. Main queue only.
+    func applyLoginSuccess(attempt: Int) {
+        guard loginAttemptToken == attempt else {
+            logger.info("performLogin: ignoring success of stale attempt \(attempt)")
+            return
+        }
+        // Success is delivered twice (urlOpener.onLoginSuccess and the
+        // result listener); act on the first only.
+        guard !loginSucceeded else { return }
+        logger.info("performLogin: SDK login succeeded")
+        loginSucceeded = true
+        pendingAuth = nil
+        pendingAuthorizeURL = nil
+        // Nothing is left to do on the SDK's success page, so close it
+        // instead of waiting for the user to dismiss it.
+        showBrowser = false
+        // The management login just completed here, so the extension
+        // can skip its own needs-login check (one Login RPC).
+        startVPNConnection(loginVerified: true)
+    }
+
+    /// Applies the SDK's failure for `attempt`. Main queue only.
+    func applyLoginFailure(_ message: String, attempt: Int, browserPhaseStarted: Bool) {
+        // A stopped flow fails late, with "context canceled" or, if nothing stopped
+        // it, "context deadline exceeded" after the 5 min PKCE timeout. Acting on it
+        // would drop the current attempt's auth and close its browser.
+        guard loginAttemptToken == attempt else {
+            logger.info("performLogin: ignoring failure of stale attempt \(attempt): \(message, privacy: .public)")
+            return
+        }
+        logger.error("performLogin: SDK login failed: \(message, privacy: .public)")
+        pendingAuth = nil
+        pendingAuthorizeURL = nil
+        guard browserPhaseStarted else { return }
+        // "peer is already registered by a different User or a Setup
+        // Key" means the account that signed in does not own this
+        // profile's peer. Report it rather than "repairing" it: the
+        // app cannot tell a stale local key from a login under the
+        // wrong account, and deleting the profile's identity to fix
+        // the latter destroys a working registration and can
+        // re-register the peer under the wrong account. Removing an
+        // identity stays an explicit user action — Profiles → Log out.
+        if message.contains("registered by a different User") {
+            loginErrorMessage = """
+                This profile belongs to a different NetBird account. \
+                Sign in with the account that owns it, or log the \
+                profile out (Profiles → Log out) to register it again.
+                """
+        } else {
+            loginErrorMessage = message
+        }
+        showBrowser = false
+    }
+
     /// Aborts an in-progress interactive login (e.g. the user dismissed the OAuth
     /// browser without completing it). Stopping the SDK auth cancels its context,
     /// which unblocks the PKCE WaitToken and shuts down the loopback HTTP server so
@@ -804,6 +842,9 @@ public class NetworkExtensionAdapter: ObservableObject {
         logger.info("cancelLogin: aborting in-progress login")
         pendingAuth?.stop()
         pendingAuth = nil
+        // The stopped flow still reports "context canceled" a moment later. Retire
+        // the attempt so that error is not shown for a login the user backed out of.
+        loginAttemptToken += 1
         pendingAuthorizeURL = nil
         loginSucceeded = false
         showBrowser = false

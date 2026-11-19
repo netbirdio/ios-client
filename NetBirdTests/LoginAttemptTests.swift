@@ -1,0 +1,148 @@
+//
+//  LoginAttemptTests.swift
+//  NetBirdTests
+//
+
+import XCTest
+@testable import NetBird
+
+/// A login flow that the app stopped (replaced by a new Connect, or cancelled) still
+/// reports its result later. That late result must not change the current login.
+@MainActor
+final class LoginAttemptTests: XCTestCase {
+
+    private let authorizeURL = "https://example.com/authorize"
+
+    private func openBrowser(_ adapter: NetworkExtensionAdapter) {
+        adapter.loginURL = authorizeURL
+        adapter.showBrowser = true
+    }
+
+    func testFailureOfCurrentAttemptClosesBrowserAndReportsError() {
+        let adapter = NetworkExtensionAdapter()
+        let attempt = adapter.beginLoginAttempt(with: nil)
+        openBrowser(adapter)
+
+        adapter.applyLoginFailure("token exchange failed", attempt: attempt, browserPhaseStarted: true)
+
+        XCTAssertFalse(adapter.showBrowser)
+        XCTAssertEqual(adapter.loginErrorMessage, "token exchange failed")
+    }
+
+    func testOwnershipConflictOfCurrentAttemptShowsAccountMessage() {
+        let adapter = NetworkExtensionAdapter()
+        let attempt = adapter.beginLoginAttempt(with: nil)
+        openBrowser(adapter)
+
+        adapter.applyLoginFailure(
+            "peer is already registered by a different User or a Setup Key",
+            attempt: attempt,
+            browserPhaseStarted: true
+        )
+
+        XCTAssertFalse(adapter.showBrowser)
+        XCTAssertTrue(adapter.loginErrorMessage?.contains("different NetBird account") ?? false)
+    }
+
+    func testFailureBeforeBrowserPhaseLeavesUIAlone() {
+        let adapter = NetworkExtensionAdapter()
+        let attempt = adapter.beginLoginAttempt(with: nil)
+
+        adapter.applyLoginFailure("failed to get OAuth flow", attempt: attempt, browserPhaseStarted: false)
+
+        XCTAssertFalse(adapter.showBrowser)
+        XCTAssertNil(adapter.loginErrorMessage)
+    }
+
+    /// The reported bug: an old flow times out after 5 min and closes the browser of
+    /// the login the user is doing now.
+    func testTimeoutOfReplacedAttemptKeepsNewBrowserOpen() {
+        let adapter = NetworkExtensionAdapter()
+        let old = adapter.beginLoginAttempt(with: nil)
+        let current = adapter.beginLoginAttempt(with: nil)
+        XCTAssertNotEqual(old, current)
+        openBrowser(adapter)
+
+        adapter.applyLoginFailure(
+            "interactive sso login failed: waiting for browser login failed: context deadline exceeded",
+            attempt: old,
+            browserPhaseStarted: true
+        )
+
+        XCTAssertTrue(adapter.showBrowser)
+        XCTAssertEqual(adapter.loginURL, authorizeURL)
+        XCTAssertNil(adapter.loginErrorMessage)
+        XCTAssertEqual(adapter.loginAttemptToken, current)
+    }
+
+    /// A stopped flow reports "context canceled" right after the new attempt has
+    /// started. The new attempt must still own its result afterwards.
+    func testCancelErrorOfReplacedAttemptDoesNotBlockNewAttempt() {
+        let adapter = NetworkExtensionAdapter()
+        let old = adapter.beginLoginAttempt(with: nil)
+        let current = adapter.beginLoginAttempt(with: nil)
+
+        adapter.applyLoginFailure("context canceled", attempt: old, browserPhaseStarted: true)
+        openBrowser(adapter)
+        adapter.applyLoginFailure("token exchange failed", attempt: current, browserPhaseStarted: true)
+
+        XCTAssertFalse(adapter.showBrowser)
+        XCTAssertEqual(adapter.loginErrorMessage, "token exchange failed")
+    }
+
+    func testSuccessOfReplacedAttemptIsIgnored() {
+        let adapter = NetworkExtensionAdapter()
+        let old = adapter.beginLoginAttempt(with: nil)
+        _ = adapter.beginLoginAttempt(with: nil)
+        openBrowser(adapter)
+
+        adapter.applyLoginSuccess(attempt: old)
+
+        XCTAssertFalse(adapter.loginSucceeded)
+        XCTAssertTrue(adapter.showBrowser)
+    }
+
+    func testCancelErrorAfterUserCancelIsNotShown() {
+        let adapter = NetworkExtensionAdapter()
+        let attempt = adapter.beginLoginAttempt(with: nil)
+        openBrowser(adapter)
+
+        adapter.cancelLogin()
+        adapter.applyLoginFailure(
+            "interactive sso login failed: waiting for browser login failed: context canceled",
+            attempt: attempt,
+            browserPhaseStarted: true
+        )
+
+        XCTAssertFalse(adapter.showBrowser)
+        XCTAssertNil(adapter.loginErrorMessage)
+    }
+
+    func testNewAttemptAfterCancelStillWorks() {
+        let adapter = NetworkExtensionAdapter()
+        _ = adapter.beginLoginAttempt(with: nil)
+        adapter.cancelLogin()
+        let attempt = adapter.beginLoginAttempt(with: nil)
+        openBrowser(adapter)
+
+        adapter.applyLoginFailure("token exchange failed", attempt: attempt, browserPhaseStarted: true)
+
+        XCTAssertEqual(adapter.loginErrorMessage, "token exchange failed")
+    }
+
+    func testRepeatedAttemptsOnlyLatestIsCurrent() {
+        let adapter = NetworkExtensionAdapter()
+        let attempts = (0..<5).map { _ in adapter.beginLoginAttempt(with: nil) }
+        openBrowser(adapter)
+
+        for stale in attempts.dropLast() {
+            adapter.applyLoginFailure("context canceled", attempt: stale, browserPhaseStarted: true)
+            adapter.applyLoginSuccess(attempt: stale)
+        }
+
+        XCTAssertTrue(adapter.showBrowser)
+        XCTAssertNil(adapter.loginErrorMessage)
+        XCTAssertFalse(adapter.loginSucceeded)
+        XCTAssertEqual(adapter.loginAttemptToken, attempts.last)
+    }
+}
