@@ -338,17 +338,15 @@ public class NetworkExtensionAdapter: ObservableObject {
             #if os(tvOS)
             await performLogin()
             #else
-            let outcome = await performLogin()
+            let attempt = await performLogin()
 
             // If performLogin() didn't open the browser, the IPC failed because the extension
             // is not running. Start the VPN connection anyway so the extension process starts,
             // detects login required, signals the main app via UserDefaults, and stays alive
             // long enough for the user to press Connect from the auth alert (which will retry
             // IPC to a still-alive extension and succeed).
-            let browserShown = await MainActor.run { self.showBrowser }
-            if Self.shouldStartVPNAfterLogin(outcome: outcome, browserShown: browserShown) {
-                logger.info("loginIfRequired: IPC failed (extension not running), starting VPN to launch extension")
-                startVPNConnection()
+            if let attempt {
+                await MainActor.run { _ = self.startVPNAfterLoginIfCurrent(attempt: attempt) }
             }
             #endif
         } else {
@@ -529,17 +527,11 @@ public class NetworkExtensionAdapter: ObservableObject {
         var observer: NSObjectProtocol?
     }
 
-    /// Whether a login attempt still owned the login when performLogin() returned.
-    enum LoginAttemptOutcome {
-        case current
-        /// A newer attempt or a cancel took over.
-        case superseded
-    }
-
-    /// Returns `.superseded` when a newer attempt or a cancel took over; the caller must
-    /// then leave the connection alone.
+    /// Returns the token of the login attempt it ran (iOS), or nil (tvOS). The caller
+    /// checks the token again before acting, since a newer attempt or a cancel can take
+    /// over at any point.
     @discardableResult
-    private func performLogin() async -> LoginAttemptOutcome {
+    private func performLogin() async -> Int? {
         #if os(iOS)
         // Run the OAuth flow in the main-app process using NetBirdSDKAuth.
         // The NE extension's client context is cancelled when adapter.stop() is called
@@ -583,6 +575,7 @@ public class NetworkExtensionAdapter: ObservableObject {
         // Every attempt owns a token, an IPC-only one too. Taken on the main queue,
         // where the SDK callbacks and cancelLogin() check it.
         let attempt = await MainActor.run { [sdkAuth] in self.beginLoginAttempt(with: sdkAuth) }
+        let loginAttempt: Int? = attempt
         if let auth = sdkAuth {
             let urlOpener = MainAppLoginURLOpener()
             let errListener = MainAppLoginErrListener()
@@ -685,7 +678,7 @@ public class NetworkExtensionAdapter: ObservableObject {
 
             if let url = receivedURL, !url.isEmpty {
                 logger.info("performLogin: auth started in main-app process")
-                return .current
+                return loginAttempt
             }
             // A newer attempt or a cancel took over while this one was starting. The
             // IPC fallback would start a second login next to it.
@@ -696,13 +689,14 @@ public class NetworkExtensionAdapter: ObservableObject {
             }
             guard stillCurrent else {
                 logger.info("performLogin: attempt \(attempt) was superseded, not falling back to IPC")
-                return .superseded
+                return loginAttempt
             }
             logger.error("performLogin: main-app auth failed to get URL, falling back to IPC")
         }
         #endif
 
         #if os(tvOS)
+        let loginAttempt: Int? = nil
         let retryState = loginRetryState
         let retryGeneration = retryState.begin()
 
@@ -776,19 +770,19 @@ public class NetworkExtensionAdapter: ObservableObject {
         }
         guard fallback.sent else {
             logger.info("performLogin: attempt \(attempt) was superseded, not sending the IPC login")
-            return .superseded
+            return loginAttempt
         }
         let loginURLString = fallback.url
         #endif
         #if os(tvOS)
         guard retryState.isActive(retryGeneration) else {
             logger.info("performLogin: tvOS login IPC retry loop cancelled")
-            return .superseded
+            return loginAttempt
         }
         #endif
         guard let url = loginURLString, !url.isEmpty else {
             logger.error("performLogin: no login URL received from extension, aborting")
-            return .current
+            return loginAttempt
         }
         // performLogin() is a nonisolated async method, so its body runs on the
         // cooperative pool even when start() called it from the main actor — a
@@ -797,24 +791,31 @@ public class NetworkExtensionAdapter: ObservableObject {
         // undefined behaviour in SwiftUI. Same ordering as the main-app path above:
         // showBrowser is committed together with the URL it belongs to.
         #if os(iOS)
-        let applied = await MainActor.run { self.applyFallbackLoginURL(url, attempt: attempt) }
-        return applied ? .current : .superseded
+        await MainActor.run { _ = self.applyFallbackLoginURL(url, attempt: attempt) }
         #else
         await MainActor.run {
             self.loginURL = url
             self.showBrowser = true
         }
-        return .current
         #endif
+        return loginAttempt
     }
 
 
     #if os(iOS)
-    /// Whether loginIfRequired() should start the VPN after performLogin() returned.
-    /// The start launches the extension when IPC failed. A superseded attempt must not
-    /// do it: the login that replaced it is still running.
-    static func shouldStartVPNAfterLogin(outcome: LoginAttemptOutcome, browserShown: Bool) -> Bool {
-        outcome == .current && !browserShown
+    /// Starts the VPN after performLogin() returned without a browser, which means IPC
+    /// failed and the extension has to be launched. Main queue only: the token and
+    /// showBrowser are read in the same step as the start, so a newer attempt or a
+    /// cancel that took over in the meantime is seen. Returns whether it started.
+    func startVPNAfterLoginIfCurrent(attempt: Int) -> Bool {
+        guard loginAttemptToken == attempt else {
+            logger.info("loginIfRequired: attempt \(attempt) was superseded, not starting VPN")
+            return false
+        }
+        guard !showBrowser else { return false }
+        logger.info("loginIfRequired: IPC failed (extension not running), starting VPN to launch extension")
+        startVPNConnection()
+        return true
     }
 
     /// Replaces the fallback Login IPC in tests. Nil sends the real `login(completion:)`.

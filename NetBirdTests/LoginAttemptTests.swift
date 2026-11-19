@@ -242,14 +242,40 @@ final class LoginAttemptTests: XCTestCase {
         XCTAssertEqual(sends, 0)
     }
 
-    func testVPNStartAfterLoginOnlyForCurrentAttemptWithoutBrowser() {
-        // IPC failed for the current attempt: start the VPN to launch the extension.
-        XCTAssertTrue(NetworkExtensionAdapter.shouldStartVPNAfterLogin(outcome: .current, browserShown: false))
-        // Browser is up: the login is in progress.
-        XCTAssertFalse(NetworkExtensionAdapter.shouldStartVPNAfterLogin(outcome: .current, browserShown: true))
-        // A newer attempt took over: leave the connection to it.
-        XCTAssertFalse(NetworkExtensionAdapter.shouldStartVPNAfterLogin(outcome: .superseded, browserShown: false))
-        XCTAssertFalse(NetworkExtensionAdapter.shouldStartVPNAfterLogin(outcome: .superseded, browserShown: true))
+    /// IPC failed for the current attempt: start the VPN to launch the extension.
+    func testVPNStartsForCurrentAttemptWithoutBrowser() {
+        let adapter = NetworkExtensionAdapter()
+        let attempt = adapter.beginLoginAttempt(with: nil)
+
+        XCTAssertTrue(adapter.startVPNAfterLoginIfCurrent(attempt: attempt))
+    }
+
+    /// Browser is up: the login is in progress.
+    func testVPNDoesNotStartWhileBrowserShown() {
+        let adapter = NetworkExtensionAdapter()
+        let attempt = adapter.beginLoginAttempt(with: nil)
+        openBrowser(adapter)
+
+        XCTAssertFalse(adapter.startVPNAfterLoginIfCurrent(attempt: attempt))
+    }
+
+    /// A newer attempt took over after performLogin() returned, its browser not open
+    /// yet. The old attempt must leave the connection to it.
+    func testVPNDoesNotStartForReplacedAttempt() {
+        let adapter = NetworkExtensionAdapter()
+        let old = adapter.beginLoginAttempt(with: nil)
+        _ = adapter.beginLoginAttempt(with: nil)
+
+        XCTAssertFalse(adapter.startVPNAfterLoginIfCurrent(attempt: old))
+    }
+
+    /// An IPC reply with no URL arrives after the user cancelled.
+    func testVPNDoesNotStartForCancelledAttempt() {
+        let adapter = NetworkExtensionAdapter()
+        let attempt = adapter.beginLoginAttempt(with: nil)
+        adapter.cancelLogin()
+
+        XCTAssertFalse(adapter.startVPNAfterLoginIfCurrent(attempt: attempt))
     }
 
     func testRepeatedAttemptsOnlyLatestIsCurrent() {
