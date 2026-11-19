@@ -30,6 +30,10 @@ struct AdvancedView: View {
         viewModel.mdmRestrictions.mdm.rosenpassPermissive || editingDisabled
     }
 
+    private var disableIPv6Locked: Bool {
+        viewModel.mdmRestrictions.mdm.disableIPv6 || editingDisabled
+    }
+
     var body: some View {
         Form {
             Section {
@@ -129,11 +133,11 @@ struct AdvancedView: View {
                     .onChange(of: viewModel.disableIPv6) { value in
                         viewModel.setDisableIPv6(disabled: value)
                     }
-                    .mdmLocked(editingDisabled)
+                    .mdmLocked(disableIPv6Locked)
             } header: {
                 Text("Network & Security")
             } footer: {
-                if editingDisabled {
+                if editingDisabled || disableIPv6Locked {
                     MDMManagedFooter()
                 }
             }

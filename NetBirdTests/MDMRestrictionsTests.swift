@@ -153,4 +153,10 @@ final class MDMRestrictionsTests: XCTestCase {
         XCTAssertFalse(MDMRestrictions.decode(#"{"mdm":{"managementURL":""}}"#).mdm.managesManagementURL)
         XCTAssertTrue(MDMRestrictions.decode(#"{"mdm":{"managementURL":"https://x"}}"#).mdm.managesManagementURL)
     }
+
+    func testDisableIPv6IsManagedOnlyWhenPresent() {
+        XCTAssertTrue(MDMRestrictions.decode(#"{"mdm":{"disableIPv6":true}}"#).mdm.disableIPv6)
+        XCTAssertFalse(MDMRestrictions.decode(#"{"mdm":{}}"#).mdm.disableIPv6)
+        XCTAssertFalse(MDMRestrictions.empty.mdm.disableIPv6)
+    }
 }

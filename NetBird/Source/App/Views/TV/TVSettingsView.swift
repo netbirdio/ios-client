@@ -33,6 +33,9 @@ struct TVSettingsView: View {
     private var rosenpassPermissiveLocked: Bool {
         viewModel.mdmRestrictions.mdm.rosenpassPermissive || editingDisabled
     }
+    private var disableIPv6Locked: Bool {
+        viewModel.mdmRestrictions.mdm.disableIPv6 || editingDisabled
+    }
 
     private var remoteJobsLocked: Bool {
         viewModel.mdmRestrictions.mdm.remoteJobsAllowed || editingDisabled
@@ -129,14 +132,14 @@ struct TVSettingsView: View {
                             TVSettingsToggleRow(
                                 icon: "network",
                                 title: "Disable IPv6",
-                                subtitle: subtitle("Disable IPv6 overlay addressing on the tunnel", managed: editingDisabled),
+                                subtitle: subtitle("Disable IPv6 overlay addressing on the tunnel", managed: disableIPv6Locked),
                                 isOn: Binding(
                                     get: { viewModel.disableIPv6 },
                                     set: { newValue in
                                         viewModel.setDisableIPv6(disabled: newValue)
                                     }
                                 ),
-                                isDisabled: editingDisabled
+                                isDisabled: disableIPv6Locked
                             )
 
                             TVSettingsToggleRow(
