@@ -177,6 +177,11 @@ cd netbird-core
 version=$(get_version "${1:-}")
 echo "Using version: $version"
 
+# gomobile bind builds in a temporary module that lacks the toolchain directive
+# of go.mod, so hand it the toolchain Go selects here.
+GOTOOLCHAIN=$(go env GOVERSION)
+export GOTOOLCHAIN
+
 if [ "$tvos" = true ]; then
   echo "Building for tvOS (using gomobile-netbird fork)"
   GOPROXY=direct ensure_gomobile_tools "$tvos_fork_module" "$tvos_fork_version" \
