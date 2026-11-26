@@ -1300,6 +1300,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func wake() {
+        // Sockets can go stale while the device sleeps: let the core check its heartbeats.
+        NetBirdSDKCheckHeartbeatsNow()
         monitorQueue.async { [weak self] in
             guard let self, self.reconnection.isActive, let monitor = self.pathMonitor else { return }
             // Wake alone does not prove sockets are stale. Reconcile the path,
