@@ -1728,6 +1728,16 @@ public class NetworkExtensionAdapter: ObservableObject {
             return
         }
 
+        // A provider message to a stopped tunnel makes iOS start the extension just to answer it.
+        // If that IPC-only extension is killed, iOS attaches the next start to the dead process.
+        switch session.status {
+        case .connected, .connecting, .reasserting, .disconnecting:
+            break
+        default:
+            completion(defaultStatus)
+            return
+        }
+
         isFetchingStatus = true
         var hasCompleted = false
         let completionLock = NSLock()
