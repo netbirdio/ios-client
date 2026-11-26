@@ -347,6 +347,10 @@ public class NetBirdAdapter {
     }
     
     public func start(completionHandler: @escaping (Error?) -> Void) {
+        start(onConnectionChanged: nil, completionHandler: completionHandler)
+    }
+
+    func start(onConnectionChanged: ((ClientState) -> Void)?, completionHandler: @escaping (Error?) -> Void) {
         DispatchQueue.global().async {
             do {
                 guard let fd = self.tunnelFileDescriptor, fd > 0 else {
@@ -360,7 +364,7 @@ public class NetBirdAdapter {
                 }
                 let ifName = self.interfaceName ?? "unknown"
 
-                let connectionListener = ConnectionListener(adapter: self, completionHandler: completionHandler)
+                let connectionListener = ConnectionListener(adapter: self, onConnectionChanged: onConnectionChanged, completionHandler: completionHandler)
                 self.client.setConnectionListener(connectionListener)
 
                 let envList = UserDefaults(suiteName: GlobalConstants.userPreferencesSuiteName).flatMap {

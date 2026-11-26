@@ -108,8 +108,11 @@ struct AdvancedView: View {
             } header: {
                 Text("Rosenpass")
             } footer: {
-                if rosenpassLocked || rosenpassPermissiveLocked {
-                    MDMManagedFooter()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Deprecated: Rosenpass support may be removed in a future release.")
+                    if rosenpassLocked || rosenpassPermissiveLocked {
+                        MDMManagedFooter()
+                    }
                 }
             }
 

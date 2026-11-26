@@ -30,6 +30,7 @@ final class MDMRestrictionsTests: XCTestCase {
         "disableMetricsCollection": false,
         "splitTunnelMode": false,
         "splitTunnelApps": false,
+        "allowRemoteJobs": true,
         "disableAdvancedView": false
       },
       "features": {
@@ -50,9 +51,17 @@ final class MDMRestrictionsTests: XCTestCase {
         XCTAssertTrue(r.mdm.disableAutoConnect)
         XCTAssertEqual(r.mdm.disableAdvancedView, false)
         XCTAssertFalse(r.mdm.hidesAdvancedView)
+        XCTAssertTrue(r.mdm.remoteJobsAllowed)
         XCTAssertTrue(r.features.disableProfiles)
         XCTAssertFalse(r.features.disableNetworks)
         XCTAssertFalse(r.features.disableUpdateSettings)
+    }
+
+    func testRemoteJobsAllowedDefaultsToUnmanaged() {
+        XCTAssertFalse(MDMRestrictions.decode(#"{"mdm":{}}"#).mdm.remoteJobsAllowed)
+        XCTAssertFalse(MDMRestrictions.empty.mdm.remoteJobsAllowed)
+        XCTAssertTrue(MDMRestrictions.decode(#"{"mdm":{"allowRemoteJobs":true}}"#).mdm.remoteJobsAllowed)
+        XCTAssertFalse(MDMRestrictions.decode(#"{"mdm":{"allowRemoteJobs":false}}"#).mdm.remoteJobsAllowed)
     }
 
     /// `allowServerSSH` is tri-state: absent and explicit null both mean

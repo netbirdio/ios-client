@@ -29,9 +29,8 @@ struct ToggleVPNIntent: AppIntent {
                 return .result()
             }
             let status = manager.connection.status
-            if status == .disconnected || status == .invalid,
-               let session = manager.connection as? NETunnelProviderSession {
-                try VPNIntentHelpers.startTunnel(session: session)
+            if status == .disconnected || status == .invalid {
+                try await VPNIntentHelpers.startTunnel(manager: manager)
             }
         } else {
             let neStatus = manager.connection.status

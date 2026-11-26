@@ -16,6 +16,9 @@ class PacketTunnelProviderSettingsManager {
     }
 
     private weak var packetTunnelProvider: PacketTunnelProvider?
+    /// Called on `applyQueue` with the settings the OS just accepted. Set once, before the
+    /// first input arrives.
+    var onSettingsApplied: ((NEPacketTunnelNetworkSettings) -> Void)?
     
     private var interfaceIP: String?
     private var interfaceIPv6: String?
@@ -281,7 +284,7 @@ class PacketTunnelProviderSettingsManager {
                 outcome = .applied
             }
             self.applyQueue.async {
-                self.finishApply(session: session, fingerprint: fingerprint, outcome: outcome, v4Count: v4Count, v6Count: v6Count)
+                self.finishApply(session: session, settings: settings, fingerprint: fingerprint, outcome: outcome, v4Count: v4Count, v6Count: v6Count)
             }
         }
     }
@@ -289,7 +292,7 @@ class PacketTunnelProviderSettingsManager {
     /// On `applyQueue`. A completion from a tunnel that `reset()` has retired, or from an
     /// apply the timeout already gave up on, is ignored: the state it would update no longer
     /// describes anything.
-    private func finishApply(session: Int, fingerprint: String, outcome: ApplyOutcome, v4Count: Int, v6Count: Int) {
+    private func finishApply(session: Int, settings: NEPacketTunnelNetworkSettings, fingerprint: String, outcome: ApplyOutcome, v4Count: Int, v6Count: Int) {
         guard session == currentSession, isApplying else {
             AppLogger.shared.log("Tunnel settings: ignoring the completion of a superseded apply")
             return
@@ -304,6 +307,7 @@ class PacketTunnelProviderSettingsManager {
         case .applied:
             lastAppliedFingerprint = fingerprint
             AppLogger.shared.log("Routes set successfully (v4: \(v4Count), v6: \(v6Count), coalesced: \(coalesced))")
+            onSettingsApplied?(settings)
         case .failed(let error):
             // A failed apply leaves the OS in an unknown state; forget what was in effect so
             // the next change is applied rather than skipped as a repeat.

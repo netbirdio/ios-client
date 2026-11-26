@@ -107,13 +107,18 @@ class ViewModel: ObservableObject {
     // Debug
     @Published var traceLogsEnabled: Bool {
         didSet {
+            let logLevel = traceLogsEnabled ? "TRACE" : "INFO"
+            UserDefaults.standard.set(logLevel, forKey: "logLevel")
+            UserDefaults.standard.synchronize()
+            // Turning trace on reaches a running tunnel at once. Anything else waits for
+            // the next connect, which is what the alert says.
+            if traceLogsEnabled && networkExtensionAdapter.enableTraceLogs() {
+                return
+            }
             self.showLogLevelChangedAlert = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 self.showLogLevelChangedAlert = false
             }
-            let logLevel = traceLogsEnabled ? "TRACE" : "INFO"
-            UserDefaults.standard.set(logLevel, forKey: "logLevel")
-            UserDefaults.standard.synchronize()
         }
     }
 
@@ -134,6 +139,7 @@ class ViewModel: ObservableObject {
     @Published var forceRelayConnection = true
     @Published var showForceRelayAlert = false
     @Published var disableIPv6 = false
+    @Published var remoteJobsAllowed = false
     @Published var connectOnDemand = false
     @Published var showOnDemandAlert = false
     @Published var showOnDemandConflictAlert = false
@@ -281,6 +287,13 @@ class ViewModel: ObservableObject {
                 !self.isValidSetupKey(setupKey)
             }
             .assign(to: &$showInvalidSetupKeyHint)
+
+        // Views read the adapter's login state through this model, and @Published on a
+        // class reference fires only when the reference changes. Without this, the login
+        // page waits for an unrelated change here, often the 10 s status poll.
+        networkExtensionAdapter.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
     }
 
     /// Stops long-lived monitors and removes the VPN status observer.
@@ -573,6 +586,10 @@ class ViewModel: ObservableObject {
             connectPressed = false
             disconnectPressed = false
             newState = .connected
+        case .reasserting:
+            connectPressed = false
+            disconnectPressed = false
+            newState = .connecting
         case .connecting:
             // A connecting extension after a disconnect request represents an On Demand
             // reconnect, so the stale disconnect intent must no longer override it.
@@ -620,7 +637,8 @@ class ViewModel: ObservableObject {
         case .connected:
             extensionStateText = isInternetConnected ? "Connected" : "Offline"
         case .connecting:
-            extensionStateText = "Connecting..."
+            extensionStateText = managementStatus == .noNetwork ? "No network" :
+                (extensionState == .reasserting ? "Reconnecting..." : "Connecting...")
         case .disconnecting:
             extensionStateText = "Disconnecting..."
         case .disconnected:
@@ -742,8 +760,8 @@ class ViewModel: ObservableObject {
 
     /// Applies a newly loaded extension status and updates dependent UI state.
     /// - Parameter status: The current status reported by Network Extension.
-    private func applyExtensionStatus(_ status: NEVPNStatus) {
-        let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .disconnecting]
+    func applyExtensionStatus(_ status: NEVPNStatus) {
+        let knownStatuses: Set<NEVPNStatus> = [.connected, .disconnected, .connecting, .reasserting, .disconnecting]
         guard knownStatuses.contains(status) else { return }
 
         let priorState = extensionState
@@ -1154,6 +1172,39 @@ class ViewModel: ObservableObject {
 
     func loadIPv6Settings() {
         self.disableIPv6 = configProvider.disableIPv6
+    }
+
+    /// Whether the policy owns the remote-jobs toggle, by managing it
+    /// directly or by forbidding settings edits at all. Mirrors the lock the
+    /// iOS and tvOS toggles apply, so the backstop cannot disagree with the
+    /// control the user sees.
+    private var remoteJobsForbiddenByPolicy: Bool {
+        mdmRestrictions.mdm.remoteJobsAllowed || mdmRestrictions.features.disableUpdateSettings
+    }
+
+    func setRemoteJobsAllowed(allowed: Bool) {
+        // The snapshot can be up to a poll behind a policy pushed from
+        // another process, and on tvOS commit() always reports success, so
+        // the enforced value has to be re-read before it is trusted.
+        refreshMDMRestrictions()
+        guard !remoteJobsForbiddenByPolicy else {
+            AppLogger.shared.log("MDM: refusing to change remote debug bundles while the setting is managed")
+            self.remoteJobsAllowed = configProvider.remoteJobsAllowed
+            settingsRejectedMessage = "This setting is managed by your organization and cannot be changed."
+            showSettingsRejectedAlert = true
+            return
+        }
+        let previous = self.remoteJobsAllowed
+        self.remoteJobsAllowed = allowed
+        configProvider.remoteJobsAllowed = allowed
+        if !commitSettings() {
+            self.remoteJobsAllowed = previous
+            configProvider.remoteJobsAllowed = previous
+        }
+    }
+
+    func loadRemoteJobsSettings() {
+        self.remoteJobsAllowed = configProvider.remoteJobsAllowed
     }
 
     func setForcedRelayConnection(isEnabled: Bool) {
