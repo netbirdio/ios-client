@@ -22,7 +22,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     private lazy var tunnelManager: PacketTunnelProviderSettingsManager = {
-        return PacketTunnelProviderSettingsManager(with: self)
+        let manager = PacketTunnelProviderSettingsManager(with: self)
+        manager.onSettingsApplied = { [weak self] settings in
+            self?.tunnelSettingsApplied(settings)
+        }
+        return manager
     }()
 
     private var adapter: NetBirdAdapter?
@@ -79,14 +83,25 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let exitPeerStatsInterval: TimeInterval = 10.0
     private static let exitPeerStatsSamples = 12
 
+    private enum StartReport {
+        case delivered
+        case alreadyReported
+        case previousTunnel
+    }
+
     /// NE requires the startTunnel completion handler to be called exactly once. The Go
     /// engine's connection listener reports every management/signal reconnect as a fresh
     /// onConnected, so the adapter's start callback fires repeatedly over one tunnel's life;
     /// this latch keeps the first outcome and drops the rest. Locked because the outcome can
     /// arrive on the main queue (connection listener) or a global queue (adapter start
-    /// errors).
+    /// errors). The handler is stored together with the settings manager session of the
+    /// startTunnel that armed it, and a report is matched against that session under the
+    /// same lock: a stop does not wait for the engine to exit, so the previous tunnel's
+    /// engine can report its failure after the next tunnel has armed its handler, and must
+    /// not deliver that failure as the next tunnel's outcome.
     private let startCompletionLock = NSLock()
     private var startCompletionHandler: ((Error?) -> Void)?
+    private var startSession = 0
 
     /// Observer token for UserDefaults.didChangeNotification — used to
     /// catch MDM managed-configuration pushes
@@ -206,7 +221,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// Starts the selected profile's NetBird engine and completes Network Extension startup.
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
-        armTunnelStartCompletion(completionHandler)
+        // Before anything else: open the settings manager's lifecycle. The OS dropped the
+        // previous tunnel's settings with its utun, so what the engine pushes now must not
+        // be skipped as a repeat of them, and nothing left over from the previous tunnel
+        // may act on this one. The session identifies this tunnel's start reports.
+        let settingsSession = tunnelManager.reset()
+        armTunnelStartCompletion(completionHandler, settingsSession: settingsSession)
 
         if let options = options, let logLevel = options["logLevel"] as? String {
             initializeLogging(loglevel: logLevel)
@@ -244,7 +264,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 code: 1003,
                 userInfo: [NSLocalizedDescriptionKey: "Failed to initialize NetBird adapter."]
             )
-            completeTunnelStart(with: error)
+            completeTunnelStart(with: error, settingsSession: settingsSession)
             return
         }
 
@@ -276,7 +296,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 domain: "io.netbird.NetbirdNetworkExtension",
                 code: 1001,
                 userInfo: [NSLocalizedDescriptionKey: "Login required."]
-            ))
+            ), settingsSession: settingsSession)
             return
         }
 
@@ -326,8 +346,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     code: 1001,
                     userInfo: [NSLocalizedDescriptionKey: "Login required."]
                 )
-                if !self.completeTunnelStart(with: error) {
+                switch self.completeTunnelStart(with: error, settingsSession: settingsSession) {
+                case .delivered:
+                    break
+                case .alreadyReported:
                     self.cancelTunnelWithError(error)
+                case .previousTunnel:
+                    AppLogger.shared.log("onLoginRequired: dropped a report from the previous tunnel's engine")
                 }
             }
         }
@@ -344,12 +369,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 guard let self, self.reconnection.acceptsCallback(
                     sessionID: sessionID, engineGeneration: engineGeneration,
                     currentEngineGeneration: self.restartGeneration) else { return }
+                let report = self.completeTunnelStart(with: error, settingsSession: settingsSession)
+                if report == .previousTunnel {
+                    AppLogger.shared.log("startTunnel: dropped a start report from the previous tunnel's engine")
+                    return
+                }
                 self.endInitialStart()
-                let initialCompletion = self.completeTunnelStart(with: error)
                 if let error {
                     self.stopMonitoringNetworkChanges()
                     self.updateWidgetStatus("disconnected")
-                    if !initialCompletion { self.cancelTunnelWithError(error) }
+                    if report == .alreadyReported { self.cancelTunnelWithError(error) }
                 } else {
                     self.updateWidgetStatus("connected")
                 }
@@ -357,11 +386,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
-    /// Records the handler NE is waiting on for this tunnel session.
-    private func armTunnelStartCompletion(_ handler: @escaping (Error?) -> Void) {
+    /// Records the handler NE is waiting on for this tunnel session, keyed by the settings
+    /// manager session its startTunnel opened.
+    private func armTunnelStartCompletion(_ handler: @escaping (Error?) -> Void, settingsSession: Int) {
         startCompletionLock.lock()
         let pending = startCompletionHandler != nil
         startCompletionHandler = handler
+        startSession = settingsSession
         startCompletionLock.unlock()
 
         if pending {
@@ -369,18 +400,35 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
-    /// Reports the tunnel's start outcome to NE, at most once per startTunnel.
-    /// Returns true when this call is the one that delivered it.
-    @discardableResult
-    private func completeTunnelStart(with error: Error?) -> Bool {
+    /// The settings manager session of the startTunnel whose handler is armed, or was armed
+    /// last. For `stopTunnel`, which ends whatever start is pending.
+    private var armedStartSession: Int {
         startCompletionLock.lock()
+        defer { startCompletionLock.unlock() }
+        return startSession
+    }
+
+    /// Reports the tunnel's start outcome to NE, at most once per startTunnel, and only for
+    /// the startTunnel that opened `settingsSession`: a report from another session leaves
+    /// the armed handler alone. A failure ends the tunnel without a stopTunnel, so the
+    /// settings manager's lifecycle is closed here, before NE learns of it, for that session.
+    @discardableResult
+    private func completeTunnelStart(with error: Error?, settingsSession: Int) -> StartReport {
+        startCompletionLock.lock()
+        guard settingsSession == startSession else {
+            startCompletionLock.unlock()
+            return .previousTunnel
+        }
         let handler = startCompletionHandler
         startCompletionHandler = nil
         startCompletionLock.unlock()
 
-        guard let handler = handler else { return false }
+        guard let handler = handler else { return .alreadyReported }
+        if error != nil {
+            tunnelManager.suspend(session: settingsSession)
+        }
         handler(error)
-        return true
+        return .delivered
     }
 
     /// Stops monitoring and the NetBird engine before completing tunnel teardown.
@@ -390,6 +438,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // a queued write would let it see the old value and restart into the
         // teardown.
         isTearingDown = true
+        // Close the settings manager's lifecycle before the OS can start the next tunnel in
+        // this process: the apply in flight is retired so its completion or timeout cannot
+        // reach that tunnel, and the outgoing engine's last pushes are not applied.
+        tunnelManager.suspend()
 
         // A stop that lands before the engine ever reported connected would otherwise leave
         // NE waiting on the start outcome forever: the outcome is delivered from the
@@ -401,7 +453,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             domain: "io.netbird.NetbirdNetworkExtension",
             code: 1005,
             userInfo: [NSLocalizedDescriptionKey: "Tunnel stopped before the connection was established (reason \(reason.rawValue))."]
-        ))
+        ), settingsSession: armedStartSession) == .delivered
         if stoppedBeforeConnect {
             AppLogger.shared.log("stopTunnel: stopped before the connection was established, reported the start failure to NE")
         }
@@ -908,7 +960,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                         // A policy restart may replace a still-pending initial start
                         // after its guard expires. Only the replacement may finish it.
                         self.endInitialStart()
-                        self.completeTunnelStart(with: nil)
+                        self.completeTunnelStart(with: nil, settingsSession: self.armedStartSession)
                         let completion = self.restartCompletion
                         self.restartCompletion = nil
                         completion?()
@@ -1287,16 +1339,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
-    func setTunnelSettings(tunnelNetworkSettings: NEPacketTunnelNetworkSettings) {
-        setTunnelNetworkSettings(tunnelNetworkSettings) { [weak self] error in
-            if let error = error {
-                AppLogger.shared.log("Error assigning routes: \(error.localizedDescription)")
-                return
-            }
-            AppLogger.shared.log("Routes set successfully.")
-            self?.monitorQueue.async {
-                self?.scheduleSettingsLog(tunnelNetworkSettings)
-            }
+    /// Called by the settings manager once the OS has accepted `settings`.
+    func tunnelSettingsApplied(_ settings: NEPacketTunnelNetworkSettings) {
+        monitorQueue.async { [weak self] in
+            self?.scheduleSettingsLog(settings)
         }
     }
 
